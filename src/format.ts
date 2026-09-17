@@ -12,7 +12,12 @@
 
 import { toTitleCase } from './shared/dom';
 
-import type { Entry, LocalizedText, SchemaAttribute } from './types';
+import type {
+  EntityDescriptor,
+  Entry,
+  LocalizedText,
+  SchemaAttribute,
+} from './types';
 
 /**
  * Pick the text for a language.
@@ -166,10 +171,68 @@ export function formatByteSize(value: string): string {
 
 export function displayValue(
   attr: SchemaAttribute | undefined,
-  value: string
+  value: string,
+  pointerLabel?: (dn: string) => string | undefined
 ): string {
   const pointer = attr?.type === 'pointer' || attr?.items?.type === 'pointer';
-  if (pointer) return rdnValue(value);
+  if (pointer) return pointerLabel?.(value) || rdnValue(value);
   if (attr?.normalize === 'byteSize') return formatByteSize(value);
   return value;
+}
+
+/** A DN in the one spelling two DNs are compared in. */
+function comparableDn(dn: string): string {
+  return dn.replace(/\s*,\s*/g, ',').toLowerCase();
+}
+
+/**
+ * What to call the entry a pointer lands on, when its schema names it.
+ *
+ * A nomenclature declares a readable name per value in `entity.valueLabels`,
+ * keyed by the value of its main attribute — `teamMailbox` reads _Shared
+ * mailbox_. The entity is the one whose base is the entry's parent, which is
+ * where a flat entity keeps its entries.
+ *
+ * @param entities every entity the console knows
+ * @param dn DN the pointer holds
+ * @param language interface language
+ * @returns the readable name, or undefined when no schema gives one
+ */
+export function pointerLabel(
+  entities: EntityDescriptor[],
+  dn: string,
+  language: string
+): string | undefined {
+  const match = /^[^=]+=((?:\\.|[^,])*),(.+)$/.exec(dn);
+  if (!match) return undefined;
+  const parent = comparableDn(match[2]);
+  const owner = entities.find(
+    entity => entity.base && comparableDn(entity.base) === parent
+  );
+  const labels = owner?.schema.entity?.valueLabels;
+  if (!labels) return undefined;
+  return valueLabel(labels, rdnValue(dn), language);
+}
+
+/**
+ * The readable name of one value in a `valueLabels` map. A directory answers
+ * with its own spelling of a value, so the key is found whatever its case.
+ *
+ * @param labels the entity's map
+ * @param value main attribute value
+ * @param language interface language
+ * @returns the name, or undefined when the map does not hold the value
+ */
+export function valueLabel(
+  labels: Record<string, LocalizedText>,
+  value: string,
+  language: string
+): string | undefined {
+  const key =
+    value in labels
+      ? value
+      : Object.keys(labels).find(
+          name => name.toLowerCase() === value.toLowerCase()
+        );
+  return key === undefined ? undefined : resolveText(labels[key], language);
 }

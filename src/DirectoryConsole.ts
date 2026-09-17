@@ -18,7 +18,13 @@ import { EntityDetail } from './components/EntityDetail';
 import { EntityForm } from './components/EntityForm';
 import { EntityList, SEARCH_MINIMUM } from './components/EntityList';
 import { OrganizationTree } from './components/OrganizationTree';
-import { attributeLabel, entryValue, rdnValue, resolveText } from './format';
+import {
+  attributeLabel,
+  entryValue,
+  pointerLabel,
+  rdnValue,
+  resolveText,
+} from './format';
 import { availableLanguages, Translator } from './i18n';
 import type {
   ConsoleOptions,
@@ -742,6 +748,8 @@ export class DirectoryConsole {
           ? this.api.list(entity, search, attribute)
           : this.api.list(entity),
       canDelete: this.canDelete(),
+      pointerLabel: (dn: string): string | undefined =>
+        pointerLabel(this.entities, dn, this.translator.language),
       onOpen: (id: string): void =>
         this.go(`${entity.key}/${encodeURIComponent(id)}`),
       onDelete: (ids: string[]): Promise<void> => this.deleteMany(entity, ids),
@@ -791,6 +799,8 @@ export class DirectoryConsole {
       translator: this.translator,
       canWrite: this.canWrite(),
       canDelete: this.canDelete(),
+      pointerLabel: (dn: string): string | undefined =>
+        pointerLabel(this.entities, dn, this.translator.language),
       relations: this.relations(entity, entry),
       onEdit: (): void => {
         void this.openForm(entity, entry);
@@ -938,6 +948,8 @@ export class DirectoryConsole {
       translator: this.translator,
       canWrite: this.canWrite(),
       canDelete: this.canDelete(),
+      pointerLabel: (dn: string): string | undefined =>
+        pointerLabel(this.entities, dn, this.translator.language),
       relations: {
         title: this.translator.t('detail.members'),
         items: members.map(member => ({
@@ -1016,7 +1028,11 @@ export class DirectoryConsole {
       pointerOptions: (
         branch: string
       ): Promise<{ dn: string; label: string }[]> =>
-        this.api.pointerOptions(branch, this.entities),
+        this.api.pointerOptions(
+          branch,
+          this.entities,
+          this.translator.language
+        ),
       onCancel: (): void => this.closePanel(),
       onSubmit: async (
         values: Record<string, string | string[]>,
@@ -1074,7 +1090,11 @@ export class DirectoryConsole {
       pointerOptions: (
         branch: string
       ): Promise<{ dn: string; label: string }[]> =>
-        this.api.pointerOptions(branch, this.entities),
+        this.api.pointerOptions(
+          branch,
+          this.entities,
+          this.translator.language
+        ),
       onCancel: (): void => this.closePanel(),
       onSubmit: async (
         values: Record<string, string | string[]>,

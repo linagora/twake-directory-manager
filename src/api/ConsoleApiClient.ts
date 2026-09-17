@@ -17,7 +17,7 @@ import type {
   Scope,
   SchemaAttribute,
 } from '../types';
-import { entryValue, rdnValue } from '../format';
+import { entryValue, rdnValue, valueLabel } from '../format';
 
 interface FlatResource {
   name: string;
@@ -686,11 +686,13 @@ export class ConsoleApiClient {
    *
    * @param branch DN the pointer must land in
    * @param entities entities the console knows, to find one covering the branch
+   * @param language interface language, to name a nomenclature value
    * @returns DN and label of every candidate
    */
   async pointerOptions(
     branch: string,
-    entities: EntityDescriptor[]
+    entities: EntityDescriptor[],
+    language = 'en'
   ): Promise<{ dn: string; label: string }[]> {
     // An organization pointer names the whole tree, which no flat listing
     // covers: walk it instead, so the department field of an account is
@@ -709,9 +711,11 @@ export class ConsoleApiClient {
     );
     if (owner) {
       const list = await this.list(owner);
+      const labels = owner.schema.entity?.valueLabels;
       return Object.entries(list).map(([id, entry]) => ({
         dn: String(entry.dn || id),
-        label: id,
+        // A nomenclature names its values; anything else is known by its id.
+        label: (labels && valueLabel(labels, id, language)) || id,
       }));
     }
     // An unknown branch: ask the raw browser, which every deployment that

@@ -64,6 +64,8 @@ export interface EntitySchema {
   entity?: {
     label?: LocalizedText;
     singularLabel?: LocalizedText;
+    /** Readable name of an entry, keyed by its main attribute value */
+    valueLabels?: Record<string, LocalizedText>;
   };
 }
 

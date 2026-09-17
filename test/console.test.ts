@@ -16,7 +16,13 @@ import {
   readFailure,
   splitEntities,
 } from '../src/DirectoryConsole';
-import { attributeLabel, rdnValue, resolveText } from '../src/format';
+import {
+  attributeLabel,
+  displayValue,
+  pointerLabel,
+  rdnValue,
+  resolveText,
+} from '../src/format';
 import { EntityDetail } from '../src/components/EntityDetail';
 import { EntityForm } from '../src/components/EntityForm';
 import { EntityList, csvCell } from '../src/components/EntityList';
@@ -122,6 +128,25 @@ const groups: EntityDescriptor = {
   },
   endpoint: '/api/v1/ldap/groups',
   kind: 'group',
+};
+
+const mailboxTypes: EntityDescriptor = {
+  key: 'mailboxTypes',
+  pluralName: 'mailboxTypes',
+  singularName: 'mailboxType',
+  mainAttribute: 'cn',
+  base: 'ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com',
+  schema: {
+    entity: {
+      valueLabels: {
+        group: { en: 'Group', fr: 'Groupe' },
+        teamMailbox: { en: 'Shared mailbox', fr: 'Boîte partagée' },
+      },
+    },
+    attributes: { cn: { type: 'string', role: 'identifier' } },
+  },
+  endpoint: '/api/v1/ldap/mailboxTypes',
+  kind: 'flat',
 };
 
 /** A group as the directory holds it, before the form edits it. */
@@ -727,6 +752,29 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should name a nomenclature value the way its schema does', async () => {
+      nock(baseUrl)
+        .get('/api/v1/ldap/mailboxTypes')
+        .reply(200, {
+          teamMailbox: {
+            dn: `cn=teamMailbox,${mailboxTypes.base}`,
+            cn: 'teamMailbox',
+          },
+          custom: { dn: `cn=custom,${mailboxTypes.base}`, cn: 'custom' },
+        });
+
+      const options = await new ConsoleApiClient(baseUrl).pointerOptions(
+        mailboxTypes.base as string,
+        [mailboxTypes],
+        'fr'
+      );
+      // A value the directory added itself keeps the name it is stored as.
+      expect(options.map(option => option.label)).to.deep.equal([
+        'Boîte partagée',
+        'custom',
+      ]);
+    });
+
     it('should give a failure its status whatever the body it came with', async () => {
       // Not every answer comes from the API: Express's own 404 page and a
       // proxy's 502 are HTML, and reading the body as JSON first threw a
@@ -1038,6 +1086,42 @@ describe('Directory console', () => {
       // Ordinary values are left alone, quoted only when they need it.
       expect(csvCell('John Smith')).to.equal('John Smith');
       expect(csvCell('Smith, John')).to.equal('"Smith, John"');
+    });
+  });
+
+  describe('pointerLabel', () => {
+    const dn = (value: string): string =>
+      `cn=${value},ou=twakeMailboxType, ou=nomenclature,DC=example,dc=com`;
+
+    it('should name the value a pointer lands on', () => {
+      // The DN is spelled as a directory may answer it: spaces after a comma,
+      // upper-case attribute names, the value in another case.
+      expect(
+        pointerLabel([users, mailboxTypes], dn('TEAMMAILBOX'), 'en')
+      ).to.equal('Shared mailbox');
+      expect(
+        displayValue({ type: 'pointer' }, dn('teamMailbox'), value =>
+          pointerLabel([mailboxTypes], value, 'fr')
+        )
+      ).to.equal('Boîte partagée');
+    });
+
+    it('should fall back to the stored value when no schema names it', () => {
+      expect(pointerLabel([mailboxTypes], dn('custom'), 'en')).to.equal(
+        undefined
+      );
+      expect(
+        displayValue({ type: 'pointer' }, dn('custom'), value =>
+          pointerLabel([mailboxTypes], value, 'en')
+        )
+      ).to.equal('custom');
+      // An entry of an entity without a map, or of no entity at all.
+      expect(
+        pointerLabel([users], 'uid=alice,ou=users,dc=example,dc=com', 'en')
+      ).to.equal(undefined);
+      expect(pointerLabel([mailboxTypes], 'not a dn', 'en')).to.equal(
+        undefined
+      );
     });
   });
 

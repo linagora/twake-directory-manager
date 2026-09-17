@@ -43,6 +43,8 @@ export interface ListOptions {
   onOpen(id: string): void;
   onDelete(ids: string[]): Promise<void>;
   canDelete: boolean;
+  /** Readable name of the entry a pointer lands on, when its schema has one */
+  pointerLabel?(dn: string): string | undefined;
 }
 
 /**
@@ -433,7 +435,9 @@ export class EntityList {
             const shown = text(
               (Array.isArray(value) ? value : [value])
                 .filter((v): v is string => v !== undefined)
-                .map(v => displayValue(attr, String(v)))
+                .map(v =>
+                  displayValue(attr, String(v), this.options.pointerLabel)
+                )
             );
             const isPath = name === entity.organizationPath;
             return `<td${isPath ? ' class="dc-path"' : ''} title="${escapeHtml(raw)}">${

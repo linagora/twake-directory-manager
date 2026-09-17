@@ -24,6 +24,8 @@ export interface DetailOptions {
   onDelete(): void;
   onStatus(state: string): void;
   onResetPassword(): void;
+  /** Readable name of the entry a pointer lands on, when its schema has one */
+  pointerLabel?(dn: string): string | undefined;
   /** Entries pointing at this one, or pointed at by it */
   relations?: {
     title: string;
@@ -152,7 +154,11 @@ export class EntityDetail {
       )}" class="dc-path-link" title="${escapeHtml(value)}">${escapeHtml(
         value
       )}</a>`;
-    const shown = displayValue(entity.schema.attributes[name], value);
+    const shown = displayValue(
+      entity.schema.attributes[name],
+      value,
+      this.options.pointerLabel
+    );
     return `<span class="dc-value" title="${escapeHtml(value)}">${escapeHtml(shown)}</span>`;
   }
 
