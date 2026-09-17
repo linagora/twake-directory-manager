@@ -1252,6 +1252,54 @@ select.dc-input {
   background: color-mix(in srgb, var(--dc-accent) 18%, transparent);
 }
 
+/* A pointer chosen by searching: its suggestions open under the box. */
+.dc-picker-box {
+  position: relative;
+}
+
+.dc-picker-results {
+  /* Room for the form's sticky actions when scrolled into view. */
+  scroll-margin-bottom: 88px;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  max-height: 280px;
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  list-style: none;
+  background: var(--dc-surface);
+  border: 1px solid var(--dc-line);
+  border-radius: var(--dc-radius-small);
+  box-shadow: var(--dc-shadow-raised);
+}
+
+.dc-picker-results[hidden] {
+  display: none;
+}
+
+.dc-picker-option {
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-picker-option:hover,
+.dc-picker-option.dc-active {
+  background: var(--dc-accent-soft);
+  color: var(--dc-accent);
+}
+
+.dc-picker-note {
+  padding: 8px 10px;
+  color: var(--dc-muted);
+}
+
 /* The actions stay in reach at the bottom of a long form. */
 .dc-form-actions {
   position: sticky;

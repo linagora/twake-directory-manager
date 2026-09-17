@@ -15,9 +15,24 @@
  */
 
 import { escapeHtml } from '../shared/dom';
-import { attributeLabel, entryValue, formatByteSize } from '../format';
+import {
+  attributeLabel,
+  entryValue,
+  formatByteSize,
+  rdnValue,
+} from '../format';
+import { SEARCH_MINIMUM } from './EntityList';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
+
+/** An entry a pointer field may land on. */
+interface PointerCandidate {
+  dn: string;
+  label: string;
+}
+
+/** Wait after a keystroke before searching, so a word is one request. */
+const SEARCH_DELAY = 250;
 
 /** A field's current value, always as a list to keep one code path. */
 type Values = Record<string, string[]>;
@@ -29,6 +44,13 @@ export interface FormOptions {
   entry?: Entry;
   /** Load the candidates of a pointer field */
   pointerOptions(branch: string): Promise<{ dn: string; label: string }[]>;
+  /**
+   * A search of a branch too large to list, or undefined when it is not: a
+   * pointer into such a branch is chosen by typing, not from a select
+   */
+  pointerSearch?(
+    branch: string
+  ): ((query: string) => Promise<PointerCandidate[]>) | undefined;
   /** Called with the attributes to write and those to clear */
   onSubmit(
     values: Record<string, string | string[]>,
@@ -68,12 +90,25 @@ export class EntityForm {
   private values: Values = {};
   private root: HTMLElement | null = null;
   private errors: Record<string, string> = {};
+  /** Pointer fields chosen by searching, with their search */
+  private readonly searches = new Map<
+    string,
+    (query: string) => Promise<PointerCandidate[]>
+  >();
+  /** Names of the entries picked by searching, keyed by DN */
+  private readonly picked = new Map<string, string>();
 
   constructor(options: FormOptions) {
     this.options = options;
     this.fields = this.editableFields();
-    for (const [name] of this.fields)
+    for (const [name, attr] of this.fields) {
       this.values[name] = toList(entryValue(options.entry, name));
+      const pointer = attr.type === 'pointer' || attr.items?.type === 'pointer';
+      const branch = (attr.branch || attr.items?.branch || [])[0];
+      const search =
+        pointer && branch ? options.pointerSearch?.(branch) : undefined;
+      if (search) this.searches.set(name, search);
+    }
   }
 
   /**
@@ -150,8 +185,9 @@ export class EntityForm {
     const id = `dc-field-${name}`;
     const hint = attr.hint || attr.items?.hint;
     const required = attr.required ? ' <span class="dc-required">*</span>' : '';
-    const control =
-      attr.type === 'array'
+    const control = this.searches.has(name)
+      ? this.pickerMarkup(name, attr)
+      : attr.type === 'array'
         ? this.tokenMarkup(name, attr)
         : attr.type === 'pointer'
           ? this.pointerMarkup(name, attr)
@@ -213,6 +249,48 @@ export class EntityForm {
   }
 
   /**
+   * A pointer into a branch too large to list: the entries chosen, as tokens,
+   * and a box that suggests entries as the operator types. A single-valued
+   * attribute holds one token, which a new choice replaces.
+   */
+  private pickerMarkup(name: string, attr: SchemaAttribute): string {
+    const { translator } = this.options;
+    const listId = `dc-picker-${name}`;
+    return `
+      <div class="dc-tokens dc-picker" data-picker="${escapeHtml(name)}"
+        data-multiple="${attr.type === 'array' ? 'true' : 'false'}">
+        <ul class="dc-token-list">${this.pickerItems(name)}</ul>
+        <div class="dc-picker-box">
+          <input id="dc-field-${escapeHtml(name)}" type="search" class="dc-input"
+            data-picker-input autocomplete="off" role="combobox"
+            aria-autocomplete="list" aria-expanded="false"
+            aria-controls="${escapeHtml(listId)}"
+            placeholder="${escapeHtml(
+              translator.t('form.searchPointer', { count: SEARCH_MINIMUM })
+            )}" />
+          <ul class="dc-picker-results" id="${escapeHtml(listId)}"
+            role="listbox" hidden></ul>
+        </div>
+      </div>`;
+  }
+
+  private pickerItems(name: string): string {
+    const { translator } = this.options;
+    return this.values[name]
+      .map(
+        (dn, index) => `
+      <li class="dc-token">
+        <span title="${escapeHtml(dn)}">${escapeHtml(
+          this.picked.get(dn) || rdnValue(dn)
+        )}</span>
+        <button type="button" data-remove="${index}"
+          aria-label="${escapeHtml(translator.t('form.removeValue'))}">×</button>
+      </li>`
+      )
+      .join('');
+  }
+
+  /**
    * A multi-valued attribute as a list of removable tokens plus one input.
    * The instruction is explicit — a text box that silently swallows Enter is
    * the surest way to lose a value.
@@ -269,6 +347,10 @@ export class EntityForm {
       );
       if (!wrapper) continue;
 
+      if (this.searches.has(name)) {
+        this.bindPicker(name, wrapper);
+        continue;
+      }
       if (attr.type === 'array') {
         this.bindTokens(name, wrapper);
         continue;
@@ -284,6 +366,144 @@ export class EntityForm {
             : [attr.type === 'date' ? EntityForm.toDirectoryDate(raw) : raw];
       });
     }
+  }
+
+  private bindPicker(name: string, wrapper: HTMLElement): void {
+    const search = this.searches.get(name);
+    const input = wrapper.querySelector<HTMLInputElement>(
+      '[data-picker-input]'
+    );
+    const results = wrapper.querySelector<HTMLElement>('.dc-picker-results');
+    const tokens = wrapper.querySelector<HTMLElement>('.dc-token-list');
+    if (!search || !input || !results || !tokens) return;
+    const { translator } = this.options;
+    const multiple = wrapper.dataset.multiple === 'true';
+    let candidates: PointerCandidate[] = [];
+    let active = -1;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // A search answered after a later keystroke is dropped, like the list's.
+    let generation = 0;
+
+    const redraw = (): void => {
+      tokens.innerHTML = this.pickerItems(name);
+    };
+    const close = (): void => {
+      results.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+      input.removeAttribute('aria-activedescendant');
+      active = -1;
+    };
+    const message = (text: string): void => {
+      candidates = [];
+      results.innerHTML = `<li class="dc-picker-note">${escapeHtml(text)}</li>`;
+      results.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    };
+    const paint = (): void => {
+      if (candidates.length === 0) return message(translator.t('list.noMatch'));
+      results.innerHTML = candidates
+        .map(
+          (candidate, index) => `
+        <li id="dc-picker-${escapeHtml(name)}-${index}" role="option"
+          class="dc-picker-option${index === active ? ' dc-active' : ''}"
+          aria-selected="${index === active ? 'true' : 'false'}"
+          data-candidate="${index}" title="${escapeHtml(candidate.dn)}">${escapeHtml(
+            candidate.label
+          )}</li>`
+        )
+        .join('');
+      results.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+      // The last fields of a long form sit above the sticky actions: bring
+      // the suggestions into the scrolled panel rather than under the buttons.
+      results.scrollIntoView?.({ block: 'nearest' });
+      if (active >= 0)
+        input.setAttribute(
+          'aria-activedescendant',
+          `dc-picker-${name}-${active}`
+        );
+    };
+    const choose = (candidate: PointerCandidate): void => {
+      this.picked.set(candidate.dn, candidate.label);
+      if (multiple) {
+        if (!this.values[name].includes(candidate.dn))
+          this.values[name].push(candidate.dn);
+      } else this.values[name] = [candidate.dn];
+      input.value = '';
+      close();
+      redraw();
+    };
+
+    input.addEventListener('input', () => {
+      if (timer) clearTimeout(timer);
+      const query = input.value.trim();
+      const ticket = ++generation;
+      if (query.length < SEARCH_MINIMUM) {
+        if (query.length === 0) close();
+        else
+          message(translator.t('list.searchGuard', { count: SEARCH_MINIMUM }));
+        return;
+      }
+      timer = setTimeout(() => {
+        message(translator.t('form.searching'));
+        search(query)
+          .then(found => {
+            if (ticket !== generation) return;
+            // What is already chosen is not offered again.
+            candidates = found.filter(
+              candidate => !this.values[name].includes(candidate.dn)
+            );
+            active = candidates.length ? 0 : -1;
+            paint();
+          })
+          .catch((err: Error) => {
+            if (ticket === generation) message(err.message);
+          });
+      }, SEARCH_DELAY);
+    });
+
+    input.addEventListener('keydown', event => {
+      const key = (event as KeyboardEvent).key;
+      if (key === 'Escape') {
+        if (!results.hidden) event.preventDefault();
+        close();
+        return;
+      }
+      if (results.hidden || candidates.length === 0) {
+        // Enter in an empty search must not submit the whole form.
+        if (key === 'Enter') event.preventDefault();
+        return;
+      }
+      if (key === 'ArrowDown' || key === 'ArrowUp') {
+        event.preventDefault();
+        const step = key === 'ArrowDown' ? 1 : -1;
+        active = (active + step + candidates.length) % candidates.length;
+        paint();
+      } else if (key === 'Enter') {
+        event.preventDefault();
+        if (active >= 0) choose(candidates[active]);
+      }
+    });
+
+    // `mousedown`, not `click`: the input's blur closes the list first.
+    results.addEventListener('mousedown', event => {
+      const item = (event.target as HTMLElement).closest<HTMLElement>(
+        '[data-candidate]'
+      );
+      if (!item) return;
+      event.preventDefault();
+      choose(candidates[Number(item.dataset.candidate)]);
+    });
+    input.addEventListener('blur', close);
+
+    tokens.addEventListener('click', event => {
+      const button = (event.target as HTMLElement).closest<HTMLElement>(
+        '[data-remove]'
+      );
+      if (!button) return;
+      this.values[name].splice(Number(button.dataset.remove), 1);
+      redraw();
+    });
   }
 
   private bindTokens(name: string, wrapper: HTMLElement): void {

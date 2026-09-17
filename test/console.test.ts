@@ -752,6 +752,42 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should search a branch too large to list, and name what it finds', async () => {
+      // Accounts are attached to the organization tree: a pointer to them is
+      // searched, never listed whole.
+      expect(
+        new ConsoleApiClient(baseUrl).pointerSearch(
+          mailboxTypes.base as string,
+          [mailboxTypes]
+        )
+      ).to.equal(undefined);
+      const search = new ConsoleApiClient(baseUrl).pointerSearch(
+        'OU=users,dc=example,dc=com',
+        [users]
+      );
+      expect(search).to.be.a('function');
+
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(query => query.match === 'jane' && Boolean(query.attribute))
+        .reply(200, {
+          'jane.doe': {
+            dn: 'uid=jane.doe,ou=users,dc=example,dc=com',
+            cn: 'Jane Doe',
+          },
+          jdoe: { dn: 'uid=jdoe,ou=users,dc=example,dc=com' },
+        });
+      const found = await (search as (q: string) => Promise<unknown>)('jane');
+      expect(found).to.deep.equal([
+        {
+          dn: 'uid=jane.doe,ou=users,dc=example,dc=com',
+          label: 'Jane Doe (jane.doe)',
+        },
+        // No display name: the identifier alone.
+        { dn: 'uid=jdoe,ou=users,dc=example,dc=com', label: 'jdoe' },
+      ]);
+    });
+
     it('should name a nomenclature value the way its schema does', async () => {
       nock(baseUrl)
         .get('/api/v1/ldap/mailboxTypes')
@@ -1173,6 +1209,49 @@ describe('Directory console', () => {
         onSubmit: () => Promise.resolve(),
         onCancel: () => undefined,
       });
+
+    it('should offer a search, not a select, for a pointer into a large branch', async () => {
+      const delegates = {
+        ...users,
+        schema: {
+          ...users.schema,
+          attributes: {
+            ...users.schema.attributes,
+            twakeDelegatedUsers: {
+              type: 'array' as const,
+              items: {
+                type: 'pointer',
+                branch: ['ou=users,dc=example,dc=com'],
+              },
+            },
+          },
+        },
+      };
+      let asked = '';
+      const container = stubContainer();
+      await new EntityForm({
+        entity: delegates,
+        entry: {
+          uid: 'bob',
+          twakeDelegatedUsers: ['uid=alice,ou=users,dc=example,dc=com'],
+        },
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        pointerSearch: branch => {
+          asked = branch;
+          return () => Promise.resolve([]);
+        },
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+      }).render(container);
+      expect(asked).to.equal('ou=users,dc=example,dc=com');
+      expect(container.innerHTML).to.include(
+        'data-picker="twakeDelegatedUsers"'
+      );
+      expect(container.innerHTML).to.include('Type 3 characters to search');
+      // The value held is shown by its RDN, not as a DN.
+      expect(container.innerHTML).to.include('>alice</span>');
+    });
 
     it('should offer neither computed nor read-only attributes', async () => {
       const container = stubContainer();

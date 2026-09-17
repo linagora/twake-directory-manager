@@ -17,7 +17,12 @@ import type {
   Scope,
   SchemaAttribute,
 } from '../types';
-import { entryValue, rdnValue, valueLabel } from '../format';
+import {
+  entryValue,
+  rdnValue,
+  searchableAttributes,
+  valueLabel,
+} from '../format';
 
 interface FlatResource {
   name: string;
@@ -72,6 +77,9 @@ export function roleAttribute(
     if (hasRole(attr, role)) return name;
   return undefined;
 }
+
+/** Suggestions a pointer search offers: enough to pick from, few to read. */
+const POINTER_SEARCH_LIMIT = 20;
 
 /** Organizations walked before a pointer listing stops asking for more. */
 const ORGANIZATION_OPTION_LIMIT = 200;
@@ -734,6 +742,49 @@ export class ConsoleApiClient {
     } catch {
       return [];
     }
+  }
+
+  /**
+   * A search for the entries of a branch too large to list, for a pointer
+   * field to offer as the operator types.
+   *
+   * A branch whose entries are attached to the organization tree — the
+   * accounts — is the one the list view will not show unfiltered either: a
+   * select of every account of a directory holds ten thousand options, and
+   * building it downloads them all each time a form opens. The search looks in
+   * the attributes the list searches, and names each entry the way a person
+   * recognises it: by its display name, then by its identifier.
+   *
+   * @param branch DN the pointer must land in
+   * @param entities entities the console knows, to find the one owning it
+   * @returns a search, or undefined when the branch is small enough to list
+   */
+  pointerSearch(
+    branch: string,
+    entities: EntityDescriptor[]
+  ): ((query: string) => Promise<{ dn: string; label: string }[]>) | undefined {
+    const owner = entities.find(
+      entity =>
+        entity.base && branch.toLowerCase() === entity.base.toLowerCase()
+    );
+    if (!owner || !owner.organizationLink) return undefined;
+    const scope = searchableAttributes(owner)
+      .map(([name]) => name)
+      .join(',');
+    const display = roleAttribute(owner.schema, 'displayName');
+    return async query => {
+      const found = await this.list(owner, query, scope);
+      return Object.entries(found)
+        .slice(0, POINTER_SEARCH_LIMIT)
+        .map(([id, entry]) => {
+          const shown = display ? entryValue(entry, display) : undefined;
+          const name = Array.isArray(shown) ? shown[0] : shown;
+          return {
+            dn: String(entry.dn || id),
+            label: name && name !== id ? `${name} (${id})` : id,
+          };
+        });
+    };
   }
 
   /**

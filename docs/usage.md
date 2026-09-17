@@ -93,6 +93,14 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
   is the `organizationLink` role: a collection attached to a node of the tree
   is everyday work, one attached to none is reference data. A directory with
   no organization tree puts every collection forward.
+- **A field pointing into a large branch is searched, not listed.** The
+  delegates of an account, the managers and local administrators of an
+  organization point at accounts, and a select of every account of a
+  directory holds thousands of options, downloaded each time the form opens.
+  Such a field — any pointer into an entity attached to the organization
+  tree — is a search box instead: three characters, then the matching
+  entries by display name and identifier, chosen with the mouse or the
+  arrow keys. A pointer into a small branch stays a select.
 - **Long forms open as a side panel**, short ones as a dialog. A form of
   twenty fields inside a modal puts its Save button off screen.
 - **The search covers every field the schema marks `searchable`**, not the

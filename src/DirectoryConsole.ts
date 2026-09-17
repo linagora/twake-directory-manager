@@ -1087,6 +1087,11 @@ export class DirectoryConsole {
           this.entities,
           this.translator.language
         ),
+      pointerSearch: (
+        branch: string
+      ):
+        | ((query: string) => Promise<{ dn: string; label: string }[]>)
+        | undefined => this.api.pointerSearch(branch, this.entities),
       onCancel: (): void => this.closePanel(),
       onSubmit: async (
         values: Record<string, string | string[]>,
@@ -1149,6 +1154,11 @@ export class DirectoryConsole {
           this.entities,
           this.translator.language
         ),
+      pointerSearch: (
+        branch: string
+      ):
+        | ((query: string) => Promise<{ dn: string; label: string }[]>)
+        | undefined => this.api.pointerSearch(branch, this.entities),
       onCancel: (): void => this.closePanel(),
       onSubmit: async (
         values: Record<string, string | string[]>,

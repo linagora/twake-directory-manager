@@ -236,3 +236,29 @@ export function valueLabel(
         );
   return key === undefined ? undefined : resolveText(labels[key], language);
 }
+
+/**
+ * The attributes a search of an entity looks in.
+ *
+ * A schema that marks any attribute `searchable` has said which ones its
+ * directory indexed, and that list is taken as it stands. One that marks
+ * none is guessed at — everything returnable, single-valued and not a DN —
+ * which suits a small branch and scans a large one.
+ *
+ * @param entity entity searched
+ * @returns the attributes, in schema order
+ */
+export function searchableAttributes(
+  entity: EntityDescriptor
+): [string, SchemaAttribute][] {
+  const all = Object.entries(entity.schema.attributes);
+  const declared = all.filter(([, attr]) => attr.searchable);
+  if (declared.length) return declared;
+  return all.filter(
+    ([name, attr]) =>
+      name !== 'objectClass' &&
+      !attr.neverReturn &&
+      attr.type !== 'array' &&
+      attr.type !== 'pointer'
+  );
+}

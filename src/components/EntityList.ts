@@ -17,7 +17,12 @@ import { csvCell } from '../csv';
 import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
 import { hasRole } from '../api/ConsoleApiClient';
-import { attributeLabel, displayValue, entryValue } from '../format';
+import {
+  attributeLabel,
+  displayValue,
+  entryValue,
+  searchableAttributes,
+} from '../format';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
 
 // Kept importable from here, where it was first defined.
@@ -176,25 +181,9 @@ export class EntityList {
       .join(',');
   }
 
-  /**
-   * The attributes offered in the scope selector, and searched together.
-   *
-   * A schema that marks any attribute `searchable` has said which ones its
-   * directory indexed, and that list is taken as it stands. One that marks
-   * none is guessed at — everything returnable, single-valued and not a DN —
-   * which suits a small branch and scans a large one.
-   */
+  /** The attributes offered in the scope selector, and searched together. */
   private searchableAttributes(): [string, SchemaAttribute][] {
-    const all = Object.entries(this.options.entity.schema.attributes);
-    const declared = all.filter(([, attr]) => attr.searchable);
-    if (declared.length) return declared;
-    return all.filter(
-      ([name, attr]) =>
-        name !== 'objectClass' &&
-        !attr.neverReturn &&
-        attr.type !== 'array' &&
-        attr.type !== 'pointer'
-    );
+    return searchableAttributes(this.options.entity);
   }
 
   /**
