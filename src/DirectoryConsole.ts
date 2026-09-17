@@ -10,7 +10,7 @@
  * @module browser/directory-console/DirectoryConsole
  */
 
-import { escapeHtml } from '../shared/utils/dom';
+import { escapeHtml } from './shared/dom';
 
 import { ConsoleApiClient } from './api/ConsoleApiClient';
 import { CONSOLE_LOGO, LINAGORA_LOGO } from './assets';

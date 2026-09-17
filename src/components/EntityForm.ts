@@ -14,7 +14,7 @@
  * @module browser/directory-console/components/EntityForm
  */
 
-import { escapeHtml } from '../../shared/utils/dom';
+import { escapeHtml } from '../shared/dom';
 import { attributeLabel, entryValue, formatByteSize } from '../format';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';

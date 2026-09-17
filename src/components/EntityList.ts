@@ -13,7 +13,7 @@
  * @module browser/directory-console/components/EntityList
  */
 
-import { escapeHtml } from '../../shared/utils/dom';
+import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
 import { hasRole } from '../api/ConsoleApiClient';
 import { attributeLabel, displayValue, entryValue } from '../format';

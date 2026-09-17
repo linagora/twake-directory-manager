@@ -9,7 +9,7 @@
  * @module browser/directory-console/components/EntityDetail
  */
 
-import { escapeHtml } from '../../shared/utils/dom';
+import { escapeHtml } from '../shared/dom';
 import { attributeLabel, displayValue, entryValue } from '../format';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';

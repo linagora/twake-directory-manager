@@ -9,31 +9,30 @@
 import { expect } from 'chai';
 import nock from 'nock';
 
-import { ConsoleApiClient } from '../../src/browser/directory-console/api/ConsoleApiClient';
+import { ConsoleApiClient } from '../src/api/ConsoleApiClient';
 import {
   ToastController,
   createdEntryId,
   readFailure,
-} from '../../src/browser/directory-console/DirectoryConsole';
+} from '../src/DirectoryConsole';
 import {
   attributeLabel,
   rdnValue,
   resolveText,
-} from '../../src/browser/directory-console/format';
-import { EntityDetail } from '../../src/browser/directory-console/components/EntityDetail';
-import { EntityForm } from '../../src/browser/directory-console/components/EntityForm';
+} from '../src/format';
+import { EntityDetail } from '../src/components/EntityDetail';
+import { EntityForm } from '../src/components/EntityForm';
 import {
   EntityList,
   csvCell,
-} from '../../src/browser/directory-console/components/EntityList';
-import { Translator } from '../../src/browser/directory-console/i18n';
-import { formatByteSize } from '../../src/browser/directory-console/format';
-import { parseByteSize } from '../../src/plugins/ldap/enterpriseRules';
+} from '../src/components/EntityList';
+import { Translator } from '../src/i18n';
+import { formatByteSize } from '../src/format';
 import type {
   EntityDescriptor,
   EntitySchema,
   Entry,
-} from '../../src/browser/directory-console/types';
+} from '../src/types';
 
 const baseUrl = 'http://localhost:8099';
 
@@ -1017,9 +1016,20 @@ describe('Directory console', () => {
     });
 
     it('should round-trip every value it chooses to format', () => {
+      // What ldap-rest's `parseByteSize` (plugins/ldap/enterpriseRules) reads
+      // each of these as: decimal units, 1 kB = 1000 bytes. The console no
+      // longer lives beside it, so the server's answers are written down here;
+      // a change on either side that breaks the round trip fails this table.
+      const server: Record<string, number> = {
+        '2 GB': 2000000000,
+        '2.048 KB': 2048,
+        '1.5 MB': 1500000,
+        '512 GB': 512000000000,
+      };
       for (const raw of ['2000000000', '2048', '1500000', '512000000000']) {
         const shown = formatByteSize(raw);
-        expect(String(parseByteSize(shown)), shown).to.equal(raw);
+        expect(server, shown).to.have.property(shown);
+        expect(String(server[shown]), shown).to.equal(raw);
       }
     });
   });

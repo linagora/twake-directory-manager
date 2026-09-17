@@ -9,7 +9,7 @@
  * @module browser/directory-console/components/OrganizationTree
  */
 
-import { escapeHtml } from '../../shared/utils/dom';
+import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
 import type { OrganizationNode } from '../types';
 

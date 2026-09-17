@@ -10,7 +10,7 @@
  * @module browser/directory-console/format
  */
 
-import { toTitleCase } from '../shared/utils/dom';
+import { toTitleCase } from './shared/dom';
 
 import type { Entry, LocalizedText, SchemaAttribute } from './types';
 
