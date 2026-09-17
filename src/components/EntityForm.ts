@@ -347,6 +347,15 @@ export class EntityForm {
         } catch {
           options = [];
         }
+        // In the order a person looks for them, not the order the server
+        // found them in: the organization walk is breadth-first, which put a
+        // department after every node of the level above it.
+        options.sort((a, b) =>
+          a.label.localeCompare(b.label, this.options.translator.language, {
+            sensitivity: 'base',
+            numeric: true,
+          })
+        );
         const current = select.value;
         select.innerHTML =
           `<option value="">${escapeHtml(this.options.translator.t('form.choose'))}</option>` +
