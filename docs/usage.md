@@ -1,8 +1,8 @@
-# Directory console
+# Twake Directory Manager
 
 A complete administration interface — the equivalent of what an administrator
 does in _Active Directory Users and Computers_ and in the _Exchange Admin
-Center_, served by `ldap-rest` itself.
+Center_, running on top of [ldap-rest](https://github.com/linagora/ldap-rest).
 
 It is built entirely from what the server advertises. `GET /v1/config` gives
 the entities, their schemas and their endpoints; `GET /v1/authz/scope` gives
@@ -12,21 +12,24 @@ differently gets its own interface without a change.
 
 ## Using it
 
+The Docker image serves the console at `/static/console/`, next to the API
+it reads — see the [README](../README.md). To embed it in a page of your own:
+
 ```html
-<link rel="stylesheet" href="/static/browser/directory-console.css" />
+<link rel="stylesheet" href="/static/console/twake-directory-manager.css" />
 <div id="console"></div>
 <script type="module">
-  import { DirectoryConsole } from '/static/browser/directory-console.esm.js';
+  import { DirectoryConsole } from '/static/console/twake-directory-manager.esm.js';
   await new DirectoryConsole({ containerId: 'console' }).init();
 </script>
 ```
 
-A ready-made page ships with the repository. Serve the repository root and
-open it:
+`npm run build` writes the bundles and a ready-made page to `dist/`. Any
+ldap-rest serves it with its static plugin:
 
 ```sh
-node bin/index.mjs --plugin core/static --static-path . …
-# http://localhost:8081/static/examples/web/directory-console.html
+npx ldap-rest --plugin core/static --static-path ./dist --static-name console …
+# http://localhost:8081/console/
 ```
 
 ```ts
@@ -63,7 +66,7 @@ capabilities as they are loaded.
 ## What the schema drives
 
 Everything the console shows about an attribute comes from its schema
-definition — see [flat-generic](../../usage/plugins/ldap/flat-generic.md).
+definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/ldap/flat-generic.md).
 
 | Schema                  | Effect in the interface                                                   |
 | ----------------------- | ------------------------------------------------------------------------- |
@@ -88,7 +91,7 @@ definition — see [flat-generic](../../usage/plugins/ldap/flat-generic.md).
   identifier alone, and the selector still narrows it to one. A schema that
   marks nothing is guessed at, which is why a large branch should mark its
   indexed attributes — see
-  [flat-generic](../../usage/plugins/ldap/flat-generic.md).
+  [flat-generic](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/ldap/flat-generic.md).
 - **A large branch is not listed unfiltered.** Entities attached to an
   organization ask for three characters before searching; the small reference
   tables are listed whole.
@@ -119,7 +122,7 @@ The console follows the Twake Workplace applications: quiet neutrals, one
 blue, rounded surfaces and pill buttons, in light and dark following the
 system setting. Its mark — an organization chart on the gradient tile the
 Twake applications share — is drawn inline, and ships on its own as
-[`examples/web/directory-console-logo.svg`](../../../examples/web/directory-console-logo.svg)
+[`public/logo.svg`](../public/logo.svg)
 for a page that wants it as a favicon.
 
 Everything is written against custom properties on `.dc-app`, so a deployment
@@ -160,7 +163,7 @@ import {
   OrganizationTree,
   Translator,
   roleAttribute,
-} from 'ldap-rest/browser-directory-console-index';
+} from 'twake-directory-manager';
 ```
 
 ## Filling a pointer field

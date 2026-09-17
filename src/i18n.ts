@@ -13,7 +13,7 @@
 export type Catalogue = Record<string, string>;
 
 const en: Catalogue = {
-  'app.title': 'Directory',
+  'app.title': 'Twake Directory Manager',
   'app.loading': 'Loading…',
   'app.error': 'Something went wrong',
   'app.retry': 'Retry',
@@ -107,7 +107,7 @@ const en: Catalogue = {
 };
 
 const fr: Catalogue = {
-  'app.title': 'Annuaire',
+  'app.title': 'Twake Directory Manager',
   'app.loading': 'Chargement…',
   'app.error': 'Une erreur est survenue',
   'app.retry': 'Réessayer',

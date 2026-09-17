@@ -91,10 +91,11 @@
   height: 100%;
 }
 
+/* A product name is read whole: it wraps under its logo rather than losing
+   its last word to an ellipsis. */
 .dc-brand-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .dc-nav {
