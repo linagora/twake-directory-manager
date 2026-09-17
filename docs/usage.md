@@ -124,6 +124,40 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
   `enabled`, `disabled`, `noAccess`, `toDelete` — and keeps the name the
   deployment gave it otherwise. The chosen language is remembered.
 
+## Importing entries from a CSV file
+
+A list whose entries the caller may create has an **Import CSV** button: a
+file of accounts becomes accounts, in four steps, nothing written before the
+last.
+
+1. **The file.** Separated by commas, semicolons or tabs — whatever the
+   spreadsheet saved — with a header row. _Download an empty file_ gives one
+   with a column per field, named in the interface language.
+2. **The columns.** Each is matched to a field by its name: the attribute's
+   own, or its label in any language, whatever the case, spacing or accents.
+   A column whose name only starts or ends like a label (`Email address`,
+   `Phone number`) is matched when nothing else fits it. What is not matched
+   is shown as _Ignore_ and chosen by hand; a required field no column fills,
+   or a field two columns fill, stops the step.
+3. **The check.** Every row is checked the way the form checks a field —
+   required fields, the schema's `test`, yes/no and date values — and every
+   pointer is looked up the way a person names it: a title or a position by
+   its name, a department by its path, or any of them by its DN. A row
+   reusing a value an earlier row holds, where the schema marks it `unique`,
+   is refused with the line it repeats. The rows in error can be downloaded,
+   with the reason in a last column, to be corrected and imported again.
+4. **The import.** Each valid row is sent to the entity's create endpoint,
+   four at a time — the endpoint the form uses, so the server applies every
+   rule it applies to an entry typed in, and the caller's rights with them.
+   What it refuses (an address already in use, a department outside the
+   caller's branch) is listed with the server's own message, and can be
+   downloaded the same way. The import can be stopped; what was created
+   stays created.
+
+A cell of a multi-valued field holds its values separated by `|`. A date is
+written `2027-09-30` or `30/09/2027`; a yes/no field takes yes, no, oui, non,
+true, false, 1 or 0.
+
 ## Appearance
 
 The console follows the Twake Workplace applications: quiet neutrals, one

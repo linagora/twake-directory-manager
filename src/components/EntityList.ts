@@ -13,11 +13,15 @@
  * @module browser/directory-console/components/EntityList
  */
 
+import { csvCell } from '../csv';
 import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
 import { hasRole } from '../api/ConsoleApiClient';
 import { attributeLabel, displayValue, entryValue } from '../format';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
+
+// Kept importable from here, where it was first defined.
+export { csvCell };
 
 /** Characters required before a search is issued. */
 export const SEARCH_MINIMUM = 3;
@@ -45,24 +49,6 @@ export interface ListOptions {
   canDelete: boolean;
   /** Readable name of the entry a pointer lands on, when its schema has one */
   pointerLabel?(dn: string): string | undefined;
-}
-
-/**
- * One value as a CSV cell.
- *
- * Two separate jobs. RFC 4180 quoting is what keeps a comma or a newline
- * inside its own field; the leading apostrophe is what keeps a spreadsheet
- * from *evaluating* the cell. A directory holds whatever was written into it,
- * and Excel and LibreOffice both read a value opening on `= + - @` — or on a
- * tab or a carriage return — as a formula rather than as text. Quoting does
- * not help there: the quotes are stripped on import and the formula runs.
- *
- * @param value value to write
- * @returns the cell, escaped and neutralised
- */
-export function csvCell(value: string): string {
-  const cell = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
-  return /[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell;
 }
 
 /** Controls a repaint must not steal the caret from. */

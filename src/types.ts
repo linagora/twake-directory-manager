@@ -30,6 +30,11 @@ export interface SchemaAttribute {
   hint?: string;
   branch?: string[];
   fixed?: boolean;
+  /**
+   * No two entries may hold the value. An object widens the namespace to
+   * other attributes — an address must not already be someone's alias.
+   */
+  unique?: boolean | { attributes?: string[]; branches?: string[] };
   /** Server-side normalisation, which decides how the value reads back */
   normalize?: 'byteSize';
   /** Whether "search everywhere" includes this attribute; see the schema doc */

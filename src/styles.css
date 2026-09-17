@@ -408,6 +408,13 @@
   margin-bottom: 20px;
 }
 
+.dc-view-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .dc-view-header h1,
 .dc-dashboard h1 {
   margin: 0;
@@ -1033,6 +1040,11 @@
   animation: dc-slide-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* A table of columns and of rejected rows needs more than a form's width. */
+.dc-panel-wide .dc-panel-inner {
+  width: min(880px, 100%);
+}
+
 /* A short form does not need the whole height: it opens as a dialog. */
 .dc-panel-modal {
   justify-content: center;
@@ -1251,6 +1263,149 @@ select.dc-input {
   padding: 16px 24px;
   background: var(--dc-surface);
   border-top: 1px solid var(--dc-line);
+}
+
+/* ------------------------------------------------------------------ import */
+
+.dc-import {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 4px;
+}
+
+.dc-import > p {
+  margin: 0;
+}
+
+.dc-import-notes {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--dc-muted);
+  font-size: 13px;
+}
+
+.dc-import-notes li + li {
+  margin-top: 4px;
+}
+
+.dc-import-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 32px 16px;
+  border: 1.5px dashed var(--dc-line-strong);
+  border-radius: var(--dc-radius);
+  background: var(--dc-ground);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.dc-import-drop:hover,
+.dc-import-drop:focus-within {
+  border-color: var(--dc-accent);
+  background: var(--dc-accent-soft);
+}
+
+/* The whole zone is the control: a file dropped on it lands in the input. */
+.dc-import-drop input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dc-import-drop-title {
+  font-weight: 600;
+  color: var(--dc-accent);
+}
+
+.dc-import-mapping td {
+  vertical-align: middle;
+}
+
+.dc-import-mapping td:nth-child(2) {
+  max-width: 200px;
+}
+
+.dc-import-mapping .dc-input {
+  min-width: 220px;
+}
+
+.dc-import-mapping tbody tr {
+  cursor: default;
+}
+
+.dc-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.dc-import-stat {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 18px;
+  border: 1px solid var(--dc-line);
+  border-radius: var(--dc-radius-small);
+  background: var(--dc-surface);
+  color: var(--dc-muted);
+}
+
+.dc-import-stat strong {
+  font-size: 26px;
+  line-height: 1.1;
+  color: var(--dc-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-import-stat-ok strong {
+  color: #1d8540;
+}
+
+.dc-import-stat-bad strong {
+  color: var(--dc-danger);
+}
+
+.dc-import-problems {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.dc-import-problems tbody tr {
+  cursor: default;
+}
+
+.dc-import-problems td:first-child {
+  width: 64px;
+  color: var(--dc-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-import .dc-table td.dc-import-message {
+  white-space: normal;
+  max-width: none;
+}
+
+.dc-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--dc-line);
+  overflow: hidden;
+}
+
+.dc-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--dc-accent);
+  transition: width 0.2s;
 }
 
 /* ----------------------------------------------------------------- buttons */
@@ -1564,6 +1719,10 @@ select.dc-input {
 
   .dc-header > .dc-scope-empty::before {
     background: #4cd07d;
+  }
+
+  .dc-import-stat-ok strong {
+    color: #4cd07d;
   }
 
   .dc-cards .dc-card:hover {

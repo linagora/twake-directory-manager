@@ -16,6 +16,7 @@ import { ConsoleApiClient } from './api/ConsoleApiClient';
 import { CONSOLE_LOGO, LINAGORA_LOGO } from './assets';
 import { EntityDetail } from './components/EntityDetail';
 import { EntityForm } from './components/EntityForm';
+import { EntityImport } from './components/EntityImport';
 import { EntityList, SEARCH_MINIMUM } from './components/EntityList';
 import { OrganizationTree } from './components/OrganizationTree';
 import {
@@ -721,9 +722,18 @@ export class DirectoryConsole {
           <h1>${escapeHtml(this.plural(entity))}</h1>
           ${
             this.canCreate(entity)
-              ? `<button type="button" class="dc-button dc-button-primary" data-new>${escapeHtml(
-                  t('dashboard.create', { entity: this.singular(entity) })
-                )}</button>`
+              ? `<div class="dc-view-actions">
+                  ${
+                    entity.kind === 'flat'
+                      ? `<button type="button" class="dc-button" data-import>${escapeHtml(
+                          t('import.open')
+                        )}</button>`
+                      : ''
+                  }
+                  <button type="button" class="dc-button dc-button-primary" data-new>${escapeHtml(
+                    t('dashboard.create', { entity: this.singular(entity) })
+                  )}</button>
+                </div>`
               : ''
           }
         </header>
@@ -733,6 +743,9 @@ export class DirectoryConsole {
     main
       .querySelector('[data-new]')
       ?.addEventListener('click', () => void this.openForm(entity));
+    main
+      .querySelector('[data-import]')
+      ?.addEventListener('click', () => this.openImport(entity));
 
     const list = new EntityList({
       entity,
@@ -987,7 +1000,8 @@ export class DirectoryConsole {
   private openPanel(
     title: string,
     build: (body: HTMLElement) => void,
-    modal = false
+    modal = false,
+    wide = false
   ): void {
     const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
     const heading =
@@ -997,6 +1011,7 @@ export class DirectoryConsole {
     if (!panel || !heading || !body) return;
     heading.textContent = title;
     panel.classList.toggle('dc-panel-modal', modal);
+    panel.classList.toggle('dc-panel-wide', wide);
     body.innerHTML = '';
     build(body);
     panel.hidden = false;
@@ -1005,6 +1020,45 @@ export class DirectoryConsole {
   private closePanel(): void {
     const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
     if (panel) panel.hidden = true;
+  }
+
+  /**
+   * Create entries of a flat entity from a CSV file. Each row goes through
+   * the create endpoint the form uses, so the server holds an imported entry
+   * to the same rules as one typed in.
+   */
+  private openImport(entity: EntityDescriptor): void {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    this.openPanel(
+      t('import.title', { entities: this.plural(entity) }),
+      body => {
+        new EntityImport({
+          entity,
+          translator: this.translator,
+          pointerOptions: (
+            branch: string
+          ): Promise<{ dn: string; label: string }[]> =>
+            this.api.pointerOptions(
+              branch,
+              this.entities,
+              this.translator.language
+            ),
+          create: async (
+            values: Record<string, string | string[]>
+          ): Promise<void> => {
+            await this.api.create(entity, values as Entry);
+          },
+          onDone: (created: number): void => {
+            if (created > 0 && this.route.entity === entity.key)
+              void this.renderMain();
+          },
+          onClose: (): void => this.closePanel(),
+        }).render(body);
+      },
+      false,
+      true
+    );
   }
 
   /** Create or edit an entry of a flat or group entity. */
