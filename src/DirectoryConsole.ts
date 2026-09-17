@@ -36,6 +36,45 @@ interface Route {
 }
 
 const LANGUAGE_KEY = 'ldap-rest.console.language';
+const REFERENCE_OPEN_KEY = 'ldap-rest.console.referenceOpen';
+
+/**
+ * Whether a collection is one an administrator works in every day.
+ *
+ * What an administrator manages lives in the organization tree: the tree
+ * itself, and the entries attached to a node of it — accounts, groups. What is
+ * attached to no node is what those entries point at — positions, titles,
+ * account states, mail domains — reference data, set up once and rarely
+ * touched. The schema already says which is which, through the
+ * `organizationLink` role, so the console needs no list of names to tell them
+ * apart.
+ *
+ * @param entity collection to classify
+ * @returns true for the tree and the entries attached to it
+ */
+export function isPrimaryEntity(entity: EntityDescriptor): boolean {
+  return entity.kind === 'organization' || !!entity.organizationLink;
+}
+
+/**
+ * The collections to put forward and the ones to tuck away. A directory with
+ * no organization tree has nothing to tell apart: every collection is then
+ * put forward rather than all of them hidden.
+ *
+ * @param entities every collection the server serves
+ * @returns both lists, in the order the server gave them
+ */
+export function splitEntities(entities: EntityDescriptor[]): {
+  primary: EntityDescriptor[];
+  reference: EntityDescriptor[];
+} {
+  const primary = entities.filter(isPrimaryEntity);
+  if (primary.length === 0) return { primary: entities, reference: [] };
+  return {
+    primary,
+    reference: entities.filter(entity => !isPrimaryEntity(entity)),
+  };
+}
 
 /**
  * The letter standing for a collection in the navigation and on its card.
@@ -45,6 +84,12 @@ const LANGUAGE_KEY = 'ldap-rest.console.language';
 function initial(label: string): string {
   return (Array.from(label.trim())[0] || '').toLocaleUpperCase();
 }
+
+/** A chevron, turned by CSS when its section is open. */
+const CHEVRON_ICON =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="m6 4 4 4-4 4"/></svg>';
 
 /** Four squares: the overview, which is every collection at once. */
 const OVERVIEW_ICON =
@@ -280,6 +325,7 @@ export class DirectoryConsole {
     if (!container) return;
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
+    const { primary, reference } = splitEntities(this.entities);
 
     container.innerHTML = `
       <div class="dc-app">
@@ -293,7 +339,7 @@ export class DirectoryConsole {
               <span class="dc-nav-icon">${OVERVIEW_ICON}</span>
               <span class="dc-nav-label">${escapeHtml(t('nav.dashboard'))}</span>
             </button>
-            ${this.entities
+            ${primary
               .map(
                 entity =>
                   `<button type="button" class="dc-nav-item" data-nav="${escapeHtml(
@@ -306,6 +352,29 @@ export class DirectoryConsole {
                   </button>`
               )
               .join('')}
+            ${
+              reference.length
+                ? `<div class="dc-nav-section">
+                    <button type="button" class="dc-nav-toggle" data-nav-toggle
+                      aria-expanded="false" aria-controls="dc-nav-reference">
+                      <span>${escapeHtml(t('nav.reference'))}</span>
+                      <span class="dc-nav-chevron">${CHEVRON_ICON}</span>
+                    </button>
+                    <div class="dc-nav-reference" id="dc-nav-reference" hidden>
+                      ${reference
+                        .map(
+                          entity =>
+                            `<button type="button" class="dc-nav-item dc-nav-item-reference" data-nav="${escapeHtml(
+                              entity.key
+                            )}"><span class="dc-nav-label">${escapeHtml(
+                              this.plural(entity)
+                            )}</span></button>`
+                        )
+                        .join('')}
+                    </div>
+                  </div>`
+                : ''
+            }
           </nav>
           <div class="dc-sidebar-footer">
             <label class="dc-language">
@@ -349,6 +418,18 @@ export class DirectoryConsole {
     )) {
       button.addEventListener('click', () => this.go(button.dataset.nav || ''));
     }
+
+    container
+      .querySelector<HTMLElement>('[data-nav-toggle]')
+      ?.addEventListener('click', () => {
+        const open = !this.referenceOpen();
+        try {
+          localStorage.setItem(REFERENCE_OPEN_KEY, open ? '1' : '');
+          // eslint-disable-next-line no-empty
+        } catch {}
+        this.showReference(open);
+      });
+    this.showReference(this.referenceOpen());
 
     container
       .querySelector<HTMLSelectElement>('[data-language]')
@@ -420,6 +501,26 @@ export class DirectoryConsole {
     return generation === this.viewGeneration;
   }
 
+  /** Whether the reader left the reference section open last time. */
+  private referenceOpen(): boolean {
+    try {
+      return localStorage.getItem(REFERENCE_OPEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  /** Open or close the reference section of the navigation. */
+  private showReference(open: boolean): void {
+    const toggle =
+      this.container?.querySelector<HTMLElement>('[data-nav-toggle]');
+    const section =
+      this.container?.querySelector<HTMLElement>('#dc-nav-reference');
+    if (!toggle || !section) return;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    section.hidden = !open;
+  }
+
   /** Draw whatever the current route asks for. */
   private async renderMain(): Promise<void> {
     const main = this.main();
@@ -435,6 +536,14 @@ export class DirectoryConsole {
         (this.route.view === 'organizations' && key === 'organizations') ||
         (this.route.view === 'entity' && key === this.route.entity);
       button.classList.toggle('dc-active', active);
+      // Reference data is tucked away, not out of reach: a page of it being
+      // shown opens its section, or the reader would not see where they are.
+      if (active && button.classList.contains('dc-nav-item-reference'))
+        this.showReference(true);
+      // On a phone the navigation is a row that scrolls sideways: bring the
+      // current entry into it, or it may sit past the edge of the screen.
+      if (active)
+        button.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }
 
     if (this.route.view === 'dashboard') return this.renderDashboard(main);
@@ -518,6 +627,7 @@ export class DirectoryConsole {
   private renderDashboard(main: HTMLElement): void {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
+    const { primary, reference } = splitEntities(this.entities);
     main.innerHTML = `
       <section class="dc-dashboard">
         <h1>${escapeHtml(t('app.title'))}</h1>
@@ -530,7 +640,7 @@ export class DirectoryConsole {
         }
         <h2>${escapeHtml(t('dashboard.entities'))}</h2>
         <ul class="dc-cards">
-          ${this.entities
+          ${primary
             .map(entity => {
               const allowed = this.canCreate(entity);
               return `<li class="dc-card">
@@ -560,6 +670,21 @@ export class DirectoryConsole {
             })
             .join('')}
         </ul>
+        ${
+          reference.length
+            ? `<h2>${escapeHtml(t('nav.reference'))}</h2>
+              <ul class="dc-reference">
+                ${reference
+                  .map(
+                    entity =>
+                      `<li><button type="button" class="dc-reference-link" data-open="${escapeHtml(
+                        entity.key
+                      )}">${escapeHtml(this.plural(entity))}</button></li>`
+                  )
+                  .join('')}
+              </ul>`
+            : ''
+        }
       </section>`;
 
     for (const button of Array.from(

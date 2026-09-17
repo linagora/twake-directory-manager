@@ -28,6 +28,7 @@ const en: Catalogue = {
   'app.language': 'Language',
 
   'nav.dashboard': 'Overview',
+  'nav.reference': 'Reference data',
 
   'scope.title': 'You administer',
   'scope.none': 'You administer no branch',
@@ -122,6 +123,7 @@ const fr: Catalogue = {
   'app.language': 'Langue',
 
   'nav.dashboard': 'Vue d’ensemble',
+  'nav.reference': 'Référentiels',
 
   'scope.title': 'Vous administrez',
   'scope.none': 'Vous n’administrez aucune branche',

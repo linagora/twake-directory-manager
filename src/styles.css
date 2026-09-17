@@ -207,6 +207,86 @@
   color: #fff;
 }
 
+/*
+ * Reference data — what the everyday collections point at — sits below them,
+ * behind a toggle, in a quieter voice: no tile, smaller type.
+ */
+.dc-nav-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dc-line);
+}
+
+.dc-nav-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dc-muted);
+  cursor: pointer;
+}
+
+.dc-nav-toggle:hover {
+  background: var(--dc-hover);
+  color: var(--dc-ink);
+}
+
+.dc-nav-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--dc-focus);
+}
+
+.dc-nav-chevron {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  transition: transform 0.15s;
+}
+
+.dc-nav-chevron svg {
+  width: 100%;
+  height: 100%;
+}
+
+.dc-nav-toggle[aria-expanded='true'] .dc-nav-chevron {
+  transform: rotate(90deg);
+}
+
+.dc-nav-reference {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-top: 4px;
+}
+
+.dc-nav-reference[hidden] {
+  display: none;
+}
+
+.dc-nav-item-reference {
+  padding: 6px 10px 6px 20px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--dc-muted);
+}
+
+.dc-nav-item-reference:hover {
+  color: var(--dc-ink);
+}
+
+.dc-nav-item-reference.dc-active {
+  font-weight: 500;
+}
+
 .dc-sidebar-footer {
   padding: 12px 20px 16px;
   border-top: 1px solid var(--dc-line);
@@ -453,6 +533,39 @@
   margin: 0 0 16px;
   font-size: 15px;
   font-weight: 650;
+}
+
+.dc-reference {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dc-reference-link {
+  padding: 6px 14px;
+  border: 1px solid var(--dc-line);
+  border-radius: 999px;
+  background: var(--dc-surface);
+  font: inherit;
+  font-size: 13px;
+  color: var(--dc-ink);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.dc-reference-link:hover {
+  border-color: var(--dc-line-strong);
+  background: var(--dc-hover);
+}
+
+.dc-reference-link:focus-visible {
+  outline: none;
+  box-shadow: var(--dc-focus);
 }
 
 .dc-card-actions {
@@ -1326,6 +1439,23 @@ select.dc-input {
   .dc-nav-item {
     width: auto;
     flex: none;
+  }
+
+  .dc-nav-section,
+  .dc-nav-reference {
+    flex-direction: row;
+    align-items: center;
+    display: flex;
+    flex: none;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .dc-nav-toggle {
+    width: auto;
+    gap: 6px;
   }
 
   .dc-sidebar-footer {

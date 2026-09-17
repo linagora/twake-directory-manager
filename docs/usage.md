@@ -85,6 +85,14 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 
 ## Behaviour worth knowing
 
+- **The organization tree and what is attached to it come first.** Accounts,
+  groups and organizations lead the navigation and the overview; the
+  collections they point at — positions, titles, account states, mail
+  domains — sit below, under _Reference data_, a section that stays closed
+  until opened and opens by itself on one of its pages. What tells them apart
+  is the `organizationLink` role: a collection attached to a node of the tree
+  is everyday work, one attached to none is reference data. A directory with
+  no organization tree puts every collection forward.
 - **Long forms open as a side panel**, short ones as a dialog. A form of
   twenty fields inside a modal puts its Save button off screen.
 - **The search covers every field the schema marks `searchable`**, not the

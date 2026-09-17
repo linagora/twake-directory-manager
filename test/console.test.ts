@@ -14,6 +14,7 @@ import {
   ToastController,
   createdEntryId,
   readFailure,
+  splitEntities,
 } from '../src/DirectoryConsole';
 import { attributeLabel, rdnValue, resolveText } from '../src/format';
 import { EntityDetail } from '../src/components/EntityDetail';
@@ -136,6 +137,61 @@ const staff: Entry = {
 
 describe('Directory console', () => {
   afterEach(() => nock.cleanAll());
+
+  describe('splitEntities', () => {
+    const flat = (
+      key: string,
+      organizationLink?: string
+    ): EntityDescriptor => ({
+      key,
+      pluralName: key,
+      singularName: key,
+      mainAttribute: 'cn',
+      base: `ou=${key},dc=example,dc=com`,
+      schema: { attributes: {} },
+      endpoint: `/api/v1/ldap/${key}`,
+      kind: 'flat',
+      organizationLink,
+    });
+    const tree: EntityDescriptor = {
+      ...flat('organizations'),
+      kind: 'organization',
+    };
+
+    it('should put forward the tree and what is attached to it', () => {
+      const positions = flat('positions');
+      const titles = flat('titles');
+      const linkedGroups = {
+        ...groups,
+        organizationLink: 'twakeDepartmentLink',
+      };
+      const { primary, reference } = splitEntities([
+        users,
+        positions,
+        titles,
+        linkedGroups,
+        tree,
+      ]);
+      expect(primary.map(entity => entity.key)).to.deep.equal([
+        'users',
+        'groups',
+        'organizations',
+      ]);
+      expect(reference.map(entity => entity.key)).to.deep.equal([
+        'positions',
+        'titles',
+      ]);
+    });
+
+    it('should hide nothing in a directory with no organization tree', () => {
+      // Nothing is attached to a tree that does not exist: tucking every
+      // collection away would leave an empty navigation.
+      const all = [flat('people'), flat('roles')];
+      const { primary, reference } = splitEntities(all);
+      expect(primary).to.deep.equal(all);
+      expect(reference).to.deep.equal([]);
+    });
+  });
 
   describe('Translator', () => {
     it('should fall back to English for an unknown language', () => {
