@@ -15,24 +15,13 @@ import {
   createdEntryId,
   readFailure,
 } from '../src/DirectoryConsole';
-import {
-  attributeLabel,
-  rdnValue,
-  resolveText,
-} from '../src/format';
+import { attributeLabel, rdnValue, resolveText } from '../src/format';
 import { EntityDetail } from '../src/components/EntityDetail';
 import { EntityForm } from '../src/components/EntityForm';
-import {
-  EntityList,
-  csvCell,
-} from '../src/components/EntityList';
+import { EntityList, csvCell } from '../src/components/EntityList';
 import { Translator } from '../src/i18n';
 import { formatByteSize } from '../src/format';
-import type {
-  EntityDescriptor,
-  EntitySchema,
-  Entry,
-} from '../src/types';
+import type { EntityDescriptor, EntitySchema, Entry } from '../src/types';
 
 const baseUrl = 'http://localhost:8099';
 

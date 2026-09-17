@@ -21,13 +21,7 @@ export type LocalizedText = string | Record<string, string>;
 /** One attribute of an entity schema. */
 export interface SchemaAttribute {
   type:
-    | 'string'
-    | 'number'
-    | 'integer'
-    | 'boolean'
-    | 'date'
-    | 'array'
-    | 'pointer';
+    'string' | 'number' | 'integer' | 'boolean' | 'date' | 'array' | 'pointer';
   items?: { type: string; test?: string; hint?: string; branch?: string[] };
   default?: unknown;
   required?: boolean;
