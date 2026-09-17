@@ -59,13 +59,21 @@ administrator the branches whose `twakeLocalAdminLink` names them.
 
 The Twake schemas that ship with ldap-rest are loaded by default:
 
-| Variable                 | Default                                    |
-| ------------------------ | ------------------------------------------ |
-| `DM_LDAP_FLAT_SCHEMA`    | `twake/users.json`, `twake/positions.json` |
-| `DM_GROUP_SCHEMA`        | `twake/groups.json`                        |
-| `DM_ORGANIZATION_SCHEMA` | `twake/organizations.json`                 |
+| Variable                 | Default                                                                 |
+| ------------------------ | ----------------------------------------------------------------------- |
+| `DM_LDAP_FLAT_SCHEMA`    | `twake/users.json`, `twake/positions.json`, `twake/nomenclature/*.json` |
+| `DM_GROUP_SCHEMA`        | `twake/groups.json`                                                     |
+| `DM_ORGANIZATION_SCHEMA` | `twake/organizations.json`                                              |
 
-under `/app/node_modules/ldap-rest/static/schemas/`. A deployment with its own
+under `/app/node_modules/ldap-rest/static/schemas/`.
+
+The nomenclatures — titles, account states, delivery modes, list and mailbox
+types, mail domains — are loaded as entities of their own. They have to be: a
+select in a form is filled by listing the entity whose base its `branch`
+names, and a nomenclature nobody loaded leaves its select empty. A deployment
+replacing `DM_LDAP_FLAT_SCHEMA` keeps them in its list.
+
+A deployment with its own
 schemas mounts them and points these variables at them: the mail domains, the
 national formats and the payroll-number rules of a directory belong there,
 never in the code.
