@@ -4,7 +4,7 @@ The administration console of an enterprise directory: organizations, users,
 groups and positions, with what an administrator does in _Active Directory
 Users and Computers_ and the _Exchange Admin Center_ — create and move
 accounts, disable them, reset a password, manage a group's members — on
-OpenLDAP, behind LemonLDAP::NG, for the Twake Workplace.
+OpenLDAP, behind a single sign-on, for the Twake Workplace.
 
 It runs on [ldap-rest](https://github.com/linagora/ldap-rest) and is built
 entirely from what that server advertises: the entities, their schemas and
@@ -24,11 +24,15 @@ docker run -p 8081:8081 \
   -e DM_LDAP_BASE='dc=example,dc=org' \
   -e DM_LDAP_TOP_ORGANIZATION='ou=organization,dc=example,dc=org' \
   -e DM_LDAP_GROUP_BASE='ou=groups,dc=example,dc=org' \
-  -v /etc/lemonldap-ng/lemonldap-ng.ini:/etc/lemonldap-ng/lemonldap-ng.ini:ro \
+  -e DM_OIDC_SERVER=https://auth.example.org \
+  -e DM_OIDC_CLIENT_ID=twake-directory-manager \
+  -e DM_OIDC_CLIENT_SECRET=secret \
+  -e DM_BASE_URL=https://directory.example.org \
   ghcr.io/linagora/twake-directory-manager
 ```
 
-The console is then at `http://localhost:8081/static/console/`, and the API
+The console is then at `https://directory.example.org/static/console/`, behind
+the HTTPS reverse proxy that serves that name, and the API
 it uses under `/api`. Every other ldap-rest setting is an environment
 variable too — see the
 [ldap-rest configuration](https://github.com/linagora/ldap-rest/tree/master/docs/usage).
@@ -39,7 +43,7 @@ variable too — see the
 
 | Variable             | Default                                                                                                                                  | What it is                                                                  |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `DM_AUTH_PLUGINS`    | `core/auth/llng,core/auth/authzLinid1`                                                                                                   | Who the caller is, and which branches they administer                       |
+| `DM_AUTH_PLUGINS`    | `core/auth/openidconnect,core/auth/authzLinid1`                                                                                          | Who the caller is, and which branches they administer                       |
 | `DM_CONSOLE_PLUGINS` | `core/static`, `core/configApi`, `core/ldap/{flatGeneric,groups,organizations,enterpriseRules,accountLifecycle}`, `core/auth/authzScope` | What the console reads and writes                                           |
 | `DM_EXTRA_PLUGINS`   | _(empty)_                                                                                                                                | Anything else: `core/twake/james`, `core/ldap/trash`, `core/auth/crowdsec`… |
 
@@ -51,9 +55,31 @@ without an authentication plugin serves every request, and this interface
 creates accounts, resets passwords and deletes organizations. Set
 `DM_ALLOW_ANONYMOUS=true` for a test instance that nobody else can reach.
 
-The default authentication is LemonLDAP::NG's handler, reading the
-`lemonldap-ng.ini` mounted above; `authzLinid1` then grants each
-administrator the branches whose `twakeLocalAdminLink` names them.
+### Authentication
+
+The default is OpenID Connect, with any provider — LemonLDAP::NG is one. The
+container does not start until the four variables above are set. At the
+provider, declare a confidential client:
+
+- redirect URI `https://directory.example.org/callback`;
+- scopes `openid profile email`;
+- `sub` holding the account's `uid`, which is LemonLDAP::NG's default.
+  `authzLinid1` finds the account by it.
+
+`authzLinid1` then grants each administrator the branches whose
+`twakeLocalAdminLink` names them, and their sub-branches: an account named on
+no organization signs in and may do nothing. An administrator of the whole
+directory is named on the top organization itself.
+
+LemonLDAP::NG's own handler is the alternative when the provider is
+LemonLDAP::NG and its configuration is reachable from the container:
+
+```sh
+  -e DM_AUTH_PLUGINS=core/auth/llng,core/auth/authzLinid1 \
+  -v /etc/lemonldap-ng/lemonldap-ng.ini:/etc/lemonldap-ng/lemonldap-ng.ini:ro \
+```
+
+with this server's name in the file's `[node-handler] nodeVhosts`.
 
 ### Schemas
 

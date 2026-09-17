@@ -30,6 +30,7 @@ The console leaves ldap-rest, where it was developed as
 - Reference data — positions, titles, account states — gathered in a section
   of its own, below the organization tree and what is attached to it
 
-- A Docker image: ldap-rest with the console and the plugins it needs. It
-  refuses to start without an authentication plugin. See the
+- A Docker image: ldap-rest with the console and the plugins it needs,
+  authenticating through OpenID Connect. It refuses to start without an
+  authentication plugin. See the
   [README](README.md#running-it)
