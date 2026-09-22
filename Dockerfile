@@ -6,7 +6,7 @@
 #
 # The console needs an ldap-rest recent enough to serve the enterprise
 # plugins (enterpriseRules, accountLifecycle, authzScope).
-ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.8.0
+ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.8.1
 
 FROM node:24-alpine AS build
 
