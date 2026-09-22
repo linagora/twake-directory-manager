@@ -33,7 +33,12 @@ COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/twake-directory-manager
 # The nomenclatures are flat entities like the users: a pointer field is filled
 # by listing the entity whose base it names, so a nomenclature that is not
 # loaded leaves its select empty.
-ENV DM_CONSOLE_PLUGINS=core/static,core/configApi,core/ldap/flatGeneric,core/ldap/groups,core/ldap/organizations,core/ldap/enterpriseRules,core/ldap/accountLifecycle,core/auth/authzScope \
+#
+# `core/ldap/flatGeneric` is not in the list: each schema of
+# DM_LDAP_FLAT_SCHEMA already creates its own instance, and naming the plugin
+# as well asked for a nameless one on top, which ldap-rest dropped with a
+# warning at every start.
+ENV DM_CONSOLE_PLUGINS=core/static,core/configApi,core/ldap/groups,core/ldap/organizations,core/ldap/enterpriseRules,core/ldap/accountLifecycle,core/auth/authzScope \
  DM_AUTH_PLUGINS=core/auth/openidconnect,core/auth/authzLinid1 \
  DM_EXTRA_PLUGINS= \
  DM_ALLOW_ANONYMOUS=false \
