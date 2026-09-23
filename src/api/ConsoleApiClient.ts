@@ -618,11 +618,16 @@ export class ConsoleApiClient {
    * The endpoint searches its own children on `organizationalUnit` whatever
    * it is asked, so that is the class to ask for; the class list a deployment
    * declares is what tells an *attached* entry apart, below.
+   *
+   * The indicator row is dropped here as it is for the attached entries. It
+   * used to reach only the unfiltered call, which the tree does not make; a
+   * branch the directory will not list in one answer now ends with one too,
+   * and mapped like an entry it would draw a node whose DN answers nothing.
    */
   async organizationChildren(dn: string): Promise<OrganizationNode[]> {
-    return (await this.subnodes(dn, ORGANIZATION_CLASS)).map(entry =>
-      this.toNode(entry)
-    );
+    return (await this.subnodes(dn, ORGANIZATION_CLASS))
+      .filter(entry => !isMoreIndicator(entry))
+      .map(entry => this.toNode(entry));
   }
 
   /**
