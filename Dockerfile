@@ -8,7 +8,10 @@
 # plugins (enterpriseRules, accountLifecycle, authzScope).
 ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.8.1
 
-FROM node:24-alpine AS build
+# The console builds to JavaScript and CSS, which are the same whatever the
+# target architecture, so this stage runs natively. Left to follow the target
+# it would run the whole npm build emulated for the arm64 image.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 
 WORKDIR /build
 COPY package.json package-lock.json ./
