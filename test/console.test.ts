@@ -576,6 +576,36 @@ describe('Directory console', () => {
       expect(children.map(node => node.name)).to.deep.equal(['EU']);
     });
 
+    it('should not draw the truncation row as a branch of the tree', async () => {
+      // A branch the directory will not list in one answer ends with that
+      // row too, now that ldap-rest answers a refusal with what it can get
+      // rather than with an empty list. Mapped like an entry it drew a node
+      // whose DN answers nothing, right where the missing organizations are.
+      const dn = 'ou=Sales,ou=organization,dc=example,dc=com';
+      nock(baseUrl)
+        .get(`/api/v1/ldap/organizations/${encodeURIComponent(dn)}/subnodes`)
+        .query({ objectClass: 'organizationalUnit' })
+        .reply(200, [
+          {
+            dn: `ou=EU,${dn}`,
+            ou: ['EU'],
+            twakeDepartmentPath: ['Sales / EU'],
+          },
+          {
+            dn: `more-organizations-${dn}`,
+            cn: ['... more organizations than the directory will list'],
+            objectClass: ['moreIndicator'],
+            _isMoreIndicator: 'true',
+            _displayedCount: '50',
+          },
+        ]);
+
+      const children = await new ConsoleApiClient(baseUrl).organizationChildren(
+        dn
+      );
+      expect(children.map(node => node.name)).to.deep.equal(['EU']);
+    });
+
     it('should not offer the truncation row as a member', async () => {
       // Past `ldap_organization_max_subnodes` the endpoint appends a row that
       // is not an entry: its DN is `more-` plus the organization's own, and
