@@ -161,6 +161,22 @@ export function createdEntryId(
 }
 
 /**
+ * Whether the scope decides which actions the console offers.
+ *
+ * It does not when there is none — a server without `authzScope` — when it is
+ * unrestricted, or when the server could not describe it. Each action is then
+ * offered and the server answers it. An undescribed scope carries no branch
+ * and no entity, and reading that as "no right" left a deployment gating its
+ * routes with `authzPerRoute` a read-only console.
+ *
+ * @param scope what `GET /v1/authz/scope` answered
+ * @returns true when the scope's branches and entities are the rights
+ */
+export function scopeRestricts(scope: Scope | null): scope is Scope {
+  return !!scope && !scope.unrestricted && scope.described !== false;
+}
+
+/**
  * The console's one toast element: a message, then hidden after a while.
  *
  * Every message replaces the previous one, and so must its timer. A timer left
@@ -473,6 +489,8 @@ export class DirectoryConsole {
       return `<span class="dc-scope-empty">${escapeHtml(t('scope.unrestricted'))}</span>`;
     if (this.scope.unrestricted)
       return `<span class="dc-scope-empty">${escapeHtml(t('scope.unrestricted'))}</span>`;
+    if (this.scope.described === false)
+      return `<span class="dc-scope-empty">${escapeHtml(t('scope.undescribed'))}</span>`;
     if (this.scope.branches.length === 0)
       return `<span class="dc-scope-empty">${escapeHtml(t('scope.none'))}</span>`;
 
@@ -603,7 +621,7 @@ export class DirectoryConsole {
   /** Whether the caller may create an entry of this entity. */
   private canCreate(entity: EntityDescriptor): boolean {
     if (this.scopeError) return false;
-    if (!this.scope || this.scope.unrestricted) return true;
+    if (!scopeRestricts(this.scope)) return true;
     const declared = this.scope.entities.find(
       item => item.name === entity.pluralName
     );
@@ -616,13 +634,13 @@ export class DirectoryConsole {
   /** Whether the caller may write anywhere at all. */
   private canWrite(): boolean {
     if (this.scopeError) return false;
-    if (!this.scope || this.scope.unrestricted) return true;
+    if (!scopeRestricts(this.scope)) return true;
     return this.scope.branches.some(branch => branch.write);
   }
 
   private canDelete(): boolean {
     if (this.scopeError) return false;
-    if (!this.scope || this.scope.unrestricted) return true;
+    if (!scopeRestricts(this.scope)) return true;
     return this.scope.branches.some(branch => branch.delete);
   }
 
