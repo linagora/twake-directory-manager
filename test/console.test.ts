@@ -14,6 +14,7 @@ import {
   ToastController,
   createdEntryId,
   readFailure,
+  scopeRestricts,
   splitEntities,
 } from '../src/DirectoryConsole';
 import {
@@ -28,7 +29,12 @@ import { EntityForm } from '../src/components/EntityForm';
 import { EntityList, csvCell } from '../src/components/EntityList';
 import { Translator } from '../src/i18n';
 import { formatByteSize } from '../src/format';
-import type { EntityDescriptor, EntitySchema, Entry } from '../src/types';
+import type {
+  EntityDescriptor,
+  EntitySchema,
+  Entry,
+  Scope,
+} from '../src/types';
 
 const baseUrl = 'http://localhost:8099';
 
@@ -215,6 +221,38 @@ describe('Directory console', () => {
       const { primary, reference } = splitEntities(all);
       expect(primary).to.deep.equal(all);
       expect(reference).to.deep.equal([]);
+    });
+  });
+
+  describe('scopeRestricts', () => {
+    const scope = (over: Partial<Scope>): Scope => ({
+      user: 'alice',
+      unrestricted: false,
+      described: true,
+      branches: [],
+      entities: [],
+      ...over,
+    });
+
+    it('should restrict by a described scope, even an empty one', () => {
+      expect(scopeRestricts(scope({}))).to.be.true;
+    });
+
+    it('should leave to the server a scope it could not describe', () => {
+      // What ldap-rest 0.9.0 answers when only authzPerRoute or authzDynamic
+      // judges the caller: empty for want of a model, not of rights.
+      expect(scopeRestricts(scope({ described: false }))).to.be.false;
+    });
+
+    it('should restrict by a scope from a server predating `described`', () => {
+      const legacy = scope({});
+      delete legacy.described;
+      expect(scopeRestricts(legacy)).to.be.true;
+    });
+
+    it('should not restrict without a scope, or with an unrestricted one', () => {
+      expect(scopeRestricts(null)).to.be.false;
+      expect(scopeRestricts(scope({ unrestricted: true }))).to.be.false;
     });
   });
 

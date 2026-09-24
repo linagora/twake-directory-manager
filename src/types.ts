@@ -111,6 +111,13 @@ export type Entry = Record<string, string | string[] | undefined> & {
 export interface Scope {
   user: string | null;
   unrestricted: boolean;
+  /**
+   * `false` when the plugins judging the caller gate routes or read a token,
+   * and none can say what the caller may do: `branches` and `entities` are
+   * then empty for want of a model, not of rights. Absent before ldap-rest
+   * 0.9.0, which answered `unrestricted: true` there
+   */
+  described?: boolean;
   branches: {
     dn: string;
     name?: string;

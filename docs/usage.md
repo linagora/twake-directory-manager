@@ -118,8 +118,11 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 - **The scope is shown permanently** — which branches the caller administers,
   and with which rights. An action they cannot perform is not offered. A
   server that does not load `core/auth/authzScope` restricts nothing and the
-  console says so; a scope request that _fails_ is a different thing, and the
-  console then offers no write action at all rather than every one of them.
+  console says so. Nor does a scope the server cannot describe — the caller is
+  judged by `authzPerRoute` or `authzDynamic` alone, which gate routes and
+  tokens rather than branches: every action is offered, and the server answers
+  each one. A scope request that _fails_ is a different thing, and the console
+  then offers no write action at all rather than every one of them.
 - **The interface is in one language at a time**, and the whole of it, not
   only the chrome. Two catalogues meet: the console's own, which holds the
   interface words (`Search`, `Per page`, `Delete selection`) and ships with the
