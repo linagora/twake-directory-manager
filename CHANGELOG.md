@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.2.0 (2026-09-26)
+
+Built on ldap-rest 0.11.0 —
+[its upgrade notes](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md#to-0110).
+
+### Security
+
+- A signed-in account no longer reads every group and its members: groups are
+  shown to the administrators of the organizations they are attached to
+
+### Bug Fixes
+
+- An administrator lists and changes the accounts of their organizations
+  without `DM_AUTHZ_FILTER_ATTACHED_ENTRIES`, which the image never set
+
 ## v0.1.0 (2026-09-26)
 
 The console leaves ldap-rest, where it was developed as
