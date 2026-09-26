@@ -31,6 +31,9 @@ docker run -p 8081:8081 \
   ghcr.io/linagora/twake-directory-manager
 ```
 
+`DM_LDAP_BASE` is required: ldap-rest refuses to start without it, and every
+search — the one finding who signed in included — runs under it.
+
 The console is then at `https://directory.example.org/static/console/`, behind
 the HTTPS reverse proxy that serves that name, and the API
 it uses under `/api`. Every other ldap-rest setting is an environment
@@ -64,7 +67,10 @@ provider, declare a confidential client:
 - redirect URI `https://directory.example.org/callback`;
 - scopes `openid profile email`;
 - `sub` holding the account's `uid`, which is LemonLDAP::NG's default.
-  `authzLinid1` finds the account by it.
+  `authzLinid1` finds the account by it, and refuses every request with a
+  `403` when that `uid` names several entries under `DM_LDAP_BASE` — a
+  homonym left in the trash counts. Keep uids unique, with OpenLDAP's
+  `unique` overlay.
 
 `authzLinid1` then grants each administrator the branches whose
 `twakeLocalAdminLink` names them, and their sub-branches: an account named on
