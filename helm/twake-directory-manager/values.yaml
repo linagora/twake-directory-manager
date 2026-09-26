@@ -1,0 +1,63 @@
+replicaCount: 1
+
+image:
+  registry: docker.io
+  repository: yadd/twake-directory-manager
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 8081
+
+ingress:
+  enabled: false
+  hostname: ""
+  ingressClassName: ""
+  path: /
+  pathType: Prefix
+  # The certificate is read from <release>-tls.
+  tls: false
+  annotations: {}
+  # Traefik only: a Middleware sending the bare host to the console, which is
+  # not served at the root. Reference it from the router's annotation:
+  # traefik.ingress.kubernetes.io/router.middlewares: <namespace>-<release>-root@kubernetescrd
+  redirectRoot: false
+  consolePath: /static/console/
+
+# Directory the console administers.
+ldap:
+  url: ""
+  bindDn: ""
+  base: ""
+  groupBase: ""
+  topOrganization: ""
+
+# The image refuses to start without an authentication plugin: an
+# unauthenticated instance would publish account creation and password resets
+# to whoever reaches the port.
+oidc:
+  server: ""
+  clientId: twake-directory-manager
+  # Public URL the provider redirects back to; defaults to the ingress host.
+  baseUrl: ""
+
+secrets:
+  # A Secret holding DM_LDAP_PWD and DM_OIDC_CLIENT_SECRET. When set, the two
+  # values below are ignored and no Secret is created.
+  existingSecret: ""
+  ldapPassword: ""
+  oidcClientSecret: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+# Anything else ldap-rest reads, as environment variables. The image already
+# sets its plugin list and the Twake schemas it serves.
+extraEnv: {}

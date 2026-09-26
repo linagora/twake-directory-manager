@@ -189,9 +189,41 @@ jobs:
             done
           done
 
+  # Package the chart under the tag's version and push it as an OCI artifact.
+  helm:
+    name: Release Helm Chart
+    runs-on: ubuntu-latest
+    needs: docker-manifest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.0
+
+      - name: Set chart version from tag
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          sed -i "s/^version:.*/version: $VERSION/" helm/twake-directory-manager/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" helm/twake-directory-manager/Chart.yaml
+          cat helm/twake-directory-manager/Chart.yaml
+
+      - name: Package chart
+        run: helm package helm/twake-directory-manager --destination .
+
+      - name: Login to GHCR (Helm registry)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY_GHCR }} --username ${{ github.actor }} --password-stdin
+
+      - name: Push chart to OCI registry
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          helm push "twake-directory-manager-${VERSION}.tgz" oci://${{ env.REGISTRY_GHCR }}/linagora/charts
+
   release:
     name: Create GitHub Release
-    needs: docker-manifest
+    needs: [docker-manifest, helm]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

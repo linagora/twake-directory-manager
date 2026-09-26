@@ -1,0 +1,5 @@
+The console is served at {{ include "tdm.baseUrl" . }}{{ .Values.ingress.consolePath }}
+and its API under {{ include "tdm.baseUrl" . }}/api.
+
+Declare {{ include "tdm.baseUrl" . }}/callback as a redirect URI of the
+"{{ .Values.oidc.clientId }}" client at {{ .Values.oidc.server }}.
