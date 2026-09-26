@@ -1,0 +1,23 @@
+apiVersion: v2
+name: twake-directory-manager
+description: |
+  Administration console for an enterprise directory. The image is an ldap-rest
+  serving its API under /api with the console's static files next to it, so
+  one Deployment and one Ingress cover both.
+type: application
+# version and appVersion are overwritten from the git tag by the release
+# workflow. The values here are only a fallback for a checkout.
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/linagora/twake-directory-manager
+keywords:
+  - ldap
+  - directory
+  - administration
+  - twake
+maintainers:
+  - name: yadd
+    url: https://github.com/linagora/twake-directory-manager
+sources:
+  - https://github.com/linagora/twake-directory-manager
+  - https://github.com/linagora/ldap-rest

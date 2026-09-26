@@ -1,0 +1,16 @@
+{{- if .Values.ingress.redirectRoot }}
+# The console is served under /static/console/, so the bare host has no route
+# and answers Express's own "Cannot GET /". Anyone typing the hostname lands
+# there, which is the first thing they see of the product.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "tdm.fullname" . }}-root
+spec:
+  redirectRegex:
+    # Only the bare root: any other path is left alone, including /api and the
+    # OIDC callback, which a broader rule would break.
+    regex: "^https?://([^/]+)/?$"
+    replacement: "https://${1}{{ .Values.ingress.consolePath }}"
+    permanent: true
+{{- end }}

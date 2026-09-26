@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tdm.fullname" . }}-env
+data:
+  DM_PORT: {{ .Values.service.port | quote }}
+  DM_LDAP_URL: {{ required "ldap.url is required" .Values.ldap.url | quote }}
+  DM_LDAP_DN: {{ required "ldap.bindDn is required" .Values.ldap.bindDn | quote }}
+  DM_LDAP_BASE: {{ required "ldap.base is required: ldap-rest refuses to start without it" .Values.ldap.base | quote }}
+  {{- with .Values.ldap.groupBase }}
+  DM_LDAP_GROUP_BASE: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.ldap.topOrganization }}
+  DM_LDAP_TOP_ORGANIZATION: {{ . | quote }}
+  {{- end }}
+  DM_OIDC_SERVER: {{ required "oidc.server is required" .Values.oidc.server | quote }}
+  DM_OIDC_CLIENT_ID: {{ required "oidc.clientId is required" .Values.oidc.clientId | quote }}
+  DM_BASE_URL: {{ include "tdm.baseUrl" . | quote }}
+  {{- range $k, $v := .Values.extraEnv }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}

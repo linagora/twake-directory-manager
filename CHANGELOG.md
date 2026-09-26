@@ -34,3 +34,7 @@ The console leaves ldap-rest, where it was developed as
   authenticating through OpenID Connect. It refuses to start without an
   authentication plugin. See the
   [README](README.md#running-it)
+
+- A Helm chart, published as
+  `oci://ghcr.io/linagora/charts/twake-directory-manager`. See the
+  [README](README.md#kubernetes)

@@ -122,6 +122,28 @@ docker build --build-arg LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.8.0 \
 
 The console needs the enterprise plugins, which ldap-rest ships from 0.8.0.
 
+### Kubernetes
+
+A Helm chart is published with each release, under the same version as the
+image:
+
+```sh
+helm install directory-manager \
+  oci://ghcr.io/linagora/charts/twake-directory-manager --version 0.1.0 \
+  --set ldap.url=ldap://ldap.example.org \
+  --set ldap.bindDn='cn=admin,dc=example,dc=org' \
+  --set ldap.base='dc=example,dc=org' \
+  --set oidc.server=https://auth.example.org \
+  --set ingress.enabled=true \
+  --set ingress.hostname=directory.example.org \
+  --set secrets.ldapPassword=secret \
+  --set secrets.oidcClientSecret=secret
+```
+
+`secrets.existingSecret` names a Secret holding `DM_LDAP_PWD` and
+`DM_OIDC_CLIENT_SECRET` instead, and `extraEnv` passes any other ldap-rest
+setting. See [values.yaml](helm/twake-directory-manager/values.yaml).
+
 ## Documentation
 
 - [Using the console](docs/usage.md): what the server has to expose, what
