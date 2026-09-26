@@ -28,7 +28,7 @@ docker run -p 8081:8081 \
   -e DM_OIDC_CLIENT_ID=twake-directory-manager \
   -e DM_OIDC_CLIENT_SECRET=secret \
   -e DM_BASE_URL=https://directory.example.org \
-  ghcr.io/linagora/twake-directory-manager
+  yadd/twake-directory-manager
 ```
 
 `DM_LDAP_BASE` is required: ldap-rest refuses to start without it, and every
