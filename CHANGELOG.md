@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.1.0 (2026-09-26)
 
 The console leaves ldap-rest, where it was developed as
 `browser/directory-console`, and becomes a product of its own.
