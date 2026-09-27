@@ -1538,10 +1538,13 @@ describe('Directory console', () => {
     /** A select just real enough for `fillPointers`, which only rewrites markup. */
     const stubSelect = (
       branch: string,
-      value: string
+      value: string,
+      required = false
     ): HTMLSelectElement & { dataset: { pointer: string } } => {
       const select = {
-        dataset: { pointer: branch },
+        dataset: required
+          ? { pointer: branch, required: 'true' }
+          : { pointer: branch },
         value,
         innerHTML: '',
         disabled: true,
@@ -1559,14 +1562,15 @@ describe('Directory console', () => {
     const renderWith = async (
       select: HTMLSelectElement,
       entry: Record<string, string | string[]>,
-      pointerOptions: () => Promise<{ dn: string; label: string }[]>
+      pointerOptions: () => Promise<{ dn: string; label: string }[]>,
+      entity: EntityDescriptor = users
     ): Promise<HTMLElement & { innerHTML: string }> => {
       const container = stubContainer();
       (
         container as unknown as { querySelectorAll: () => unknown[] }
       ).querySelectorAll = (): unknown[] => [select];
       await new EntityForm({
-        entity: users,
+        entity,
         entry,
         translator: new Translator('en'),
         pointerOptions,
@@ -1587,19 +1591,43 @@ describe('Directory console', () => {
       );
       // A click meant to open the list would otherwise take the empty choice
       // and clear the organization the entry holds.
-      expect(container.innerHTML).to.include(
-        'data-pointer="dc=example,dc=com" disabled'
-      );
-      expect(container.innerHTML).to.include('aria-busy="true"');
+      expect(container.innerHTML).to.include('data-required="true"');
+      expect(container.innerHTML).to.include('disabled aria-busy="true"');
       expect(container.innerHTML).to.include('<option value="" disabled>');
     });
 
-    it('should offer the empty choice once the candidates are there', async () => {
-      const select = stubSelect('dc=example,dc=com', held);
+    it('should not offer the empty choice on a required field', async () => {
+      const select = stubSelect('dc=example,dc=com', held, true);
       await renderWith(
         select,
         { uid: 'bob', twakeDepartmentLink: [held] },
         () => Promise.resolve([{ dn: held, label: 'Demo' }])
+      );
+      // The form refuses to save without it: a choice that cannot be taken is
+      // not offered.
+      expect(select.disabled).to.equal(false);
+      expect(select.innerHTML).to.include('<option value="" disabled>');
+      expect(select.innerHTML).to.include('>Demo</option>');
+      expect(select.value).to.equal(held);
+    });
+
+    it('should offer the empty choice on an optional field', async () => {
+      const optional: EntityDescriptor = {
+        ...users,
+        schema: {
+          ...users.schema,
+          attributes: {
+            ...users.schema.attributes,
+            title: { type: 'pointer' as const, branch: ['dc=example,dc=com'] },
+          },
+        },
+      };
+      const select = stubSelect('dc=example,dc=com', held);
+      await renderWith(
+        select,
+        { uid: 'bob', title: [held] },
+        () => Promise.resolve([{ dn: held, label: 'Demo' }]),
+        optional
       );
       expect(select.disabled).to.equal(false);
       expect(select.innerHTML).to.not.include('disabled');

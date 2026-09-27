@@ -245,7 +245,8 @@ export class EntityForm {
     // only selectable option, the click that opens the list picks that choice
     // and silently clears the value the entry holds.
     return `<select id="dc-field-${escapeHtml(name)}" name="${escapeHtml(name)}"
-      class="dc-input" data-pointer="${escapeHtml(branch)}" disabled aria-busy="true">
+      class="dc-input" data-pointer="${escapeHtml(branch)}"
+      ${attr.required ? 'data-required="true" ' : ''}disabled aria-busy="true">
       <option value="" disabled>${escapeHtml(translator.t('form.choose'))}</option>
       ${current ? `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>` : ''}
     </select>`;
@@ -308,7 +309,7 @@ export class EntityForm {
         ${
           isPointer
             ? `<select class="dc-input" data-token-input data-pointer="${escapeHtml(branch)}"
-                 disabled aria-busy="true">
+                 ${attr.required ? 'data-required="true" ' : ''}disabled aria-busy="true">
                  <option value="" disabled>${escapeHtml(translator.t('form.choose'))}</option>
                </select>`
             : `<input class="dc-input" data-token-input type="text"
@@ -581,11 +582,13 @@ export class EntityForm {
           })
         );
         const current = select.value;
-        // The empty choice is offered only when there is something to choose:
-        // on a branch that answered nothing, taking it would drop the value
-        // the entry holds and put nothing in its place.
+        // The empty choice is offered only when taking it means something: on
+        // a branch that answered nothing it would drop the value the entry
+        // holds and put nothing in its place, and on a required field the form
+        // refuses to save it.
+        const empty = options.length > 0 && select.dataset.required !== 'true';
         select.innerHTML =
-          `<option value=""${options.length === 0 ? ' disabled' : ''}>` +
+          `<option value=""${empty ? '' : ' disabled'}>` +
           `${escapeHtml(this.options.translator.t('form.choose'))}</option>` +
           options
             .map(
