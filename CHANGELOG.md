@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.3 (2026-09-27)
+
+Built on ldap-rest 0.11.2.
+
+### Bug Fixes
+
+- An organization field no longer clears the value the entry holds when it is
+  clicked before its list of candidates is loaded: the field is inert until
+  they are there, and a branch that answered nothing keeps the value instead
+  of offering an empty choice
+
 ## v0.2.2 (2026-09-27)
 
 Built on ldap-rest 0.11.2.
