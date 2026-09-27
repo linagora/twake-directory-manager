@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.2 (2026-09-27)
+
+Built on ldap-rest 0.11.2.
+
+### Bug Fixes
+
+- Attaching an account another tool created as a bare `inetOrgPerson` no longer
+  fails with a server error: ldap-rest gives the entry the object class its
+  organization link needs
+
 ## v0.2.1 (2026-09-27)
 
 Built on ldap-rest 0.11.1.
