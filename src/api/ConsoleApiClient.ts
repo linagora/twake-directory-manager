@@ -18,6 +18,7 @@ import type {
   SchemaAttribute,
 } from '../types';
 import {
+  comparableDn,
   entryValue,
   rdnValue,
   searchableAttributes,
@@ -798,18 +799,23 @@ export class ConsoleApiClient {
    * The walk is breadth-first and bounded: a directory with a very wide tree
    * should not turn opening a form into hundreds of requests.
    *
+   * @param from subtrees to walk instead of the whole tree; nested ones are
+   * walked once
    * @returns DN and label of each organization found
    */
-  private async organizationOptions(): Promise<
-    { dn: string; label: string }[]
-  > {
-    const root = await this.organizationTop();
-    if (!root) return [];
+  async organizationOptions(
+    from?: OrganizationNode[]
+  ): Promise<{ dn: string; label: string }[]> {
+    const roots = from ?? [await this.organizationTop()];
     const options: { dn: string; label: string }[] = [];
-    const queue: OrganizationNode[] = [root];
+    const queue = roots.filter((node): node is OrganizationNode => !!node);
+    const seen = new Set<string>();
     let visited = 0;
     while (queue.length > 0 && visited < ORGANIZATION_OPTION_LIMIT) {
       const node = queue.shift() as OrganizationNode;
+      const key = comparableDn(node.dn);
+      if (seen.has(key)) continue;
+      seen.add(key);
       visited++;
       options.push({ dn: node.dn, label: node.path || node.name });
       try {

@@ -10,6 +10,7 @@
  */
 
 import { escapeHtml } from '../shared/dom';
+import { comparableDn } from '../format';
 import type { Translator } from '../i18n';
 import type { OrganizationNode } from '../types';
 
@@ -19,6 +20,8 @@ export interface TreeOptions {
   root(): Promise<OrganizationNode | null>;
   /** Direct children of a node */
   children(dn: string): Promise<OrganizationNode[]>;
+  /** The transit branch, marked where it stands in the tree */
+  transit?: string;
   onSelect(node: OrganizationNode): void;
   onCreateChild?(parent: OrganizationNode): void;
 }
@@ -100,6 +103,9 @@ export class OrganizationTree {
     const matches = this.matches(node);
     if (!matches) return '';
     const hasChildren = !node.loaded || (node.children?.length ?? 0) > 0;
+    const transit =
+      !!this.options.transit &&
+      comparableDn(node.dn) === comparableDn(this.options.transit);
     return `
       <li class="dc-tree-node${node.dn === this.selectedDn ? ' dc-selected' : ''}"
           style="--depth:${depth}">
@@ -110,6 +116,13 @@ export class OrganizationTree {
           </button>
           <button type="button" class="dc-tree-label" data-select="${escapeHtml(node.dn)}"
             title="${escapeHtml(node.path || node.dn)}">${escapeHtml(node.name)}</button>
+          ${
+            transit
+              ? `<span class="dc-tag dc-tag-transit">${escapeHtml(
+                  this.options.translator.t('transit.branch')
+                )}</span>`
+              : ''
+          }
           ${
             this.options.onCreateChild
               ? `<button type="button" class="dc-tree-add" data-add="${escapeHtml(node.dn)}"

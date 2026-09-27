@@ -390,6 +390,36 @@
   background: var(--dc-danger);
 }
 
+.dc-scope-transit {
+  padding: 3px 12px;
+  border: 1px dashed var(--dc-line-strong);
+  border-radius: 999px;
+  background: var(--dc-surface);
+  color: inherit;
+  text-decoration: none;
+}
+
+.dc-scope-transit:hover {
+  border-color: var(--dc-accent);
+  color: var(--dc-accent);
+}
+
+.dc-tag {
+  display: inline-block;
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  vertical-align: middle;
+}
+
+.dc-tag-transit {
+  background: var(--dc-accent-soft);
+  color: var(--dc-accent);
+}
+
 /* -------------------------------------------------------------------- main */
 
 .dc-main {

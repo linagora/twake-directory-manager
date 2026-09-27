@@ -12,10 +12,12 @@ import nock from 'nock';
 import { ConsoleApiClient } from '../src/api/ConsoleApiClient';
 import {
   ToastController,
+  claimRoots,
   createdEntryId,
   readFailure,
   scopeRestricts,
   splitEntities,
+  transitState,
 } from '../src/DirectoryConsole';
 import {
   attributeLabel,
@@ -27,6 +29,7 @@ import {
 import { EntityDetail } from '../src/components/EntityDetail';
 import { EntityForm } from '../src/components/EntityForm';
 import { EntityList, csvCell } from '../src/components/EntityList';
+import { OrganizationTree } from '../src/components/OrganizationTree';
 import { Translator } from '../src/i18n';
 import { formatByteSize } from '../src/format';
 import type {
@@ -253,6 +256,217 @@ describe('Directory console', () => {
     it('should not restrict without a scope, or with an unrestricted one', () => {
       expect(scopeRestricts(null)).to.be.false;
       expect(scopeRestricts(scope({ unrestricted: true }))).to.be.false;
+    });
+  });
+
+  describe('transit', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const transit = `ou=Transit,${top}`;
+    const sales = `ou=Sales,${top}`;
+    const scope = (over: Partial<Scope> = {}): Scope => ({
+      user: 'alice',
+      unrestricted: false,
+      described: true,
+      branches: [{ dn: sales, name: 'Sales', read: true, write: true }],
+      entities: [],
+      transit,
+      ...over,
+    });
+    const account = (link?: string): Entry => ({
+      dn: 'uid=bob,ou=users,dc=example,dc=com',
+      uid: 'bob',
+      ...(link ? { twakeDepartmentLink: link } : {}),
+    });
+    const linkedGroups: EntityDescriptor = {
+      ...groups,
+      organizationLink: 'twakeDepartmentLink',
+    };
+
+    it('should offer to claim an entry attached to the transit branch', () => {
+      // Spelled differently from the scope: the server compares DNs, not text.
+      const state = transitState(
+        scope(),
+        users,
+        account('ou=transit, ou=Organization,dc=example,dc=com')
+      );
+      expect(state).to.include({
+        inTransit: true,
+        claim: true,
+        handOver: false,
+      });
+    });
+
+    it('should offer to claim an account attached to nothing', () => {
+      expect(transitState(scope(), users, account())).to.include({
+        inTransit: true,
+        claim: true,
+      });
+    });
+
+    it('should not offer to claim a group attached to nothing', () => {
+      // POST /groups/:cn/move refuses such a group.
+      const group = { dn: 'cn=staff,ou=groups,dc=example,dc=com', cn: 'staff' };
+      expect(transitState(scope(), linkedGroups, group)).to.include({
+        inTransit: true,
+        claim: false,
+      });
+      expect(
+        transitState(scope(), linkedGroups, {
+          ...group,
+          twakeDepartmentLink: transit,
+        }).claim
+      ).to.be.true;
+    });
+
+    it('should not offer to claim to a caller who writes nowhere', () => {
+      const reader = scope({ branches: [{ dn: sales, read: true }] });
+      expect(transitState(reader, users, account(transit)).claim).to.be.false;
+    });
+
+    it('should offer to hand over what the caller writes, sub-organizations included', () => {
+      expect(transitState(scope(), users, account(`ou=EU,${sales}`)).handOver)
+        .to.be.true;
+      expect(
+        transitState(scope(), users, account(`ou=Legal,${top}`))
+      ).to.deep.equal({ inTransit: false, claim: false, handOver: false });
+    });
+
+    it('should not offer the other changes to an entry in transit before it is claimed', () => {
+      // The server judges them on the transit branch, or on the parent of an
+      // entry attached to nothing.
+      expect(
+        transitState(scope(), users, account(transit)).rights
+      ).to.deep.equal({ write: false, delete: false });
+      const keeper = scope({
+        branches: [{ dn: top, read: true, write: true, delete: false }],
+      });
+      expect(
+        transitState(keeper, users, account(transit)).rights
+      ).to.deep.equal({
+        write: true,
+        delete: false,
+      });
+      const usersAdmin = scope({
+        branches: [
+          { dn: 'ou=users,dc=example,dc=com', write: true, delete: true },
+        ],
+      });
+      expect(transitState(usersAdmin, users, account()).rights).to.deep.equal({
+        write: true,
+        delete: true,
+      });
+    });
+
+    it('should say nothing of transit when the server names no transit branch', () => {
+      // `transit: null` is also what a server not judging by attachment
+      // answers, where nobody may claim an entry attached to nothing.
+      const none = { inTransit: false, claim: false, handOver: false };
+      expect(
+        transitState(scope({ transit: null }), users, account())
+      ).to.deep.equal(none);
+      const legacy = scope();
+      delete legacy.transit;
+      expect(transitState(legacy, users, account())).to.deep.equal(none);
+      expect(
+        transitState(scope({ unrestricted: true }), users, account())
+      ).to.deep.equal(none);
+      expect(
+        transitState(scope(), mailboxTypes, { cn: 'group' })
+      ).to.deep.equal(none);
+    });
+
+    it('should claim only into the branches the caller writes', () => {
+      const roots = claimRoots(
+        scope({
+          branches: [
+            { dn: sales, name: 'Sales', path: 'Sales', write: true },
+            { dn: `ou=Legal,${top}`, read: true },
+          ],
+        })
+      );
+      expect(roots).to.deep.equal([
+        { dn: sales, name: 'Sales', path: 'Sales' },
+      ]);
+    });
+
+    it('should walk only the subtrees it is given, each once', async () => {
+      const eu = `ou=EU,${sales}`;
+      const asked: string[] = [];
+      nock(baseUrl)
+        .persist()
+        .get(/\/api\/v1\/ldap\/organizations\/[^/]+\/subnodes/)
+        .query({ objectClass: 'organizationalUnit' })
+        .reply(uri => {
+          const dn = decodeURIComponent(uri.split('/')[5]);
+          asked.push(dn);
+          return [
+            200,
+            dn === sales
+              ? [{ dn: eu, ou: ['EU'], twakeDepartmentPath: ['Sales / EU'] }]
+              : [],
+          ];
+        });
+
+      const options = await new ConsoleApiClient(baseUrl).organizationOptions([
+        { dn: sales, name: 'Sales', path: 'Sales' },
+        // Nested in the first: already walked from there.
+        { dn: eu, name: 'EU', path: 'Sales / EU' },
+      ]);
+      expect(options).to.deep.equal([
+        { dn: sales, label: 'Sales' },
+        { dn: eu, label: 'Sales / EU' },
+      ]);
+      expect(asked).to.deep.equal([sales, eu]);
+    });
+
+    it('should mark an entry in transit and offer its moves', () => {
+      const render = (options: {
+        inTransit?: boolean;
+        onClaim?: () => void;
+        onHandOver?: () => void;
+      }): string => {
+        const container = stubContainer();
+        new EntityDetail({
+          entity: users,
+          entry: account(transit),
+          translator: new Translator('en'),
+          canWrite: false,
+          canDelete: false,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          onStatus: () => undefined,
+          onResetPassword: () => undefined,
+          ...options,
+        }).render(container);
+        return container.innerHTML;
+      };
+      const claimable = render({ inTransit: true, onClaim: () => undefined });
+      expect(claimable).to.include('In transit').and.include('data-claim');
+      expect(claimable).not.to.include('data-hand-over');
+      const held = render({ onHandOver: () => undefined });
+      expect(held).to.include('data-hand-over');
+      expect(held).not.to.include('In transit').and.not.include('data-claim');
+    });
+
+    it('should mark the transit branch where it stands in the tree', async () => {
+      const container = stubContainer();
+      await new OrganizationTree({
+        translator: new Translator('en'),
+        root: async () => ({ dn: top, name: 'organization' }),
+        children: async () => [
+          { dn: sales, name: 'Sales' },
+          {
+            dn: 'ou=TRANSIT,ou=organization,dc=example,dc=com',
+            name: 'Transit',
+          },
+        ],
+        transit,
+        onSelect: () => undefined,
+      }).render(container);
+      expect(container.innerHTML.match(/dc-tag-transit/g)).to.have.length(1);
+      expect(container.innerHTML).to.match(
+        /data-select="ou=TRANSIT[^"]*"[^>]*>Transit<\/button>\s*<span class="dc-tag dc-tag-transit">/
+      );
     });
   });
 
