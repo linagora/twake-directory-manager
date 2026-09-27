@@ -1,14 +1,13 @@
 # Changelog
 
-## Unreleased
+## v0.2.1 (2026-09-27)
+
+Built on ldap-rest 0.11.1.
 
 ### Features
 
 - Handing entries over between organizations through ldap-rest's transit
-  branch (`DM_AUTHZ_TRANSIT_BRANCH`): _Hand over_ on an entry one manages,
-  _Claim…_ on an entry in transit, and the branch shown in the scope banner and
-  the tree — see
-  [Handing an entry over](docs/usage.md#handing-an-entry-over-the-transit-branch)
+  branch — [doc](docs/usage.md#handing-an-entry-over-the-transit-branch)
 
 ## v0.2.0 (2026-09-26)
 
