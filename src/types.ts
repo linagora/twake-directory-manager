@@ -127,6 +127,11 @@ export interface Scope {
     delete?: boolean;
   }[];
   entities: { name: string; base: string; create: boolean }[];
+  /**
+   * The organization entries are handed over through between administrators,
+   * `null` when there is none. Absent before ldap-rest 0.11.1
+   */
+  transit?: string | null;
 }
 
 /** Options accepted by the console. */

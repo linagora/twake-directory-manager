@@ -135,6 +135,41 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
   `enabled`, `disabled`, `noAccess`, `toDelete` — and keeps the name the
   deployment gave it otherwise. The chosen language is remembered.
 
+## Handing an entry over: the transit branch
+
+An administrator moves an entry only between organizations they write. To
+hand one over to an organization they do not manage, ldap-rest (0.11.1 or
+later) offers a transit branch, named with `DM_AUTHZ_TRANSIT_BRANCH` (the
+Helm chart takes it under `extraEnv`):
+
+```bash
+-e DM_AUTHZ_TRANSIT_BRANCH='ou=Transit,ou=organization,dc=example,dc=org'
+```
+
+The branch is an organization like any other, created in the tree
+beforehand. Once the server names it:
+
+- **The scope banner shows it** after the caller's own branches, and links to
+  its card, which lists the entries waiting in it: every administrator sees
+  them. The tree marks it where it stands, but a local administrator's tree
+  starts at their own branch and seldom holds it, so the banner is their way
+  in.
+- **An entry of an organization the caller writes offers _Hand over_**, which
+  moves it into the transit branch after a confirmation. The caller no longer
+  manages it.
+- **An entry in transit is marked _In transit_ and offers _Claim…_**, which
+  moves it into one of the organizations the caller writes, and only those.
+  Its other actions (edit, state, password, deletion) are offered only to a
+  caller who writes the transit branch itself: the server judges them there,
+  so the entry is claimed first.
+
+ldap-rest also counts an account attached to no organization as in transit.
+The console shows it so, and offers to claim it, only when a transit branch
+is named: without one, the server's answer does not say whether it judges by
+attachment, and when it does not, nobody may claim such an entry. A group
+attached to no organization is in transit but cannot be claimed: ldap-rest's
+group move refuses it.
+
 ## Importing entries from a CSV file
 
 A list whose entries the caller may create has an **Import CSV** button: a
@@ -245,8 +280,11 @@ screen from shipping.
 - The list endpoint returns a whole branch: the search guard keeps that
   workable, but a search matching many thousands of entries is still fetched
   in full. Server-side pagination would remove the need for the guard.
-- Moving an entry between organizations is exposed by the API
-  (`POST {entity}/:id/move`) but has no control in the interface yet.
+- Moving an entry between two organizations the caller writes has no control
+  of its own: its organization field is changed in its form. The move
+  controls are the transit branch's.
+- Nothing lists the entries attached to no organization: they are found by a
+  search, and ldap-rest has no filter for a missing link.
 - Bulk actions cover export and deletion; assignment is not there yet.
 - The exported CSV neutralises a cell a spreadsheet would read as a formula by
   prefixing it with an apostrophe, so such a value comes back with one.

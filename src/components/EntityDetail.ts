@@ -24,6 +24,12 @@ export interface DetailOptions {
   onDelete(): void;
   onStatus(state: string): void;
   onResetPassword(): void;
+  /** The entry waits in the transit branch, or is attached to nothing */
+  inTransit?: boolean;
+  /** Move it into an organization of the caller's, when they may */
+  onClaim?(): void;
+  /** Let it go into the transit branch, when they may */
+  onHandOver?(): void;
   /** Readable name of the entry a pointer lands on, when its schema has one */
   pointerLabel?(dn: string): string | undefined;
   /** Entries pointing at this one, or pointed at by it */
@@ -56,13 +62,34 @@ export class EntityDetail {
    */
   render(container: HTMLElement): void {
     const { entity, entry, translator, canWrite, canDelete } = this.options;
+    const { inTransit, onClaim, onHandOver } = this.options;
     const title = values(entryValue(entry, entity.mainAttribute))[0] || '';
 
     container.innerHTML = `
       <article class="dc-detail">
         <header class="dc-detail-header">
-          <h2>${escapeHtml(title)}</h2>
+          <h2>${escapeHtml(title)}${
+            inTransit
+              ? ` <span class="dc-tag dc-tag-transit">${escapeHtml(
+                  translator.t('transit.badge')
+                )}</span>`
+              : ''
+          }</h2>
           <div class="dc-detail-actions">
+            ${
+              onClaim
+                ? `<button type="button" class="dc-button dc-button-primary" data-claim>${escapeHtml(
+                    translator.t('transit.claim')
+                  )}</button>`
+                : ''
+            }
+            ${
+              onHandOver
+                ? `<button type="button" class="dc-button" data-hand-over>${escapeHtml(
+                    translator.t('transit.handOver')
+                  )}</button>`
+                : ''
+            }
             ${
               canWrite
                 ? `<button type="button" class="dc-button dc-button-primary" data-edit>${escapeHtml(
@@ -218,6 +245,12 @@ export class EntityDetail {
     container
       .querySelector('[data-password]')
       ?.addEventListener('click', () => this.options.onResetPassword());
+    container
+      .querySelector('[data-claim]')
+      ?.addEventListener('click', () => this.options.onClaim?.());
+    container
+      .querySelector('[data-hand-over]')
+      ?.addEventListener('click', () => this.options.onHandOver?.());
 
     const status = container.querySelector<HTMLSelectElement>('[data-status]');
     status?.addEventListener('change', () => {

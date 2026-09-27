@@ -161,6 +161,18 @@ const en: Catalogue = {
   'delete.done': 'Deleted',
   'delete.failed': '{name}: {error}',
 
+  'transit.branch': 'Transit',
+  'transit.badge': 'In transit',
+  'transit.claim': 'Claim…',
+  'transit.claimTitle': 'Claim {name}',
+  'transit.target': 'Into the organization',
+  'transit.noTarget': 'You write in no organization that could take it',
+  'transit.claimed': '{name} moved to {organization}',
+  'transit.handOver': 'Hand over',
+  'transit.handOverConfirm':
+    'Put {name} in transit? Every administrator will see this entry and may claim it, and you will no longer manage it.',
+  'transit.handedOver': '{name} is in transit',
+
   'save.done': 'Saved',
   'create.done': 'Created',
 };
@@ -316,6 +328,19 @@ const fr: Catalogue = {
     'Supprimer {count} entrées ? Cette action est irréversible.',
   'delete.done': 'Supprimé',
   'delete.failed': '{name} : {error}',
+
+  'transit.branch': 'Transit',
+  'transit.badge': 'En transit',
+  'transit.claim': 'Rattacher à…',
+  'transit.claimTitle': 'Rattacher {name}',
+  'transit.target': 'À l’organisation',
+  'transit.noTarget':
+    'Vous n’écrivez dans aucune organisation qui puisse l’accueillir',
+  'transit.claimed': '{name} est désormais dans {organization}',
+  'transit.handOver': 'Mettre en transit',
+  'transit.handOverConfirm':
+    'Mettre {name} en transit ? Tous les administrateurs verront cette entrée et pourront la rattacher, et vous ne la gérerez plus.',
+  'transit.handedOver': '{name} est en transit',
 
   'save.done': 'Enregistré',
   'create.done': 'Créé',

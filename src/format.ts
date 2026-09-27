@@ -181,8 +181,15 @@ export function displayValue(
 }
 
 /** A DN in the one spelling two DNs are compared in. */
-function comparableDn(dn: string): string {
+export function comparableDn(dn: string): string {
   return dn.replace(/\s*,\s*/g, ',').toLowerCase();
+}
+
+/** Whether a DN is a branch itself or lies anywhere under it. */
+export function withinDn(dn: string, branch: string): boolean {
+  const entry = comparableDn(dn);
+  const root = comparableDn(branch);
+  return entry === root || entry.endsWith(`,${root}`);
 }
 
 /**

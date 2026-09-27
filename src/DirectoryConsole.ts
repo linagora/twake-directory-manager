@@ -21,10 +21,12 @@ import { EntityList, SEARCH_MINIMUM } from './components/EntityList';
 import { OrganizationTree } from './components/OrganizationTree';
 import {
   attributeLabel,
+  comparableDn,
   entryValue,
   pointerLabel,
   rdnValue,
   resolveText,
+  withinDn,
 } from './format';
 import { availableLanguages, Translator } from './i18n';
 import type {
@@ -174,6 +176,94 @@ export function createdEntryId(
  */
 export function scopeRestricts(scope: Scope | null): scope is Scope {
   return !!scope && !scope.unrestricted && scope.described !== false;
+}
+
+/** Where an entry stands with the transit branch, and what the caller may do. */
+export interface TransitState {
+  /** Waiting for an administrator to claim it */
+  inTransit: boolean;
+  /** The caller may move it into an organization of theirs */
+  claim: boolean;
+  /** The caller may let it go into the transit branch */
+  handOver: boolean;
+  /**
+   * What the caller may do to an entry in transit besides moving it. The
+   * server judges those changes on the transit branch, or on the entry's
+   * parent when it is attached to nothing, so an entry is usually claimed
+   * first. Absent when the entry is not in transit
+   */
+  rights?: { write: boolean; delete: boolean };
+}
+
+/**
+ * The transit moves offered on an entry.
+ *
+ * ldap-rest also counts an entry attached to no organization as in transit,
+ * but `transit: null` does not tell a server judging by attachment without a
+ * transit branch from one not judging by attachment at all, where nobody may
+ * claim such an entry. The console therefore speaks of transit only when the
+ * server names a transit branch.
+ *
+ * `POST /groups/:cn/move` refuses a group attached to no organization, so
+ * such a group is in transit but cannot be claimed.
+ *
+ * @param scope what `GET /v1/authz/scope` answered
+ * @param entity entity the entry belongs to
+ * @param entry the entry as read
+ * @returns whether it is in transit, and the moves offered
+ */
+export function transitState(
+  scope: Scope | null,
+  entity: EntityDescriptor,
+  entry: Entry
+): TransitState {
+  const none = { inTransit: false, claim: false, handOver: false };
+  if (!scopeRestricts(scope) || !scope.transit || !entity.organizationLink)
+    return none;
+  const raw = entryValue(entry, entity.organizationLink);
+  const link = String((Array.isArray(raw) ? raw[0] : raw) ?? '');
+  if (!link || comparableDn(link) === comparableDn(scope.transit)) {
+    // The parent: everything up to the first comma the DN does not escape.
+    const judged =
+      link || String(entry.dn ?? '').replace(/^(?:\\.|[^,\\])*,/, '');
+    const grants = (right: 'write' | 'delete'): boolean =>
+      !!judged &&
+      scope.branches.some(
+        branch => branch[right] && withinDn(judged, branch.dn)
+      );
+    return {
+      inTransit: true,
+      claim:
+        (!!link || entity.kind !== 'group') &&
+        scope.branches.some(branch => branch.write),
+      handOver: false,
+      rights: { write: grants('write'), delete: grants('delete') },
+    };
+  }
+  return {
+    inTransit: false,
+    claim: false,
+    handOver: scope.branches.some(
+      branch => branch.write && withinDn(link, branch.dn)
+    ),
+  };
+}
+
+/**
+ * The branches an entry in transit can be claimed into: those the caller
+ * writes, each standing for its subtree.
+ *
+ * @param scope what `GET /v1/authz/scope` answered
+ * @returns the roots to offer the organizations of
+ */
+export function claimRoots(scope: Scope): OrganizationNode[] {
+  return scope.branches
+    .filter(branch => branch.write)
+    .map(branch => ({
+      dn: branch.dn,
+      name: branch.name || rdnValue(branch.dn),
+      path: branch.path,
+    }));
 }
 
 /**
@@ -512,7 +602,17 @@ export class DirectoryConsole {
             </li>`;
           })
           .join('')}
-      </ul>`;
+      </ul>
+      ${
+        this.scope.transit
+          ? `<span class="dc-scope-label">${escapeHtml(t('transit.branch'))}</span>
+            <a class="dc-scope-transit" href="#/organizations/${encodeURIComponent(
+              this.scope.transit
+            )}" title="${escapeHtml(this.scope.transit)}">${escapeHtml(
+              rdnValue(this.scope.transit)
+            )}</a>`
+          : ''
+      }`;
   }
 
   /* ------------------------------------------------------------------ views */
@@ -824,12 +924,20 @@ export class DirectoryConsole {
       .querySelector('[data-back]')
       ?.addEventListener('click', () => this.go(entity.key));
 
+    const transit = transitState(this.scope, entity, entry);
     const detail = new EntityDetail({
       entity,
       entry,
       translator: this.translator,
-      canWrite: this.canWrite(),
-      canDelete: this.canDelete(),
+      canWrite: transit.rights?.write ?? this.canWrite(),
+      canDelete: transit.rights?.delete ?? this.canDelete(),
+      inTransit: transit.inTransit,
+      onClaim: transit.claim
+        ? (): void => void this.claim(entity, id)
+        : undefined,
+      onHandOver: transit.handOver
+        ? (): void => void this.handOver(entity, id)
+        : undefined,
       pointerLabel: (dn: string): string | undefined =>
         pointerLabel(this.entities, dn, this.translator.language),
       relations: this.relations(entity, entry),
@@ -918,6 +1026,7 @@ export class DirectoryConsole {
       root: (): Promise<OrganizationNode | null> => this.api.organizationTop(),
       children: (dn: string): Promise<OrganizationNode[]> =>
         this.api.organizationChildren(dn),
+      transit: this.scope?.transit || undefined,
       onSelect: (node: OrganizationNode): void => {
         void this.showOrganization(node);
       },
@@ -1288,6 +1397,103 @@ export class DirectoryConsole {
           .catch((err: Error) => this.toast(err.message, true));
       });
     });
+  }
+
+  /**
+   * Claim an entry in transit into one of the caller's organizations. Only
+   * those are offered: the server asks for write on the destination and
+   * nothing else, so any other choice would be refused.
+   */
+  private async claim(entity: EntityDescriptor, id: string): Promise<void> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    const scope = this.scope;
+    if (!scopeRestricts(scope) || !scope.transit) return;
+    const transit = comparableDn(scope.transit);
+    let targets: { dn: string; label: string }[];
+    try {
+      targets = (await this.api.organizationOptions(claimRoots(scope))).filter(
+        target => comparableDn(target.dn) !== transit
+      );
+    } catch (err) {
+      this.toast((err as Error).message, true);
+      return;
+    }
+
+    this.openPanel(
+      t('transit.claimTitle', { name: id }),
+      body => {
+        if (targets.length === 0) {
+          body.innerHTML = `<p class="dc-empty">${escapeHtml(t('transit.noTarget'))}</p>`;
+          return;
+        }
+        body.innerHTML = `
+          <form class="dc-form">
+            <div class="dc-field">
+              <label for="dc-claim-target">${escapeHtml(t('transit.target'))}</label>
+              <select id="dc-claim-target" class="dc-input">
+                ${targets
+                  .map(
+                    target =>
+                      `<option value="${escapeHtml(target.dn)}">${escapeHtml(
+                        target.label
+                      )}</option>`
+                  )
+                  .join('')}
+              </select>
+            </div>
+            <div class="dc-form-actions">
+              <button type="button" class="dc-button" data-cancel>${escapeHtml(
+                t('app.cancel')
+              )}</button>
+              <button type="submit" class="dc-button dc-button-primary">${escapeHtml(
+                t('app.confirm')
+              )}</button>
+            </div>
+          </form>`;
+
+        body
+          .querySelector('[data-cancel]')
+          ?.addEventListener('click', () => this.closePanel());
+        body.querySelector('form')?.addEventListener('submit', event => {
+          event.preventDefault();
+          const select =
+            body.querySelector<HTMLSelectElement>('#dc-claim-target');
+          const target = targets.find(item => item.dn === select?.value);
+          if (!target) return;
+          void this.api
+            .move(entity, id, target.dn)
+            .then(async () => {
+              this.closePanel();
+              this.toast(
+                t('transit.claimed', { name: id, organization: target.label })
+              );
+              await this.renderMain();
+            })
+            .catch((err: Error) => this.toast(err.message, true));
+        });
+      },
+      true
+    );
+  }
+
+  /** Let an entry go into the transit branch, for another administrator. */
+  private async handOver(entity: EntityDescriptor, id: string): Promise<void> {
+    const transit = this.scope?.transit;
+    if (!transit) return;
+    if (
+      !window.confirm(
+        this.translator.t('transit.handOverConfirm', { name: id })
+      )
+    )
+      return;
+    try {
+      await this.api.move(entity, id, transit);
+      this.toast(this.translator.t('transit.handedOver', { name: id }));
+      await this.renderMain();
+    } catch (err) {
+      this.toast((err as Error).message, true);
+    }
   }
 
   private async confirmDelete(
