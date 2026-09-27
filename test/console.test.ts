@@ -1535,6 +1535,93 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.include('>alice</span>');
     });
 
+    /** A select just real enough for `fillPointers`, which only rewrites markup. */
+    const stubSelect = (
+      branch: string,
+      value: string
+    ): HTMLSelectElement & { dataset: { pointer: string } } => {
+      const select = {
+        dataset: { pointer: branch },
+        value,
+        innerHTML: '',
+        disabled: true,
+        removeAttribute: (_name: string): void => undefined,
+        insertAdjacentHTML: (_position: string, html: string): void => {
+          select.innerHTML += html;
+        },
+      };
+      return select as unknown as HTMLSelectElement & {
+        dataset: { pointer: string };
+      };
+    };
+
+    /** Render a form whose one pointer control is that select. */
+    const renderWith = async (
+      select: HTMLSelectElement,
+      entry: Record<string, string | string[]>,
+      pointerOptions: () => Promise<{ dn: string; label: string }[]>
+    ): Promise<HTMLElement & { innerHTML: string }> => {
+      const container = stubContainer();
+      (
+        container as unknown as { querySelectorAll: () => unknown[] }
+      ).querySelectorAll = (): unknown[] => [select];
+      await new EntityForm({
+        entity: users,
+        entry,
+        translator: new Translator('en'),
+        pointerOptions,
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+      }).render(container);
+      return container;
+    };
+
+    const held = 'ou=Demo,dc=example,dc=com';
+
+    it('should keep a pointer inert until its candidates are known', async () => {
+      const select = stubSelect('dc=example,dc=com', held);
+      const container = await renderWith(
+        select,
+        { uid: 'bob', twakeDepartmentLink: [held] },
+        () => Promise.resolve([])
+      );
+      // A click meant to open the list would otherwise take the empty choice
+      // and clear the organization the entry holds.
+      expect(container.innerHTML).to.include(
+        'data-pointer="dc=example,dc=com" disabled'
+      );
+      expect(container.innerHTML).to.include('aria-busy="true"');
+      expect(container.innerHTML).to.include('<option value="" disabled>');
+    });
+
+    it('should offer the empty choice once the candidates are there', async () => {
+      const select = stubSelect('dc=example,dc=com', held);
+      await renderWith(
+        select,
+        { uid: 'bob', twakeDepartmentLink: [held] },
+        () => Promise.resolve([{ dn: held, label: 'Demo' }])
+      );
+      expect(select.disabled).to.equal(false);
+      expect(select.innerHTML).to.not.include('disabled');
+      expect(select.innerHTML).to.include('>Demo</option>');
+      expect(select.value).to.equal(held);
+    });
+
+    it('should keep the value of a branch that answered nothing', async () => {
+      const select = stubSelect('dc=example,dc=com', held);
+      await renderWith(
+        select,
+        { uid: 'bob', twakeDepartmentLink: [held] },
+        () => Promise.reject(new Error('403'))
+      );
+      // Nothing to choose: the empty choice cannot be taken, and the value the
+      // directory holds stays selected rather than being silently dropped.
+      expect(select.disabled).to.equal(false);
+      expect(select.innerHTML).to.include('<option value="" disabled>');
+      expect(select.innerHTML).to.include(`${held}" selected`);
+      expect(select.value).to.equal(held);
+    });
+
     it('should offer neither computed nor read-only attributes', async () => {
       const container = stubContainer();
       await build().render(container);

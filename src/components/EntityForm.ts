@@ -241,9 +241,12 @@ export class EntityForm {
     const { translator } = this.options;
     const current = this.values[name][0] ?? '';
     const branch = (attr.branch || [])[0] || '';
+    // Inert until `fillPointers` has answered: with the empty choice as the
+    // only selectable option, the click that opens the list picks that choice
+    // and silently clears the value the entry holds.
     return `<select id="dc-field-${escapeHtml(name)}" name="${escapeHtml(name)}"
-      class="dc-input" data-pointer="${escapeHtml(branch)}">
-      <option value="">${escapeHtml(translator.t('form.choose'))}</option>
+      class="dc-input" data-pointer="${escapeHtml(branch)}" disabled aria-busy="true">
+      <option value="" disabled>${escapeHtml(translator.t('form.choose'))}</option>
       ${current ? `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>` : ''}
     </select>`;
   }
@@ -304,8 +307,9 @@ export class EntityForm {
         <ul class="dc-token-list">${this.tokenItems(name)}</ul>
         ${
           isPointer
-            ? `<select class="dc-input" data-token-input data-pointer="${escapeHtml(branch)}">
-                 <option value="">${escapeHtml(translator.t('form.choose'))}</option>
+            ? `<select class="dc-input" data-token-input data-pointer="${escapeHtml(branch)}"
+                 disabled aria-busy="true">
+                 <option value="" disabled>${escapeHtml(translator.t('form.choose'))}</option>
                </select>`
             : `<input class="dc-input" data-token-input type="text"
                  placeholder="${escapeHtml(translator.t('form.addValue'))}" />`
@@ -577,8 +581,12 @@ export class EntityForm {
           })
         );
         const current = select.value;
+        // The empty choice is offered only when there is something to choose:
+        // on a branch that answered nothing, taking it would drop the value
+        // the entry holds and put nothing in its place.
         select.innerHTML =
-          `<option value="">${escapeHtml(this.options.translator.t('form.choose'))}</option>` +
+          `<option value=""${options.length === 0 ? ' disabled' : ''}>` +
+          `${escapeHtml(this.options.translator.t('form.choose'))}</option>` +
           options
             .map(
               option =>
@@ -596,6 +604,8 @@ export class EntityForm {
           );
         }
         select.value = current;
+        select.disabled = false;
+        select.removeAttribute('aria-busy');
       })
     );
   }
