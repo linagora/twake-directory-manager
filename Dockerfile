@@ -6,7 +6,7 @@
 #
 # The console needs an ldap-rest recent enough to serve the enterprise
 # plugins (enterpriseRules, accountLifecycle, authzScope).
-ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.11.2
+ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.12.0
 
 # The console builds to JavaScript and CSS, which are the same whatever the
 # target architecture, so this stage runs natively. Left to follow the target
