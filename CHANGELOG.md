@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- A sign-out button in the header, behind OpenID Connect: it ends the session
+  at the provider too. It needs an ldap-rest that advertises its logout route
+  ([linagora/ldap-rest#224](https://github.com/linagora/ldap-rest/pull/224));
+  an older one shows no button
+
 ## v0.2.3 (2026-09-27)
 
 Built on ldap-rest 0.11.2.

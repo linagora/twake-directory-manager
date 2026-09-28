@@ -736,6 +736,43 @@ describe('Directory console', () => {
       expect(resolveText(groups.singularLabel, 'fr')).to.equal('groupe');
     });
 
+    it('should offer to sign out only when the server says how', async () => {
+      nock(baseUrl)
+        .get('/api/v1/config')
+        .reply(200, {
+          apiPrefix: '/api',
+          ldapBase: 'dc=example,dc=com',
+          features: {
+            openidconnect: { enabled: true, endpoints: { logout: '/logout' } },
+          },
+        });
+      const oidc = new ConsoleApiClient(baseUrl);
+      await oidc.discover();
+      // The server's route, not the API's: no prefix.
+      expect(oidc.logoutUrl).to.equal(`${baseUrl}/logout`);
+
+      // A server naming the plugin without a logout route: nothing to link
+      // to. (An ldap-rest older than the logout support names no
+      // `openidconnect` at all, which the last case covers.)
+      nock(baseUrl)
+        .get('/api/v1/config')
+        .reply(200, {
+          apiPrefix: '/api',
+          ldapBase: '',
+          features: { openidconnect: { enabled: true } },
+        });
+      const older = new ConsoleApiClient(baseUrl);
+      await older.discover();
+      expect(older.logoutUrl).to.equal(undefined);
+
+      nock(baseUrl)
+        .get('/api/v1/config')
+        .reply(200, { apiPrefix: '/api', ldapBase: '', features: {} });
+      const other = new ConsoleApiClient(baseUrl);
+      await other.discover();
+      expect(other.logoutUrl).to.equal(undefined);
+    });
+
     it('should ignore an entity whose schema the server did not serve', async () => {
       nock(baseUrl)
         .get('/api/v1/config')

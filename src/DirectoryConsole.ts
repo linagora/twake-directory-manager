@@ -506,7 +506,7 @@ export class DirectoryConsole {
           </div>
         </aside>
         <div class="dc-content">
-          <header class="dc-header">${this.scopeMarkup()}</header>
+          <header class="dc-header">${this.scopeMarkup()}${this.logoutMarkup()}</header>
           <main class="dc-main" data-main></main>
         </div>
         <div class="dc-panel" data-panel hidden>
@@ -560,6 +560,15 @@ export class DirectoryConsole {
     container
       .querySelector('[data-panel-close]')
       ?.addEventListener('click', () => this.closePanel());
+  }
+
+  /** The sign-out control, when the server offers a way to sign out. */
+  private logoutMarkup(): string {
+    const url = this.api.logoutUrl;
+    if (!url) return '';
+    return `<a class="dc-button dc-logout" href="${escapeHtml(url)}">${escapeHtml(
+      this.translator.t('app.logout')
+    )}</a>`;
   }
 
   /**
