@@ -751,6 +751,20 @@ describe('Directory console', () => {
       // The server's route, not the API's: no prefix.
       expect(oidc.logoutUrl).to.equal(`${baseUrl}/logout`);
 
+      // The plugin loaded, but no route published: an ldap-rest older than the
+      // logout support. A link to a route the server does not serve would land
+      // the caller on a 404.
+      nock(baseUrl)
+        .get('/api/v1/config')
+        .reply(200, {
+          apiPrefix: '/api',
+          ldapBase: '',
+          features: { openidconnect: { enabled: true } },
+        });
+      const older = new ConsoleApiClient(baseUrl);
+      await older.discover();
+      expect(older.logoutUrl).to.equal(undefined);
+
       nock(baseUrl)
         .get('/api/v1/config')
         .reply(200, { apiPrefix: '/api', ldapBase: '', features: {} });
