@@ -1630,7 +1630,9 @@ describe('Directory console', () => {
         optional
       );
       expect(select.disabled).to.equal(false);
-      expect(select.innerHTML).to.not.include('disabled');
+      // The empty choice is there and carries no `disabled`: taking it is a
+      // real choice, and how the value an entry holds is cleared.
+      expect(select.innerHTML).to.include('<option value="">');
       expect(select.innerHTML).to.include('>Demo</option>');
       expect(select.value).to.equal(held);
     });
