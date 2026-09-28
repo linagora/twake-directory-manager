@@ -736,6 +736,29 @@ describe('Directory console', () => {
       expect(resolveText(groups.singularLabel, 'fr')).to.equal('groupe');
     });
 
+    it('should offer to sign out only when the server says how', async () => {
+      nock(baseUrl)
+        .get('/api/v1/config')
+        .reply(200, {
+          apiPrefix: '/api',
+          ldapBase: 'dc=example,dc=com',
+          features: {
+            openidconnect: { enabled: true, endpoints: { logout: '/logout' } },
+          },
+        });
+      const oidc = new ConsoleApiClient(baseUrl);
+      await oidc.discover();
+      // The server's route, not the API's: no prefix.
+      expect(oidc.logoutUrl).to.equal(`${baseUrl}/logout`);
+
+      nock(baseUrl)
+        .get('/api/v1/config')
+        .reply(200, { apiPrefix: '/api', ldapBase: '', features: {} });
+      const other = new ConsoleApiClient(baseUrl);
+      await other.discover();
+      expect(other.logoutUrl).to.equal(undefined);
+    });
+
     it('should ignore an entity whose schema the server did not serve', async () => {
       nock(baseUrl)
         .get('/api/v1/config')

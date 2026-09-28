@@ -54,6 +54,7 @@ interface ConfigResponse {
       pathSeparator?: string;
       schema?: EntitySchema;
     };
+    openidconnect?: { endpoints?: { logout?: string } };
   };
 }
 
@@ -147,6 +148,8 @@ export class ConsoleApiClient {
   private organizationPathAttribute?: string;
   /** Object classes that make an entry an organization rather than a member */
   private organizationClasses: string[] = [];
+  /** Route that ends the session, when the server's authentication has one */
+  private logoutPath?: string;
   /**
    * Whether the API lives on another origin than the page. `same-origin`
    * attaches no cookie to a cross-origin request, so a deployment that points
@@ -169,6 +172,18 @@ export class ConsoleApiClient {
   /** Separator the directory puts between the segments of an organization path. */
   get organizationPathSeparator(): string {
     return this.pathSeparator;
+  }
+
+  /**
+   * Where to send the browser to end its session, when the server says.
+   *
+   * Only OpenID Connect publishes one: it logs out at the provider too, and
+   * without that the provider would log the caller straight back in. Behind
+   * any other authentication the session is the host's, and so is ending it.
+   * The route belongs to the server, not to its API, hence no prefix.
+   */
+  get logoutUrl(): string | undefined {
+    return this.logoutPath ? `${this.origin}${this.logoutPath}` : undefined;
   }
 
   /** Root of the organization tree, when the server serves one. */
@@ -232,6 +247,7 @@ export class ConsoleApiClient {
     );
     this.apiPrefix = config.apiPrefix || this.apiPrefix;
     this.ldapBase = config.ldapBase || '';
+    this.logoutPath = config.features.openidconnect?.endpoints?.logout;
     const entities: EntityDescriptor[] = [];
 
     for (const resource of config.features.ldapFlatGeneric?.flatResources ||

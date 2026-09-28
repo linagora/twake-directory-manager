@@ -333,6 +333,14 @@
   font-size: 13px;
 }
 
+/* Whatever the scope banner holds, signing out stays at the far end. */
+.dc-logout {
+  margin-left: auto;
+  min-height: 32px;
+  padding: 4px 14px;
+  text-decoration: none;
+}
+
 .dc-scope-label {
   font-weight: 600;
 }

@@ -26,6 +26,7 @@ const en: Catalogue = {
   'app.confirm': 'Confirm',
   'app.back': 'Back',
   'app.language': 'Language',
+  'app.logout': 'Sign out',
 
   'nav.dashboard': 'Overview',
   'nav.reference': 'Reference data',
@@ -191,6 +192,7 @@ const fr: Catalogue = {
   'app.confirm': 'Confirmer',
   'app.back': 'Retour',
   'app.language': 'Langue',
+  'app.logout': 'Se déconnecter',
 
   'nav.dashboard': 'Vue d’ensemble',
   'nav.reference': 'Référentiels',
