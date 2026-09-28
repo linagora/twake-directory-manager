@@ -157,6 +157,11 @@ and [storage](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugi
 
 ## Documentation
 
+- [Administrator's guide](docs/admin-guide/): getting started with the
+  console, for global and local administrators. Sphinx sources:
+  `make -C docs/admin-guide html`, or `make -C docs/admin-guide pdf` for the
+  PDF (Docker only). The _Administrator's guide_ workflow builds the PDF on
+  demand.
 - [Using the console](docs/usage.md): what the server has to expose, what
   each schema marker changes in the interface, the behaviour worth knowing,
   and how a deployment restyles it.
