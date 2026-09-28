@@ -16,6 +16,32 @@ data:
   DM_OIDC_SERVER: {{ required "oidc.server is required" .Values.oidc.server | quote }}
   DM_OIDC_CLIENT_ID: {{ required "oidc.clientId is required" .Values.oidc.clientId | quote }}
   DM_BASE_URL: {{ include "tdm.baseUrl" . | quote }}
+  {{- $extraPlugins := list }}
+  {{- with .Values.bcl }}
+  {{- if .enabled }}
+  {{- $extraPlugins = append $extraPlugins "core/bcl" }}
+  DM_BCL_RETENTION: {{ .retention | quote }}
+  DM_STORAGE_BACKEND: {{ .backend | quote }}
+  {{- if eq .backend "ldap" }}
+  DM_STORAGE_LDAP_BASE: {{ required "bcl.ldap.base is required with the ldap backend" .ldap.base | quote }}
+  {{- else if eq .backend "file" }}
+  {{- if gt (int $.Values.replicaCount) 1 }}
+  {{- fail "bcl.backend file keeps the records on one volume: use ldap, postgres or valkey with several replicas" }}
+  {{- end }}
+  DM_STORAGE_FILE_DIRECTORY: "/var/lib/twake-directory-manager/bcl"
+  {{- else if not (has .backend (list "postgres" "valkey")) }}
+  {{- fail "bcl.backend must be ldap, file, postgres or valkey" }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- with .Values.extraEnv.DM_EXTRA_PLUGINS }}
+  {{- $extraPlugins = append $extraPlugins . }}
+  {{- end }}
+  {{- if $extraPlugins }}
+  DM_EXTRA_PLUGINS: {{ join "," $extraPlugins | quote }}
+  {{- end }}
   {{- range $k, $v := .Values.extraEnv }}
+  {{- if ne $k "DM_EXTRA_PLUGINS" }}
   {{ $k }}: {{ $v | quote }}
+  {{- end }}
   {{- end }}

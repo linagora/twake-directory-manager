@@ -1,0 +1,15 @@
+{{- if include "tdm.bclVolume" . }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "tdm.fullname" . }}-bcl
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- with .Values.bcl.file.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.bcl.file.size }}
+{{- end }}

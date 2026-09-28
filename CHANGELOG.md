@@ -8,6 +8,10 @@
   at the provider too. It needs an ldap-rest that advertises its logout route
   ([linagora/ldap-rest#224](https://github.com/linagora/ldap-rest/pull/224));
   an older one shows no button
+- Back-Channel Logout, in the Helm chart (`bcl.enabled`): a logout at the
+  provider or in another application ends the console's session, and the
+  console signs in again on its next request. The records live in the
+  directory, a file volume, PostgreSQL or Valkey (`bcl.backend`)
 
 ## v0.2.3 (2026-09-27)
 
