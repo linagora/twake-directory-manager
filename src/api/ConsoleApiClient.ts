@@ -158,6 +158,12 @@ export class ConsoleApiClient {
    * origin and credentials in its CORS policy either way.
    */
   private readonly crossOrigin: boolean;
+  /**
+   * Called when the server answers `401` on the page's own origin: the
+   * session ended, and loading the page again can get it back. Not across
+   * origins, where reloading the page signs nothing in at the API's host.
+   */
+  onSessionEnded?: () => void;
 
   constructor(apiBaseUrl?: string, apiPrefix?: string) {
     const own = typeof window !== 'undefined' ? window.location.origin : '';
@@ -213,6 +219,7 @@ export class ConsoleApiClient {
         ...(init?.headers || {}),
       },
     });
+    if (response.status === 401 && !this.crossOrigin) this.onSessionEnded?.();
     const text = await response.text();
     const status = `${response.status} ${response.statusText}`;
     let payload: unknown = null;
