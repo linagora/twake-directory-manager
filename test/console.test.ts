@@ -751,9 +751,9 @@ describe('Directory console', () => {
       // The server's route, not the API's: no prefix.
       expect(oidc.logoutUrl).to.equal(`${baseUrl}/logout`);
 
-      // The plugin loaded, but no route published: an ldap-rest older than the
-      // logout support. A link to a route the server does not serve would land
-      // the caller on a 404.
+      // A server naming the plugin without a logout route: nothing to link
+      // to. (An ldap-rest older than the logout support names no
+      // `openidconnect` at all, which the last case covers.)
       nock(baseUrl)
         .get('/api/v1/config')
         .reply(200, {
