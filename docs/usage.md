@@ -293,6 +293,12 @@ screen from shipping.
   at the provider too. Behind any other authentication the console sends
   whatever credential the browser already holds, so ending a session is the
   host application's to offer, not its own.
+- A `401` from the API means the session ended since the page was loaded — a
+  logout elsewhere told through Back-Channel Logout, or an expiry. The
+  console loads the page again, which goes through the sign-in and comes back
+  to it; once a minute at most, so a page served without a session shows the
+  error instead of reloading for ever. Not when the API is on another origin,
+  where reloading the page signs nothing in.
 - The members listed under an organization's card stop at
   `ldap_organization_max_subnodes` (50 by default) and the card does not say
   it truncated. The tree itself is unaffected: child organizations are asked

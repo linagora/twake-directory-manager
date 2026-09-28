@@ -44,6 +44,32 @@ oidc:
   # Public URL the provider redirects back to; defaults to the ingress host.
   baseUrl: ""
 
+# Back-Channel Logout: a logout at the provider, or in another application,
+# ends the console's session too. Register https://<host>/backchannel-logout
+# at the provider. The sessions it ends are recorded, and where is a choice,
+# hence off by default.
+bcl:
+  enabled: false
+  # Seconds a record is kept: at least the session lifetime (seven days).
+  retention: 604800
+  # ldap, file, postgres or valkey.
+  backend: ldap
+  ldap:
+    # A branch holding these records and nothing else, outside the ones the
+    # console administers. It must exist; the bind account writes to it.
+    base: ""
+  file:
+    # On a volume of its own, so one replica only.
+    size: 64Mi
+    storageClass: ""
+  # The URLs carry credentials, so they go into the Secret. With
+  # secrets.existingSecret, put DM_STORAGE_POSTGRES_URL or
+  # DM_STORAGE_VALKEY_URL in that Secret instead.
+  postgres:
+    url: ""
+  valkey:
+    url: ""
+
 secrets:
   # A Secret holding DM_LDAP_PWD and DM_OIDC_CLIENT_SECRET. When set, the two
   # values below are ignored and no Secret is created.

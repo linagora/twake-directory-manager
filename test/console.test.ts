@@ -10,6 +10,7 @@ import { expect } from 'chai';
 import nock from 'nock';
 
 import { ConsoleApiClient } from '../src/api/ConsoleApiClient';
+import { signInAgain } from '../src/session';
 import {
   ToastController,
   claimRoots,
@@ -648,6 +649,47 @@ describe('Directory console', () => {
     });
   });
 
+  describe('signInAgain', () => {
+    const g = globalThis as Record<string, unknown>;
+    let originals: Record<string, unknown>;
+    let reloads: number;
+    let stored: Record<string, string>;
+
+    beforeEach(() => {
+      originals = { window: g.window, sessionStorage: g.sessionStorage };
+      reloads = 0;
+      stored = {};
+      g.window = { location: { reload: () => reloads++ } };
+      g.sessionStorage = {
+        getItem: (k: string) => stored[k] ?? null,
+        setItem: (k: string, v: string) => (stored[k] = v),
+      };
+    });
+
+    afterEach(() => {
+      g.window = originals.window;
+      g.sessionStorage = originals.sessionStorage;
+    });
+
+    it('should reload once a minute at most', () => {
+      expect(signInAgain(1_000_000)).to.equal(true);
+      // The page answered 401 again right after: no sign-in behind it
+      expect(signInAgain(1_030_000)).to.equal(false);
+      expect(signInAgain(1_061_000)).to.equal(true);
+      expect(reloads).to.equal(2);
+    });
+
+    it('should not reload without storage to stop a loop', () => {
+      g.sessionStorage = {
+        getItem: () => {
+          throw new Error('denied');
+        },
+      };
+      expect(signInAgain()).to.equal(false);
+      expect(reloads).to.equal(0);
+    });
+  });
+
   describe('ConsoleApiClient', () => {
     it('should turn the server configuration into entities', async () => {
       nock(baseUrl)
@@ -771,6 +813,35 @@ describe('Directory console', () => {
       const other = new ConsoleApiClient(baseUrl);
       await other.discover();
       expect(other.logoutUrl).to.equal(undefined);
+    });
+
+    it('should say the session ended on its own origin only', async () => {
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      g.window = { location: { origin: baseUrl } };
+      const other = 'http://api.example.test';
+      try {
+        nock(baseUrl).get('/api/v1/authz/scope').reply(401, {
+          error: 'Unauthorized',
+        });
+        nock(other).get('/api/v1/authz/scope').reply(401, {
+          error: 'Unauthorized',
+        });
+        let ended = 0;
+        const own = new ConsoleApiClient();
+        const across = new ConsoleApiClient(other);
+        own.onSessionEnded = () => ended++;
+        across.onSessionEnded = () => ended++;
+        // The failure still reaches the caller, in case nothing reloads
+        let error: unknown;
+        await own.scope().catch(err => (error = err));
+        expect(error).to.have.property('status', 401);
+        expect(ended).to.equal(1);
+        await across.scope().catch(() => undefined);
+        expect(ended, 'a session at another host').to.equal(1);
+      } finally {
+        g.window = original;
+      }
     });
 
     it('should ignore an entity whose schema the server did not serve', async () => {

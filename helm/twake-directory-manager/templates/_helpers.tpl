@@ -25,3 +25,8 @@ https://{{ .Values.ingress.hostname }}
 {{- define "tdm.secretName" -}}
 {{- .Values.secrets.existingSecret | default (printf "%s-env" (include "tdm.fullname" .)) -}}
 {{- end -}}
+
+{{/* Whether Back-Channel Logout keeps its records on a volume. */}}
+{{- define "tdm.bclVolume" -}}
+{{- if and .Values.bcl.enabled (eq .Values.bcl.backend "file") -}}true{{- end -}}
+{{- end -}}

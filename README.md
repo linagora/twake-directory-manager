@@ -66,6 +66,7 @@ provider, declare a confidential client:
 
 - redirect URI `https://directory.example.org/callback`;
 - scopes `openid profile email`;
+- no post-logout redirect URI: signing out ends on the provider's own page;
 - `sub` holding the account's `uid`, which is LemonLDAP::NG's default.
   `authzLinid1` finds the account by it, and refuses every request with a
   `403` when that `uid` names several entries under `DM_LDAP_BASE` — a
@@ -143,6 +144,16 @@ helm install directory-manager \
 `secrets.existingSecret` names a Secret holding `DM_LDAP_PWD` and
 `DM_OIDC_CLIENT_SECRET` instead, and `extraEnv` passes any other ldap-rest
 setting. See [values.yaml](helm/twake-directory-manager/values.yaml).
+
+`bcl.enabled=true` turns on Back-Channel Logout: a logout at the provider, or
+in another application, ends the console's session too. Declare
+`https://directory.example.org/backchannel-logout` as the client's
+back-channel logout URI. The ended sessions are recorded under
+`bcl.backend`: `ldap` (the default, in the branch `bcl.ldap.base`, which must
+exist), `file` (on a volume, one replica only), `postgres` or `valkey`. See
+ldap-rest's
+[Back-Channel Logout](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/auth/back-channel-logout.md)
+and [storage](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/utilities/storage.md).
 
 ## Documentation
 

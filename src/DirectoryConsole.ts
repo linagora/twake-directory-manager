@@ -29,6 +29,7 @@ import {
   withinDn,
 } from './format';
 import { availableLanguages, Translator } from './i18n';
+import { signInAgain } from './session';
 import type {
   ConsoleOptions,
   EntityDescriptor,
@@ -342,6 +343,7 @@ export class DirectoryConsole {
   constructor(options: ConsoleOptions) {
     this.options = options;
     this.api = new ConsoleApiClient(options.apiBaseUrl, options.apiPrefix);
+    this.api.onSessionEnded = (): void => void signInAgain();
     this.translator = new Translator(options.language || this.storedLanguage());
   }
 

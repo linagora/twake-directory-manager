@@ -4,6 +4,11 @@ metadata:
   name: {{ include "tdm.fullname" . }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  {{- if include "tdm.bclVolume" . }}
+  # The volume is ReadWriteOnce: the old pod must let go of it first.
+  strategy:
+    type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       app: {{ include "tdm.fullname" . }}
@@ -20,6 +25,15 @@ spec:
         {{- range . }}
         - name: {{ . }}
         {{- end }}
+      {{- end }}
+      {{- if include "tdm.bclVolume" . }}
+      # The image runs as node (1000): the volume must be writable by it.
+      securityContext:
+        fsGroup: 1000
+      volumes:
+        - name: bcl
+          persistentVolumeClaim:
+            claimName: {{ include "tdm.fullname" . }}-bcl
       {{- end }}
       containers:
         - name: console
@@ -49,5 +63,10 @@ spec:
               port: http
             initialDelaySeconds: 30
             periodSeconds: 30
+          {{- if include "tdm.bclVolume" . }}
+          volumeMounts:
+            - name: bcl
+              mountPath: /var/lib/twake-directory-manager/bcl
+          {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
