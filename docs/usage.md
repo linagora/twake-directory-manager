@@ -205,9 +205,10 @@ last.
    instead, a few at a time. A DN is read as such when it names a direct
    child of the branch by its main attribute, the way ldap-rest's flat
    entities are laid out; any other DN is not found. Anything else is read as
-   an identifier, which settles it exactly — two identifiers differing only
-   by accents or case, which the full list would refuse as ambiguous, are
-   told apart by the directory. A value that is no identifier is then
+   an identifier, which settles it exactly: written in another case, it is
+   found as the full list finds it, and two identifiers differing only by
+   accents (`jose`, `josé`), which the full list would refuse as ambiguous,
+   are told apart by the directory. A value that is no identifier is then
    searched for, and compared exactly with what the search finds: a name two
    entries share is refused as ambiguous, and a value so short that too many
    entries contain it for the search to rule out another spelling is refused
@@ -307,8 +308,8 @@ field, in the words the entity list uses. A branch refused as too broad
 entity owns becomes a search box instead, since its entries can still be
 found by typing — by the attributes the entity's list searches, not by a
 nomenclature's labels, which live in its schema. The organization tree has no
-search, and keeps the select with the message. A raw branch still offers nothing when it cannot be read,
-without a message: `core/ldap/raw` not being loaded is the usual reason, and
+search, and keeps the select with the message. A raw branch still offers
+nothing when it cannot be read, without a message: `core/ldap/raw` not being loaded is the usual reason, and
 not a failure.
 
 ## Adding a language
