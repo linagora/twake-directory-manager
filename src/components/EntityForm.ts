@@ -227,7 +227,7 @@ export class EntityForm {
     const hint = attr.hint || attr.items?.hint;
     const required = attr.required ? ' <span class="dc-required">*</span>' : '';
     const control = this.searches.has(name)
-      ? this.pickerMarkup(name, attr)
+      ? this.pickerMarkup(name)
       : attr.type === 'array'
         ? this.tokenMarkup(name, attr)
         : attr.type === 'pointer'
@@ -304,12 +304,11 @@ export class EntityForm {
    * and a box that suggests entries as the operator types. A single-valued
    * attribute holds one token, which a new choice replaces.
    */
-  private pickerMarkup(name: string, attr: SchemaAttribute): string {
+  private pickerMarkup(name: string): string {
     const { translator } = this.options;
     const listId = `dc-picker-${name}`;
     return `
-      <div class="dc-tokens dc-picker" data-picker="${escapeHtml(name)}"
-        data-multiple="${attr.type === 'array' ? 'true' : 'false'}">
+      <div class="dc-tokens dc-picker" data-picker="${escapeHtml(name)}">
         <ul class="dc-token-list">${this.pickerItems(name)}</ul>
         <div class="dc-picker-box">
           <input id="dc-field-${escapeHtml(name)}" type="search" class="dc-input"
@@ -429,7 +428,11 @@ export class EntityForm {
     const tokens = wrapper.querySelector<HTMLElement>('.dc-token-list');
     if (!search || !input || !results || !tokens) return;
     const { translator } = this.options;
-    const multiple = wrapper.dataset.multiple === 'true';
+    // From the schema. It was read from a `data-multiple` the picker carried,
+    // on the field this is handed, which never had it: every picker read as
+    // single-valued, and choosing a second delegate replaced the first.
+    const multiple =
+      this.fields.find(([field]) => field === name)?.[1].type === 'array';
     let candidates: PointerCandidate[] = [];
     let active = -1;
     let timer: ReturnType<typeof setTimeout> | undefined;

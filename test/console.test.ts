@@ -2233,6 +2233,91 @@ describe('Directory console', () => {
       expect(select.value).to.equal(held);
     });
 
+    /** An element recording its listeners, for wiring a stub cannot run. */
+    const recorder = (
+      children: Record<string, unknown> = {},
+      dataset: Record<string, string> = {}
+    ): {
+      innerHTML: string;
+      value: string;
+      hidden: boolean;
+      dataset: Record<string, string>;
+      addEventListener(type: string, handler: (event: unknown) => void): void;
+      setAttribute(): void;
+      removeAttribute(): void;
+      querySelector(selector: string): unknown;
+      fire(type: string, event?: unknown): void;
+    } => {
+      const handlers: Record<string, ((event: unknown) => void)[]> = {};
+      return {
+        innerHTML: '',
+        value: '',
+        hidden: true,
+        dataset,
+        addEventListener: (type, handler) => {
+          (handlers[type] ||= []).push(handler);
+        },
+        setAttribute: () => undefined,
+        removeAttribute: () => undefined,
+        querySelector: selector => children[selector] ?? null,
+        fire: (type, event = {}) => {
+          for (const handler of handlers[type] || []) handler(event);
+        },
+      };
+    };
+
+    it('should add a second choice to a multi-valued pointer, not replace the first', async () => {
+      // The picker read "multiple" from the field element, which never
+      // carried it: choosing a second delegate dropped the first.
+      const alice = 'uid=alice,ou=users,dc=example,dc=com';
+      const jane = 'uid=jane,ou=users,dc=example,dc=com';
+      const input = recorder();
+      const results = recorder();
+      const tokens = recorder();
+      const field = recorder({
+        '[data-picker-input]': input,
+        '.dc-picker-results': results,
+        '.dc-token-list': tokens,
+      });
+      const container = stubContainer();
+      (
+        container as unknown as { querySelector(s: string): unknown }
+      ).querySelector = selector =>
+        selector === '[data-field="twakeDelegatedUsers"]' ? field : null;
+      const form = new EntityForm({
+        entity: {
+          ...users,
+          schema: {
+            attributes: {
+              uid: users.schema.attributes.uid,
+              twakeDelegatedUsers: {
+                type: 'array',
+                items: { type: 'pointer', branch: [users.base as string] },
+              },
+            },
+          },
+        },
+        entry: { uid: 'bob', twakeDelegatedUsers: [alice] },
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        pointerSearch: () => () =>
+          Promise.resolve([{ dn: jane, label: 'Jane' }]),
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+      });
+      await form.render(container);
+
+      input.value = 'jane';
+      input.fire('input');
+      // Past the debounce, and the search it then issues.
+      await new Promise(resolve => setTimeout(resolve, 300));
+      input.fire('keydown', { key: 'Enter', preventDefault: () => undefined });
+      expect(
+        (form as unknown as { values: Record<string, string[]> }).values
+          .twakeDelegatedUsers
+      ).to.deep.equal([alice, jane]);
+    });
+
     describe('a pointer branch that could not be listed', () => {
       const translator = new Translator('en');
       const failure = (status: number, message: string): Error =>
