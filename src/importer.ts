@@ -11,7 +11,7 @@
  */
 
 import type { CsvTable } from './csv';
-import { attributeLabel, rdnValue } from './format';
+import { attributeLabel, isDnShaped, rdnValue } from './format';
 import type { Translator } from './i18n';
 import type { EntityDescriptor, LocalizedText, SchemaAttribute } from './types';
 
@@ -30,11 +30,41 @@ export interface PreparedRow {
   errors: string[];
 }
 
-/** Finds the DN a pointer cell names, or says why it cannot. */
+/**
+ * Finds the DN a pointer cell names, or says why it cannot: several entries
+ * go by that name (`ambiguous`), or the directory would not say which do
+ * (`undecided`, only when the branch had to be searched value by value).
+ */
 export type PointerResolver = (value: string) => {
   dn?: string;
   ambiguous?: boolean;
+  undecided?: boolean;
 };
+
+/** An entry a pointer may land on, as the form lists it. */
+export interface PointerOption {
+  dn: string;
+  label: string;
+}
+
+/**
+ * How to find what one value of a pointer column names, without the whole
+ * branch: for a branch the directory will not list in one search.
+ */
+export interface PointerLookup {
+  /**
+   * The entry a DN or an identifier names, read on its own; undefined when
+   * there is none — or when the value is a DN elsewhere than in the branch.
+   */
+  read(value: string): Promise<PointerOption | undefined>;
+  /**
+   * The entries whose names contain a text, and whether the answer was cut
+   * before the end — or refused as too broad, which says as little.
+   */
+  search(
+    text: string
+  ): Promise<{ options: PointerOption[]; truncated: boolean }>;
+}
 
 /**
  * Attributes a file may fill: the ones the form offers on creation. What the
@@ -184,6 +214,51 @@ function comparableDn(dn: string): string {
 }
 
 /**
+ * The values one cell holds: a multi-valued attribute separates them by `|`
+ * or a line break.
+ *
+ * @param raw the cell, trimmed
+ * @param multi whether the attribute holds several values
+ * @returns the values, trimmed, empty ones dropped
+ */
+function cellValues(raw: string, multi: boolean): string[] {
+  return multi
+    ? raw
+        .split(/[|\n]/)
+        .map(value => value.trim())
+        .filter(Boolean)
+    : [raw];
+}
+
+/**
+ * The distinct values a file holds for one attribute, read the way
+ * `prepareRows` reads them — which is what makes a resolver built from them
+ * answer every cell it will be asked about.
+ *
+ * @param table the file
+ * @param mapping attribute of each column
+ * @param name attribute
+ * @param multi whether it holds several values
+ * @returns each value once
+ */
+export function columnValues(
+  table: CsvTable,
+  mapping: string[],
+  name: string,
+  multi: boolean
+): string[] {
+  const values = new Set<string>();
+  for (const [column, mapped] of mapping.entries()) {
+    if (mapped !== name) continue;
+    for (const cells of table.rows) {
+      const raw = (cells[column] ?? '').trim();
+      if (raw) for (const value of cellValues(raw, multi)) values.add(value);
+    }
+  }
+  return [...values];
+}
+
+/**
  * A resolver for the cells of one pointer column.
  *
  * A file names what a pointer lands on the way a person would: a title by
@@ -195,9 +270,7 @@ function comparableDn(dn: string): string {
  * @param options candidates, as the form lists them
  * @returns the resolver
  */
-export function pointerResolver(
-  options: { dn: string; label: string }[]
-): PointerResolver {
+export function pointerResolver(options: PointerOption[]): PointerResolver {
   const byName = new Map<string, string | null>();
   const add = (key: string, dn: string): void => {
     if (!key) return;
@@ -220,6 +293,80 @@ export function pointerResolver(
     if (found === null) return { ambiguous: true };
     return found ? { dn: found } : {};
   };
+}
+
+/**
+ * A resolver for the values of one pointer column, each looked up on its own
+ * rather than in the whole branch.
+ *
+ * The branch-wide listing `pointerResolver` is built from is one search, and
+ * a branch past the directory's size limit — the accounts of a large
+ * directory — refuses it. The values a file holds are far fewer, and each is
+ * found the ways `pointerResolver` finds one, with the same answers:
+ *
+ * - a DN is read as such, and names that entry or nothing;
+ * - anything else is read as an identifier first, which is how a file names
+ *   an entry of a large branch, and what one request settles — by the
+ *   directory's own matching, so two identifiers differing only by an accent,
+ *   which the full list would call ambiguous, are told apart;
+ * - failing that, the names the form shows are searched for — a substring
+ *   search, compared exactly afterwards by `pointerResolver` itself, so two
+ *   entries sharing the name are refused just as they would be from the full
+ *   list. A search the server cut, or refused as too broad, cannot promise
+ *   the name is not further on, or not shared: short of two matches, which
+ *   settle it as ambiguous, the value is left `undecided` rather than
+ *   reported missing, or matched to the one entry the cut let through.
+ *
+ * Every distinct value is looked up once, a few at a time.
+ *
+ * @param values the distinct values of the column
+ * @param lookup how to read and search the branch
+ * @param concurrency lookups in flight at once
+ * @returns a resolver answering every one of those values
+ */
+export async function lookupResolver(
+  values: string[],
+  lookup: PointerLookup,
+  concurrency = 4
+): Promise<PointerResolver> {
+  const answers = new Map<string, ReturnType<PointerResolver>>();
+  const resolve = async (
+    value: string
+  ): Promise<ReturnType<PointerResolver>> => {
+    const found = await lookup.read(value);
+    if (found) return { dn: found.dn };
+    if (isDnShaped(value)) return {};
+    const { options, truncated } = await lookup.search(value);
+    const answer = pointerResolver(options)(value);
+    if (answer.ambiguous || !truncated) return answer;
+    return { undecided: true };
+  };
+  const queue = [...new Set(values)];
+  let failed = false;
+  await Promise.all(
+    // One worker at least: none would leave every value unanswered, and
+    // read as not found.
+    Array.from(
+      { length: Math.max(1, Math.min(concurrency, queue.length)) },
+      async () => {
+        // A failure ends the check: the others stop taking values rather than
+        // go on sending requests nobody will read the answer to.
+        for (
+          let value = queue.shift();
+          value !== undefined && !failed;
+          value = queue.shift()
+        ) {
+          try {
+            answers.set(value, await resolve(value));
+          } catch (err) {
+            failed = true;
+            throw err;
+          }
+        }
+      }
+    )
+  );
+  return (value: string) => answers.get(value) ?? {};
 }
 
 const TRUE_WORDS = ['true', 'yes', 'y', '1', 'oui', 'o', 'vrai'];
@@ -276,12 +423,7 @@ export function prepareRows(
       const raw = (cells[column] ?? '').trim();
       if (!raw) continue;
       const multi = attr.type === 'array';
-      let list = multi
-        ? raw
-            .split(/[|\n]/)
-            .map(value => value.trim())
-            .filter(Boolean)
-        : [raw];
+      let list = cellValues(raw, multi);
 
       if (isPointer(attr)) {
         const resolve = resolvers[name];
@@ -293,7 +435,11 @@ export function prepareRows(
             refused.add(name);
             errors.push(
               translator.t(
-                answer.ambiguous ? 'import.ambiguous' : 'import.notFound',
+                answer.ambiguous
+                  ? 'import.ambiguous'
+                  : answer.undecided
+                    ? 'import.undecided'
+                    : 'import.notFound',
                 { value, field: label(name) }
               )
             );

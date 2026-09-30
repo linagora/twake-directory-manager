@@ -13,19 +13,24 @@
 import { parseCsv, writeCsv, type CsvTable } from '../csv';
 import { attributeLabel } from '../format';
 import type { Translator } from '../i18n';
+import { tooBroad } from '../api/ConsoleApiClient';
 import {
+  columnValues,
   guessMapping,
   importableFields,
   isPointer,
+  lookupResolver,
   pointerResolver,
   prepareRows,
   templateHeaders,
   unmappedRequired,
   type ImportField,
+  type PointerLookup,
   type PointerResolver,
   type PreparedRow,
 } from '../importer';
 import { escapeHtml } from '../shared/dom';
+import { listFailure } from './EntityList';
 import type { EntityDescriptor } from '../types';
 
 export interface ImportOptions {
@@ -33,6 +38,11 @@ export interface ImportOptions {
   translator: Translator;
   /** Candidates of a pointer attribute, as the form lists them */
   pointerOptions(branch: string): Promise<{ dn: string; label: string }[]>;
+  /**
+   * How to find a branch's entries value by value, when listing it whole
+   * failed as too broad; undefined for a branch that cannot be read so
+   */
+  pointerLookup?(branch: string): PointerLookup | undefined;
   /** Create one entry; a refusal is thrown with the server's message */
   create(values: Record<string, string | string[]>): Promise<void>;
   /** Called once the import has run, with the number of entries created */
@@ -260,24 +270,54 @@ export class EntityImport {
   /**
    * Load the candidates of every pointer attribute the file fills, then
    * check each row.
+   *
+   * The whole branch first: one request, and all a nomenclature or a list of
+   * positions takes. A branch past the directory's size limit refuses that
+   * search — the accounts of a large directory, for a column of managers —
+   * and only the values the file holds are then looked up, each on its own.
    */
   private async check(): Promise<void> {
     this.step = 'checking';
     this.paint();
     const resolvers: Record<string, PointerResolver> = {};
     const attributes = this.options.entity.schema.attributes;
+    // Columns pointing into one branch share its resolver: a manager and a
+    // delegate are both accounts, and the branch is listed, or its values
+    // looked up, once for both.
+    const branches = new Map<string, string[]>();
+    for (const name of new Set(this.mapping.filter(Boolean))) {
+      const attr = attributes[name];
+      if (!attr || !isPointer(attr)) continue;
+      const branch = (attr.branch || attr.items?.branch || [])[0];
+      if (!branch) continue;
+      branches.set(branch, [...(branches.get(branch) || []), name]);
+    }
     try {
-      for (const name of new Set(this.mapping.filter(Boolean))) {
-        const attr = attributes[name];
-        if (!attr || !isPointer(attr)) continue;
-        const branch = (attr.branch || attr.items?.branch || [])[0];
-        if (!branch) continue;
-        resolvers[name] = pointerResolver(
-          await this.options.pointerOptions(branch)
-        );
+      for (const [branch, names] of branches) {
+        let resolver: PointerResolver;
+        try {
+          resolver = pointerResolver(await this.options.pointerOptions(branch));
+        } catch (err) {
+          const lookup = tooBroad(err)
+            ? this.options.pointerLookup?.(branch)
+            : undefined;
+          if (!lookup) throw err;
+          const values = names.flatMap(name =>
+            columnValues(
+              this.table as CsvTable,
+              this.mapping,
+              name,
+              attributes[name].type === 'array'
+            )
+          );
+          resolver = await lookupResolver(values, lookup, CONCURRENCY);
+        }
+        for (const name of names) resolvers[name] = resolver;
       }
     } catch (err) {
-      this.error = (err as Error).message;
+      // Said the way the list says it: "Internal Server Error" is what
+      // ldap-rest 0.12.0 answers a search too broad for the directory.
+      this.error = listFailure(err, this.options.translator);
       this.step = 'mapping';
       this.paint();
       return;

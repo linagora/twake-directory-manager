@@ -16,20 +16,92 @@
 import { csvCell } from '../csv';
 import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
-import { hasRole } from '../api/ConsoleApiClient';
+import { hasRole, tooBroad } from '../api/ConsoleApiClient';
 import {
   attributeLabel,
   displayValue,
   entryValue,
   searchableAttributes,
 } from '../format';
-import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
+import type {
+  EntityDescriptor,
+  Entry,
+  EntryList,
+  SchemaAttribute,
+} from '../types';
 
 // Kept importable from here, where it was first defined.
 export { csvCell };
 
 /** Characters required before a search is issued. */
 export const SEARCH_MINIMUM = 3;
+
+/**
+ * Most entries a list asks the server for, filtered or not.
+ *
+ * The directory refuses a search matching more than its own size limit —
+ * ten thousand entries where this was first seen — and ldap-rest turned that
+ * refusal into a failure of the whole list: "List everything" on the accounts
+ * of a large directory, or a search as loose as "demo", showed "Internal
+ * Server Error" and nothing else. With a server that honours `limit`, asking
+ * for fewer turns that into a thousand entries and a notice that there are
+ * more — and a thousand rows is already more than anyone pages through rather
+ * than searches. ldap-rest 0.12.0 ignores it and still fails past the
+ * directory's limit; that failure is then explained (`listFailure`) rather
+ * than shown as "Internal Server Error".
+ */
+export const LIST_LIMIT = 1000;
+
+/** What a server says on a `500` when it says nothing about the cause. */
+const GENERIC_FAILURE =
+  /^(?:\d{3}\s*)?(?:Internal Server Error|An error occurred)?\.?$/i;
+
+/**
+ * What to say about a list, or a search, that could not be loaded.
+ *
+ * The server's own message is usually the most useful one, and is kept.
+ * Not for the failures a search too broad for the directory ends in (see
+ * `tooBroad`): `422` is ldap-rest saying so, with wording meant for an API
+ * client; `500` is how ldap-rest 0.12.0 reports the same refusal — as
+ * "Internal Server Error", which tells the operator nothing they can act on
+ * — and `502` or `504` is a proxy giving up on the unbounded search before
+ * the server did. Those can have other causes, hence the hedged wording; and
+ * a `500` that does name its cause keeps it, after that wording, so a real
+ * failure stays diagnosable.
+ *
+ * @param err what the request threw
+ * @param translator translator of the interface
+ * @returns the message to show
+ */
+export function listFailure(err: unknown, translator: Translator): string {
+  const status = (err as { status?: number } | null)?.status;
+  const message = err instanceof Error ? err.message : String(err);
+  if (!tooBroad(err)) return message;
+  if (status === 422) return translator.t('list.tooMany');
+  const hedged = translator.t('list.failed');
+  const cause = message.trim();
+  return status === 500 && !GENERIC_FAILURE.test(cause)
+    ? `${hedged} (${cause})`
+    : hedged;
+}
+
+/**
+ * Read what a loader answered: the entries and whether the server left some
+ * out, or — from a loader written before the flag existed — the plain map,
+ * which says nothing was left out.
+ *
+ * Told apart by `truncated` being a boolean: in a map keyed by identifier
+ * every value is an entry, so even an entry named `truncated` is an object.
+ *
+ * @param answer what `load` resolved to
+ * @returns the entries and the flag
+ */
+function asEntryList(answer: Record<string, Entry> | EntryList): EntryList {
+  const list = answer as Partial<EntryList>;
+  if (typeof list.truncated === 'boolean' && list.entries)
+    return answer as EntryList;
+  return { entries: answer as Record<string, Entry>, truncated: false };
+}
 
 /**
  * The search scope meaning "every field worth searching" rather than one.
@@ -45,8 +117,15 @@ const PAGE_SIZE_KEY = 'ldap-rest.console.pageSize';
 export interface ListOptions {
   entity: EntityDescriptor;
   translator: Translator;
-  /** Fetch the entries; `search` is already known to be long enough */
-  load(search: string, attribute: string): Promise<Record<string, Entry>>;
+  /**
+   * Fetch the entries; `search` is already known to be long enough. An
+   * `EntryList` also says whether the server left entries out; a plain map,
+   * as before it existed, means it did not.
+   */
+  load(
+    search: string,
+    attribute: string
+  ): Promise<Record<string, Entry> | EntryList>;
   /** Whether the branch is small enough to show without a search */
   listable: boolean;
   onOpen(id: string): void;
@@ -94,6 +173,8 @@ export class EntityList {
   private loading = false;
   private loaded = false;
   private error: string | null = null;
+  /** Whether the server left entries out of the last answer */
+  private truncated = false;
   /** Set when the reader asked for the whole branch despite the guard */
   private listEverything = false;
   /**
@@ -207,6 +288,7 @@ export class EntityList {
     const generation = ++this.generation;
     if (!this.listable() && this.query.length < SEARCH_MINIMUM) {
       this.entries = [];
+      this.truncated = false;
       this.loaded = false;
       this.draw();
       return;
@@ -215,18 +297,22 @@ export class EntityList {
     this.error = null;
     this.draw();
     try {
-      const list = await this.options.load(this.query, this.searchScope);
+      const list = asEntryList(
+        await this.options.load(this.query, this.searchScope)
+      );
       if (generation !== this.generation) return;
-      this.entries = Object.entries(list).sort(([a], [b]) =>
+      this.entries = Object.entries(list.entries).sort(([a], [b]) =>
         a.localeCompare(b, undefined, { sensitivity: 'base' })
       );
+      this.truncated = list.truncated;
       this.loaded = true;
       this.page = 0;
       this.selected.clear();
     } catch (err) {
       if (generation !== this.generation) return;
-      this.error = (err as Error).message;
+      this.error = listFailure(err, this.options.translator);
       this.entries = [];
+      this.truncated = false;
     } finally {
       if (generation === this.generation) {
         this.loading = false;
@@ -364,6 +450,17 @@ export class EntityList {
 
     const attributes = this.options.entity.schema.attributes;
     return `
+      ${
+        this.truncated
+          ? `<p class="dc-list-notice" role="status">${escapeHtml(
+              // What was received, not what was asked: a server may cap
+              // lower than the console asked.
+              translator.t('list.truncated', {
+                count: this.entries.length.toLocaleString(translator.language),
+              })
+            )}</p>`
+          : ''
+      }
       <div class="dc-table-scroll">
         <table class="dc-table">
           <thead>

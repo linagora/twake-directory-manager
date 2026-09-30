@@ -47,7 +47,9 @@ read it from. A server started without `--api-prefix` needs neither option.
 
 An `apiBaseUrl` on another origin makes every call a cross-origin one, sent
 with credentials: that deployment has to allow the console's origin _and_
-credentials in its CORS policy, or the browser drops the answer.
+credentials in its CORS policy, or the browser drops the answer. It also has
+to expose the `X-Result-Truncated` header (`Access-Control-Expose-Headers`),
+or the browser hides it and a truncated list reads as complete.
 
 ## What the server has to expose
 
@@ -111,6 +113,13 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 - **A large branch is not listed unfiltered.** Entities attached to an
   organization ask for three characters before searching; the small reference
   tables are listed whole.
+- **A list asks for 1,000 entries at most**, searched or not
+  (`?limit=1000`). A server that honours it and answers
+  `X-Result-Truncated: true` gets a notice above the table: there are more,
+  to be reached by searching. A search the directory refuses as too broad is
+  explained rather than shown as the server's generic error: `422` from an
+  ldap-rest that tells that refusal apart says so; a `500`, which is how
+  ldap-rest 0.12.0 reports it, suggests narrowing the search.
 - **The page size is remembered**, along with the chosen language.
 - **A deep organization path is shortened** to its root and its leaf, with the
   whole path in the cell's tooltip.
@@ -188,7 +197,22 @@ last.
 3. **The check.** Every row is checked the way the form checks a field —
    required fields, the schema's `test`, yes/no and date values — and every
    pointer is looked up the way a person names it: a title or a position by
-   its name, a department by its path, or any of them by its DN. A row
+   its name, a department by its path, or any of them by its DN. The
+   pointer's branch is listed whole for that; a branch the directory will not
+   list in one search — the accounts of a large directory, for a column of
+   managers — is refused (`422`, or `500` from ldap-rest 0.12.0, or a proxy's
+   `502`/`504`), and the values the file holds are then looked up one by one
+   instead, a few at a time. A DN is read as such when it names a direct
+   child of the branch by its main attribute, the way ldap-rest's flat
+   entities are laid out; any other DN is not found. Anything else is read as
+   an identifier, which settles it exactly: written in another case, it is
+   found as the full list finds it, and two identifiers differing only by
+   accents (`jose`, `josé`), which the full list would refuse as ambiguous,
+   are told apart by the directory. A value that is no identifier is then
+   searched for, and compared exactly with what the search finds: a name two
+   entries share is refused as ambiguous, and a value so short that too many
+   entries contain it for the search to rule out another spelling is refused
+   as such rather than reported missing — a DN settles it. A row
    reusing a value an earlier row holds, where the schema marks it `unique`,
    is refused with the line it repeats. The rows in error can be downloaded,
    with the reason in a last column, to be corrected and imported again.
@@ -254,6 +278,13 @@ import {
 } from 'twake-directory-manager';
 ```
 
+`ConsoleApiClient.list(entity, search?, attribute?, limit?)` answers the
+entries as a map keyed by identifier. `listBounded()` takes the same
+arguments and answers an `EntryList` — `{ entries, truncated }` — where
+`truncated` is the server's `X-Result-Truncated` header: it is the one to use
+with a `limit`, which may leave entries out. The `load` an `EntityList` is
+given may answer either shape; a plain map is read as complete.
+
 ## Filling a pointer field
 
 A `pointer` names a branch, and the console fills the select from it:
@@ -266,6 +297,21 @@ A `pointer` names a branch, and the console fills the select from it:
   Without it the select keeps the value the entry already holds and offers no
   others.
 
+A pointer into the branch of an entity attached to the organization tree —
+the accounts — is a search box from the start rather than a select.
+
+When the listing fails, the select keeps the value the entry holds either
+way. A branch the caller may not read (`403`) offers nothing more, and says
+nothing: that is what it holds for them. Any other failure is said under the
+field, in the words the entity list uses. A branch refused as too broad
+(`422`, or `500` from ldap-rest 0.12.0, or a proxy's `502`/`504`) that an
+entity owns becomes a search box instead, since its entries can still be
+found by typing — by the attributes the entity's list searches, not by a
+nomenclature's labels, which live in its schema. The organization tree has no
+search, and keeps the select with the message. A raw branch still offers
+nothing when it cannot be read, without a message: `core/ldap/raw` not being loaded is the usual reason, and
+not a failure.
+
 ## Adding a language
 
 The console ships with English and French. A third one is a catalogue in
@@ -277,9 +323,14 @@ screen from shipping.
 
 ## Known limits
 
-- The list endpoint returns a whole branch: the search guard keeps that
-  workable, but a search matching many thousands of entries is still fetched
-  in full. Server-side pagination would remove the need for the guard.
+- A list holds 1,000 entries at most, in the directory's order before the
+  console sorts them, and pages through them in the browser; the rest are
+  reached by searching, not by paging. That needs a server that honours
+  `limit` on the list endpoint: ldap-rest 0.12.0 ignores it, still fetches a
+  branch or a search in full, and fails once the directory's size limit is
+  exceeded. Across origins, the deployment's CORS policy has to expose
+  `X-Result-Truncated` (`Access-Control-Expose-Headers`), or the list looks
+  complete and shows no notice.
 - Moving an entry between two organizations the caller writes has no control
   of its own: its organization field is changed in its form. The move
   controls are the transit branch's.

@@ -31,6 +31,7 @@ export type {
   EntityDescriptor,
   EntitySchema,
   Entry,
+  EntryList,
   OrganizationNode,
   Scope,
   SchemaAttribute,

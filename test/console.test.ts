@@ -15,6 +15,7 @@ import {
   ToastController,
   claimRoots,
   createdEntryId,
+  listLoader,
   readFailure,
   scopeRestricts,
   splitEntities,
@@ -28,8 +29,14 @@ import {
   resolveText,
 } from '../src/format';
 import { EntityDetail } from '../src/components/EntityDetail';
-import { EntityForm } from '../src/components/EntityForm';
-import { EntityList, csvCell } from '../src/components/EntityList';
+import { EntityForm, pointerFallback } from '../src/components/EntityForm';
+import { EntityImport } from '../src/components/EntityImport';
+import {
+  EntityList,
+  LIST_LIMIT,
+  csvCell,
+  listFailure,
+} from '../src/components/EntityList';
 import { OrganizationTree } from '../src/components/OrganizationTree';
 import { Translator } from '../src/i18n';
 import { formatByteSize } from '../src/format';
@@ -37,6 +44,7 @@ import type {
   EntityDescriptor,
   EntitySchema,
   Entry,
+  EntryList,
   Scope,
 } from '../src/types';
 
@@ -1151,6 +1159,22 @@ describe('Directory console', () => {
           [mailboxTypes]
         )
       ).to.equal(undefined);
+      // Unless listing it failed: any branch an entity owns can be searched.
+      expect(
+        new ConsoleApiClient(baseUrl).pointerSearch(
+          mailboxTypes.base as string,
+          [mailboxTypes],
+          true
+        )
+      ).to.be.a('function');
+      // Not a branch no entity owns, which has no search to offer.
+      expect(
+        new ConsoleApiClient(baseUrl).pointerSearch(
+          'ou=elsewhere,dc=example,dc=com',
+          [mailboxTypes],
+          true
+        )
+      ).to.equal(undefined);
       const search = new ConsoleApiClient(baseUrl).pointerSearch(
         'OU=users,dc=example,dc=com',
         [users]
@@ -1268,6 +1292,138 @@ describe('Directory console', () => {
       } catch (err) {
         expect((err as Error).message).to.equal('No authenticated user');
       }
+    });
+
+    it('should ask a list for a bounded number of entries, searched or not', async () => {
+      // "List everything" on the accounts of a large directory ran an
+      // unbounded search the directory refused, and so did a search as loose
+      // as "demo": the list showed "Internal Server Error" and nothing else.
+      const load = listLoader(new ConsoleApiClient(baseUrl), users);
+
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ limit: String(LIST_LIMIT) })
+        .reply(200, { jsmith: { dn: 'uid=jsmith', uid: 'jsmith' } });
+      const all = await load('', 'uid,cn');
+      expect(all.entries).to.have.property('jsmith');
+
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ match: 'demo', attribute: 'uid,cn', limit: '1000' })
+        .reply(200, { demo1: { dn: 'uid=demo1', uid: 'demo1' } });
+      const found = await load('demo', 'uid,cn');
+      expect(found.entries).to.have.property('demo1');
+
+      // Too short to be a search: the branch, still bounded.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ limit: '1000' })
+        .reply(200, {});
+      expect((await load('de', 'uid,cn')).entries).to.deep.equal({});
+      expect(nock.isDone()).to.equal(true);
+    });
+
+    it('should say a list is truncated only when the server says so', async () => {
+      const client = new ConsoleApiClient(baseUrl);
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ limit: '2' })
+        .reply(
+          200,
+          { a: { dn: 'uid=a', uid: 'a' }, b: { dn: 'uid=b', uid: 'b' } },
+          { 'X-Result-Truncated': 'true' }
+        );
+      const cut = await client.listBounded(users, undefined, undefined, 2);
+      expect(cut.truncated).to.equal(true);
+      expect(Object.keys(cut.entries)).to.deep.equal(['a', 'b']);
+
+      // A server predating `limit` ignores it and sends no header: what it
+      // answered is the whole branch.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ limit: '2' })
+        .reply(200, { a: { dn: 'uid=a', uid: 'a' } });
+      expect(
+        (await client.listBounded(users, undefined, undefined, 2)).truncated
+      ).to.equal(false);
+    });
+
+    it('should keep answering the plain map from `list()`, bounded or not', async () => {
+      // `list()` is exported, and embedders read what it answers as the map
+      // it always was: the flag comes from `listBounded()` instead.
+      const client = new ConsoleApiClient(baseUrl);
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .reply(200, { a: { dn: 'uid=a', uid: 'a' } });
+      expect(await client.list(users)).to.deep.equal({
+        a: { dn: 'uid=a', uid: 'a' },
+      });
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ limit: '1' })
+        .reply(
+          200,
+          { a: { dn: 'uid=a', uid: 'a' } },
+          { 'X-Result-Truncated': 'true' }
+        );
+      expect(await client.list(users, undefined, undefined, 1)).to.deep.equal({
+        a: { dn: 'uid=a', uid: 'a' },
+      });
+    });
+
+    it('should bound a pointer search, and explain the searches too broad', async () => {
+      const search = new ConsoleApiClient(baseUrl).pointerSearch(
+        'ou=users,dc=example,dc=com',
+        [users]
+      ) as (q: string) => Promise<unknown>;
+      const translator = new Translator('en');
+      const failure = async (): Promise<string> => {
+        try {
+          await search('demo');
+        } catch (err) {
+          return listFailure(err, translator);
+        }
+        throw new Error('the search should have failed');
+      };
+
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(query => query.match === 'demo' && query.limit === '20')
+        .reply(200, { demo1: { dn: 'uid=demo1,ou=users,dc=example,dc=com' } });
+      expect(await search('demo')).to.have.length(1);
+
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(422, { error: 'Size limit exceeded' });
+      expect(await failure()).to.equal(
+        'Too many entries to show them all: narrow the search.'
+      );
+
+      nock(baseUrl).get('/api/v1/ldap/users').query(true).reply(500, {
+        error: 'Internal Server Error',
+        message: 'An error occurred',
+      });
+      expect(await failure()).to.equal(
+        'The list could not be loaded. If the directory holds many entries, narrow the search.'
+      );
+    });
+
+    it('should hedge a failure a broad search may explain, keeping any cause', () => {
+      const translator = new Translator('en');
+      const failed = (status: number, message: string): string =>
+        listFailure(Object.assign(new Error(message), { status }), translator);
+      const hedged = translator.t('list.failed');
+      // A proxy giving up on a slow unbounded search says nothing useful.
+      expect(failed(502, '502 Bad Gateway')).to.equal(hedged);
+      expect(failed(504, '504 Gateway Timeout')).to.equal(hedged);
+      expect(failed(500, '500 Internal Server Error')).to.equal(hedged);
+      expect(failed(500, '500 ')).to.equal(hedged);
+      // A 500 that names its cause keeps it, so it can still be diagnosed.
+      expect(failed(500, 'Invalid DN syntax')).to.equal(
+        `${hedged} (Invalid DN syntax)`
+      );
+      expect(failed(403, 'Out of your scope')).to.equal('Out of your scope');
     });
   });
 
@@ -1500,6 +1656,157 @@ describe('Directory console', () => {
       expect(csv).to.contain('jsmith@example.com');
     });
 
+    /** A list of accounts drawn from what `listLoader` answers. */
+    async function drawnList(language: string): Promise<string> {
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator(language),
+        load: listLoader(new ConsoleApiClient(baseUrl), users),
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      });
+      const container = stubContainer();
+      await list.render(container);
+      return container.innerHTML;
+    }
+
+    it('should say when the server left entries out, and only then', async () => {
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(
+          200,
+          { jsmith: { dn: 'uid=jsmith', uid: 'jsmith' } },
+          { 'X-Result-Truncated': 'true' }
+        );
+      const cut = await drawnList('fr');
+      expect(cut).to.contain(
+        'Seules 1 entrées sont affichées ; il y en a d’autres. Utilisez la recherche pour les trouver.'
+      );
+      expect(cut).to.contain('jsmith');
+
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(200, { jsmith: { dn: 'uid=jsmith', uid: 'jsmith' } });
+      const whole = await drawnList('en');
+      expect(whole).to.contain('jsmith');
+      expect(whole).to.not.contain('dc-list-notice');
+      expect(whole).to.not.contain('Only ');
+    });
+
+    it('should count what was received, in the reader’s way of writing numbers', async () => {
+      // The server cuts where it likes — it may cap lower than asked — so the
+      // notice counts the rows it sent, not the rows the console asked for.
+      const many: Record<string, Entry> = {};
+      for (let i = 0; i < 1200; i++)
+        many[`u${i}`] = { dn: `uid=u${i}`, uid: `u${i}` };
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(200, many, { 'X-Result-Truncated': 'true' });
+      expect(await drawnList('en')).to.contain(
+        'Only 1,200 entries are shown; there are more.'
+      );
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(200, many, { 'X-Result-Truncated': 'true' });
+      expect(await drawnList('fr')).to.contain(
+        `Seules ${(1200).toLocaleString('fr')} entrées sont affichées`
+      );
+    });
+
+    it('should drop the notice once an answer is complete, or fails', async () => {
+      const answers: (EntryList | Error)[] = [];
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () => {
+          const answer = answers.shift() as EntryList | Error;
+          return answer instanceof Error
+            ? Promise.reject(answer)
+            : Promise.resolve(answer);
+        },
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      });
+      const container = stubContainer();
+      const cut: EntryList = {
+        entries: { a: { dn: 'uid=a', uid: 'a' } },
+        truncated: true,
+      };
+
+      answers.push(cut, { entries: cut.entries, truncated: false });
+      await list.render(container);
+      expect(container.innerHTML).to.contain('dc-list-notice');
+      await list.refresh();
+      expect(container.innerHTML).to.contain('>a<');
+      expect(container.innerHTML).to.not.contain('dc-list-notice');
+
+      answers.push(cut, Object.assign(new Error('Nope'), { status: 403 }));
+      await list.refresh();
+      expect(container.innerHTML).to.contain('dc-list-notice');
+      await list.refresh();
+      expect(container.innerHTML).to.contain('Nope');
+      expect(container.innerHTML).to.not.contain('dc-list-notice');
+    });
+
+    it('should still take a plain map from a loader, as complete', async () => {
+      // `EntityList` is exported: a loader written before `EntryList` answers
+      // the map alone, and that says nothing was left out.
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () =>
+          Promise.resolve({ truncated: { dn: 'uid=truncated', uid: 'x' } }),
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      });
+      const container = stubContainer();
+      await list.render(container);
+      // Even an entry named after the flag is read as an entry.
+      expect(container.innerHTML).to.contain('data-id="truncated"');
+      expect(container.innerHTML).to.not.contain('dc-list-notice');
+    });
+
+    it('should explain a search too broad for the directory, not repeat the server', async () => {
+      // A server that knows the refusal answers 422.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(422, { error: 'Size limit exceeded, use limit or match' });
+      const refused = await drawnList('fr');
+      expect(refused).to.contain(
+        'Trop d’entrées pour les afficher toutes : affinez la recherche.'
+      );
+      expect(refused).to.not.contain('Size limit exceeded');
+
+      // ldap-rest 0.12.0 ignores `limit` and reports it as any failure.
+      nock(baseUrl).get('/api/v1/ldap/users').query(true).reply(500, {
+        error: 'Internal Server Error',
+        message: 'An error occurred',
+      });
+      const failed = await drawnList('en');
+      expect(failed).to.contain(
+        'The list could not be loaded. If the directory holds many entries, narrow the search.'
+      );
+      expect(failed).to.not.contain('Internal Server Error');
+
+      // Any other refusal says what the server said.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(403, { error: 'Out of your scope' });
+      expect(await drawnList('en')).to.contain('Out of your scope');
+    });
+
     it('should not let an exported cell become a formula', () => {
       // A directory holds what was written into it, and a spreadsheet reads a
       // cell opening on one of these as a formula. Quoting does not help: the
@@ -1512,6 +1819,189 @@ describe('Directory console', () => {
       // Ordinary values are left alone, quoted only when they need it.
       expect(csvCell('John Smith')).to.equal('John Smith');
       expect(csvCell('Smith, John')).to.equal('"Smith, John"');
+    });
+  });
+
+  describe('importing pointers into a large branch', () => {
+    const accounts: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          uid: { type: 'string', role: 'identifier', required: true },
+          manager: { type: 'pointer', branch: [users.base as string] },
+          delegates: {
+            type: 'array',
+            items: { type: 'pointer', branch: [users.base as string] },
+          },
+        },
+      },
+    };
+    const dn = (uid: string): string => `uid=${uid},${users.base}`;
+    const account = (uid: string): Entry => ({ dn: dn(uid), uid });
+
+    /**
+     * Run the import's check on a file, the way the button does, and hand
+     * back the rows it prepared and the error it showed.
+     */
+    async function check(
+      rows: string[][]
+    ): Promise<{ errors: string[][]; values: unknown[]; error: string }> {
+      const client = new ConsoleApiClient(baseUrl);
+      const importer = new EntityImport({
+        entity: accounts,
+        translator: new Translator('en'),
+        pointerOptions: branch => client.pointerOptions(branch, [accounts]),
+        pointerLookup: branch => client.pointerLookup(branch, [accounts]),
+        create: () => Promise.resolve(),
+        onDone: () => undefined,
+        onClose: () => undefined,
+      });
+      importer.render(stubContainer());
+      const state = importer as unknown as {
+        table: unknown;
+        mapping: string[];
+        rows: { errors: string[]; values: unknown }[];
+        error: string;
+        check(): Promise<void>;
+      };
+      state.table = {
+        headers: ['uid', 'manager', 'delegates'],
+        rows,
+        delimiter: ',',
+      };
+      state.mapping = ['uid', 'manager', 'delegates'];
+      await state.check();
+      return {
+        errors: state.rows.map(row => row.errors),
+        values: state.rows.map(row => row.values),
+        error: state.error,
+      };
+    }
+
+    it('should resolve from the whole branch when it can be listed', async () => {
+      // One listing for both columns, and no request per value.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .reply(200, { alice: account('alice'), bob: account('bob') });
+      const { errors, values } = await check([['new1', 'alice', 'bob|Alice']]);
+      expect(errors).to.deep.equal([[]]);
+      expect(values[0]).to.deep.include({
+        manager: dn('alice'),
+        delegates: [dn('bob'), dn('alice')],
+      });
+      expect(nock.isDone()).to.equal(true);
+    });
+
+    for (const status of [500, 422]) {
+      it(`should look each value up when the branch answers ${status}`, async () => {
+        nock(baseUrl)
+          .get('/api/v1/ldap/users')
+          .reply(status, { error: 'Internal Server Error' });
+        // Every interceptor answers once: a value looked up twice fails.
+        nock(baseUrl)
+          .get(`/api/v1/ldap/users/${encodeURIComponent(dn('alice'))}`)
+          .reply(200, account('alice'));
+        nock(baseUrl).get('/api/v1/ldap/users/bob').reply(200, account('bob'));
+        // Spaces around the separators, as a DN typed by hand has them: read
+        // by the DN rebuilt on the base, as the full list would match it.
+        nock(baseUrl)
+          .get(`/api/v1/ldap/users/${encodeURIComponent(dn('carol'))}`)
+          .reply(200, account('carol'));
+        for (const missing of ['ann', 'zoé', 'dup', 'jo', 'x', 'ka'])
+          nock(baseUrl)
+            .get(`/api/v1/ldap/users/${encodeURIComponent(missing)}`)
+            .reply(404, { error: 'user not found' });
+        const search = (match: string) =>
+          nock(baseUrl)
+            .get('/api/v1/ldap/users')
+            .query({ match, attribute: 'uid', limit: '50' });
+        // Names containing "ann", none of them "ann" itself.
+        search('ann').reply(200, {
+          anna: account('anna'),
+          joanne: account('joanne'),
+        });
+        // What the search answered is compared the way the full list
+        // compares names: without accents. OpenLDAP's substring match does
+        // not fold accents, so this answer stands for the resolver's exact
+        // comparison, not for what a directory would send.
+        search('zoé').reply(200, { zoe: account('zoe') });
+        // Two answers the exact comparison reads as the same name are refused,
+        // not guessed. A directory ignores a uid's trailing space and would
+        // not hold both: again the comparison is tested, not the directory.
+        search('dup').reply(200, {
+          dup: { dn: 'uid=dup,ou=users,dc=example,dc=com', uid: 'dup' },
+          'Dup ': { dn: 'uid=Dup\\20,ou=users,dc=example,dc=com', uid: 'Dup ' },
+        });
+        // Cut before the end with no exact match: the name may be further.
+        search('jo').reply(
+          200,
+          { john: account('john') },
+          {
+            'X-Result-Truncated': 'true',
+          }
+        );
+        // Refused as too broad by ldap-rest 0.12.0: says as little.
+        search('x').reply(500, { error: 'Internal Server Error' });
+        // Exactly as long as asked, and no header — which a cross-origin page
+        // may not see: read as cut all the same.
+        const many: Record<string, Entry> = {};
+        for (let i = 0; i < 50; i++) many[`ka${i}`] = account(`ka${i}`);
+        search('ka').reply(200, many);
+
+        const { errors, values, error } = await check([
+          ['new1', dn('alice'), 'bob|zoé'],
+          ['new2', 'bob', 'ann|uid=carol, ou=users, dc=example, dc=com|ka'],
+          ['new3', 'dup', 'jo|x'],
+          ['new4', 'uid=eve,ou=other,dc=example,dc=com', ''],
+        ]);
+        expect(error).to.equal('');
+        expect(values[0]).to.deep.include({
+          manager: dn('alice'),
+          delegates: [dn('bob'), dn('zoe')],
+        });
+        expect(values[1]).to.deep.include({ delegates: [dn('carol')] });
+        const undecided = (value: string): string =>
+          `Delegates: “${value}” is no identifier, and too many entries contain it to rule out another spelling: check it, or use a DN`;
+        expect(errors[0]).to.deep.equal([]);
+        expect(errors[1]).to.deep.equal([
+          'Delegates: “ann” not found',
+          undecided('ka'),
+        ]);
+        expect(errors[2]).to.deep.equal([
+          'Manager: “dup” matches several entries',
+          undecided('jo'),
+          undecided('x'),
+        ]);
+        // A DN outside the branch is no entry of it, and costs no request.
+        expect(errors[3]).to.deep.equal([
+          'Manager: “uid=eve,ou=other,dc=example,dc=com” not found',
+        ]);
+        expect(nock.isDone()).to.equal(true);
+      });
+    }
+
+    it('should explain a branch it could neither list nor look up', async () => {
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .reply(500, { error: 'Internal Server Error' });
+      nock(baseUrl)
+        .get('/api/v1/ldap/users/bob')
+        .reply(502, '<html>Bad gateway</html>', {
+          'Content-Type': 'text/html',
+        });
+      const { error } = await check([['new1', 'bob', '']]);
+      expect(error).to.equal(
+        'The list could not be loaded. If the directory holds many entries, narrow the search.'
+      );
+    });
+
+    it('should not look values up when the branch was refused for another reason', async () => {
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .reply(403, { error: 'Out of your scope' });
+      const { error } = await check([['new1', 'bob', '']]);
+      expect(error).to.equal('Out of your scope');
+      expect(nock.isDone()).to.equal(true);
     });
   });
 
@@ -1750,14 +2240,341 @@ describe('Directory console', () => {
       await renderWith(
         select,
         { uid: 'bob', twakeDepartmentLink: [held] },
-        () => Promise.reject(new Error('403'))
+        () =>
+          Promise.reject(Object.assign(new Error('Forbidden'), { status: 403 }))
       );
       // Nothing to choose: the empty choice cannot be taken, and the value the
       // directory holds stays selected rather than being silently dropped.
+      // An unreadable branch has nothing more to say: the stub has no
+      // `closest`, and looking for the field to write a message in would throw.
       expect(select.disabled).to.equal(false);
       expect(select.innerHTML).to.include('<option value="" disabled>');
       expect(select.innerHTML).to.include(`${held}" selected`);
       expect(select.value).to.equal(held);
+    });
+
+    /** An element recording its listeners, for wiring a stub cannot run. */
+    const recorder = (
+      children: Record<string, unknown> = {},
+      dataset: Record<string, string> = {}
+    ): {
+      innerHTML: string;
+      value: string;
+      hidden: boolean;
+      dataset: Record<string, string>;
+      addEventListener(type: string, handler: (event: unknown) => void): void;
+      setAttribute(): void;
+      removeAttribute(): void;
+      querySelector(selector: string): unknown;
+      fire(type: string, event?: unknown): void;
+    } => {
+      const handlers: Record<string, ((event: unknown) => void)[]> = {};
+      return {
+        innerHTML: '',
+        value: '',
+        hidden: true,
+        dataset,
+        addEventListener: (type, handler) => {
+          (handlers[type] ||= []).push(handler);
+        },
+        setAttribute: () => undefined,
+        removeAttribute: () => undefined,
+        querySelector: selector => children[selector] ?? null,
+        fire: (type, event = {}) => {
+          for (const handler of handlers[type] || []) handler(event);
+        },
+      };
+    };
+
+    it('should add a second choice to a multi-valued pointer, not replace the first', async () => {
+      // The picker read "multiple" from the field element, which never
+      // carried it: choosing a second delegate dropped the first.
+      const alice = 'uid=alice,ou=users,dc=example,dc=com';
+      const jane = 'uid=jane,ou=users,dc=example,dc=com';
+      const input = recorder();
+      const results = recorder();
+      const tokens = recorder();
+      const field = recorder({
+        '[data-picker-input]': input,
+        '.dc-picker-results': results,
+        '.dc-token-list': tokens,
+      });
+      const container = stubContainer();
+      (
+        container as unknown as { querySelector(s: string): unknown }
+      ).querySelector = selector =>
+        selector === '[data-field="twakeDelegatedUsers"]' ? field : null;
+      const form = new EntityForm({
+        entity: {
+          ...users,
+          schema: {
+            attributes: {
+              uid: users.schema.attributes.uid,
+              twakeDelegatedUsers: {
+                type: 'array',
+                items: { type: 'pointer', branch: [users.base as string] },
+              },
+            },
+          },
+        },
+        entry: { uid: 'bob', twakeDelegatedUsers: [alice] },
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        pointerSearch: () => () =>
+          Promise.resolve([{ dn: jane, label: 'Jane' }]),
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+      });
+      await form.render(container);
+
+      input.value = 'jane';
+      input.fire('input');
+      // Past the debounce, and the search it then issues.
+      await new Promise(resolve => setTimeout(resolve, 300));
+      input.fire('keydown', { key: 'Enter', preventDefault: () => undefined });
+      expect(
+        (form as unknown as { values: Record<string, string[]> }).values
+          .twakeDelegatedUsers
+      ).to.deep.equal([alice, jane]);
+    });
+
+    describe('a pointer branch that could not be listed', () => {
+      const translator = new Translator('en');
+      const failure = (status: number, message: string): Error =>
+        Object.assign(new Error(message), { status });
+      const search = (): Promise<{ dn: string; label: string }[]> =>
+        Promise.resolve([]);
+
+      it('should say nothing of a branch the caller may not read', () => {
+        let asked = false;
+        const fallback = pointerFallback(
+          failure(403, 'Forbidden'),
+          translator,
+          () => {
+            asked = true;
+            return search;
+          }
+        );
+        expect(fallback).to.deep.equal({});
+        expect(asked).to.equal(false);
+      });
+
+      it('should explain a branch too broad to list, and offer its search', () => {
+        const failed = pointerFallback(
+          failure(500, 'Internal Server Error'),
+          translator,
+          () => search
+        );
+        expect(failed.message).to.equal(
+          'The list could not be loaded. If the directory holds many entries, narrow the search.'
+        );
+        expect(failed.search).to.equal(search);
+        const refused = pointerFallback(
+          failure(422, 'Size limit exceeded'),
+          translator,
+          () => undefined
+        );
+        expect(refused).to.deep.equal({
+          message: 'Too many entries to show them all: narrow the search.',
+          search: undefined,
+        });
+      });
+
+      it('should repeat any other failure, with no search', () => {
+        let asked = false;
+        expect(
+          pointerFallback(failure(404, 'Not found'), translator, () => {
+            asked = true;
+            return search;
+          })
+        ).to.deep.equal({ message: 'Not found' });
+        expect(asked).to.equal(false);
+      });
+
+      /** A select inside its field, both just real enough for the form. */
+      const inField = (
+        name: string,
+        branch: string,
+        value: string
+      ): {
+        select: HTMLSelectElement;
+        field: { innerHTML: string };
+        note: { textContent: string; hidden: boolean; id: string };
+        describedBy: () => string | undefined;
+      } => {
+        const select = stubSelect(branch, value) as unknown as Record<
+          string,
+          unknown
+        >;
+        let describedBy: string | undefined;
+        select.setAttribute = (attribute: string, text: string): void => {
+          if (attribute === 'aria-describedby') describedBy = text;
+        };
+        const note = {
+          textContent: '',
+          hidden: true,
+          id: `dc-note-${name}`,
+        };
+        const field = {
+          innerHTML: '',
+          dataset: { field: name },
+          querySelector: (selector: string): unknown =>
+            selector === '[data-pointer-note]'
+              ? note
+              : selector.includes('[data-pointer]')
+                ? select
+                : null,
+        };
+        select.closest = (): unknown => field;
+        return {
+          select: select as unknown as HTMLSelectElement,
+          field,
+          note,
+          describedBy: () => describedBy,
+        };
+      };
+
+      it('should keep the select and say why it offers nothing', async () => {
+        const { select, field, note, describedBy } = inField(
+          'twakeDepartmentLink',
+          'dc=example,dc=com',
+          held
+        );
+        await renderWith(
+          select,
+          { uid: 'bob', twakeDepartmentLink: [held] },
+          () => Promise.reject(failure(500, 'Internal Server Error'))
+        );
+        expect(select.disabled).to.equal(false);
+        expect(select.innerHTML).to.include(`${held}" selected`);
+        expect(field.innerHTML).to.equal('');
+        expect(note.hidden).to.equal(false);
+        // Filled a moment after it is shown, for a screen reader to say it.
+        await new Promise(resolve => setTimeout(resolve, 150));
+        expect(note.textContent).to.equal(
+          'The list could not be loaded. If the directory holds many entries, narrow the search.'
+        );
+        expect(describedBy()).to.equal('dc-note-twakeDepartmentLink');
+      });
+
+      it('should trade the select for a search when the branch has one', async () => {
+        const { select, field, note } = inField(
+          'twakeDepartmentLink',
+          'dc=example,dc=com',
+          held
+        );
+        const container = stubContainer();
+        (
+          container as unknown as { querySelectorAll: () => unknown[] }
+        ).querySelectorAll = (): unknown[] => [select];
+        const asked: [string, boolean | undefined][] = [];
+        await new EntityForm({
+          entity: users,
+          entry: { uid: 'bob', twakeDepartmentLink: [held] },
+          translator,
+          pointerOptions: () => Promise.reject(failure(422, 'Too broad')),
+          pointerSearch: (branch, failed) => {
+            asked.push([branch, failed]);
+            return failed ? search : undefined;
+          },
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        }).render(container);
+        // Asked once as usual, then once more after the failure.
+        expect(asked).to.deep.include(['dc=example,dc=com', true]);
+        expect(field.innerHTML).to.include('data-picker="twakeDepartmentLink"');
+        // The value held is still there, as a token of the search.
+        expect(field.innerHTML).to.include('>Demo</span>');
+        await new Promise(resolve => setTimeout(resolve, 150));
+        expect(note.textContent).to.equal(
+          'Too many entries to show them all: narrow the search.'
+        );
+        // The select was not filled: it is gone.
+        expect(select.disabled).to.equal(true);
+      });
+
+      it('should remove one value per click once a token list became a search', async () => {
+        // The token list listens on the field itself, which the swap keeps:
+        // left alone, it removed a value on the same click as the search did.
+        const alice = 'uid=alice,ou=users,dc=example,dc=com';
+        const bob = 'uid=bob,ou=users,dc=example,dc=com';
+        const tokens = recorder();
+        const note = { textContent: '', hidden: true, id: 'note' };
+        const field = recorder(
+          {
+            '[data-picker-input]': recorder(),
+            '.dc-picker-results': recorder(),
+            '.dc-token-list': tokens,
+            '[data-pointer-note]': note,
+          },
+          { field: 'twakeDelegatedUsers' }
+        );
+        const select = stubSelect(users.base as string, '') as unknown as {
+          closest(): unknown;
+        };
+        select.closest = (): unknown => field;
+        const container = stubContainer() as unknown as {
+          querySelector(selector: string): unknown;
+          querySelectorAll(): unknown[];
+        };
+        container.querySelector = selector =>
+          selector === '[data-field="twakeDelegatedUsers"]' ? field : null;
+        container.querySelectorAll = (): unknown[] => [select];
+        const form = new EntityForm({
+          entity: {
+            ...users,
+            schema: {
+              attributes: {
+                uid: users.schema.attributes.uid,
+                twakeDelegatedUsers: {
+                  type: 'array',
+                  items: { type: 'pointer', branch: [users.base as string] },
+                },
+              },
+            },
+          },
+          entry: { uid: 'bob', twakeDelegatedUsers: [alice, bob] },
+          translator,
+          pointerOptions: () => Promise.reject(failure(500, 'Internal')),
+          pointerSearch: (_branch, failed) => (failed ? search : undefined),
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        });
+        await form.render(container as unknown as HTMLElement);
+        expect(field.innerHTML).to.include('data-picker="twakeDelegatedUsers"');
+
+        // One click on the first token's button, bubbling from the token
+        // list up to the field.
+        const click = {
+          target: { closest: () => ({ dataset: { remove: '0' } }) },
+        };
+        tokens.fire('click', click);
+        field.fire('click', click);
+        expect(
+          (form as unknown as { values: Record<string, string[]> }).values
+            .twakeDelegatedUsers
+        ).to.deep.equal([bob]);
+      });
+
+      it('should build the form when the caller’s search throws', async () => {
+        // Read as "no search": thrown from the constructor or from render,
+        // it left the form half-built.
+        const container = stubContainer();
+        await new EntityForm({
+          entity: users,
+          entry: { uid: 'bob' },
+          translator,
+          pointerOptions: () => Promise.resolve([]),
+          pointerSearch: () => {
+            throw new Error('Not this branch');
+          },
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        }).render(container);
+        expect(container.innerHTML).to.include(
+          'data-pointer="dc=example,dc=com"'
+        );
+      });
     });
 
     it('should offer neither computed nor read-only attributes', async () => {

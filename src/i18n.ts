@@ -48,13 +48,18 @@ const en: Catalogue = {
   'dashboard.noCreate': 'Creation not allowed here',
 
   'list.open': 'Open',
-  'list.listEverything': 'List everything (may be slow)',
+  'list.listEverything': 'List without searching',
   'list.search': 'Search',
   'list.searchIn': 'in',
   'list.searchAnywhere': 'Every field',
   'list.searchGuard': 'Type at least {count} characters to search',
   'list.empty': 'Nothing to show',
   'list.noMatch': 'No entry matches this search',
+  'list.truncated':
+    'Only {count} entries are shown; there are more. Search to find the others.',
+  'list.tooMany': 'Too many entries to show them all: narrow the search.',
+  'list.failed':
+    'The list could not be loaded. If the directory holds many entries, narrow the search.',
   'list.count': '{from}–{to} of {total}',
   'list.perPage': 'Per page',
   'list.previous': 'Previous',
@@ -131,6 +136,8 @@ const en: Catalogue = {
   'import.downloadRefused': 'Download the refused rows',
   'import.ambiguous': '{field}: “{value}” matches several entries',
   'import.notFound': '{field}: “{value}” not found',
+  'import.undecided':
+    '{field}: “{value}” is no identifier, and too many entries contain it to rule out another spelling: check it, or use a DN',
   'import.notBoolean': '{field}: “{value}” is neither yes nor no',
   'import.notDate': '{field}: “{value}” is not a date',
   'import.missing': '{field} is required',
@@ -214,13 +221,19 @@ const fr: Catalogue = {
   'dashboard.noCreate': 'Création non autorisée ici',
 
   'list.open': 'Ouvrir',
-  'list.listEverything': 'Tout lister (peut être long)',
+  'list.listEverything': 'Lister sans rechercher',
   'list.search': 'Rechercher',
   'list.searchIn': 'dans',
   'list.searchAnywhere': 'Tous les champs',
   'list.searchGuard': 'Saisissez au moins {count} caractères pour rechercher',
   'list.empty': 'Rien à afficher',
   'list.noMatch': 'Aucune entrée ne correspond',
+  'list.truncated':
+    'Seules {count} entrées sont affichées ; il y en a d’autres. Utilisez la recherche pour les trouver.',
+  'list.tooMany':
+    'Trop d’entrées pour les afficher toutes : affinez la recherche.',
+  'list.failed':
+    'La liste n’a pas pu être chargée. Si l’annuaire contient beaucoup d’entrées, affinez la recherche.',
   'list.count': '{from}–{to} sur {total}',
   'list.perPage': 'Par page',
   'list.previous': 'Précédent',
@@ -299,6 +312,8 @@ const fr: Catalogue = {
   'import.downloadRefused': 'Télécharger les lignes refusées',
   'import.ambiguous': '{field} : « {value} » correspond à plusieurs entrées',
   'import.notFound': '{field} : « {value} » introuvable',
+  'import.undecided':
+    '{field} : « {value} » n’est pas un identifiant, et trop d’entrées le contiennent pour exclure une autre écriture : vérifiez-le, ou utilisez un DN',
   'import.notBoolean': '{field} : « {value} » n’est ni oui ni non',
   'import.notDate': '{field} : « {value} » n’est pas une date',
   'import.missing': '{field} est obligatoire',
