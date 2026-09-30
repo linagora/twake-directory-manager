@@ -48,7 +48,7 @@ const en: Catalogue = {
   'dashboard.noCreate': 'Creation not allowed here',
 
   'list.open': 'Open',
-  'list.listEverything': 'List everything (may be slow)',
+  'list.listEverything': 'List without searching',
   'list.search': 'Search',
   'list.searchIn': 'in',
   'list.searchAnywhere': 'Every field',
@@ -56,7 +56,7 @@ const en: Catalogue = {
   'list.empty': 'Nothing to show',
   'list.noMatch': 'No entry matches this search',
   'list.truncated':
-    'Only the first {count} entries are shown. Search to find the others.',
+    'Only {count} entries are shown; there are more. Search to find the others.',
   'list.tooMany': 'Too many entries to show them all: narrow the search.',
   'list.failed':
     'The list could not be loaded. If the directory holds many entries, narrow the search.',
@@ -219,7 +219,7 @@ const fr: Catalogue = {
   'dashboard.noCreate': 'Création non autorisée ici',
 
   'list.open': 'Ouvrir',
-  'list.listEverything': 'Tout lister (peut être long)',
+  'list.listEverything': 'Lister sans rechercher',
   'list.search': 'Rechercher',
   'list.searchIn': 'dans',
   'list.searchAnywhere': 'Tous les champs',
@@ -227,7 +227,7 @@ const fr: Catalogue = {
   'list.empty': 'Rien à afficher',
   'list.noMatch': 'Aucune entrée ne correspond',
   'list.truncated':
-    'Seules les {count} premières entrées sont affichées. Affinez avec la recherche pour trouver les autres.',
+    'Seules {count} entrées sont affichées ; il y en a d’autres. Utilisez la recherche pour les trouver.',
   'list.tooMany':
     'Trop d’entrées pour les afficher toutes : affinez la recherche.',
   'list.failed':

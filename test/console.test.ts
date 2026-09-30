@@ -30,7 +30,12 @@ import {
 } from '../src/format';
 import { EntityDetail } from '../src/components/EntityDetail';
 import { EntityForm } from '../src/components/EntityForm';
-import { EntityList, LIST_LIMIT, csvCell } from '../src/components/EntityList';
+import {
+  EntityList,
+  LIST_LIMIT,
+  csvCell,
+  listFailure,
+} from '../src/components/EntityList';
 import { OrganizationTree } from '../src/components/OrganizationTree';
 import { Translator } from '../src/i18n';
 import { formatByteSize } from '../src/format';
@@ -38,6 +43,7 @@ import type {
   EntityDescriptor,
   EntitySchema,
   Entry,
+  EntryList,
   Scope,
 } from '../src/types';
 
@@ -884,8 +890,7 @@ describe('Directory console', () => {
         'smith',
         'cn'
       );
-      expect(result.entries).to.have.property('jsmith');
-      expect(result.truncated).to.equal(false);
+      expect(result).to.have.property('jsmith');
     });
 
     it('should send only what changed, and what was cleared', async () => {
@@ -1311,7 +1316,7 @@ describe('Directory console', () => {
           { a: { dn: 'uid=a', uid: 'a' }, b: { dn: 'uid=b', uid: 'b' } },
           { 'X-Result-Truncated': 'true' }
         );
-      const cut = await client.list(users, undefined, undefined, 2);
+      const cut = await client.listBounded(users, undefined, undefined, 2);
       expect(cut.truncated).to.equal(true);
       expect(Object.keys(cut.entries)).to.deep.equal(['a', 'b']);
 
@@ -1322,8 +1327,86 @@ describe('Directory console', () => {
         .query({ limit: '2' })
         .reply(200, { a: { dn: 'uid=a', uid: 'a' } });
       expect(
-        (await client.list(users, undefined, undefined, 2)).truncated
+        (await client.listBounded(users, undefined, undefined, 2)).truncated
       ).to.equal(false);
+    });
+
+    it('should keep answering the plain map from `list()`, bounded or not', async () => {
+      // `list()` is exported, and embedders read what it answers as the map
+      // it always was: the flag comes from `listBounded()` instead.
+      const client = new ConsoleApiClient(baseUrl);
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .reply(200, { a: { dn: 'uid=a', uid: 'a' } });
+      expect(await client.list(users)).to.deep.equal({
+        a: { dn: 'uid=a', uid: 'a' },
+      });
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ limit: '1' })
+        .reply(
+          200,
+          { a: { dn: 'uid=a', uid: 'a' } },
+          { 'X-Result-Truncated': 'true' }
+        );
+      expect(await client.list(users, undefined, undefined, 1)).to.deep.equal({
+        a: { dn: 'uid=a', uid: 'a' },
+      });
+    });
+
+    it('should bound a pointer search, and explain the searches too broad', async () => {
+      const search = new ConsoleApiClient(baseUrl).pointerSearch(
+        'ou=users,dc=example,dc=com',
+        [users]
+      ) as (q: string) => Promise<unknown>;
+      const translator = new Translator('en');
+      const failure = async (): Promise<string> => {
+        try {
+          await search('demo');
+        } catch (err) {
+          return listFailure(err, translator);
+        }
+        throw new Error('the search should have failed');
+      };
+
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(query => query.match === 'demo' && query.limit === '20')
+        .reply(200, { demo1: { dn: 'uid=demo1,ou=users,dc=example,dc=com' } });
+      expect(await search('demo')).to.have.length(1);
+
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(422, { error: 'Size limit exceeded' });
+      expect(await failure()).to.equal(
+        'Too many entries to show them all: narrow the search.'
+      );
+
+      nock(baseUrl).get('/api/v1/ldap/users').query(true).reply(500, {
+        error: 'Internal Server Error',
+        message: 'An error occurred',
+      });
+      expect(await failure()).to.equal(
+        'The list could not be loaded. If the directory holds many entries, narrow the search.'
+      );
+    });
+
+    it('should hedge a failure a broad search may explain, keeping any cause', () => {
+      const translator = new Translator('en');
+      const failed = (status: number, message: string): string =>
+        listFailure(Object.assign(new Error(message), { status }), translator);
+      const hedged = translator.t('list.failed');
+      // A proxy giving up on a slow unbounded search says nothing useful.
+      expect(failed(502, '502 Bad Gateway')).to.equal(hedged);
+      expect(failed(504, '504 Gateway Timeout')).to.equal(hedged);
+      expect(failed(500, '500 Internal Server Error')).to.equal(hedged);
+      expect(failed(500, '500 ')).to.equal(hedged);
+      // A 500 that names its cause keeps it, so it can still be diagnosed.
+      expect(failed(500, 'Invalid DN syntax')).to.equal(
+        `${hedged} (Invalid DN syntax)`
+      );
+      expect(failed(403, 'Out of your scope')).to.equal('Out of your scope');
     });
   });
 
@@ -1403,7 +1486,7 @@ describe('Directory console', () => {
         translator: new Translator('en'),
         load: (_search: string, attribute: string) => {
           asked.push(attribute);
-          return Promise.resolve({ entries: {}, truncated: false });
+          return Promise.resolve({});
         },
         listable: true,
         onOpen: () => undefined,
@@ -1433,7 +1516,7 @@ describe('Directory console', () => {
         translator: new Translator('en'),
         load: (_search: string, attribute: string) => {
           asked.push(attribute);
-          return Promise.resolve({ entries: {}, truncated: false });
+          return Promise.resolve({});
         },
         listable: true,
         onOpen: () => undefined,
@@ -1454,9 +1537,7 @@ describe('Directory console', () => {
         entity: users,
         translator: new Translator('en'),
         load: () =>
-          new Promise<Record<string, Entry>>(resolve =>
-            pending.push(resolve)
-          ).then(entries => ({ entries, truncated: false })),
+          new Promise<Record<string, Entry>>(resolve => pending.push(resolve)),
         listable: true,
         onOpen: () => undefined,
         onDelete: () => Promise.resolve(),
@@ -1487,15 +1568,12 @@ describe('Directory console', () => {
         translator: new Translator('en'),
         load: () =>
           Promise.resolve({
-            entries: {
-              jsmith: {
-                dn: 'uid=jsmith,ou=users,dc=example,dc=com',
-                UID: 'jsmith',
-                CN: 'John Smith',
-                MAIL: 'jsmith@example.com',
-              },
+            jsmith: {
+              dn: 'uid=jsmith,ou=users,dc=example,dc=com',
+              UID: 'jsmith',
+              CN: 'John Smith',
+              MAIL: 'jsmith@example.com',
             },
-            truncated: false,
           }),
         listable: true,
         onOpen: () => undefined,
@@ -1513,15 +1591,12 @@ describe('Directory console', () => {
         translator: new Translator('en'),
         load: () =>
           Promise.resolve({
-            entries: {
-              jsmith: {
-                dn: 'uid=jsmith,ou=users,dc=example,dc=com',
-                UID: 'jsmith',
-                CN: 'John Smith',
-                MAIL: 'jsmith@example.com',
-              },
+            jsmith: {
+              dn: 'uid=jsmith,ou=users,dc=example,dc=com',
+              UID: 'jsmith',
+              CN: 'John Smith',
+              MAIL: 'jsmith@example.com',
             },
-            truncated: false,
           }),
         listable: true,
         onOpen: () => undefined,
@@ -1591,7 +1666,7 @@ describe('Directory console', () => {
         );
       const cut = await drawnList('fr');
       expect(cut).to.contain(
-        'Seules les 1000 premières entrées sont affichées. Affinez avec la recherche pour trouver les autres.'
+        'Seules 1 entrées sont affichées ; il y en a d’autres. Utilisez la recherche pour les trouver.'
       );
       expect(cut).to.contain('jsmith');
 
@@ -1602,7 +1677,86 @@ describe('Directory console', () => {
       const whole = await drawnList('en');
       expect(whole).to.contain('jsmith');
       expect(whole).to.not.contain('dc-list-notice');
-      expect(whole).to.not.contain('Only the first');
+      expect(whole).to.not.contain('Only ');
+    });
+
+    it('should count what was received, in the reader’s way of writing numbers', async () => {
+      // The server cuts where it likes — it may cap lower than asked — so the
+      // notice counts the rows it sent, not the rows the console asked for.
+      const many: Record<string, Entry> = {};
+      for (let i = 0; i < 1200; i++)
+        many[`u${i}`] = { dn: `uid=u${i}`, uid: `u${i}` };
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(200, many, { 'X-Result-Truncated': 'true' });
+      expect(await drawnList('en')).to.contain(
+        'Only 1,200 entries are shown; there are more.'
+      );
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(200, many, { 'X-Result-Truncated': 'true' });
+      expect(await drawnList('fr')).to.contain(
+        `Seules ${(1200).toLocaleString('fr')} entrées sont affichées`
+      );
+    });
+
+    it('should drop the notice once an answer is complete, or fails', async () => {
+      const answers: (EntryList | Error)[] = [];
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () => {
+          const answer = answers.shift() as EntryList | Error;
+          return answer instanceof Error
+            ? Promise.reject(answer)
+            : Promise.resolve(answer);
+        },
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      });
+      const container = stubContainer();
+      const cut: EntryList = {
+        entries: { a: { dn: 'uid=a', uid: 'a' } },
+        truncated: true,
+      };
+
+      answers.push(cut, { entries: cut.entries, truncated: false });
+      await list.render(container);
+      expect(container.innerHTML).to.contain('dc-list-notice');
+      await list.refresh();
+      expect(container.innerHTML).to.contain('>a<');
+      expect(container.innerHTML).to.not.contain('dc-list-notice');
+
+      answers.push(cut, Object.assign(new Error('Nope'), { status: 403 }));
+      await list.refresh();
+      expect(container.innerHTML).to.contain('dc-list-notice');
+      await list.refresh();
+      expect(container.innerHTML).to.contain('Nope');
+      expect(container.innerHTML).to.not.contain('dc-list-notice');
+    });
+
+    it('should still take a plain map from a loader, as complete', async () => {
+      // `EntityList` is exported: a loader written before `EntryList` answers
+      // the map alone, and that says nothing was left out.
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () =>
+          Promise.resolve({ truncated: { dn: 'uid=truncated', uid: 'x' } }),
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      });
+      const container = stubContainer();
+      await list.render(container);
+      // Even an entry named after the flag is read as an entry.
+      expect(container.innerHTML).to.contain('data-id="truncated"');
+      expect(container.innerHTML).to.not.contain('dc-list-notice');
     });
 
     it('should explain a search too broad for the directory, not repeat the server', async () => {

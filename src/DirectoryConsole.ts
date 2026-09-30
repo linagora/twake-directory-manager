@@ -276,8 +276,9 @@ export function claimRoots(scope: Scope): OrganizationNode[] {
  * How the list of an entity fetches its entries: a search once the operator
  * typed enough of one, the whole branch otherwise.
  *
- * Bounded either way, at `LIST_LIMIT`: the whole branch is what "List
- * everything" asks for, and a search as loose as three letters can match more
+ * Asks for `LIST_LIMIT` entries at most either way (a server predating
+ * `limit` ignores it): the whole branch is what "List without searching"
+ * asks for, and a search as loose as three letters can match more
  * of a large directory than it lets one search return. The list says so when
  * the server left entries out.
  *
@@ -291,8 +292,8 @@ export function listLoader(
 ): (search: string, attribute: string) => Promise<EntryList> {
   return (search, attribute) =>
     search.length >= SEARCH_MINIMUM
-      ? api.list(entity, search, attribute, LIST_LIMIT)
-      : api.list(entity, undefined, undefined, LIST_LIMIT);
+      ? api.listBounded(entity, search, attribute, LIST_LIMIT)
+      : api.listBounded(entity, undefined, undefined, LIST_LIMIT);
 }
 
 /**

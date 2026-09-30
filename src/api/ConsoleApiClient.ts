@@ -377,6 +377,26 @@ export class ConsoleApiClient {
    * List the entries of an entity, optionally narrowed by a substring on one
    * attribute.
    *
+   * @param entity entity to list
+   * @param search substring to look for
+   * @param attribute attribute the substring applies to
+   * @param limit most entries to ask for
+   * @returns the entries, keyed by their identifier
+   */
+  async list(
+    entity: EntityDescriptor,
+    search?: string,
+    attribute?: string,
+    limit?: number
+  ): Promise<Record<string, Entry>> {
+    return (await this.listBounded(entity, search, attribute, limit)).entries;
+  }
+
+  /**
+   * `list()`, saying also whether the server left entries out — which only
+   * a header tells, hence a method of its own rather than a new shape for
+   * `list()`, whose plain map embedders already read.
+   *
    * Without a limit the server runs the search unbounded, and a directory
    * refuses one that matches more entries than its own size limit: ldap-rest
    * then answers `422` — or `500`, before it learnt to tell that failure
@@ -393,7 +413,7 @@ export class ConsoleApiClient {
    * @returns the entries, keyed by their identifier, and whether the server
    *   left some out
    */
-  async list(
+  async listBounded(
     entity: EntityDescriptor,
     search?: string,
     attribute?: string,
@@ -777,7 +797,7 @@ export class ConsoleApiClient {
         entity.base && branch.toLowerCase() === entity.base.toLowerCase()
     );
     if (owner) {
-      const { entries: list } = await this.list(owner);
+      const list = await this.list(owner);
       const labels = owner.schema.entity?.valueLabels;
       return Object.entries(list).map(([id, entry]) => ({
         dn: String(entry.dn || id),
@@ -832,7 +852,10 @@ export class ConsoleApiClient {
       .join(',');
     const display = roleAttribute(owner.schema, 'displayName');
     return async query => {
-      const { entries: found } = await this.list(owner, query, scope);
+      // Asked for bounded, because a loose search can match more of the
+      // directory than it lets one search return; cut here as well, because
+      // ldap-rest 0.12.0 ignores the bound.
+      const found = await this.list(owner, query, scope, POINTER_SEARCH_LIMIT);
       return Object.entries(found)
         .slice(0, POINTER_SEARCH_LIMIT)
         .map(([id, entry]) => {

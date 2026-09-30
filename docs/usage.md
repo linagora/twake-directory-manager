@@ -47,7 +47,9 @@ read it from. A server started without `--api-prefix` needs neither option.
 
 An `apiBaseUrl` on another origin makes every call a cross-origin one, sent
 with credentials: that deployment has to allow the console's origin _and_
-credentials in its CORS policy, or the browser drops the answer.
+credentials in its CORS policy, or the browser drops the answer. It also has
+to expose the `X-Result-Truncated` header (`Access-Control-Expose-Headers`),
+or the browser hides it and a truncated list reads as complete.
 
 ## What the server has to expose
 
@@ -111,12 +113,13 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 - **A large branch is not listed unfiltered.** Entities attached to an
   organization ask for three characters before searching; the small reference
   tables are listed whole.
-- **A list shows 1,000 entries at most**, searched or not. The console asks
-  for `?limit=1000`, and a server that answers `X-Result-Truncated: true`
-  gets a notice above the table saying the rest is to be found by searching.
-  A search the directory refuses as too broad — `422` from ldap-rest, `500`
-  from a server predating `limit` — is explained as such rather than shown as
-  the server's generic error.
+- **A list asks for 1,000 entries at most**, searched or not
+  (`?limit=1000`). A server that honours it and answers
+  `X-Result-Truncated: true` gets a notice above the table: there are more,
+  to be reached by searching. A search the directory refuses as too broad is
+  explained rather than shown as the server's generic error: `422` from an
+  ldap-rest that tells that refusal apart says so; a `500`, which is how
+  ldap-rest 0.12.0 reports it, suggests narrowing the search.
 - **The page size is remembered**, along with the chosen language.
 - **A deep organization path is shortened** to its root and its leaf, with the
   whole path in the cell's tooltip.
@@ -260,6 +263,13 @@ import {
 } from 'twake-directory-manager';
 ```
 
+`ConsoleApiClient.list(entity, search?, attribute?, limit?)` answers the
+entries as a map keyed by identifier. `listBounded()` takes the same
+arguments and answers an `EntryList` — `{ entries, truncated }` — where
+`truncated` is the server's `X-Result-Truncated` header: it is the one to use
+with a `limit`, which may leave entries out. The `load` an `EntityList` is
+given may answer either shape; a plain map is read as complete.
+
 ## Filling a pointer field
 
 A `pointer` names a branch, and the console fills the select from it:
@@ -283,12 +293,14 @@ screen from shipping.
 
 ## Known limits
 
-- A list stops at its first 1,000 entries and pages through them in the
-  browser; the rest are reached by searching, not by paging. That needs a
-  server that honours `limit` on the list endpoint: an older one ignores it,
-  still fetches a branch or a search in full, and fails once the directory's
-  size limit is exceeded. Across origins, its CORS policy has to expose
-  `X-Result-Truncated` for the notice to show.
+- A list holds 1,000 entries at most, in the directory's order before the
+  console sorts them, and pages through them in the browser; the rest are
+  reached by searching, not by paging. That needs a server that honours
+  `limit` on the list endpoint: ldap-rest 0.12.0 ignores it, still fetches a
+  branch or a search in full, and fails once the directory's size limit is
+  exceeded. Across origins, the deployment's CORS policy has to expose
+  `X-Result-Truncated` (`Access-Control-Expose-Headers`), or the list looks
+  complete and shows no notice.
 - Moving an entry between two organizations the caller writes has no control
   of its own: its organization field is changed in its form. The move
   controls are the transit branch's.

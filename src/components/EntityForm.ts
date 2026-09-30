@@ -21,7 +21,7 @@ import {
   formatByteSize,
   rdnValue,
 } from '../format';
-import { SEARCH_MINIMUM } from './EntityList';
+import { SEARCH_MINIMUM, listFailure } from './EntityList';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
 
@@ -461,8 +461,8 @@ export class EntityForm {
             active = candidates.length ? 0 : -1;
             paint();
           })
-          .catch((err: Error) => {
-            if (ticket === generation) message(err.message);
+          .catch((err: unknown) => {
+            if (ticket === generation) message(listFailure(err, translator));
           });
       }, SEARCH_DELAY);
     });
