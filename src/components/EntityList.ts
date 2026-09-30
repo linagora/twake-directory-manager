@@ -16,7 +16,7 @@
 import { csvCell } from '../csv';
 import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
-import { hasRole } from '../api/ConsoleApiClient';
+import { hasRole, tooBroad } from '../api/ConsoleApiClient';
 import {
   attributeLabel,
   displayValue,
@@ -60,13 +60,14 @@ const GENERIC_FAILURE =
  * What to say about a list, or a search, that could not be loaded.
  *
  * The server's own message is usually the most useful one, and is kept.
- * Not for the failures a search too broad for the directory ends in: `422`
- * is ldap-rest saying so, with wording meant for an API client; `500` is how
- * ldap-rest 0.12.0 reports the same refusal — as "Internal Server Error",
- * which tells the operator nothing they can act on — and `502` or `504` is a
- * proxy giving up on the unbounded search before the server did. Those can
- * have other causes, hence the hedged wording; and a `500` that does name its
- * cause keeps it, after that wording, so a real failure stays diagnosable.
+ * Not for the failures a search too broad for the directory ends in (see
+ * `tooBroad`): `422` is ldap-rest saying so, with wording meant for an API
+ * client; `500` is how ldap-rest 0.12.0 reports the same refusal — as
+ * "Internal Server Error", which tells the operator nothing they can act on
+ * — and `502` or `504` is a proxy giving up on the unbounded search before
+ * the server did. Those can have other causes, hence the hedged wording; and
+ * a `500` that does name its cause keeps it, after that wording, so a real
+ * failure stays diagnosable.
  *
  * @param err what the request threw
  * @param translator translator of the interface
@@ -75,15 +76,13 @@ const GENERIC_FAILURE =
 export function listFailure(err: unknown, translator: Translator): string {
   const status = (err as { status?: number } | null)?.status;
   const message = err instanceof Error ? err.message : String(err);
+  if (!tooBroad(err)) return message;
   if (status === 422) return translator.t('list.tooMany');
-  if (status === 500 || status === 502 || status === 504) {
-    const hedged = translator.t('list.failed');
-    const cause = message.trim();
-    return status === 500 && !GENERIC_FAILURE.test(cause)
-      ? `${hedged} (${cause})`
-      : hedged;
-  }
-  return message;
+  const hedged = translator.t('list.failed');
+  const cause = message.trim();
+  return status === 500 && !GENERIC_FAILURE.test(cause)
+    ? `${hedged} (${cause})`
+    : hedged;
 }
 
 /**

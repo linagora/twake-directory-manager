@@ -66,6 +66,17 @@ export function attributeLabel(
   return resolveText(attr?.label, language) || toTitleCase(name);
 }
 
+/**
+ * Whether a text is written as a DN — `attribute=value` pairs separated by
+ * commas, two at least — rather than as a name. An identifier holding an
+ * `=` is not one, being a single pair.
+ */
+export function isDnShaped(text: string): boolean {
+  return /^\s*[a-z][\w.-]*\s*=(?:\\.|[^,\\])*(?:,\s*[a-z][\w.-]*\s*=(?:\\.|[^,\\])*)+$/i.test(
+    text
+  );
+}
+
 /** Value of the first RDN of a DN, with its escapes removed. */
 export function rdnValue(dn: string): string {
   const match = /^[^=]+=((?:\\.|[^,])*)/.exec(dn);

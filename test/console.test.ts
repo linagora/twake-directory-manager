@@ -30,6 +30,7 @@ import {
 } from '../src/format';
 import { EntityDetail } from '../src/components/EntityDetail';
 import { EntityForm } from '../src/components/EntityForm';
+import { EntityImport } from '../src/components/EntityImport';
 import {
   EntityList,
   LIST_LIMIT,
@@ -1802,6 +1803,169 @@ describe('Directory console', () => {
       // Ordinary values are left alone, quoted only when they need it.
       expect(csvCell('John Smith')).to.equal('John Smith');
       expect(csvCell('Smith, John')).to.equal('"Smith, John"');
+    });
+  });
+
+  describe('importing pointers into a large branch', () => {
+    const accounts: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          uid: { type: 'string', role: 'identifier', required: true },
+          manager: { type: 'pointer', branch: [users.base as string] },
+          delegates: {
+            type: 'array',
+            items: { type: 'pointer', branch: [users.base as string] },
+          },
+        },
+      },
+    };
+    const dn = (uid: string): string => `uid=${uid},${users.base}`;
+    const account = (uid: string): Entry => ({ dn: dn(uid), uid });
+
+    /**
+     * Run the import's check on a file, the way the button does, and hand
+     * back the rows it prepared and the error it showed.
+     */
+    async function check(
+      rows: string[][]
+    ): Promise<{ errors: string[][]; values: unknown[]; error: string }> {
+      const client = new ConsoleApiClient(baseUrl);
+      const importer = new EntityImport({
+        entity: accounts,
+        translator: new Translator('en'),
+        pointerOptions: branch => client.pointerOptions(branch, [accounts]),
+        pointerLookup: branch => client.pointerLookup(branch, [accounts]),
+        create: () => Promise.resolve(),
+        onDone: () => undefined,
+        onClose: () => undefined,
+      });
+      importer.render(stubContainer());
+      const state = importer as unknown as {
+        table: unknown;
+        mapping: string[];
+        rows: { errors: string[]; values: unknown }[];
+        error: string;
+        check(): Promise<void>;
+      };
+      state.table = {
+        headers: ['uid', 'manager', 'delegates'],
+        rows,
+        delimiter: ',',
+      };
+      state.mapping = ['uid', 'manager', 'delegates'];
+      await state.check();
+      return {
+        errors: state.rows.map(row => row.errors),
+        values: state.rows.map(row => row.values),
+        error: state.error,
+      };
+    }
+
+    it('should resolve from the whole branch when it can be listed', async () => {
+      // One listing for both columns, and no request per value.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .reply(200, { alice: account('alice'), bob: account('bob') });
+      const { errors, values } = await check([['new1', 'alice', 'bob|Alice']]);
+      expect(errors).to.deep.equal([[]]);
+      expect(values[0]).to.deep.include({
+        manager: dn('alice'),
+        delegates: [dn('bob'), dn('alice')],
+      });
+      expect(nock.isDone()).to.equal(true);
+    });
+
+    for (const status of [500, 422]) {
+      it(`should look each value up when the branch answers ${status}`, async () => {
+        nock(baseUrl)
+          .get('/api/v1/ldap/users')
+          .reply(status, { error: 'Internal Server Error' });
+        // Every interceptor answers once: a value looked up twice fails.
+        nock(baseUrl)
+          .get(`/api/v1/ldap/users/${encodeURIComponent(dn('alice'))}`)
+          .reply(200, account('alice'));
+        nock(baseUrl).get('/api/v1/ldap/users/bob').reply(200, account('bob'));
+        for (const missing of ['ann', 'zoé', 'dup', 'jo', 'x'])
+          nock(baseUrl)
+            .get(`/api/v1/ldap/users/${encodeURIComponent(missing)}`)
+            .reply(404, { error: 'user not found' });
+        const search = (match: string) =>
+          nock(baseUrl)
+            .get('/api/v1/ldap/users')
+            .query({ match, attribute: 'uid', limit: '50' });
+        // Names containing "ann", none of them "ann" itself.
+        search('ann').reply(200, {
+          anna: account('anna'),
+          joanne: account('joanne'),
+        });
+        // Found by the name the form shows, compared the way the full list
+        // compares it: without accents.
+        search('zoé').reply(200, { zoe: account('zoe') });
+        // Two entries go by that name: refused, not guessed.
+        search('dup').reply(200, {
+          dup: { dn: 'uid=dup,ou=users,dc=example,dc=com', uid: 'dup' },
+          'Dup ': { dn: 'uid=Dup\\20,ou=users,dc=example,dc=com', uid: 'Dup ' },
+        });
+        // Cut before the end with no exact match: the name may be further.
+        search('jo').reply(
+          200,
+          { john: account('john') },
+          {
+            'X-Result-Truncated': 'true',
+          }
+        );
+        // Refused as too broad by ldap-rest 0.12.0: says as little.
+        search('x').reply(500, { error: 'Internal Server Error' });
+
+        const { errors, values, error } = await check([
+          ['new1', dn('alice'), 'bob|zoé'],
+          ['new2', 'bob', 'ann'],
+          ['new3', 'dup', 'jo|x'],
+          ['new4', 'uid=eve,ou=other,dc=example,dc=com', ''],
+        ]);
+        expect(error).to.equal('');
+        expect(values[0]).to.deep.include({
+          manager: dn('alice'),
+          delegates: [dn('bob'), dn('zoe')],
+        });
+        expect(errors[0]).to.deep.equal([]);
+        expect(errors[1]).to.deep.equal(['Delegates: “ann” not found']);
+        expect(errors[2]).to.deep.equal([
+          'Manager: “dup” matches several entries',
+          'Delegates: “jo” could not be checked, too many entries resemble it: use its identifier or its DN',
+          'Delegates: “x” could not be checked, too many entries resemble it: use its identifier or its DN',
+        ]);
+        // A DN outside the branch is no entry of it, and costs no request.
+        expect(errors[3]).to.deep.equal([
+          'Manager: “uid=eve,ou=other,dc=example,dc=com” not found',
+        ]);
+        expect(nock.isDone()).to.equal(true);
+      });
+    }
+
+    it('should explain a branch it could neither list nor look up', async () => {
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .reply(500, { error: 'Internal Server Error' });
+      nock(baseUrl)
+        .get('/api/v1/ldap/users/bob')
+        .reply(502, '<html>Bad gateway</html>', {
+          'Content-Type': 'text/html',
+        });
+      const { error } = await check([['new1', 'bob', '']]);
+      expect(error).to.equal(
+        'The list could not be loaded. If the directory holds many entries, narrow the search.'
+      );
+    });
+
+    it('should not look values up when the branch was refused for another reason', async () => {
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .reply(403, { error: 'Out of your scope' });
+      const { error } = await check([['new1', 'bob', '']]);
+      expect(error).to.equal('Out of your scope');
+      expect(nock.isDone()).to.equal(true);
     });
   });
 

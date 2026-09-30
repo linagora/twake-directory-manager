@@ -18,9 +18,11 @@ import type {
   Scope,
   SchemaAttribute,
 } from '../types';
+import type { PointerLookup, PointerOption } from '../importer';
 import {
   comparableDn,
   entryValue,
+  isDnShaped,
   rdnValue,
   searchableAttributes,
   valueLabel,
@@ -84,6 +86,13 @@ export function roleAttribute(
 /** Suggestions a pointer search offers: enough to pick from, few to read. */
 const POINTER_SEARCH_LIMIT = 20;
 
+/**
+ * Entries a pointer lookup asks for when it searches a name: the one it looks
+ * for is compared exactly among them, so a few dozen say whether it is there
+ * unless the name is so short that it is part of many others.
+ */
+const POINTER_LOOKUP_LIMIT = 50;
+
 /** Organizations walked before a pointer listing stops asking for more. */
 const ORGANIZATION_OPTION_LIMIT = 200;
 
@@ -137,6 +146,23 @@ function statusError(
   const error = new Error(message) as Error & { status: number };
   error.status = status;
   return error;
+}
+
+/**
+ * Whether a failure is one a search too broad for the directory ends in.
+ *
+ * `422` is ldap-rest saying so; `500` is how ldap-rest 0.12.0 reports the
+ * same refusal, and `502` or `504` a proxy giving up on the unbounded search
+ * before the server did. The last three have other causes too, which is why
+ * what is said about them stays hedged — but each is worth trying something
+ * narrower after.
+ *
+ * @param err what a request threw
+ * @returns true for those four statuses
+ */
+export function tooBroad(err: unknown): boolean {
+  const status = (err as { status?: number } | null)?.status;
+  return status === 422 || status === 500 || status === 502 || status === 504;
 }
 
 export class ConsoleApiClient {
@@ -784,13 +810,7 @@ export class ConsoleApiClient {
     // An organization pointer names the whole tree, which no flat listing
     // covers: walk it instead, so the department field of an account is
     // filled from the organizations themselves.
-    if (
-      this.topOrganization &&
-      (branch.toLowerCase() === this.topOrganization.toLowerCase() ||
-        this.topOrganization.toLowerCase().endsWith(`,${branch.toLowerCase()}`))
-    ) {
-      return this.organizationOptions();
-    }
+    if (this.inOrganizationTree(branch)) return this.organizationOptions();
 
     const owner = entities.find(
       entity =>
@@ -798,12 +818,9 @@ export class ConsoleApiClient {
     );
     if (owner) {
       const list = await this.list(owner);
-      const labels = owner.schema.entity?.valueLabels;
-      return Object.entries(list).map(([id, entry]) => ({
-        dn: String(entry.dn || id),
-        // A nomenclature names its values; anything else is known by its id.
-        label: (labels && valueLabel(labels, id, language)) || id,
-      }));
+      return Object.entries(list).map(([id, entry]) =>
+        this.pointerOption(owner, id, entry, language)
+      );
     }
     // An unknown branch: ask the raw browser, which every deployment that
     // enables it serves, and give up quietly when it is not there.
@@ -821,6 +838,119 @@ export class ConsoleApiClient {
     } catch {
       return [];
     }
+  }
+
+  /** Whether a pointer's branch is the organization tree, or holds it. */
+  private inOrganizationTree(branch: string): boolean {
+    return Boolean(
+      this.topOrganization &&
+      (branch.toLowerCase() === this.topOrganization.toLowerCase() ||
+        this.topOrganization.toLowerCase().endsWith(`,${branch.toLowerCase()}`))
+    );
+  }
+
+  /** One entry of an entity, as a pointer candidate the way the form lists it. */
+  private pointerOption(
+    owner: EntityDescriptor,
+    id: string,
+    entry: Entry,
+    language: string
+  ): PointerOption {
+    const labels = owner.schema.entity?.valueLabels;
+    return {
+      dn: String(entry.dn || id),
+      // A nomenclature names its values; anything else is known by its id.
+      label: (labels && valueLabel(labels, id, language)) || id,
+    };
+  }
+
+  /**
+   * How the import finds the entries of a branch value by value, for a
+   * branch too large to list whole; undefined for a branch no entity owns.
+   *
+   * Only an entity's branch can be read entry by entry and searched. The
+   * organization tree is walked, and bounded, rather than listed; a raw
+   * branch has neither a read nor a search to fall back to.
+   *
+   * A DN is read through the entity's endpoint, which takes one in place of
+   * an identifier for a direct child of its base named by its main
+   * attribute — anything else is not an entry of that branch, and the full
+   * listing would not have held it either. The search looks in the main
+   * attribute, where the names the form lists an entry by come from: its
+   * identifier and the value of its RDN. A nomenclature's own labels live in
+   * its schema, not in the directory, and are not searched: a branch holding
+   * one is small enough to be listed.
+   *
+   * @param branch DN the pointer must land in
+   * @param entities entities the console knows, to find the one owning it
+   * @param language interface language, to name a nomenclature value
+   * @returns the lookup, or undefined
+   */
+  pointerLookup(
+    branch: string,
+    entities: EntityDescriptor[],
+    language = 'en'
+  ): PointerLookup | undefined {
+    if (this.inOrganizationTree(branch)) return undefined;
+    const owner = entities.find(
+      entity =>
+        entity.base && branch.toLowerCase() === entity.base.toLowerCase()
+    );
+    if (!owner?.base) return undefined;
+    const base = owner.base;
+    const main = owner.mainAttribute;
+    return {
+      read: async (value: string): Promise<PointerOption | undefined> => {
+        let id = value;
+        if (isDnShaped(value)) {
+          const dn = /^\s*([^=\s]+)\s*=((?:\\.|[^,])*),(.*)$/.exec(value);
+          if (
+            !dn ||
+            dn[1].toLowerCase() !== main.toLowerCase() ||
+            comparableDn(dn[3]) !== comparableDn(base)
+          )
+            return undefined;
+          // The base as the server spells it: it compares the parent to its
+          // own base as written, spaces included.
+          id = `${main}=${dn[2]},${base}`;
+        }
+        let entry: Entry;
+        try {
+          entry = await this.get(owner, id);
+        } catch (err) {
+          // Absent, or not a name the endpoint can read as an entry.
+          const status = (err as { status?: number }).status;
+          if (status === 404 || status === 400) return undefined;
+          throw err;
+        }
+        const own = entryValue(entry, main);
+        const key = (Array.isArray(own) ? own[0] : own) || rdnValue(id);
+        return this.pointerOption(owner, key, entry, language);
+      },
+      search: async (
+        text: string
+      ): Promise<{ options: PointerOption[]; truncated: boolean }> => {
+        try {
+          const { entries, truncated } = await this.listBounded(
+            owner,
+            text,
+            main,
+            POINTER_LOOKUP_LIMIT
+          );
+          return {
+            options: Object.entries(entries).map(([id, entry]) =>
+              this.pointerOption(owner, id, entry, language)
+            ),
+            truncated,
+          };
+        } catch (err) {
+          // Refused as too broad — ldap-rest 0.12.0 honours no bound — says
+          // no more than an answer cut short: the name may be there.
+          if (tooBroad(err)) return { options: [], truncated: true };
+          throw err;
+        }
+      },
+    };
   }
 
   /**

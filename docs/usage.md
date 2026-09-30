@@ -197,7 +197,16 @@ last.
 3. **The check.** Every row is checked the way the form checks a field —
    required fields, the schema's `test`, yes/no and date values — and every
    pointer is looked up the way a person names it: a title or a position by
-   its name, a department by its path, or any of them by its DN. A row
+   its name, a department by its path, or any of them by its DN. The
+   pointer's branch is listed whole for that; a branch the directory will not
+   list in one search — the accounts of a large directory, for a column of
+   managers — is refused (`422`, or `500` from ldap-rest 0.12.0), and the
+   values the file holds are then looked up one by one instead, a few at a
+   time: a DN read as such, anything else as an identifier, then as a name.
+   A name two entries share is refused as it would be from the full list,
+   and one the directory would not search precisely enough to settle — too
+   many entries contain it — is refused as _could not be checked_ rather
+   than reported missing: its identifier or DN settles it. A row
    reusing a value an earlier row holds, where the schema marks it `unique`,
    is refused with the line it repeats. The rows in error can be downloaded,
    with the reason in a last column, to be corrected and imported again.

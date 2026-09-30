@@ -34,6 +34,7 @@ import {
 } from './format';
 import { availableLanguages, Translator } from './i18n';
 import { signInAgain } from './session';
+import type { PointerLookup } from './importer';
 import type {
   ConsoleOptions,
   EntityDescriptor,
@@ -1201,6 +1202,12 @@ export class DirectoryConsole {
             branch: string
           ): Promise<{ dn: string; label: string }[]> =>
             this.api.pointerOptions(
+              branch,
+              this.entities,
+              this.translator.language
+            ),
+          pointerLookup: (branch: string): PointerLookup | undefined =>
+            this.api.pointerLookup(
               branch,
               this.entities,
               this.translator.language
