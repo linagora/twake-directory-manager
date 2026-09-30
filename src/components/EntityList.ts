@@ -23,13 +23,31 @@ import {
   entryValue,
   searchableAttributes,
 } from '../format';
-import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
+import type {
+  EntityDescriptor,
+  Entry,
+  EntryList,
+  SchemaAttribute,
+} from '../types';
 
 // Kept importable from here, where it was first defined.
 export { csvCell };
 
 /** Characters required before a search is issued. */
 export const SEARCH_MINIMUM = 3;
+
+/**
+ * Most entries a list asks the server for, filtered or not.
+ *
+ * The directory refuses a search matching more than its own size limit —
+ * ten thousand entries where this was first seen — and ldap-rest turned that
+ * refusal into a failure of the whole list: "List everything" on the accounts
+ * of a large directory, or a search as loose as "demo", showed an error and
+ * nothing else. Asking for fewer turns that into the first thousand entries
+ * and a notice that there are more, and a thousand rows is already more than
+ * anyone pages through rather than searches.
+ */
+export const LIST_LIMIT = 1000;
 
 /**
  * The search scope meaning "every field worth searching" rather than one.
@@ -46,7 +64,7 @@ export interface ListOptions {
   entity: EntityDescriptor;
   translator: Translator;
   /** Fetch the entries; `search` is already known to be long enough */
-  load(search: string, attribute: string): Promise<Record<string, Entry>>;
+  load(search: string, attribute: string): Promise<EntryList>;
   /** Whether the branch is small enough to show without a search */
   listable: boolean;
   onOpen(id: string): void;
@@ -94,6 +112,8 @@ export class EntityList {
   private loading = false;
   private loaded = false;
   private error: string | null = null;
+  /** Whether the server left entries out of the last answer */
+  private truncated = false;
   /** Set when the reader asked for the whole branch despite the guard */
   private listEverything = false;
   /**
@@ -207,6 +227,7 @@ export class EntityList {
     const generation = ++this.generation;
     if (!this.listable() && this.query.length < SEARCH_MINIMUM) {
       this.entries = [];
+      this.truncated = false;
       this.loaded = false;
       this.draw();
       return;
@@ -217,22 +238,45 @@ export class EntityList {
     try {
       const list = await this.options.load(this.query, this.searchScope);
       if (generation !== this.generation) return;
-      this.entries = Object.entries(list).sort(([a], [b]) =>
+      this.entries = Object.entries(list.entries).sort(([a], [b]) =>
         a.localeCompare(b, undefined, { sensitivity: 'base' })
       );
+      this.truncated = list.truncated;
       this.loaded = true;
       this.page = 0;
       this.selected.clear();
     } catch (err) {
       if (generation !== this.generation) return;
-      this.error = (err as Error).message;
+      this.error = this.failureMessage(err);
       this.entries = [];
+      this.truncated = false;
     } finally {
       if (generation === this.generation) {
         this.loading = false;
         this.draw();
       }
     }
+  }
+
+  /**
+   * What to say about a list that could not be loaded.
+   *
+   * The server's own message is usually the most useful one, and is kept.
+   * Not for the two failures a search too broad for the directory ends in:
+   * `422` is ldap-rest saying so, with wording meant for an API client; `500`
+   * is how a server predating that answer reports the same refusal — as
+   * "Internal Server Error", which tells the operator nothing they can act on.
+   * A `500` can have other causes, hence the hedged wording.
+   *
+   * @param err what the load threw
+   * @returns the message to show
+   */
+  private failureMessage(err: unknown): string {
+    const { translator } = this.options;
+    const status = (err as { status?: number }).status;
+    if (status === 422) return translator.t('list.tooMany');
+    if (status === 500) return translator.t('list.failed');
+    return (err as Error).message;
   }
 
   /** Repaint the whole table. */
@@ -364,6 +408,13 @@ export class EntityList {
 
     const attributes = this.options.entity.schema.attributes;
     return `
+      ${
+        this.truncated
+          ? `<p class="dc-list-notice" role="status">${escapeHtml(
+              translator.t('list.truncated', { count: LIST_LIMIT })
+            )}</p>`
+          : ''
+      }
       <div class="dc-table-scroll">
         <table class="dc-table">
           <thead>

@@ -15,6 +15,7 @@ import {
   ToastController,
   claimRoots,
   createdEntryId,
+  listLoader,
   readFailure,
   scopeRestricts,
   splitEntities,
@@ -29,7 +30,7 @@ import {
 } from '../src/format';
 import { EntityDetail } from '../src/components/EntityDetail';
 import { EntityForm } from '../src/components/EntityForm';
-import { EntityList, csvCell } from '../src/components/EntityList';
+import { EntityList, LIST_LIMIT, csvCell } from '../src/components/EntityList';
 import { OrganizationTree } from '../src/components/OrganizationTree';
 import { Translator } from '../src/i18n';
 import { formatByteSize } from '../src/format';
@@ -883,7 +884,8 @@ describe('Directory console', () => {
         'smith',
         'cn'
       );
-      expect(result).to.have.property('jsmith');
+      expect(result.entries).to.have.property('jsmith');
+      expect(result.truncated).to.equal(false);
     });
 
     it('should send only what changed, and what was cleared', async () => {
@@ -1269,6 +1271,60 @@ describe('Directory console', () => {
         expect((err as Error).message).to.equal('No authenticated user');
       }
     });
+
+    it('should ask a list for a bounded number of entries, searched or not', async () => {
+      // "List everything" on the accounts of a large directory ran an
+      // unbounded search the directory refused, and so did a search as loose
+      // as "demo": the list showed "Internal Server Error" and nothing else.
+      const load = listLoader(new ConsoleApiClient(baseUrl), users);
+
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ limit: String(LIST_LIMIT) })
+        .reply(200, { jsmith: { dn: 'uid=jsmith', uid: 'jsmith' } });
+      const all = await load('', 'uid,cn');
+      expect(all.entries).to.have.property('jsmith');
+
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ match: 'demo', attribute: 'uid,cn', limit: '1000' })
+        .reply(200, { demo1: { dn: 'uid=demo1', uid: 'demo1' } });
+      const found = await load('demo', 'uid,cn');
+      expect(found.entries).to.have.property('demo1');
+
+      // Too short to be a search: the branch, still bounded.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ limit: '1000' })
+        .reply(200, {});
+      expect((await load('de', 'uid,cn')).entries).to.deep.equal({});
+      expect(nock.isDone()).to.equal(true);
+    });
+
+    it('should say a list is truncated only when the server says so', async () => {
+      const client = new ConsoleApiClient(baseUrl);
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ limit: '2' })
+        .reply(
+          200,
+          { a: { dn: 'uid=a', uid: 'a' }, b: { dn: 'uid=b', uid: 'b' } },
+          { 'X-Result-Truncated': 'true' }
+        );
+      const cut = await client.list(users, undefined, undefined, 2);
+      expect(cut.truncated).to.equal(true);
+      expect(Object.keys(cut.entries)).to.deep.equal(['a', 'b']);
+
+      // A server predating `limit` ignores it and sends no header: what it
+      // answered is the whole branch.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ limit: '2' })
+        .reply(200, { a: { dn: 'uid=a', uid: 'a' } });
+      expect(
+        (await client.list(users, undefined, undefined, 2)).truncated
+      ).to.equal(false);
+    });
   });
 
   describe('EntityList', () => {
@@ -1347,7 +1403,7 @@ describe('Directory console', () => {
         translator: new Translator('en'),
         load: (_search: string, attribute: string) => {
           asked.push(attribute);
-          return Promise.resolve({});
+          return Promise.resolve({ entries: {}, truncated: false });
         },
         listable: true,
         onOpen: () => undefined,
@@ -1377,7 +1433,7 @@ describe('Directory console', () => {
         translator: new Translator('en'),
         load: (_search: string, attribute: string) => {
           asked.push(attribute);
-          return Promise.resolve({});
+          return Promise.resolve({ entries: {}, truncated: false });
         },
         listable: true,
         onOpen: () => undefined,
@@ -1398,7 +1454,9 @@ describe('Directory console', () => {
         entity: users,
         translator: new Translator('en'),
         load: () =>
-          new Promise<Record<string, Entry>>(resolve => pending.push(resolve)),
+          new Promise<Record<string, Entry>>(resolve =>
+            pending.push(resolve)
+          ).then(entries => ({ entries, truncated: false })),
         listable: true,
         onOpen: () => undefined,
         onDelete: () => Promise.resolve(),
@@ -1429,12 +1487,15 @@ describe('Directory console', () => {
         translator: new Translator('en'),
         load: () =>
           Promise.resolve({
-            jsmith: {
-              dn: 'uid=jsmith,ou=users,dc=example,dc=com',
-              UID: 'jsmith',
-              CN: 'John Smith',
-              MAIL: 'jsmith@example.com',
+            entries: {
+              jsmith: {
+                dn: 'uid=jsmith,ou=users,dc=example,dc=com',
+                UID: 'jsmith',
+                CN: 'John Smith',
+                MAIL: 'jsmith@example.com',
+              },
             },
+            truncated: false,
           }),
         listable: true,
         onOpen: () => undefined,
@@ -1452,12 +1513,15 @@ describe('Directory console', () => {
         translator: new Translator('en'),
         load: () =>
           Promise.resolve({
-            jsmith: {
-              dn: 'uid=jsmith,ou=users,dc=example,dc=com',
-              UID: 'jsmith',
-              CN: 'John Smith',
-              MAIL: 'jsmith@example.com',
+            entries: {
+              jsmith: {
+                dn: 'uid=jsmith,ou=users,dc=example,dc=com',
+                UID: 'jsmith',
+                CN: 'John Smith',
+                MAIL: 'jsmith@example.com',
+              },
             },
+            truncated: false,
           }),
         listable: true,
         onOpen: () => undefined,
@@ -1498,6 +1562,78 @@ describe('Directory console', () => {
       }
       const csv = await captured?.text();
       expect(csv).to.contain('jsmith@example.com');
+    });
+
+    /** A list of accounts drawn from what `listLoader` answers. */
+    async function drawnList(language: string): Promise<string> {
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator(language),
+        load: listLoader(new ConsoleApiClient(baseUrl), users),
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      });
+      const container = stubContainer();
+      await list.render(container);
+      return container.innerHTML;
+    }
+
+    it('should say when the server left entries out, and only then', async () => {
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(
+          200,
+          { jsmith: { dn: 'uid=jsmith', uid: 'jsmith' } },
+          { 'X-Result-Truncated': 'true' }
+        );
+      const cut = await drawnList('fr');
+      expect(cut).to.contain(
+        'Seules les 1000 premières entrées sont affichées. Affinez avec la recherche pour trouver les autres.'
+      );
+      expect(cut).to.contain('jsmith');
+
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(200, { jsmith: { dn: 'uid=jsmith', uid: 'jsmith' } });
+      const whole = await drawnList('en');
+      expect(whole).to.contain('jsmith');
+      expect(whole).to.not.contain('dc-list-notice');
+      expect(whole).to.not.contain('Only the first');
+    });
+
+    it('should explain a search too broad for the directory, not repeat the server', async () => {
+      // A server that knows the refusal answers 422.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(422, { error: 'Size limit exceeded, use limit or match' });
+      const refused = await drawnList('fr');
+      expect(refused).to.contain(
+        'Trop d’entrées pour les afficher toutes : affinez la recherche.'
+      );
+      expect(refused).to.not.contain('Size limit exceeded');
+
+      // ldap-rest 0.12.0 ignores `limit` and reports it as any failure.
+      nock(baseUrl).get('/api/v1/ldap/users').query(true).reply(500, {
+        error: 'Internal Server Error',
+        message: 'An error occurred',
+      });
+      const failed = await drawnList('en');
+      expect(failed).to.contain(
+        'The list could not be loaded. If the directory holds many entries, narrow the search.'
+      );
+      expect(failed).to.not.contain('Internal Server Error');
+
+      // Any other refusal says what the server said.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(403, { error: 'Out of your scope' });
+      expect(await drawnList('en')).to.contain('Out of your scope');
     });
 
     it('should not let an exported cell become a formula', () => {

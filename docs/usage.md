@@ -111,6 +111,12 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 - **A large branch is not listed unfiltered.** Entities attached to an
   organization ask for three characters before searching; the small reference
   tables are listed whole.
+- **A list shows 1,000 entries at most**, searched or not. The console asks
+  for `?limit=1000`, and a server that answers `X-Result-Truncated: true`
+  gets a notice above the table saying the rest is to be found by searching.
+  A search the directory refuses as too broad — `422` from ldap-rest, `500`
+  from a server predating `limit` — is explained as such rather than shown as
+  the server's generic error.
 - **The page size is remembered**, along with the chosen language.
 - **A deep organization path is shortened** to its root and its leaf, with the
   whole path in the cell's tooltip.
@@ -277,9 +283,12 @@ screen from shipping.
 
 ## Known limits
 
-- The list endpoint returns a whole branch: the search guard keeps that
-  workable, but a search matching many thousands of entries is still fetched
-  in full. Server-side pagination would remove the need for the guard.
+- A list stops at its first 1,000 entries and pages through them in the
+  browser; the rest are reached by searching, not by paging. That needs a
+  server that honours `limit` on the list endpoint: an older one ignores it,
+  still fetches a branch or a search in full, and fails once the directory's
+  size limit is exceeded. Across origins, its CORS policy has to expose
+  `X-Result-Truncated` for the notice to show.
 - Moving an entry between two organizations the caller writes has no control
   of its own: its organization field is changed in its form. The move
   controls are the transit branch's.

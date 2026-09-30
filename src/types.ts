@@ -107,6 +107,12 @@ export type Entry = Record<string, string | string[] | undefined> & {
   dn?: string;
 };
 
+/** Entries of a list request, and whether the server stopped before the end. */
+export interface EntryList {
+  entries: Record<string, Entry>;
+  truncated: boolean;
+}
+
 /** Answer of `GET /v1/authz/scope`. */
 export interface Scope {
   user: string | null;

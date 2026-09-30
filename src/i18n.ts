@@ -55,6 +55,11 @@ const en: Catalogue = {
   'list.searchGuard': 'Type at least {count} characters to search',
   'list.empty': 'Nothing to show',
   'list.noMatch': 'No entry matches this search',
+  'list.truncated':
+    'Only the first {count} entries are shown. Search to find the others.',
+  'list.tooMany': 'Too many entries to show them all: narrow the search.',
+  'list.failed':
+    'The list could not be loaded. If the directory holds many entries, narrow the search.',
   'list.count': '{from}–{to} of {total}',
   'list.perPage': 'Per page',
   'list.previous': 'Previous',
@@ -221,6 +226,12 @@ const fr: Catalogue = {
   'list.searchGuard': 'Saisissez au moins {count} caractères pour rechercher',
   'list.empty': 'Rien à afficher',
   'list.noMatch': 'Aucune entrée ne correspond',
+  'list.truncated':
+    'Seules les {count} premières entrées sont affichées. Affinez avec la recherche pour trouver les autres.',
+  'list.tooMany':
+    'Trop d’entrées pour les afficher toutes : affinez la recherche.',
+  'list.failed':
+    'La liste n’a pas pu être chargée. Si l’annuaire contient beaucoup d’entrées, affinez la recherche.',
   'list.count': '{from}–{to} sur {total}',
   'list.perPage': 'Par page',
   'list.previous': 'Précédent',

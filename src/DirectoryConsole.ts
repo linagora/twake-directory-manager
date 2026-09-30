@@ -17,7 +17,11 @@ import { CONSOLE_LOGO, LINAGORA_LOGO } from './assets';
 import { EntityDetail } from './components/EntityDetail';
 import { EntityForm } from './components/EntityForm';
 import { EntityImport } from './components/EntityImport';
-import { EntityList, SEARCH_MINIMUM } from './components/EntityList';
+import {
+  EntityList,
+  LIST_LIMIT,
+  SEARCH_MINIMUM,
+} from './components/EntityList';
 import { OrganizationTree } from './components/OrganizationTree';
 import {
   attributeLabel,
@@ -34,6 +38,7 @@ import type {
   ConsoleOptions,
   EntityDescriptor,
   Entry,
+  EntryList,
   OrganizationNode,
   Scope,
 } from './types';
@@ -265,6 +270,29 @@ export function claimRoots(scope: Scope): OrganizationNode[] {
       name: branch.name || rdnValue(branch.dn),
       path: branch.path,
     }));
+}
+
+/**
+ * How the list of an entity fetches its entries: a search once the operator
+ * typed enough of one, the whole branch otherwise.
+ *
+ * Bounded either way, at `LIST_LIMIT`: the whole branch is what "List
+ * everything" asks for, and a search as loose as three letters can match more
+ * of a large directory than it lets one search return. The list says so when
+ * the server left entries out.
+ *
+ * @param api client to ask
+ * @param entity entity listed
+ * @returns the loader `EntityList` calls
+ */
+export function listLoader(
+  api: ConsoleApiClient,
+  entity: EntityDescriptor
+): (search: string, attribute: string) => Promise<EntryList> {
+  return (search, attribute) =>
+    search.length >= SEARCH_MINIMUM
+      ? api.list(entity, search, attribute, LIST_LIMIT)
+      : api.list(entity, undefined, undefined, LIST_LIMIT);
 }
 
 /**
@@ -882,13 +910,7 @@ export class DirectoryConsole {
       // An entity attached to organizations is the large one; the small
       // reference tables are listed whole.
       listable: !entity.organizationLink,
-      load: (
-        search: string,
-        attribute: string
-      ): Promise<Record<string, Entry>> =>
-        search.length >= SEARCH_MINIMUM
-          ? this.api.list(entity, search, attribute)
-          : this.api.list(entity),
+      load: listLoader(this.api, entity),
       canDelete: this.canDelete(),
       pointerLabel: (dn: string): string | undefined =>
         pointerLabel(this.entities, dn, this.translator.language),

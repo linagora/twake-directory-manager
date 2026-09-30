@@ -12,6 +12,7 @@ import type {
   EntityDescriptor,
   EntitySchema,
   Entry,
+  EntryList,
   LocalizedText,
   OrganizationNode,
   Scope,
@@ -210,6 +211,18 @@ export class ConsoleApiClient {
    * `404` it answered, and hid every write button on the console.
    */
   private async call<T>(path: string, init?: RequestInit): Promise<T> {
+    return (await this.request<T>(path, init)).payload;
+  }
+
+  /**
+   * `call()`, with the headers of the answer alongside its body: the list
+   * endpoint says in a header, not in the map it answers, that it stopped
+   * before the end. Every other caller wants the body alone.
+   */
+  private async request<T>(
+    path: string,
+    init?: RequestInit
+  ): Promise<{ payload: T; headers: Headers }> {
     const response = await fetch(`${this.origin}${path}`, {
       credentials: this.crossOrigin ? 'include' : 'same-origin',
       ...init,
@@ -239,7 +252,7 @@ export class ConsoleApiClient {
     // A success nobody can read is still a failure, and it is one the caller
     // should be able to tell apart by its status like any other.
     if (!isJson) throw statusError(status, response.status);
-    return payload as T;
+    return { payload: payload as T, headers: response.headers };
   }
 
   /**
@@ -364,25 +377,42 @@ export class ConsoleApiClient {
    * List the entries of an entity, optionally narrowed by a substring on one
    * attribute.
    *
+   * Without a limit the server runs the search unbounded, and a directory
+   * refuses one that matches more entries than its own size limit: ldap-rest
+   * then answers `422` — or `500`, before it learnt to tell that failure
+   * apart. With one, it answers the first `limit` entries and says in
+   * `X-Result-Truncated` that there were more. A server that predates `limit`
+   * ignores it and sends no such header, so its answer reads as complete,
+   * which it is whenever it is an answer at all. Across origins the browser
+   * hides the header unless the server's CORS policy exposes it.
+   *
    * @param entity entity to list
    * @param search substring to look for
    * @param attribute attribute the substring applies to
-   * @returns the entries, keyed by their identifier
+   * @param limit most entries to ask for
+   * @returns the entries, keyed by their identifier, and whether the server
+   *   left some out
    */
   async list(
     entity: EntityDescriptor,
     search?: string,
-    attribute?: string
-  ): Promise<Record<string, Entry>> {
+    attribute?: string,
+    limit?: number
+  ): Promise<EntryList> {
     const params = new URLSearchParams();
     if (search && attribute) {
       params.set('match', search);
       params.set('attribute', attribute);
     }
+    if (limit) params.set('limit', String(limit));
     const query = params.toString();
-    return this.call<Record<string, Entry>>(
+    const { payload, headers } = await this.request<Record<string, Entry>>(
       `${entity.endpoint}${query ? `?${query}` : ''}`
     );
+    return {
+      entries: payload,
+      truncated: headers.get('X-Result-Truncated')?.trim() === 'true',
+    };
   }
 
   /** Read one entry. */
@@ -747,7 +777,7 @@ export class ConsoleApiClient {
         entity.base && branch.toLowerCase() === entity.base.toLowerCase()
     );
     if (owner) {
-      const list = await this.list(owner);
+      const { entries: list } = await this.list(owner);
       const labels = owner.schema.entity?.valueLabels;
       return Object.entries(list).map(([id, entry]) => ({
         dn: String(entry.dn || id),
@@ -802,7 +832,7 @@ export class ConsoleApiClient {
       .join(',');
     const display = roleAttribute(owner.schema, 'displayName');
     return async query => {
-      const found = await this.list(owner, query, scope);
+      const { entries: found } = await this.list(owner, query, scope);
       return Object.entries(found)
         .slice(0, POINTER_SEARCH_LIMIT)
         .map(([id, entry]) => {
