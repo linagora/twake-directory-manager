@@ -200,13 +200,18 @@ last.
    its name, a department by its path, or any of them by its DN. The
    pointer's branch is listed whole for that; a branch the directory will not
    list in one search — the accounts of a large directory, for a column of
-   managers — is refused (`422`, or `500` from ldap-rest 0.12.0), and the
-   values the file holds are then looked up one by one instead, a few at a
-   time: a DN read as such, anything else as an identifier, then as a name.
-   A name two entries share is refused as it would be from the full list,
-   and one the directory would not search precisely enough to settle — too
-   many entries contain it — is refused as _could not be checked_ rather
-   than reported missing: its identifier or DN settles it. A row
+   managers — is refused (`422`, or `500` from ldap-rest 0.12.0, or a proxy's
+   `502`/`504`), and the values the file holds are then looked up one by one
+   instead, a few at a time. A DN is read as such when it names a direct
+   child of the branch by its main attribute, the way ldap-rest's flat
+   entities are laid out; any other DN is not found. Anything else is read as
+   an identifier, which settles it exactly — two identifiers differing only
+   by accents or case, which the full list would refuse as ambiguous, are
+   told apart by the directory. A value that is no identifier is then
+   searched for, and compared exactly with what the search finds: a name two
+   entries share is refused as ambiguous, and a value so short that too many
+   entries contain it for the search to rule out another spelling is refused
+   as such rather than reported missing — a DN settles it. A row
    reusing a value an earlier row holds, where the schema marks it `unique`,
    is refused with the line it repeats. The rows in error can be downloaded,
    with the reason in a last column, to be corrected and imported again.
@@ -300,8 +305,9 @@ nothing: that is what it holds for them. Any other failure is said under the
 field, in the words the entity list uses. A branch refused as too broad
 (`422`, or `500` from ldap-rest 0.12.0, or a proxy's `502`/`504`) that an
 entity owns becomes a search box instead, since its entries can still be
-found by typing; the organization tree has no search, and keeps the select
-with the message. A raw branch still offers nothing when it cannot be read,
+found by typing — by the attributes the entity's list searches, not by a
+nomenclature's labels, which live in its schema. The organization tree has no
+search, and keeps the select with the message. A raw branch still offers nothing when it cannot be read,
 without a message: `core/ldap/raw` not being loaded is the usual reason, and
 not a failure.
 

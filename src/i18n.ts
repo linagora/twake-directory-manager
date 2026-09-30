@@ -137,7 +137,7 @@ const en: Catalogue = {
   'import.ambiguous': '{field}: “{value}” matches several entries',
   'import.notFound': '{field}: “{value}” not found',
   'import.undecided':
-    '{field}: “{value}” could not be checked, too many entries resemble it: use its identifier or its DN',
+    '{field}: “{value}” is no identifier, and too many entries contain it to rule out another spelling: check it, or use a DN',
   'import.notBoolean': '{field}: “{value}” is neither yes nor no',
   'import.notDate': '{field}: “{value}” is not a date',
   'import.missing': '{field} is required',
@@ -313,7 +313,7 @@ const fr: Catalogue = {
   'import.ambiguous': '{field} : « {value} » correspond à plusieurs entrées',
   'import.notFound': '{field} : « {value} » introuvable',
   'import.undecided':
-    '{field} : « {value} » n’a pas pu être vérifié, trop d’entrées lui ressemblent : utilisez son identifiant ou son DN',
+    '{field} : « {value} » n’est pas un identifiant, et trop d’entrées le contiennent pour exclure une autre écriture : vérifiez-le, ou utilisez un DN',
   'import.notBoolean': '{field} : « {value} » n’est ni oui ni non',
   'import.notDate': '{field} : « {value} » n’est pas une date',
   'import.missing': '{field} est obligatoire',

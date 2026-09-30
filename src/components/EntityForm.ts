@@ -92,6 +92,9 @@ export function pointerFallback(
   return tooBroad(err) ? { message, search: search() } : { message };
 }
 
+/** Wait before filling a live region just shown, for it to be announced. */
+const ANNOUNCE_DELAY = 100;
+
 /** Above this many fields a modal stops being usable and becomes a panel. */
 const PANEL_THRESHOLD = 8;
 
@@ -138,9 +141,31 @@ export class EntityForm {
       this.values[name] = toList(entryValue(options.entry, name));
       const pointer = attr.type === 'pointer' || attr.items?.type === 'pointer';
       const branch = (attr.branch || attr.items?.branch || [])[0];
-      const search =
-        pointer && branch ? options.pointerSearch?.(branch) : undefined;
+      const search = pointer && branch ? this.searchOf(branch) : undefined;
       if (search) this.searches.set(name, search);
+    }
+  }
+
+  /**
+   * The caller's search of a branch, if it has one. A caller's function that
+   * throws rather than answer undefined is read as having none: thrown from
+   * the constructor or from `render()`, it would leave the form half-built —
+   * what `fillPointers` guards the listing against too.
+   *
+   * @param branch DN the pointer must land in
+   * @param failed whether listing the branch failed
+   * @returns the search, or undefined
+   */
+  private searchOf(
+    branch: string,
+    failed?: boolean
+  ): ((query: string) => Promise<PointerCandidate[]>) | undefined {
+    try {
+      return failed
+        ? this.options.pointerSearch?.(branch, true)
+        : this.options.pointerSearch?.(branch);
+    } catch {
+      return undefined;
     }
   }
 
@@ -243,10 +268,11 @@ export class EntityForm {
         ${hint ? `<p class="dc-hint" data-hint>${escapeHtml(hint)}</p>` : ''}
         <p class="dc-error" data-error hidden></p>
         ${
-          // Why the branch offers nothing, when that is not the truth; apart
-          // from the validation message, which a save rewrites.
+          // Why the branch offers nothing, when that is not the truth. Apart
+          // from the validation message, which a save rewrites, and styled as
+          // a hint without being one: a refusal hides `[data-hint]`.
           pointer
-            ? `<p class="dc-error" id="dc-note-${escapeHtml(name)}" data-pointer-note role="status" hidden></p>`
+            ? `<p class="dc-hint" id="dc-note-${escapeHtml(name)}" data-pointer-note role="status" hidden></p>`
             : ''
         }`;
   }
@@ -627,7 +653,7 @@ export class EntityForm {
         } catch (err) {
           options = [];
           const fallback = pointerFallback(err, this.options.translator, () =>
-            this.options.pointerSearch?.(branch, true)
+            this.searchOf(branch, true)
           );
           if (fallback.message && this.fallBack(select, fallback)) return;
         }
@@ -699,8 +725,15 @@ export class EntityForm {
     }
     const note = field.querySelector<HTMLElement>('[data-pointer-note]');
     if (note && fallback.message) {
-      note.textContent = fallback.message;
+      const message = fallback.message;
+      // Shown empty first, and filled a moment later: a live region is
+      // announced when its text changes, not when it appears already filled
+      // — and after a switch to a search it has only just been inserted.
+      // The control points at it as well, for whoever tabs to it later.
       note.hidden = false;
+      setTimeout(() => {
+        note.textContent = message;
+      }, ANNOUNCE_DELAY);
       field
         .querySelector('[data-pointer], [data-picker-input]')
         ?.setAttribute('aria-describedby', note.id);

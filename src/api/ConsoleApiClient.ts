@@ -903,7 +903,11 @@ export class ConsoleApiClient {
       read: async (value: string): Promise<PointerOption | undefined> => {
         let id = value;
         if (isDnShaped(value)) {
-          const dn = /^\s*([^=\s]+)\s*=((?:\\.|[^,])*),(.*)$/.exec(value);
+          // Spaces around a separator are no part of a DN, and a file
+          // written by hand has them: `uid=bob, ou=users, dc=example`.
+          const dn = /^\s*([^=\s]+)\s*=((?:\\.|[^,])*?)\s*,\s*(.*)$/.exec(
+            value
+          );
           if (
             !dn ||
             dn[1].toLowerCase() !== main.toLowerCase() ||
@@ -937,11 +941,16 @@ export class ConsoleApiClient {
             main,
             POINTER_LOOKUP_LIMIT
           );
+          const options = Object.entries(entries).map(([id, entry]) =>
+            this.pointerOption(owner, id, entry, language)
+          );
           return {
-            options: Object.entries(entries).map(([id, entry]) =>
-              this.pointerOption(owner, id, entry, language)
-            ),
-            truncated,
+            options,
+            // Across origins the header may not reach the page — ldap-rest
+            // exposes none to CORS — so an answer exactly as long as asked
+            // is taken as cut too. Exactly: ldap-rest 0.12.0 ignores the
+            // bound, and an answer longer than it is a whole one.
+            truncated: truncated || options.length === POINTER_LOOKUP_LIMIT,
           };
         } catch (err) {
           // Refused as too broad — ldap-rest 0.12.0 honours no bound — says

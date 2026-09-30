@@ -344,22 +344,27 @@ export async function lookupResolver(
   const queue = [...new Set(values)];
   let failed = false;
   await Promise.all(
-    Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-      // A failure ends the check: the others stop taking values rather than
-      // go on sending requests nobody will read the answer to.
-      for (
-        let value = queue.shift();
-        value !== undefined && !failed;
-        value = queue.shift()
-      ) {
-        try {
-          answers.set(value, await resolve(value));
-        } catch (err) {
-          failed = true;
-          throw err;
+    // One worker at least: none would leave every value unanswered, and
+    // read as not found.
+    Array.from(
+      { length: Math.max(1, Math.min(concurrency, queue.length)) },
+      async () => {
+        // A failure ends the check: the others stop taking values rather than
+        // go on sending requests nobody will read the answer to.
+        for (
+          let value = queue.shift();
+          value !== undefined && !failed;
+          value = queue.shift()
+        ) {
+          try {
+            answers.set(value, await resolve(value));
+          } catch (err) {
+            failed = true;
+            throw err;
+          }
         }
       }
-    })
+    )
   );
   return (value: string) => answers.get(value) ?? {};
 }

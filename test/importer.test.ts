@@ -4,11 +4,13 @@ import { csvCell, detectDelimiter, parseCsv, writeCsv } from '../src/csv';
 import { Translator } from '../src/i18n';
 import {
   guessMapping,
+  lookupResolver,
   pointerResolver,
   prepareRows,
   templateHeaders,
   unmappedRequired,
   type ImportField,
+  type PointerLookup,
 } from '../src/importer';
 
 /** Attributes laid out like the Twake user schema's. */
@@ -222,6 +224,76 @@ describe('CSV import', () => {
         { dn: 'ou=Audit,ou=B,dc=example,dc=com', label: 'Audit' },
       ]);
       expect(resolve('Audit')).to.deep.equal({ ambiguous: true });
+    });
+  });
+
+  describe('lookupResolver', () => {
+    const later = (ms: number): Promise<void> =>
+      new Promise(resolve => setTimeout(resolve, ms));
+
+    it('should look each value up once, a few at a time', async () => {
+      const calls: string[] = [];
+      let inFlight = 0;
+      let most = 0;
+      const lookup: PointerLookup = {
+        read: async value => {
+          calls.push(value);
+          most = Math.max(most, ++inFlight);
+          await later(5);
+          inFlight--;
+          return { dn: `uid=${value},ou=users`, label: value };
+        },
+        search: () => Promise.reject(new Error('no search expected')),
+      };
+      const resolve = await lookupResolver(
+        ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'a', 'b'],
+        lookup,
+        3
+      );
+      expect(most).to.equal(3);
+      expect([...calls].sort()).to.deep.equal([
+        'a',
+        'b',
+        'c',
+        'd',
+        'e',
+        'f',
+        'g',
+      ]);
+      expect(resolve('e')).to.deep.equal({ dn: 'uid=e,ou=users' });
+    });
+
+    it('should take no more values once a lookup failed', async () => {
+      const calls: string[] = [];
+      const lookup: PointerLookup = {
+        read: async value => {
+          calls.push(value);
+          if (value === 'b')
+            throw Object.assign(new Error('Forbidden'), { status: 403 });
+          await later(20);
+          return undefined;
+        },
+        search: () => Promise.resolve({ options: [], truncated: false }),
+      };
+      let failure: Error | undefined;
+      try {
+        await lookupResolver(['a', 'b', 'c', 'd', 'e', 'f'], lookup, 2);
+      } catch (err) {
+        failure = err as Error;
+      }
+      expect(failure?.message).to.equal('Forbidden');
+      // The lookup still in flight finishes; nothing new is sent after it.
+      await later(60);
+      expect(calls).to.deep.equal(['a', 'b']);
+    });
+
+    it('should still look values up when asked for no concurrency', async () => {
+      const lookup: PointerLookup = {
+        read: value => Promise.resolve({ dn: `uid=${value}`, label: value }),
+        search: () => Promise.resolve({ options: [], truncated: false }),
+      };
+      const resolve = await lookupResolver(['a'], lookup, 0);
+      expect(resolve('a')).to.deep.equal({ dn: 'uid=a' });
     });
   });
 
