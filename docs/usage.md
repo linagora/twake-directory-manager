@@ -291,6 +291,20 @@ A `pointer` names a branch, and the console fills the select from it:
   Without it the select keeps the value the entry already holds and offers no
   others.
 
+A pointer into the branch of an entity attached to the organization tree —
+the accounts — is a search box from the start rather than a select.
+
+When the listing fails, the select keeps the value the entry holds either
+way. A branch the caller may not read (`403`) offers nothing more, and says
+nothing: that is what it holds for them. Any other failure is said under the
+field, in the words the entity list uses. A branch refused as too broad
+(`422`, or `500` from ldap-rest 0.12.0, or a proxy's `502`/`504`) that an
+entity owns becomes a search box instead, since its entries can still be
+found by typing; the organization tree has no search, and keeps the select
+with the message. A raw branch still offers nothing when it cannot be read,
+without a message: `core/ldap/raw` not being loaded is the usual reason, and
+not a failure.
+
 ## Adding a language
 
 The console ships with English and French. A third one is a catalogue in

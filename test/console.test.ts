@@ -29,7 +29,7 @@ import {
   resolveText,
 } from '../src/format';
 import { EntityDetail } from '../src/components/EntityDetail';
-import { EntityForm } from '../src/components/EntityForm';
+import { EntityForm, pointerFallback } from '../src/components/EntityForm';
 import { EntityImport } from '../src/components/EntityImport';
 import {
   EntityList,
@@ -1159,6 +1159,22 @@ describe('Directory console', () => {
           [mailboxTypes]
         )
       ).to.equal(undefined);
+      // Unless listing it failed: any branch an entity owns can be searched.
+      expect(
+        new ConsoleApiClient(baseUrl).pointerSearch(
+          mailboxTypes.base as string,
+          [mailboxTypes],
+          true
+        )
+      ).to.be.a('function');
+      // Not a branch no entity owns, which has no search to offer.
+      expect(
+        new ConsoleApiClient(baseUrl).pointerSearch(
+          'ou=elsewhere,dc=example,dc=com',
+          [mailboxTypes],
+          true
+        )
+      ).to.equal(undefined);
       const search = new ConsoleApiClient(baseUrl).pointerSearch(
         'OU=users,dc=example,dc=com',
         [users]
@@ -2204,14 +2220,170 @@ describe('Directory console', () => {
       await renderWith(
         select,
         { uid: 'bob', twakeDepartmentLink: [held] },
-        () => Promise.reject(new Error('403'))
+        () =>
+          Promise.reject(Object.assign(new Error('Forbidden'), { status: 403 }))
       );
       // Nothing to choose: the empty choice cannot be taken, and the value the
       // directory holds stays selected rather than being silently dropped.
+      // An unreadable branch has nothing more to say: the stub has no
+      // `closest`, and looking for the field to write a message in would throw.
       expect(select.disabled).to.equal(false);
       expect(select.innerHTML).to.include('<option value="" disabled>');
       expect(select.innerHTML).to.include(`${held}" selected`);
       expect(select.value).to.equal(held);
+    });
+
+    describe('a pointer branch that could not be listed', () => {
+      const translator = new Translator('en');
+      const failure = (status: number, message: string): Error =>
+        Object.assign(new Error(message), { status });
+      const search = (): Promise<{ dn: string; label: string }[]> =>
+        Promise.resolve([]);
+
+      it('should say nothing of a branch the caller may not read', () => {
+        let asked = false;
+        const fallback = pointerFallback(
+          failure(403, 'Forbidden'),
+          translator,
+          () => {
+            asked = true;
+            return search;
+          }
+        );
+        expect(fallback).to.deep.equal({});
+        expect(asked).to.equal(false);
+      });
+
+      it('should explain a branch too broad to list, and offer its search', () => {
+        const failed = pointerFallback(
+          failure(500, 'Internal Server Error'),
+          translator,
+          () => search
+        );
+        expect(failed.message).to.equal(
+          'The list could not be loaded. If the directory holds many entries, narrow the search.'
+        );
+        expect(failed.search).to.equal(search);
+        const refused = pointerFallback(
+          failure(422, 'Size limit exceeded'),
+          translator,
+          () => undefined
+        );
+        expect(refused).to.deep.equal({
+          message: 'Too many entries to show them all: narrow the search.',
+          search: undefined,
+        });
+      });
+
+      it('should repeat any other failure, with no search', () => {
+        let asked = false;
+        expect(
+          pointerFallback(failure(404, 'Not found'), translator, () => {
+            asked = true;
+            return search;
+          })
+        ).to.deep.equal({ message: 'Not found' });
+        expect(asked).to.equal(false);
+      });
+
+      /** A select inside its field, both just real enough for the form. */
+      const inField = (
+        name: string,
+        branch: string,
+        value: string
+      ): {
+        select: HTMLSelectElement;
+        field: { innerHTML: string };
+        note: { textContent: string; hidden: boolean; id: string };
+        describedBy: () => string | undefined;
+      } => {
+        const select = stubSelect(branch, value) as unknown as Record<
+          string,
+          unknown
+        >;
+        let describedBy: string | undefined;
+        select.setAttribute = (attribute: string, text: string): void => {
+          if (attribute === 'aria-describedby') describedBy = text;
+        };
+        const note = {
+          textContent: '',
+          hidden: true,
+          id: `dc-note-${name}`,
+        };
+        const field = {
+          innerHTML: '',
+          dataset: { field: name },
+          querySelector: (selector: string): unknown =>
+            selector === '[data-pointer-note]'
+              ? note
+              : selector.includes('[data-pointer]')
+                ? select
+                : null,
+        };
+        select.closest = (): unknown => field;
+        return {
+          select: select as unknown as HTMLSelectElement,
+          field,
+          note,
+          describedBy: () => describedBy,
+        };
+      };
+
+      it('should keep the select and say why it offers nothing', async () => {
+        const { select, field, note, describedBy } = inField(
+          'twakeDepartmentLink',
+          'dc=example,dc=com',
+          held
+        );
+        await renderWith(
+          select,
+          { uid: 'bob', twakeDepartmentLink: [held] },
+          () => Promise.reject(failure(500, 'Internal Server Error'))
+        );
+        expect(select.disabled).to.equal(false);
+        expect(select.innerHTML).to.include(`${held}" selected`);
+        expect(field.innerHTML).to.equal('');
+        expect(note.hidden).to.equal(false);
+        expect(note.textContent).to.equal(
+          'The list could not be loaded. If the directory holds many entries, narrow the search.'
+        );
+        expect(describedBy()).to.equal('dc-note-twakeDepartmentLink');
+      });
+
+      it('should trade the select for a search when the branch has one', async () => {
+        const { select, field, note } = inField(
+          'twakeDepartmentLink',
+          'dc=example,dc=com',
+          held
+        );
+        const container = stubContainer();
+        (
+          container as unknown as { querySelectorAll: () => unknown[] }
+        ).querySelectorAll = (): unknown[] => [select];
+        const asked: [string, boolean | undefined][] = [];
+        await new EntityForm({
+          entity: users,
+          entry: { uid: 'bob', twakeDepartmentLink: [held] },
+          translator,
+          pointerOptions: () => Promise.reject(failure(422, 'Too broad')),
+          pointerSearch: (branch, failed) => {
+            asked.push([branch, failed]);
+            return failed ? search : undefined;
+          },
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        }).render(container);
+        // Asked once as usual, then once more after the failure.
+        expect(asked).to.deep.include(['dc=example,dc=com', true]);
+        expect(field.innerHTML).to.include('data-picker="twakeDepartmentLink"');
+        // The value held is still there, as a token of the search.
+        expect(field.innerHTML).to.include('>Demo</span>');
+        expect(note.textContent).to.equal(
+          'Too many entries to show them all: narrow the search.'
+        );
+        // The select was not filled: it is gone.
+        expect(select.disabled).to.equal(true);
+      });
     });
 
     it('should offer neither computed nor read-only attributes', async () => {

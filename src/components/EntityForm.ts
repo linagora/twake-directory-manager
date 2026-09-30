@@ -21,6 +21,7 @@ import {
   formatByteSize,
   rdnValue,
 } from '../format';
+import { tooBroad } from '../api/ConsoleApiClient';
 import { SEARCH_MINIMUM, listFailure } from './EntityList';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
@@ -46,10 +47,13 @@ export interface FormOptions {
   pointerOptions(branch: string): Promise<{ dn: string; label: string }[]>;
   /**
    * A search of a branch too large to list, or undefined when it is not: a
-   * pointer into such a branch is chosen by typing, not from a select
+   * pointer into such a branch is chosen by typing, not from a select. Asked
+   * again with `failed` once listing a branch failed as too broad, for a
+   * search that stands in for its select if the branch can be searched
    */
   pointerSearch?(
-    branch: string
+    branch: string,
+    failed?: boolean
   ): ((query: string) => Promise<PointerCandidate[]>) | undefined;
   /** Called with the attributes to write and those to clear */
   onSubmit(
@@ -57,6 +61,35 @@ export interface FormOptions {
     cleared: string[]
   ): Promise<void>;
   onCancel(): void;
+}
+
+/**
+ * What a pointer select does when its branch could not be listed.
+ *
+ * A branch the caller may not read answers `403`, and "nothing to offer" is
+ * then the truth: the select says nothing more. Any other failure is said
+ * next to the field, in the words the list uses, rather than left to look
+ * like an empty branch. One a search too broad for the directory ends in
+ * also trades the select for a search, when the branch can be searched — a
+ * branch past the directory's size limit cannot be listed, but its entries
+ * can still be found by typing.
+ *
+ * @param err what listing the branch threw
+ * @param translator interface language
+ * @param search the branch's search, asked only when it would be used
+ * @returns what to say, if anything, and the search to offer instead
+ */
+export function pointerFallback(
+  err: unknown,
+  translator: Translator,
+  search: () => ((query: string) => Promise<PointerCandidate[]>) | undefined
+): {
+  message?: string;
+  search?: (query: string) => Promise<PointerCandidate[]>;
+} {
+  if ((err as { status?: number } | null)?.status === 403) return {};
+  const message = listFailure(err, translator);
+  return tooBroad(err) ? { message, search: search() } : { message };
 }
 
 /** Above this many fields a modal stops being usable and becomes a panel. */
@@ -182,6 +215,14 @@ export class EntityForm {
 
   /** Markup of one field, chosen from its schema type. */
   private fieldMarkup(name: string, attr: SchemaAttribute): string {
+    return `
+      <div class="dc-field" data-field="${escapeHtml(name)}">
+        ${this.fieldContent(name, attr)}
+      </div>`;
+  }
+
+  /** What a field holds: redrawn alone when a select turns into a search. */
+  private fieldContent(name: string, attr: SchemaAttribute): string {
     const id = `dc-field-${name}`;
     const hint = attr.hint || attr.items?.hint;
     const required = attr.required ? ' <span class="dc-required">*</span>' : '';
@@ -195,13 +236,19 @@ export class EntityForm {
             ? this.booleanMarkup(name)
             : this.inputMarkup(name, attr);
 
+    const pointer = attr.type === 'pointer' || attr.items?.type === 'pointer';
     return `
-      <div class="dc-field" data-field="${escapeHtml(name)}">
         <label for="${escapeHtml(id)}">${escapeHtml(this.label(name, attr))}${required}</label>
         ${control}
         ${hint ? `<p class="dc-hint" data-hint>${escapeHtml(hint)}</p>` : ''}
         <p class="dc-error" data-error hidden></p>
-      </div>`;
+        ${
+          // Why the branch offers nothing, when that is not the truth; apart
+          // from the validation message, which a save rewrites.
+          pointer
+            ? `<p class="dc-error" id="dc-note-${escapeHtml(name)}" data-pointer-note role="status" hidden></p>`
+            : ''
+        }`;
   }
 
   private inputMarkup(name: string, attr: SchemaAttribute): string {
@@ -518,6 +565,10 @@ export class EntityForm {
     };
 
     wrapper.addEventListener('click', event => {
+      // The listener sits on the field itself, which outlives its content:
+      // once a select that could not be filled became a search, the search
+      // removes its own tokens, and one click must not remove two values.
+      if (this.searches.has(name)) return;
       const button = (event.target as HTMLElement).closest<HTMLElement>(
         '[data-remove]'
       );
@@ -566,11 +617,16 @@ export class EntityForm {
         // would surface as an unhandled one and leave the whole form
         // half-built. The select keeps the value the entry already holds and
         // offers nothing else, which is what an unreadable branch means.
+        // Any other failure keeps it so too, and says why (`pointerFallback`).
         let options: { dn: string; label: string }[];
         try {
           options = await this.options.pointerOptions(branch);
-        } catch {
+        } catch (err) {
           options = [];
+          const fallback = pointerFallback(err, this.options.translator, () =>
+            this.options.pointerSearch?.(branch, true)
+          );
+          if (fallback.message && this.fallBack(select, fallback)) return;
         }
         // In the order a person looks for them, not the order the server
         // found them in: the organization walk is breadth-first, which put a
@@ -611,6 +667,42 @@ export class EntityForm {
         select.removeAttribute('aria-busy');
       })
     );
+  }
+
+  /**
+   * Say why a pointer select could not be filled, and turn it into a search
+   * when there is one.
+   *
+   * @param select the select that could not be filled
+   * @param fallback what `pointerFallback` decided
+   * @returns true when the select was replaced, and is not to be filled
+   */
+  private fallBack(
+    select: HTMLSelectElement,
+    fallback: {
+      message?: string;
+      search?: (query: string) => Promise<PointerCandidate[]>;
+    }
+  ): boolean {
+    const field = select.closest<HTMLElement>('[data-field]');
+    const name = field?.dataset.field;
+    const attr = this.fields.find(([candidate]) => candidate === name)?.[1];
+    if (!field || !name || !attr) return false;
+    const replaced = Boolean(fallback.search);
+    if (fallback.search) {
+      this.searches.set(name, fallback.search);
+      field.innerHTML = this.fieldContent(name, attr);
+      this.bindPicker(name, field);
+    }
+    const note = field.querySelector<HTMLElement>('[data-pointer-note]');
+    if (note && fallback.message) {
+      note.textContent = fallback.message;
+      note.hidden = false;
+      field
+        .querySelector('[data-pointer], [data-picker-input]')
+        ?.setAttribute('aria-describedby', note.id);
+    }
+    return replaced;
   }
 
   /** Validate, then hand the values to the caller. */

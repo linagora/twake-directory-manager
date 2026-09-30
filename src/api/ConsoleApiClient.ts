@@ -964,19 +964,28 @@ export class ConsoleApiClient {
    * the attributes the list searches, and names each entry the way a person
    * recognises it: by its display name, then by its identifier.
    *
+   * Any other branch an entity owns is listed into a select, and can be
+   * searched all the same: `failed` asks for its search, once listing it has
+   * failed. The organization tree and a raw branch have no search.
+   *
    * @param branch DN the pointer must land in
    * @param entities entities the console knows, to find the one owning it
-   * @returns a search, or undefined when the branch is small enough to list
+   * @param failed whether listing the branch failed, and a search is wanted
+   *   even for a branch meant to be listed
+   * @returns a search, or undefined when the branch is to be listed
    */
   pointerSearch(
     branch: string,
-    entities: EntityDescriptor[]
+    entities: EntityDescriptor[],
+    failed = false
   ): ((query: string) => Promise<{ dn: string; label: string }[]>) | undefined {
     const owner = entities.find(
       entity =>
         entity.base && branch.toLowerCase() === entity.base.toLowerCase()
     );
-    if (!owner || !owner.organizationLink) return undefined;
+    if (!owner) return undefined;
+    if (failed ? this.inOrganizationTree(branch) : !owner.organizationLink)
+      return undefined;
     const scope = searchableAttributes(owner)
       .map(([name]) => name)
       .join(',');
