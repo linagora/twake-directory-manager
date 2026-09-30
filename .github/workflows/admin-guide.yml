@@ -1,0 +1,37 @@
+name: Administrator's guide
+
+# The PDF is built on demand (Actions → Administrator's guide → Run workflow)
+# and whenever the guide changes, and kept as the run's artifact.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/admin-guide/**'
+  pull_request:
+    paths:
+      - 'docs/admin-guide/**'
+
+permissions:
+  contents: read
+
+jobs:
+  pdf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the HTML, warnings as errors
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" \
+            -w /repo/docs/admin-guide sphinxdoc/sphinx-latexpdf \
+            sphinx-build -W --keep-going -b html . _build/html
+
+      - name: Build the PDF
+        run: make -C docs/admin-guide pdf
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: admin-guide
+          path: docs/admin-guide/_build/latex/*.pdf
