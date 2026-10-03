@@ -65,7 +65,9 @@ A session that expired or ended elsewhere
 
 The session can end without :guilabel:`Sign out` being clicked:
 
-- it expired after a period of inactivity;
+- it expired, after a period of inactivity or, when the identity provider
+  does not renew it, after the lifetime the provider gives it (often an
+  hour or less);
 - one signed out of another company application, or of the identity
   provider’s portal, and the provider told the console (Back-Channel Logout,
   when the deployment enables it).

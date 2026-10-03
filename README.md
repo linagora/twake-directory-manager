@@ -145,6 +145,11 @@ helm install directory-manager \
 `DM_OIDC_CLIENT_SECRET` instead, and `extraEnv` passes any other ldap-rest
 setting. See [values.yaml](helm/twake-directory-manager/values.yaml).
 
+Have the provider issue refresh tokens to the client: without them a session
+ends with its access token, and the console's next action goes back through
+the provider, losing what a form held. See ldap-rest's
+[session lifetime](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/auth/oidc.md#session-lifetime).
+
 `bcl.enabled=true` turns on Back-Channel Logout: a logout at the provider, or
 in another application, ends the console's session too. Declare
 `https://directory.example.org/backchannel-logout` as the client's
