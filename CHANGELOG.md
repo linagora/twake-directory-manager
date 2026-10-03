@@ -1,21 +1,32 @@
 # Changelog
 
-## v0.3.1 (2026-09-30)
+## v0.4.0 (2026-10-01)
 
-Built on ldap-rest 0.12.0. A list stops at 1,000 entries with a notice once
-ldap-rest honours `limit`
-([linagora/ldap-rest#237](https://github.com/linagora/ldap-rest/pull/237));
-0.12.0 ignores it, and still refuses a list longer than the directory's size
-limit.
+Built on ldap-rest 0.14.0. 0.3.1 was never published: its changes are part of
+this release.
+
+### Breaking Changes
+
+- A session ends when its access token expires, unless the identity provider
+  issues refresh tokens to the console: the next action then reloads the page
+  through the provider, which signs back in without asking while its own
+  session lasts, but anything typed in a form and not yet saved is lost. Have
+  the provider issue refresh tokens to the client (LemonLDAP::NG: _Issue
+  refresh tokens_ in the relying party's options) —
+  [ldap-rest notes](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md#an-openid-connect-session-ends-with-its-access-token)
 
 ### Bug Fixes
 
+- An action taken once the session has ended goes back through the identity
+  provider and signs in again; the server left the console's request
+  unanswered, and the console waited
 - A list or a search matching more entries than the directory answers in one
   search — the accounts of a large directory listed without searching, or a
   search as loose as `demo` — no longer ends in "Internal Server Error": the
   console asks for 1,000 entries at most and says when there are more, and
   explains a refusal instead of showing the server's generic error. The button
-  reads "List without searching"
+  reads "List without searching". The groups list is not bounded yet:
+  ldap-rest does not take `limit` there
 - Choosing a second entry in a multi-valued pointer field, such as delegated
   users, adds it instead of replacing the ones already chosen
 - Importing a file with a column pointing into a large branch — managers,
