@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.4.1 (2026-10-06)
+
+Built on ldap-rest 0.15.0, which reads array, number and DN options from the
+environment differently: a deployment passing `DM_AUTH_HMAC`, `DM_AUTH_TOTP` or
+a DN option through `extraEnv` should check the
+[ldap-rest notes](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md#to-0150).
+The image's own settings are unaffected.
+
+### Security
+
+- Behind `--trusted-proxy`, an IPv4-mapped IPv6 address no longer passes for a
+  trusted subnet; a TOTP entry whose digits are not a number no longer lets
+  `Bearer NaN` authenticate (ldap-rest 0.15.0)
+
 ## v0.4.0 (2026-10-01)
 
 Built on ldap-rest 0.14.0. 0.3.1 was never published: its changes are part of
