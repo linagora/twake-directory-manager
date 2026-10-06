@@ -69,3 +69,12 @@ jobs:
             --set ingress.hostname=directory.example.org
           helm lint helm/twake-directory-manager "$@"
           helm template test helm/twake-directory-manager "$@" > /dev/null
+          helm template test helm/twake-directory-manager "$@" \
+            --set secrets.extraEnv.DM_JAMES_WEBADMIN_TOKEN=secret \
+            | grep -q 'DM_JAMES_WEBADMIN_TOKEN: "secret"'
+          # A credential the ConfigMap already sets is refused, not shadowed.
+          if helm template test helm/twake-directory-manager "$@" \
+            --set extraEnv.FOO=a --set secrets.extraEnv.FOO=b > /dev/null 2>&1; then
+            echo "secrets.extraEnv shadowed extraEnv.FOO" >&2
+            exit 1
+          fi
