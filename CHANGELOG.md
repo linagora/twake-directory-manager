@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- Helm chart: `secrets.extraEnv` passes ldap-rest settings that are
+  credentials, such as `DM_JAMES_WEBADMIN_TOKEN` and
+  `DM_CALENDAR_WEBADMIN_TOKEN`, through the Secret rather than the ConfigMap
+  `extraEnv` lands in
+
 ## v0.4.4 (2026-10-06)
 
 Built on ldap-rest 0.15.0.

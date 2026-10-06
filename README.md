@@ -143,10 +143,22 @@ helm install directory-manager \
 
 `secrets.existingSecret` names a Secret holding `DM_LDAP_PWD` and
 `DM_OIDC_CLIENT_SECRET` instead — and `DM_LDAP_DN`, when `ldap.bindDn` is left
-empty — and `extraEnv` passes any other ldap-rest setting. A directory's own
-schemas are mounted with `extraVolumes` and `extraVolumeMounts`, and named in
-`extraEnv`. `fullnameOverride` names the objects instead of the release, for
-a chart that embeds this one. See
+empty — and `extraEnv` passes any other ldap-rest setting. Those that are
+credentials go under `secrets.extraEnv` instead, which lands in the Secret
+rather than a ConfigMap: the WebAdmin tokens of the `core/twake/james` and
+`core/twake/calendar` plugins, for instance,
+
+```sh
+  --set extraEnv.DM_EXTRA_PLUGINS='core/twake/james\,core/twake/calendar' \
+  --set extraEnv.DM_JAMES_WEBADMIN_URL=http://tmail-admin.tmail:8000 \
+  --set secrets.extraEnv.DM_JAMES_WEBADMIN_TOKEN=secret \
+  --set extraEnv.DM_CALENDAR_WEBADMIN_URL=http://calendar-webadmin:8080 \
+  --set secrets.extraEnv.DM_CALENDAR_WEBADMIN_TOKEN=secret
+```
+
+A directory's own schemas are mounted with `extraVolumes` and
+`extraVolumeMounts`, and named in `extraEnv`. `fullnameOverride` names the
+objects instead of the release, for a chart that embeds this one. See
 [values.yaml](helm/twake-directory-manager/values.yaml).
 
 Have the provider issue refresh tokens to the client: without them a session

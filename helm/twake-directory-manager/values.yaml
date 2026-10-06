@@ -80,6 +80,13 @@ secrets:
   existingSecret: ""
   ldapPassword: ""
   oidcClientSecret: ""
+  # The credentials among the other ldap-rest settings, as environment
+  # variables: they go into the Secret, where extraEnv lands in a ConfigMap.
+  # For instance the WebAdmin tokens of the core/twake/james and
+  # core/twake/calendar plugins, DM_JAMES_WEBADMIN_TOKEN and
+  # DM_CALENDAR_WEBADMIN_TOKEN. With existingSecret, put them in that Secret
+  # instead.
+  extraEnv: {}
 
 resources:
   requests:
