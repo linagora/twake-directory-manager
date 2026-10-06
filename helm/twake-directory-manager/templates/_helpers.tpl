@@ -1,5 +1,5 @@
 {{- define "tdm.fullname" -}}
-{{- .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- .Values.fullnameOverride | default .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
 {{- define "tdm.image" -}}

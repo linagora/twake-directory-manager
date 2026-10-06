@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- Helm chart: `extraVolumes` and `extraVolumeMounts` mount a directory's own
+  schemas; `secrets.existingSecret` may hold the bind DN as well, with
+  `ldap.bindDn` left empty; `fullnameOverride` names the objects when the
+  chart is embedded in another
+
 ## v0.4.1 (2026-10-06)
 
 Built on ldap-rest 0.15.0, which reads array, number and DN options from the
