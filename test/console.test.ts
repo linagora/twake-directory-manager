@@ -1373,6 +1373,43 @@ describe('Directory console', () => {
       ).to.equal(false);
     });
 
+    it('should ask a group list for the attributes its schema declares', async () => {
+      // ldap-rest answers a group list with `cn` and `member` alone otherwise:
+      // the email column stayed empty.
+      const client = new ConsoleApiClient(baseUrl);
+      const withSecret: EntityDescriptor = {
+        ...groups,
+        schema: {
+          attributes: {
+            ...groups.schema.attributes,
+            mail: { type: 'string', role: 'primaryEmail' },
+            secret: { type: 'string', neverReturn: true },
+          },
+        },
+      };
+      nock(baseUrl)
+        .get('/api/v1/ldap/groups')
+        .query({ limit: '1000', attributes: 'cn,description,member,mail' })
+        .reply(200, {
+          staff: { dn: staff.dn, cn: 'staff', mail: 'staff@example.com' },
+        });
+      const { entries } = await client.listBounded(
+        withSecret,
+        undefined,
+        undefined,
+        1000
+      );
+      expect(entries.staff.mail).to.equal('staff@example.com');
+
+      // A flat list answers every attribute already: nothing to ask for.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query({ limit: '1000' })
+        .reply(200, {});
+      await client.listBounded(users, undefined, undefined, 1000);
+      expect(nock.isDone()).to.equal(true);
+    });
+
     it('should keep answering the plain map from `list()`, bounded or not', async () => {
       // `list()` is exported, and embedders read what it answers as the map
       // it always was: the flag comes from `listBounded()` instead.

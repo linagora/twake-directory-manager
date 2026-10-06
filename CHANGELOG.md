@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- The groups list shows their email address, and exports it: the console asks
+  ldap-rest for the attributes of the group schema, where it answered the name
+  and the members only
+
 ## v0.4.3 (2026-10-06)
 
 Built on ldap-rest 0.15.0.
