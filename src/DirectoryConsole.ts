@@ -12,7 +12,7 @@
 
 import { escapeHtml } from './shared/dom';
 
-import { ConsoleApiClient } from './api/ConsoleApiClient';
+import { ConsoleApiClient, isLarge } from './api/ConsoleApiClient';
 import { CONSOLE_LOGO, LINAGORA_LOGO } from './assets';
 import { EntityDetail } from './components/EntityDetail';
 import { EntityForm } from './components/EntityForm';
@@ -909,9 +909,7 @@ export class DirectoryConsole {
     const list = new EntityList({
       entity,
       translator: this.translator,
-      // An entity attached to organizations is the large one; the small
-      // reference tables are listed whole.
-      listable: !entity.organizationLink,
+      listable: !isLarge(entity),
       load: listLoader(this.api, entity),
       canDelete: this.canDelete(),
       pointerLabel: (dn: string): string | undefined =>

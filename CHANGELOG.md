@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- A schema can mark a collection large, `"entity": { "large": true }`: it is
+  searched before it is listed, and a pointer into it is a search box. A
+  directory without an organization tree — where nothing else tells the
+  accounts apart — lists them whole otherwise,
+  [doc](docs/usage.md#behaviour-worth-knowing)
+
 ## v0.4.2 (2026-10-06)
 
 Built on ldap-rest 0.15.0.

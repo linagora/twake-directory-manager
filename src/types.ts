@@ -71,6 +71,8 @@ export interface EntitySchema {
     singularLabel?: LocalizedText;
     /** Readable name of an entry, keyed by its main attribute value */
     valueLabels?: Record<string, LocalizedText>;
+    /** Searched before listed, and searched from a pointer; see isLarge() */
+    large?: boolean;
   };
 }
 
