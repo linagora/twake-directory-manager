@@ -1,3 +1,6 @@
+# Names the objects instead of the release, as a subchart needs.
+fullnameOverride: ""
+
 replicaCount: 1
 
 image:
@@ -71,8 +74,9 @@ bcl:
     url: ""
 
 secrets:
-  # A Secret holding DM_LDAP_PWD and DM_OIDC_CLIENT_SECRET. When set, the two
-  # values below are ignored and no Secret is created.
+  # A Secret holding DM_LDAP_PWD and DM_OIDC_CLIENT_SECRET, and DM_LDAP_DN when
+  # ldap.bindDn is left empty. When set, the two values below are ignored and
+  # no Secret is created.
   existingSecret: ""
   ldapPassword: ""
   oidcClientSecret: ""
@@ -87,3 +91,8 @@ resources:
 # Anything else ldap-rest reads, as environment variables. The image already
 # sets its plugin list and the Twake schemas it serves.
 extraEnv: {}
+
+# A directory's own schemas, mounted here and named in extraEnv
+# (DM_LDAP_FLAT_SCHEMA, DM_GROUP_SCHEMA, DM_ORGANIZATION_SCHEMA).
+extraVolumes: []
+extraVolumeMounts: []
