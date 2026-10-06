@@ -9,7 +9,7 @@
 import { expect } from 'chai';
 import nock from 'nock';
 
-import { ConsoleApiClient } from '../src/api/ConsoleApiClient';
+import { ConsoleApiClient, isLarge } from '../src/api/ConsoleApiClient';
 import { signInAgain } from '../src/session';
 import {
   ToastController,
@@ -1148,6 +1148,31 @@ describe('Directory console', () => {
       expect(options.map(option => option.label)).to.deep.equal([
         'Smith, John',
       ]);
+    });
+
+    it('should take a collection the schema marks large for a large one', () => {
+      // A directory without an organization tree: nothing to tell the
+      // accounts by, but the mark.
+      const accounts: EntityDescriptor = {
+        ...users,
+        organizationLink: undefined,
+        schema: { ...usersSchema, entity: { large: true } },
+      };
+      expect(isLarge(users)).to.equal(true);
+      expect(isLarge(mailboxTypes)).to.equal(false);
+      expect(isLarge(accounts)).to.equal(true);
+      expect(isLarge({ ...accounts, schema: usersSchema })).to.equal(false);
+      // The mark wins over the organization link, both ways.
+      expect(
+        isLarge({
+          ...users,
+          schema: { ...usersSchema, entity: { large: false } },
+        })
+      ).to.equal(false);
+
+      expect(
+        new ConsoleApiClient(baseUrl).pointerSearch(accounts.base, [accounts])
+      ).to.be.a('function');
     });
 
     it('should search a branch too large to list, and name what it finds', async () => {

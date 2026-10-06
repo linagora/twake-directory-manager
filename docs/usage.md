@@ -84,6 +84,7 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 | `group`                 | Groups the fields under a heading                                         |
 | `states`                | The states the account can be moved to                                    |
 | `role`                  | Which columns the table shows, and which actions appear                   |
+| `entity.large`          | Searched before listed, and searched from a pointer field                 |
 
 ## Behaviour worth knowing
 
@@ -99,8 +100,8 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
   delegates of an account, the managers and local administrators of an
   organization point at accounts, and a select of every account of a
   directory holds thousands of options, downloaded each time the form opens.
-  Such a field — any pointer into an entity attached to the organization
-  tree — is a search box instead: three characters, then the matching
+  Such a field — any pointer into a large branch, see below — is a search
+  box instead: three characters, then the matching
   entries by display name and identifier, chosen with the mouse or the
   arrow keys. A pointer into a small branch stays a select.
 - **Long forms open as a side panel**, short ones as a dialog. A form of
@@ -110,9 +111,11 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
   marks nothing is guessed at, which is why a large branch should mark its
   indexed attributes — see
   [flat-generic](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/ldap/flat-generic.md).
-- **A large branch is not listed unfiltered.** Entities attached to an
-  organization ask for three characters before searching; the small reference
-  tables are listed whole.
+- **A large branch is not listed unfiltered.** It asks for three characters
+  before searching, or for _List without searching_; the small reference
+  tables are listed whole. A large branch is one whose schema sets
+  `"entity": { "large": true }`, or else one attached to the organization
+  tree: a directory without a tree marks its accounts itself.
 - **A list asks for 1,000 entries at most**, searched or not
   (`?limit=1000`). A server that honours it and answers
   `X-Result-Truncated: true` gets a notice above the table: there are more,

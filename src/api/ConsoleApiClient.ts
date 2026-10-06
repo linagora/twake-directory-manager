@@ -83,6 +83,21 @@ export function roleAttribute(
   return undefined;
 }
 
+/**
+ * Whether a collection is too large to list unfiltered, or to offer whole in
+ * a pointer's select.
+ *
+ * The schema says so with `entity.large`. Without it, the entries attached
+ * to the organization tree — the accounts — are the large ones: a directory
+ * with no tree has nothing to tell them by, and marks its own.
+ *
+ * @param entity collection to classify
+ * @returns true when it is searched before it is listed
+ */
+export function isLarge(entity: EntityDescriptor): boolean {
+  return entity.schema.entity?.large ?? !!entity.organizationLink;
+}
+
 /** Suggestions a pointer search offers: enough to pick from, few to read. */
 const POINTER_SEARCH_LIMIT = 20;
 
@@ -966,12 +981,12 @@ export class ConsoleApiClient {
    * A search for the entries of a branch too large to list, for a pointer
    * field to offer as the operator types.
    *
-   * A branch whose entries are attached to the organization tree — the
-   * accounts — is the one the list view will not show unfiltered either: a
-   * select of every account of a directory holds ten thousand options, and
-   * building it downloads them all each time a form opens. The search looks in
-   * the attributes the list searches, and names each entry the way a person
-   * recognises it: by its display name, then by its identifier.
+   * A large branch — see `isLarge` — is the one the list view will not show
+   * unfiltered either: a select of every account of a directory holds ten
+   * thousand options, and building it downloads them all each time a form
+   * opens. The search looks in the attributes the list searches, and names
+   * each entry the way a person recognises it: by its display name, then by
+   * its identifier.
    *
    * Any other branch an entity owns is listed into a select, and can be
    * searched all the same: `failed` asks for its search, once listing it has
@@ -993,7 +1008,7 @@ export class ConsoleApiClient {
         entity.base && branch.toLowerCase() === entity.base.toLowerCase()
     );
     if (!owner) return undefined;
-    if (failed ? this.inOrganizationTree(branch) : !owner.organizationLink)
+    if (failed ? this.inOrganizationTree(branch) : !isLarge(owner))
       return undefined;
     const scope = searchableAttributes(owner)
       .map(([name]) => name)
