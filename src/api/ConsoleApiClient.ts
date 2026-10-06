@@ -447,6 +447,10 @@ export class ConsoleApiClient {
    * which it is whenever it is an answer at all. Across origins the browser
    * hides the header unless the server's CORS policy exposes it.
    *
+   * A group list answers its name and members only, unless `attributes` asks
+   * for more: the schema's attributes are asked for, or the table's email
+   * column, its CSV export and a pointer's labels would stay empty.
+   *
    * @param entity entity to list
    * @param search substring to look for
    * @param attribute attribute the substring applies to
@@ -466,6 +470,12 @@ export class ConsoleApiClient {
       params.set('attribute', attribute);
     }
     if (limit) params.set('limit', String(limit));
+    if (entity.kind === 'group') {
+      const attributes = Object.entries(entity.schema.attributes)
+        .filter(([, attr]) => !attr.neverReturn)
+        .map(([name]) => name);
+      if (attributes.length) params.set('attributes', attributes.join(','));
+    }
     const query = params.toString();
     const { payload, headers } = await this.request<Record<string, Entry>>(
       `${entity.endpoint}${query ? `?${query}` : ''}`
