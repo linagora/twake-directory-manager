@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- The quota set in the console reaches Twake Mail: the image sets
+  `DM_QUOTA_ATTRIBUTE=mailQuotaSize`. ldap-rest defaults it to `mailQuota`,
+  which the Twake schemas keep as a message count, so the `twake/james` plugin
+  never saw the size. A deployment that set `DM_QUOTA_ATTRIBUTE` itself keeps
+  its value
+- Built on ldap-rest 0.16.1, whose `twake/james` plugin names the user's
+  default identity in Twake Mail after the display name, rather than the
+  server-set one: Twake Mail answered that by adding a second identity, named
+  "givenName sn", for every account. A change of `displayName` alone now
+  reaches Twake Mail too
+
 ## v0.4.5 (2026-10-06)
 
 Built on ldap-rest 0.15.0.
