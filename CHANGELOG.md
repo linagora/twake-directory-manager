@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.4.7 (2026-10-09)
+
+Built on ldap-rest 0.16.2.
 
 ### Bug Fixes
 
