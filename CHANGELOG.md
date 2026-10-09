@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- Built on ldap-rest 0.17.0, whose Twake user schema no longer has the
+  "Mail quota" field: it wrote `mailQuota`, an attribute the Twake directory
+  schema does not define, so the directory refused every save that filled
+  it, with the other changes of the same save. The mailbox quota is
+  "Mailbox size". A change the directory refuses for its content now
+  answers 400 with the directory's reason instead of 500
+
 ## v0.4.7 (2026-10-09)
 
 Built on ldap-rest 0.16.2.
