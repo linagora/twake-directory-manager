@@ -292,8 +292,11 @@ given may answer either shape; a plain map is read as complete.
 
 A `pointer` names a branch, and the console fills the select from it:
 
-- the branch of the organization tree is walked through the organization
-  endpoints, so a department field lists organizations by their readable path;
+- the branch of the organization tree is searched as the operator types (three
+  characters, in the name, description or path of the organizations), through
+  the organization `search` endpoint ldap-rest advertises in its config, and
+  each is named by its readable path. A server without that endpoint has the
+  tree walked instead, bounded to 200 organizations, into a select;
 - a branch that is the base of a known entity is listed through that entity;
 - any other branch is read through `core/ldap/raw`, so load that plugin for
   nomenclature branches (titles, list types, delivery modes) to be offered.

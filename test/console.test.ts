@@ -61,6 +61,66 @@ function stubContainer(): HTMLElement & { innerHTML: string } {
   } as unknown as HTMLElement & { innerHTML: string };
 }
 
+/**
+ * A container that keeps what a component writes into it apart, the way a
+ * browser does: writing its `innerHTML` replaces the whole subtree (a new
+ * filter input, a new list), while writing the list's own replaces only the
+ * list. `builds` counts how many times the shell was written, which is how
+ * many times the filter input was replaced.
+ */
+interface TreeContainer {
+  innerHTML: string;
+  builds: number;
+  filter: { value: string; fire(): void };
+  list: { innerHTML: string };
+}
+
+function treeContainer(): HTMLElement & TreeContainer {
+  const fresh = (): Pick<TreeContainer, 'filter' | 'list'> => {
+    let listener: (() => void) | undefined;
+    return {
+      filter: Object.assign(
+        {
+          value: '',
+          fire: () => listener?.(),
+        },
+        {
+          addEventListener: (_type: string, callback: () => void) => {
+            listener = callback;
+          },
+        }
+      ),
+      list: {
+        innerHTML: '',
+        querySelectorAll: () => [],
+      } as TreeContainer['list'],
+    };
+  };
+  let shell = '';
+  const container = {
+    builds: 0,
+    ...fresh(),
+    get innerHTML(): string {
+      return shell.replace(
+        '<div data-tree-list></div>',
+        `<div data-tree-list>${container.list.innerHTML}</div>`
+      );
+    },
+    set innerHTML(html: string) {
+      shell = html;
+      container.builds++;
+      Object.assign(container, fresh());
+    },
+    querySelector(selector: string): unknown {
+      if (!shell) return null;
+      if (selector === '[data-tree-list]') return container.list;
+      if (selector === '[data-filter]') return container.filter;
+      return null;
+    },
+  };
+  return container as unknown as HTMLElement & TreeContainer;
+}
+
 const usersSchema: EntitySchema = {
   attributes: {
     objectClass: { type: 'array', fixed: true, default: ['top'] },
@@ -458,7 +518,7 @@ describe('Directory console', () => {
     });
 
     it('should mark the transit branch where it stands in the tree', async () => {
-      const container = stubContainer();
+      const container = treeContainer();
       await new OrganizationTree({
         translator: new Translator('en'),
         root: async () => ({ dn: top, name: 'organization' }),
@@ -476,6 +536,41 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.match(
         /data-select="ou=TRANSIT[^"]*"[^>]*>Transit<\/button>\s*<span class="dc-tag dc-tag-transit">/
       );
+    });
+  });
+
+  describe('OrganizationTree filter', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const sales = `ou=Sales,${top}`;
+
+    it('should keep the filter input across keystrokes', async () => {
+      const container = treeContainer();
+      await new OrganizationTree({
+        translator: new Translator('en'),
+        root: async () => ({ dn: top, name: 'organization' }),
+        children: async () => [
+          { dn: sales, name: 'Sales' },
+          { dn: 'ou=Lin,ou=organization,dc=example,dc=com', name: 'Lin' },
+        ],
+        onSelect: () => undefined,
+      }).render(container);
+      const input = container.filter;
+      const builds = container.builds;
+      expect(container.innerHTML).to.include('>Sales</button>');
+
+      // The browser edits the value and its caret; a redraw that replaced the
+      // input would drop both, and the next letter would land before them.
+      for (const typed of ['l', 'li', 'lin']) {
+        input.value = typed;
+        input.fire();
+        expect(container.filter).to.equal(input);
+        expect(container.filter.value).to.equal(typed);
+      }
+      expect(container.builds).to.equal(builds);
+      // The list was filtered all the same.
+      expect(container.innerHTML)
+        .to.include('>Lin</button>')
+        .and.not.include('>Sales</button>');
     });
   });
 
@@ -758,6 +853,90 @@ describe('Directory console', () => {
       expect(client.organizationRoot).to.equal(
         'ou=organization,dc=example,dc=com'
       );
+    });
+
+    describe('searching the organization tree', () => {
+      const orgTop = 'ou=organization,dc=example,dc=com';
+      const discover = async (search?: string): Promise<ConsoleApiClient> => {
+        nock(baseUrl)
+          .get('/api/v1/config')
+          .reply(200, {
+            apiPrefix: '/api',
+            ldapBase: 'dc=example,dc=com',
+            features: {
+              ldapOrganizations: {
+                enabled: true,
+                topOrganization: orgTop,
+                endpoints: search ? { search } : {},
+                schema: {
+                  attributes: {
+                    ou: { type: 'string', role: 'identifier' },
+                    twakeDepartmentPath: {
+                      type: 'string',
+                      role: 'organizationPath',
+                    },
+                  },
+                },
+              },
+            },
+          });
+        const client = new ConsoleApiClient(baseUrl);
+        await client.discover();
+        return client;
+      };
+
+      it('should search the tree when the server advertises it, and only then', async () => {
+        const searching = await discover(
+          '/api/v1/ldap/organizations/:dn/search'
+        );
+        // The branch of the department pointer is above the top, and no
+        // entity owns it; listing it never failed.
+        expect(searching.pointerSearch('dc=example,dc=com', [])).to.be.a(
+          'function'
+        );
+        expect(searching.pointerSearch(orgTop, [], true)).to.be.a('function');
+
+        const older = await discover();
+        expect(older.pointerSearch('dc=example,dc=com', [])).to.equal(
+          undefined
+        );
+      });
+
+      it('should drop the sentinel row and label by path', async () => {
+        const client = await discover('/api/v1/ldap/organizations/:dn/search');
+        nock(baseUrl)
+          .get(
+            `/api/v1/ldap/organizations/${encodeURIComponent(orgTop)}/search`
+          )
+          .query({ q: 'lin' })
+          .reply(200, [
+            {
+              dn: `ou=b,${orgTop}`,
+              ou: 'b',
+              objectClass: ['organizationalUnit'],
+              twakeDepartmentPath: 'Government / Beta',
+            },
+            {
+              dn: `ou=a,${orgTop}`,
+              ou: 'a',
+              objectClass: ['organizationalUnit'],
+              twakeDepartmentPath: 'Government / Alpha',
+            },
+            // No path: the name.
+            { dn: `ou=c,${orgTop}`, ou: 'Gamma', objectClass: ['top'] },
+            {
+              dn: `more-organizations-${orgTop}`,
+              objectClass: ['moreIndicator'],
+              _isMoreIndicator: 'true',
+              _displayedCount: 3,
+            },
+          ]);
+        expect(await client.organizationSearch('lin')).to.deep.equal([
+          { dn: `ou=c,${orgTop}`, label: 'Gamma' },
+          { dn: `ou=a,${orgTop}`, label: 'Government / Alpha' },
+          { dn: `ou=b,${orgTop}`, label: 'Government / Beta' },
+        ]);
+      });
     });
 
     it('should take an entity’s own names from its schema metadata', async () => {

@@ -143,6 +143,15 @@ export class EntityForm {
       const branch = (attr.branch || attr.items?.branch || [])[0];
       const search = pointer && branch ? this.searchOf(branch) : undefined;
       if (search) this.searches.set(name, search);
+      // The department an account is attached to is named by its path, which
+      // the entry already carries: reading it costs no request, where the DN
+      // alone would show the bare name of the last organization.
+      const pathName = options.entity.organizationPath;
+      if (search && name === options.entity.organizationLink && pathName) {
+        const path = toList(entryValue(options.entry, pathName))[0];
+        if (path && this.values[name].length === 1)
+          this.picked.set(this.values[name][0], path);
+      }
     }
   }
 
