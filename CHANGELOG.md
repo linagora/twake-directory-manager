@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- The filter of the organization tree no longer types backwards ("lin" came
+  out as "nil"): every keystroke redrew the tree and replaced the input, whose
+  new copy had its caret at the start. Only the list is redrawn now
+- The department field of a form searches the organization tree as the
+  operator types, instead of offering a select of the first 200 organizations
+  found, which left most of a thousand domains out. It needs the organization
+  `search` endpoint of ldap-rest 0.16.2; a server without it keeps the
+  select. The department of an account being edited is shown by its path
+
 ## v0.4.6 (2026-10-07)
 
 Built on ldap-rest 0.16.1.

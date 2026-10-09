@@ -55,6 +55,7 @@ interface ConfigResponse {
       topOrganization?: string;
       organizationClass?: string[];
       pathSeparator?: string;
+      endpoints?: { search?: string };
       schema?: EntitySchema;
     };
     openidconnect?: { endpoints?: { logout?: string } };
@@ -188,6 +189,12 @@ export class ConsoleApiClient {
   private topOrganization?: string;
   /** Attribute carrying the readable path of an organization, from its role */
   private organizationPathAttribute?: string;
+  /**
+   * Whether the server searches the organization tree (`endpoints.search` of
+   * its config). A server that predates the endpoint does not advertise it,
+   * and is asked nothing it would answer with a 404.
+   */
+  private organizationSearchable = false;
   /** Object classes that make an entry an organization rather than a member */
   private organizationClasses: string[] = [];
   /** Route that ends the session, when the server's authentication has one */
@@ -353,6 +360,7 @@ export class ConsoleApiClient {
     if (organizations?.enabled) {
       this.pathSeparator = organizations.pathSeparator || ' / ';
       this.topOrganization = organizations.topOrganization;
+      this.organizationSearchable = !!organizations.endpoints?.search;
       this.organizationPathAttribute = roleAttribute(
         organizations.schema,
         'organizationPath'
@@ -1000,7 +1008,12 @@ export class ConsoleApiClient {
    *
    * Any other branch an entity owns is listed into a select, and can be
    * searched all the same: `failed` asks for its search, once listing it has
-   * failed. The organization tree and a raw branch have no search.
+   * failed. A raw branch has no search.
+   *
+   * The organization tree is searched whenever the server can, listing or not:
+   * walking it is bounded, so a directory of a thousand organizations would
+   * offer a few hundred of them in a select nobody can read. A server that
+   * cannot search it keeps the select.
    *
    * @param branch DN the pointer must land in
    * @param entities entities the console knows, to find the one owning it
@@ -1013,13 +1026,19 @@ export class ConsoleApiClient {
     entities: EntityDescriptor[],
     failed = false
   ): ((query: string) => Promise<{ dn: string; label: string }[]>) | undefined {
+    // Before the owner is looked for: the tree's branch is the top of an
+    // entity or the DN above it, and the pointer needs a search either way.
+    if (this.inOrganizationTree(branch)) {
+      return this.organizationSearchable
+        ? (query: string) => this.organizationSearch(query)
+        : undefined;
+    }
     const owner = entities.find(
       entity =>
         entity.base && branch.toLowerCase() === entity.base.toLowerCase()
     );
     if (!owner) return undefined;
-    if (failed ? this.inOrganizationTree(branch) : !isLarge(owner))
-      return undefined;
+    if (!failed && !isLarge(owner)) return undefined;
     const scope = searchableAttributes(owner)
       .map(([name]) => name)
       .join(',');
@@ -1074,6 +1093,41 @@ export class ConsoleApiClient {
       }
     }
     return options;
+  }
+
+  /**
+   * Organizations whose name, description or path contain a text, as pointer
+   * candidates labelled by their readable path.
+   *
+   * The server searches the whole subtree in one request, where walking it
+   * costs one per organization. It cuts its answer and ends it with an
+   * indicator row when more matched: that row is no organization, and the
+   * operator refines the text rather than paging.
+   *
+   * @param query text to look for
+   * @param from organization whose subtree is searched; the top by default
+   * @returns DN and label of each match, in reading order
+   */
+  async organizationSearch(
+    query: string,
+    from = this.topOrganization
+  ): Promise<{ dn: string; label: string }[]> {
+    if (!from) return [];
+    const found = await this.call<Entry[]>(
+      `${this.apiPrefix}/v1/ldap/organizations/${encodeURIComponent(from)}` +
+        `/search?q=${encodeURIComponent(query)}`
+    );
+    return (found || [])
+      .filter(entry => !isMoreIndicator(entry))
+      .map(entry => this.toNode(entry))
+      .map(node => ({ dn: node.dn, label: node.path || node.name }))
+      .sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, {
+          sensitivity: 'base',
+          numeric: true,
+        })
+      )
+      .slice(0, POINTER_SEARCH_LIMIT);
   }
 
   /** Turn an organization entry into a tree node. */

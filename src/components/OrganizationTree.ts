@@ -72,29 +72,53 @@ export class OrganizationTree {
     this.tree = null;
   }
 
+  /**
+   * Paint the tree, building the header only once.
+   *
+   * The filter input lives in the header, and a redraw that replaced it would
+   * replace the element the operator is typing in: the new one holds the value
+   * but not the caret, which lands at the start, so a word typed on would come
+   * out backwards. Only the list below it is rewritten; the input keeps its
+   * caret, its selection and any composition in progress.
+   */
   private draw(): void {
     const container = this.container;
     if (!container) return;
     const { translator } = this.options;
 
-    container.innerHTML = `
-      <div class="dc-tree">
-        <div class="dc-tree-header">
-          <h2>${escapeHtml(translator.t('tree.title'))}</h2>
-          <input type="search" class="dc-input" data-filter
-            value="${escapeHtml(this.filter)}"
-            placeholder="${escapeHtml(translator.t('tree.filter'))}" />
-        </div>
-        ${
-          this.error
-            ? `<p class="dc-empty dc-error-block">${escapeHtml(this.error)}</p>`
-            : this.tree
-              ? `<ul class="dc-tree-list">${this.nodeMarkup(this.tree, 0)}</ul>`
-              : `<p class="dc-empty">${escapeHtml(translator.t('app.loading'))}</p>`
-        }
-      </div>`;
+    // A container rendered into again (or by another view in between) no
+    // longer holds the header this tree built: build it afresh.
+    if (!container.querySelector('[data-tree-list]')) {
+      container.innerHTML = `
+        <div class="dc-tree">
+          <div class="dc-tree-header">
+            <h2>${escapeHtml(translator.t('tree.title'))}</h2>
+            <input type="search" class="dc-input" data-filter
+              value="${escapeHtml(this.filter)}"
+              placeholder="${escapeHtml(translator.t('tree.filter'))}" />
+          </div>
+          <div data-tree-list></div>
+        </div>`;
+      const filter = container.querySelector<HTMLInputElement>('[data-filter]');
+      filter?.addEventListener('input', () => {
+        this.filter = filter.value.trim();
+        this.drawList();
+      });
+    }
+    this.drawList();
+  }
 
-    this.bind();
+  /** Rewrite what sits below the filter: the list, or why there is none. */
+  private drawList(): void {
+    const list = this.container?.querySelector<HTMLElement>('[data-tree-list]');
+    if (!list) return;
+    const { translator } = this.options;
+    list.innerHTML = this.error
+      ? `<p class="dc-empty dc-error-block">${escapeHtml(this.error)}</p>`
+      : this.tree
+        ? `<ul class="dc-tree-list">${this.nodeMarkup(this.tree, 0)}</ul>`
+        : `<p class="dc-empty">${escapeHtml(translator.t('app.loading'))}</p>`;
+    this.bind(list);
   }
 
   /** One node and, when it is open, its children. */
@@ -152,17 +176,8 @@ export class OrganizationTree {
     return (node.children || []).some(child => this.matches(child));
   }
 
-  private bind(): void {
-    const container = this.container;
-    if (!container) return;
-
-    const filter = container.querySelector<HTMLInputElement>('[data-filter]');
-    filter?.addEventListener('input', () => {
-      this.filter = filter.value.trim();
-      this.draw();
-      container.querySelector<HTMLInputElement>('[data-filter]')?.focus();
-    });
-
+  /** Bind the buttons of a freshly written list; the filter binds itself. */
+  private bind(container: HTMLElement): void {
     for (const button of Array.from(
       container.querySelectorAll<HTMLElement>('[data-toggle]')
     )) {
