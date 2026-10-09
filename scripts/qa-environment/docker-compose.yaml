@@ -1,0 +1,56 @@
+# QA stack started by start.sh: the console image (ldap-rest + the console) in front of an
+# OpenLDAP holding the Twake schemas, behind Dex as OpenID Connect provider. Dex authenticates
+# against the same OpenLDAP. Only the console and Dex are published, on 127.0.0.1.
+#
+# Dex's issuer is http://sso:$QA_SSO_PORT, the one URL both ldap-rest (docker DNS) and the
+# browser agree on: a container on the stack network resolves `sso` natively, a browser on the
+# host needs `127.0.0.1 sso` in /etc/hosts.
+services:
+  ldap:
+    image: osixia/openldap:1.5.0
+    environment:
+      - LDAP_ORGANISATION=Example Corp
+      - LDAP_DOMAIN=example.com
+      - LDAP_ADMIN_PASSWORD=admin
+      - LDAP_CONFIG_PASSWORD=admin
+      - LDAP_READONLY_USER=false
+      - LDAP_RFC2307BIS_SCHEMA=true
+      - LDAP_BACKEND=mdb
+      - LDAP_TLS=false
+      - LDAP_REMOVE_CONFIG_AFTER_SETUP=true
+    volumes:
+      - ./ldap:/qa-ldap:ro
+
+  sso:
+    image: ghcr.io/dexidp/dex:v2.41.1
+    command: dex serve /etc/dex/config.yaml
+    volumes:
+      - ./.generated/dex.yaml:/etc/dex/config.yaml:ro
+    ports:
+      - '127.0.0.1:${QA_SSO_PORT:?}:${QA_SSO_PORT:?}'
+    restart: on-failure
+
+  directory:
+    image: twake-directory-manager-qa
+    depends_on:
+      - ldap
+      - sso
+    environment:
+      - DM_LDAP_URL=ldap://ldap:389
+      - DM_LDAP_DN=cn=admin,dc=example,dc=com
+      - DM_LDAP_PWD=admin
+      - DM_LDAP_BASE=dc=example,dc=com
+      - DM_LDAP_TOP_ORGANIZATION=ou=organization,dc=example,dc=com
+      - DM_LDAP_GROUP_BASE=ou=groups,dc=example,dc=com
+      - DM_AUTHZ_TRANSIT_BRANCH=ou=Transit,ou=organization,dc=example,dc=com
+      - DM_OIDC_SERVER=http://sso:${QA_SSO_PORT:?}
+      - DM_OIDC_CLIENT_ID=twake-directory-manager
+      - DM_OIDC_CLIENT_SECRET=qa-client-secret-qa-client-secret
+      # Dex's `sub` is opaque: authzLinid1 looks the administrator up by uid, which Dex
+      # publishes as preferred_username
+      - DM_OIDC_USERNAME_CLAIM=preferred_username
+      - DM_AUTHZ_IDENTITY=req.userName
+      - DM_BASE_URL=http://localhost:${QA_APP_PORT:?}
+    ports:
+      - '127.0.0.1:${QA_APP_PORT:?}:8081'
+    restart: on-failure

@@ -1,0 +1,520 @@
+# Seed data of the QA environment, loaded by start.sh under dc=example,dc=com: the branches the
+# Twake schemas of ldap-rest name, their nomenclatures, an organization tree with a global and
+# two local administrators, accounts in every organization and a few groups.
+#
+# Every account signs in with the password "secret".
+
+# ------------------------------------------------------------------------------------- branches
+dn: ou=users,dc=example,dc=com
+objectClass: organizationalUnit
+ou: users
+
+dn: ou=groups,dc=example,dc=com
+objectClass: organizationalUnit
+ou: groups
+
+dn: ou=positions,dc=example,dc=com
+objectClass: organizationalUnit
+ou: positions
+
+dn: ou=nomenclature,dc=example,dc=com
+objectClass: organizationalUnit
+ou: nomenclature
+
+# --------------------------------------------------------------------------------- nomenclatures
+dn: ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+objectClass: organizationalUnit
+ou: twakeTitle
+
+dn: cn=Dr,ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: Dr
+
+dn: cn=Mr,ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: Mr
+
+dn: cn=Mrs,ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: Mrs
+
+dn: cn=Ms,ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: Ms
+
+dn: cn=Prof,ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: Prof
+
+dn: ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+objectClass: organizationalUnit
+ou: twakeAccountStatus
+
+dn: cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: active
+
+dn: cn=disabled,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: disabled
+
+dn: cn=noaccess,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: noaccess
+
+dn: cn=todelete,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: todelete
+
+dn: ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+objectClass: organizationalUnit
+ou: twakeDeliveryMode
+
+dn: cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: normal
+
+dn: cn=forward,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: forward
+
+dn: cn=localDelivery,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: localDelivery
+
+dn: ou=twakeListType,ou=nomenclature,dc=example,dc=com
+objectClass: organizationalUnit
+ou: twakeListType
+
+dn: cn=openList,ou=twakeListType,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: openList
+
+dn: cn=memberRestrictedList,ou=twakeListType,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: memberRestrictedList
+
+dn: cn=ownerRestrictedList,ou=twakeListType,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: ownerRestrictedList
+
+dn: ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com
+objectClass: organizationalUnit
+ou: twakeMailboxType
+
+dn: cn=group,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: group
+
+dn: cn=mailingList,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: mailingList
+
+dn: cn=teamMailbox,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: applicationProcess
+cn: teamMailbox
+
+dn: ou=domains,ou=nomenclature,dc=example,dc=com
+objectClass: organizationalUnit
+ou: domains
+
+dn: dc=example,ou=domains,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: domain
+objectClass: domainRelatedObject
+dc: example
+associatedDomain: example.com
+description: Main mail domain
+
+dn: dc=lists,ou=domains,ou=nomenclature,dc=example,dc=com
+objectClass: top
+objectClass: domain
+objectClass: domainRelatedObject
+dc: lists
+associatedDomain: lists.example.com
+description: Mailing list domain
+
+# ------------------------------------------------------------------------------------ positions
+dn: cn=Administrator,ou=positions,dc=example,dc=com
+objectClass: twakePosition
+cn: Administrator
+
+dn: cn=Sales Representative,ou=positions,dc=example,dc=com
+objectClass: twakePosition
+cn: Sales Representative
+
+dn: cn=Sales Manager,ou=positions,dc=example,dc=com
+objectClass: twakePosition
+cn: Sales Manager
+
+dn: cn=Software Engineer,ou=positions,dc=example,dc=com
+objectClass: twakePosition
+cn: Software Engineer
+
+dn: cn=Engineering Manager,ou=positions,dc=example,dc=com
+objectClass: twakePosition
+cn: Engineering Manager
+
+dn: cn=HR Officer,ou=positions,dc=example,dc=com
+objectClass: twakePosition
+cn: HR Officer
+
+# ---------------------------------------------------------------------------- organization tree
+# admin administers the whole directory, sophie.martin Sales, eric.dubois Engineering; nobody
+# administers Human Resources but admin. Transit is DM_AUTHZ_TRANSIT_BRANCH.
+dn: ou=organization,dc=example,dc=com
+objectClass: top
+objectClass: organizationalUnit
+objectClass: twakeDepartment
+ou: organization
+description: Example Corp
+twakeDepartmentPath: organization
+twakeLocalAdminLink: uid=admin,ou=users,dc=example,dc=com
+twakeDomainLink: dc=example,ou=domains,ou=nomenclature,dc=example,dc=com
+
+dn: ou=Sales,ou=organization,dc=example,dc=com
+objectClass: top
+objectClass: organizationalUnit
+objectClass: twakeDepartment
+ou: Sales
+description: Sales department
+l: Paris
+twakeDepartmentPath: Sales
+twakeLocalAdminLink: uid=sophie.martin,ou=users,dc=example,dc=com
+twakeManagerLink: uid=sophie.martin,ou=users,dc=example,dc=com
+
+dn: ou=France,ou=Sales,ou=organization,dc=example,dc=com
+objectClass: top
+objectClass: organizationalUnit
+objectClass: twakeDepartment
+ou: France
+description: Sales, France
+l: Lyon
+twakeDepartmentPath: Sales / France
+
+dn: ou=Germany,ou=Sales,ou=organization,dc=example,dc=com
+objectClass: top
+objectClass: organizationalUnit
+objectClass: twakeDepartment
+ou: Germany
+description: Sales, Germany
+l: Berlin
+twakeDepartmentPath: Sales / Germany
+
+dn: ou=Engineering,ou=organization,dc=example,dc=com
+objectClass: top
+objectClass: organizationalUnit
+objectClass: twakeDepartment
+ou: Engineering
+description: Research and development
+twakeDepartmentPath: Engineering
+twakeLocalAdminLink: uid=eric.dubois,ou=users,dc=example,dc=com
+twakeManagerLink: uid=eric.dubois,ou=users,dc=example,dc=com
+
+dn: ou=Backend,ou=Engineering,ou=organization,dc=example,dc=com
+objectClass: top
+objectClass: organizationalUnit
+objectClass: twakeDepartment
+ou: Backend
+twakeDepartmentPath: Engineering / Backend
+
+dn: ou=Frontend,ou=Engineering,ou=organization,dc=example,dc=com
+objectClass: top
+objectClass: organizationalUnit
+objectClass: twakeDepartment
+ou: Frontend
+twakeDepartmentPath: Engineering / Frontend
+
+dn: ou=Human Resources,ou=organization,dc=example,dc=com
+objectClass: top
+objectClass: organizationalUnit
+objectClass: twakeDepartment
+ou: Human Resources
+twakeDepartmentPath: Human Resources
+
+dn: ou=Transit,ou=organization,dc=example,dc=com
+objectClass: top
+objectClass: organizationalUnit
+objectClass: twakeDepartment
+ou: Transit
+description: Entries handed over between administrators
+twakeDepartmentPath: Transit
+
+# ------------------------------------------------------------------------------------- accounts
+dn: uid=admin,ou=users,dc=example,dc=com
+objectClass: top
+objectClass: twakeAccount
+objectClass: twakeWhitePages
+uid: admin
+employeeNumber: E0001
+cn: Ada Admin
+givenName: Ada
+sn: Admin
+displayName: Ada Admin
+mail: admin@example.com
+userPassword: secret
+title: cn=Administrator,ou=positions,dc=example,dc=com
+twakeDepartmentLink: ou=organization,dc=example,dc=com
+twakeDepartmentPath: organization
+twakeAccountStatus: cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+twakeDeliveryMode: cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+
+dn: uid=sophie.martin,ou=users,dc=example,dc=com
+objectClass: top
+objectClass: twakeAccount
+objectClass: twakeWhitePages
+uid: sophie.martin
+employeeNumber: E0002
+cn: Sophie Martin
+givenName: Sophie
+sn: Martin
+displayName: Sophie Martin
+mail: sophie.martin@example.com
+userPassword: secret
+personalTitle: cn=Ms,ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+title: cn=Sales Manager,ou=positions,dc=example,dc=com
+telephoneNumber: +33 1 23 45 67 01
+l: Paris
+twakeDepartmentLink: ou=Sales,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Sales
+twakeAccountStatus: cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+twakeDeliveryMode: cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+
+dn: uid=eric.dubois,ou=users,dc=example,dc=com
+objectClass: top
+objectClass: twakeAccount
+objectClass: twakeWhitePages
+uid: eric.dubois
+employeeNumber: E0003
+cn: Eric Dubois
+givenName: Eric
+sn: Dubois
+displayName: Eric Dubois
+mail: eric.dubois@example.com
+userPassword: secret
+personalTitle: cn=Mr,ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+title: cn=Engineering Manager,ou=positions,dc=example,dc=com
+twakeDepartmentLink: ou=Engineering,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Engineering
+twakeAccountStatus: cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+twakeDeliveryMode: cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+
+dn: uid=alice,ou=users,dc=example,dc=com
+objectClass: top
+objectClass: twakeAccount
+objectClass: twakeWhitePages
+uid: alice
+employeeNumber: E0010
+cn: Alice Moreau
+givenName: Alice
+sn: Moreau
+displayName: Alice Moreau
+mail: alice@example.com
+mailAlternateAddress: alice.moreau@example.com
+userPassword: secret
+personalTitle: cn=Mrs,ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+title: cn=Sales Representative,ou=positions,dc=example,dc=com
+mobile: +33 6 12 34 56 78
+l: Lyon
+mailQuotaSize: 1073741824
+twakeDepartmentLink: ou=France,ou=Sales,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Sales / France
+twakeAccountStatus: cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+twakeDeliveryMode: cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+
+dn: uid=bob,ou=users,dc=example,dc=com
+objectClass: top
+objectClass: twakeAccount
+objectClass: twakeWhitePages
+uid: bob
+employeeNumber: E0011
+cn: Bob Schneider
+givenName: Bob
+sn: Schneider
+displayName: Bob Schneider
+mail: bob@example.com
+userPassword: secret
+personalTitle: cn=Mr,ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+title: cn=Sales Representative,ou=positions,dc=example,dc=com
+l: Berlin
+twakeDepartmentLink: ou=Germany,ou=Sales,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Sales / Germany
+twakeAccountStatus: cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+twakeDeliveryMode: cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+twakeDelegatedUsers: uid=alice,ou=users,dc=example,dc=com
+
+dn: uid=carol,ou=users,dc=example,dc=com
+objectClass: top
+objectClass: twakeAccount
+objectClass: twakeWhitePages
+uid: carol
+employeeNumber: E0020
+cn: Carol Nguyen
+givenName: Carol
+sn: Nguyen
+displayName: Carol Nguyen
+mail: carol@example.com
+userPassword: secret
+personalTitle: cn=Dr,ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+title: cn=Software Engineer,ou=positions,dc=example,dc=com
+twakeDepartmentLink: ou=Backend,ou=Engineering,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Engineering / Backend
+twakeAccountStatus: cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+twakeDeliveryMode: cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+
+dn: uid=dave,ou=users,dc=example,dc=com
+objectClass: top
+objectClass: twakeAccount
+objectClass: twakeWhitePages
+uid: dave
+employeeNumber: E0021
+cn: Dave Okafor
+givenName: Dave
+sn: Okafor
+displayName: Dave Okafor
+mail: dave@example.com
+userPassword: secret
+title: cn=Software Engineer,ou=positions,dc=example,dc=com
+twakeDepartmentLink: ou=Frontend,ou=Engineering,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Engineering / Frontend
+twakeAccountStatus: cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+twakeDeliveryMode: cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+
+dn: uid=frank,ou=users,dc=example,dc=com
+objectClass: top
+objectClass: twakeAccount
+objectClass: twakeWhitePages
+uid: frank
+employeeNumber: E0022
+cn: Frank Leroy
+givenName: Frank
+sn: Leroy
+displayName: Frank Leroy
+mail: frank@example.com
+userPassword: secret
+title: cn=Software Engineer,ou=positions,dc=example,dc=com
+twakeDepartmentLink: ou=Backend,ou=Engineering,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Engineering / Backend
+twakeAccountStatus: cn=disabled,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+twakeDeliveryMode: cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+
+dn: uid=erin,ou=users,dc=example,dc=com
+objectClass: top
+objectClass: twakeAccount
+objectClass: twakeWhitePages
+uid: erin
+employeeNumber: E0030
+cn: Erin Walsh
+givenName: Erin
+sn: Walsh
+displayName: Erin Walsh
+mail: erin@example.com
+userPassword: secret
+personalTitle: cn=Ms,ou=twakeTitle,ou=nomenclature,dc=example,dc=com
+title: cn=HR Officer,ou=positions,dc=example,dc=com
+twakeDepartmentLink: ou=Human Resources,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Human Resources
+twakeAccountStatus: cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+twakeDeliveryMode: cn=forward,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+
+dn: uid=grace,ou=users,dc=example,dc=com
+objectClass: top
+objectClass: twakeAccount
+objectClass: twakeWhitePages
+uid: grace
+employeeNumber: E0040
+cn: Grace Kim
+givenName: Grace
+sn: Kim
+displayName: Grace Kim
+mail: grace@example.com
+userPassword: secret
+title: cn=Software Engineer,ou=positions,dc=example,dc=com
+twakeDepartmentLink: ou=Transit,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Transit
+twakeAccountStatus: cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com
+twakeDeliveryMode: cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com
+
+# --------------------------------------------------------------------------------------- groups
+dn: cn=all-staff,ou=groups,dc=example,dc=com
+objectClass: top
+objectClass: groupOfNames
+objectClass: twakeStaticGroup
+cn: all-staff
+description: Everyone at Example Corp
+mail: all-staff@lists.example.com
+twakeMailboxType: cn=mailingList,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com
+businessCategory: cn=memberRestrictedList,ou=twakeListType,ou=nomenclature,dc=example,dc=com
+twakeDepartmentLink: ou=organization,dc=example,dc=com
+twakeDepartmentPath: organization
+owner: uid=admin,ou=users,dc=example,dc=com
+member: uid=admin,ou=users,dc=example,dc=com
+member: uid=sophie.martin,ou=users,dc=example,dc=com
+member: uid=eric.dubois,ou=users,dc=example,dc=com
+member: uid=alice,ou=users,dc=example,dc=com
+member: uid=bob,ou=users,dc=example,dc=com
+member: uid=carol,ou=users,dc=example,dc=com
+member: uid=dave,ou=users,dc=example,dc=com
+member: uid=erin,ou=users,dc=example,dc=com
+
+dn: cn=sales-team,ou=groups,dc=example,dc=com
+objectClass: top
+objectClass: groupOfNames
+objectClass: twakeStaticGroup
+cn: sales-team
+description: The sales force
+mail: sales@example.com
+twakeMailboxType: cn=teamMailbox,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com
+twakeDepartmentLink: ou=Sales,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Sales
+owner: uid=sophie.martin,ou=users,dc=example,dc=com
+member: uid=sophie.martin,ou=users,dc=example,dc=com
+member: uid=alice,ou=users,dc=example,dc=com
+member: uid=bob,ou=users,dc=example,dc=com
+
+dn: cn=engineering,ou=groups,dc=example,dc=com
+objectClass: top
+objectClass: groupOfNames
+objectClass: twakeStaticGroup
+cn: engineering
+description: Engineering mailing list
+mail: engineering@lists.example.com
+twakeMailboxType: cn=mailingList,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com
+businessCategory: cn=openList,ou=twakeListType,ou=nomenclature,dc=example,dc=com
+twakeDepartmentLink: ou=Engineering,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Engineering
+owner: uid=eric.dubois,ou=users,dc=example,dc=com
+member: uid=eric.dubois,ou=users,dc=example,dc=com
+member: uid=carol,ou=users,dc=example,dc=com
+member: uid=dave,ou=users,dc=example,dc=com
+member: uid=frank,ou=users,dc=example,dc=com
+
+dn: cn=backend-guild,ou=groups,dc=example,dc=com
+objectClass: top
+objectClass: groupOfNames
+objectClass: twakeStaticGroup
+cn: backend-guild
+description: Backend developers
+twakeMailboxType: cn=group,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com
+twakeDepartmentLink: ou=Backend,ou=Engineering,ou=organization,dc=example,dc=com
+twakeDepartmentPath: Engineering / Backend
+member: uid=carol,ou=users,dc=example,dc=com
+member: uid=frank,ou=users,dc=example,dc=com
