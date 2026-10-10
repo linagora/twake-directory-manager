@@ -61,8 +61,7 @@ With the default Twake schemas:
    * - :guilabel:`Deletion date`
      - The date the account is due to be deleted; not earlier than today.
    * - *Mailbox Settings* section: :guilabel:`Other mailboxes`,
-       :guilabel:`Mail quota`, :guilabel:`Mailbox size`,
-       :guilabel:`Delegates`
+       :guilabel:`Mailbox size`, :guilabel:`Delegates`
      - Mailbox settings. The size is written like ``5GB`` or ``500MB``.
        Delegates are accounts allowed into the mailbox.
 

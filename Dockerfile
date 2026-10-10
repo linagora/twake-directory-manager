@@ -6,7 +6,7 @@
 #
 # The console needs an ldap-rest recent enough to serve the enterprise
 # plugins (enterpriseRules, accountLifecycle, authzScope).
-ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.16.2
+ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.17.0
 
 # The console builds to JavaScript and CSS, which are the same whatever the
 # target architecture, so this stage runs natively. Left to follow the target
@@ -50,9 +50,10 @@ ENV DM_CONSOLE_PLUGINS=core/static,core/configApi,core/ldap/groups,core/ldap/org
  DM_ORGANIZATION_SCHEMA=/app/node_modules/ldap-rest/static/schemas/twake/organizations.json
 
 # The quota the Twake Mail plugin (twake/james, through DM_EXTRA_PLUGINS)
-# pushes. ldap-rest defaults it to mailQuota, which the Twake schemas keep as
-# a message count, while the console sets the size in mailQuotaSize: left
-# alone, no quota set in the console ever reached Twake Mail.
+# pushes: the size the console sets, mailQuotaSize. ldap-rest defaults to it
+# since 0.17.0; set here all the same, so an image built on an older
+# ldap-rest (LDAP_REST_IMAGE) does not fall back to mailQuota, which the
+# Twake schemas do not define.
 ENV DM_QUOTA_ATTRIBUTE=mailQuotaSize
 
 EXPOSE 8081
