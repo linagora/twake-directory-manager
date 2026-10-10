@@ -363,7 +363,182 @@ const fr: Catalogue = {
   'create.done': 'Créé',
 };
 
-const catalogues: Record<string, Catalogue> = { en, fr };
+const mn: Catalogue = {
+  'app.title': 'Twake Directory Manager',
+  'app.loading': 'Ачаалж байна…',
+  'app.error': 'Алдаа гарлаа',
+  'app.retry': 'Дахин оролдох',
+  'app.close': 'Хаах',
+  'app.cancel': 'Цуцлах',
+  'app.save': 'Хадгалах',
+  'app.create': 'Үүсгэх',
+  'app.edit': 'Засах',
+  'app.delete': 'Устгах',
+  'app.confirm': 'Батлах',
+  'app.back': 'Буцах',
+  'app.language': 'Хэл',
+  'app.logout': 'Гарах',
+
+  'nav.dashboard': 'Тойм',
+  'nav.reference': 'Лавлах өгөгдөл',
+
+  'scope.title': 'Таны удирддаг хэсэг',
+  'scope.none': 'Та ямар ч салбар удирдахгүй',
+  'scope.unrestricted': 'Хязгааргүй эрх',
+  'scope.undescribed':
+    'Таны эрхийг сервер тодорхойлоогүй — үйлдэл бүрийг сервер шалгана',
+  'scope.unavailable':
+    'Таны эрхийг уншиж чадсангүй ({error}) — уншигдах хүртэл зөвхөн унших горимд',
+  'scope.read': 'унших',
+  'scope.write': 'бичих',
+  'scope.delete': 'устгах',
+
+  'dashboard.welcome': '{user} нэвтэрсэн',
+  'dashboard.entities': 'Таны удирдах боломжтой зүйлс',
+  'dashboard.create': 'Шинэ {entity}',
+  'dashboard.noCreate': 'Энд үүсгэх эрхгүй',
+
+  'list.open': 'Нээх',
+  'list.listEverything': 'Хайлтгүйгээр жагсаах',
+  'list.search': 'Хайх',
+  'list.searchIn': 'хаана:',
+  'list.searchAnywhere': 'Бүх талбар',
+  'list.searchGuard': 'Хайхын тулд дор хаяж {count} тэмдэгт оруулна уу',
+  'list.empty': 'Харуулах зүйл алга',
+  'list.noMatch': 'Энэ хайлтад тохирох бичлэг алга',
+  'list.truncated':
+    'Зөвхөн {count} бичлэг харагдаж байна; бусад нь бас бий. Тэдгээрийг олохын тулд хайна уу.',
+  'list.tooMany':
+    'Бүгдийг харуулахад хэт олон бичлэг байна: хайлтаа нарийсгана уу.',
+  'list.failed':
+    'Жагсаалтыг ачаалж чадсангүй. Лавлахад олон бичлэг байгаа бол хайлтаа нарийсгана уу.',
+  'list.count': '{total}-с {from}–{to}',
+  'list.perPage': 'Хуудсанд',
+  'list.previous': 'Өмнөх',
+  'list.next': 'Дараах',
+  'list.selected': '{count} сонгосон',
+  'list.export': 'Сонгосныг экспортлох',
+  'list.deleteSelected': 'Сонгосныг устгах',
+  'list.selectAll': 'Энэ хуудасны бүх мөрийг сонгох',
+  'list.selectRow': 'Энэ мөрийг сонгох',
+
+  'detail.attributes': 'Дэлгэрэнгүй',
+  'detail.relations': 'Холбоотой бичлэгүүд',
+  'detail.members': 'Хавсаргасан бичлэгүүд',
+  'detail.emptyRelations': 'Холбоотой бичлэг алга',
+  'detail.actions': 'Үйлдлүүд',
+  'detail.notFound': 'Энэ бичлэг байхгүй болсон',
+
+  'form.required': '* тэмдэгтэй талбарыг заавал бөглөнө',
+  'form.addValue': 'Утга нэмэхийн тулд Enter дарна уу',
+  'form.removeValue': 'Энэ утгыг хасах',
+  'form.none': '—',
+  'form.choose': 'Сонгох…',
+  'form.searchPointer': 'Хайхын тулд {count} тэмдэгт оруулна уу',
+  'form.searching': 'Хайж байна…',
+  'form.true': 'Тийм',
+  'form.false': 'Үгүй',
+  'import.open': 'CSV импортлох',
+  'import.title': '{entities} импортлох',
+  'import.intro':
+    'Хүснэгтийн программын хадгалсан CSV файлаас олон бичлэгийг нэг дор үүсгэнэ. Мөр бүр юу хийхийг харахаас өмнө юу ч бичигдэхгүй.',
+  'import.noteHeader':
+    'Эхний мөр баганын нэрсийг агуулна. Баганыг нэрээр нь талбартай тааруулна; шалгахаас өмнө тааруулалтыг өөрчилж болно.',
+  'import.noteMulti':
+    'Олон утга авдаг талбарын утгуудыг нэг нүдэнд | тэмдэгтээр тусгаарлан бичнэ.',
+  'import.noteReference':
+    'Хэлтэс, албан тушаал, цолыг маягт дээр харагддагаар нь бичнэ: нэрээр нь, эсвэл хэлтсийн бүтэн замаар.',
+  'import.choose': 'CSV файл сонгох',
+  'import.chooseHint': 'Таслал, цэг таслал эсвэл табаар тусгаарласан',
+  'import.template': 'Хоосон файл татах',
+  'import.templateSuffix': 'загвар',
+  'import.emptyFile': 'Энэ файлд импортлох мөр алга.',
+  'import.read': '{file} файлаас {count} мөр уншлаа',
+  'import.mappingHelp':
+    'Багана бүр аль талбарыг бөглөхийг шалгана уу. «Алгасах» гэж тохируулсан багана импортлогдохгүй.',
+  'import.column': 'Багана',
+  'import.example': 'Эхний мөр',
+  'import.attribute': 'Талбар',
+  'import.ignore': 'Алгасах',
+  'import.unmapped':
+    'Эдгээр заавал бөглөх талбарыг ямар ч багана бөглөхгүй: {fields}',
+  'import.twice': 'Нэг талбарыг хэд хэдэн багана бөглөж байна: {fields}',
+  'import.otherFile': 'Өөр файл сонгох',
+  'import.check': 'Мөрүүдийг шалгах',
+  'import.checking': 'Мөрүүдийг шалгаж байна…',
+  'import.ready': 'импортлоход бэлэн',
+  'import.invalid': 'алдаатай, импортлохгүй',
+  'import.invalidHelp':
+    'Эдгээр мөрийг орхино. Тэдгээрийг татаж, засаад дахин импортлоно уу.',
+  'import.allValid': 'Бүх мөр шалгалтад тэнцлээ.',
+  'import.serverRules':
+    'Сервер бичлэг бүрийг үүсгэхдээ дахин шалгаж — жишээ нь аль хэдийн ашиглагдаж буй хаяг — шаардлагатай бол татгалзана.',
+  'import.downloadInvalid': 'Алдаатай мөрүүдийг татах',
+  'import.run': '{count} бичлэг импортлох',
+  'import.line': 'Мөр',
+  'import.problem': 'Асуудал',
+  'import.more': 'Өөр {count} нь татах файлд байна.',
+  'import.rejectedSuffix': 'татгалзсан',
+  'import.progress': '{total}-с {done} бичлэг боловсруулсан',
+  'import.progressDetail': '{created} үүсгэсэн, {failed} татгалзсан',
+  'import.stop': 'Зогсоох',
+  'import.stopping': 'Зогсоож байна…',
+  'import.created': 'үүсгэсэн',
+  'import.refused': 'сервер татгалзсан',
+  'import.notSent': 'илгээгээгүй, импортыг зогсоосон',
+  'import.downloadRefused': 'Татгалзсан мөрүүдийг татах',
+  'import.ambiguous': '{field}: «{value}» хэд хэдэн бичлэгт тохирч байна',
+  'import.notFound': '{field}: «{value}» олдсонгүй',
+  'import.undecided':
+    '{field}: «{value}» нь танигч биш бөгөөд үүнийг агуулсан бичлэг хэт олон тул өөр бичлэгийг үгүйсгэх боломжгүй: шалгана уу, эсвэл DN ашиглана уу',
+  'import.notBoolean': '{field}: «{value}» нь тийм ч биш, үгүй ч биш',
+  'import.notDate': '{field}: «{value}» нь огноо биш',
+  'import.missing': '{field} заавал бөглөнө',
+  'import.duplicate': '{field}: «{value}» {line}-р мөрөнд аль хэдийн байна',
+
+  'tree.title': 'Байгууллагууд',
+  'tree.filter': 'Шүүх',
+  'tree.empty': 'Байгууллага сонгоно уу',
+  'tree.addChild': 'Энд шинэ байгууллага',
+
+  'status.title': 'Бүртгэлийн төлөв',
+  'status.change': 'Төлөв өөрчлөх',
+  'status.changed': 'Төлөвийг {state} болгож өөрчиллөө',
+  'state.enabled': 'Идэвхтэй',
+  'state.disabled': 'Идэвхгүй',
+  'state.noAccess': 'Хандах эрхгүй',
+  'state.toDelete': 'Устгах',
+
+  'password.title': 'Нууц үг шинэчлэх',
+  'password.generate': 'Нууц үг үүсгэх',
+  'password.choose': 'Нууц үг тохируулах',
+  'password.forceChange': 'Дараагийн нэвтрэлтэд солихыг шаардах',
+  'password.generated':
+    'Шинэ нууц үг: {password} — одоо хуулж авна уу, дахин харагдахгүй',
+  'password.set': 'Нууц үг солигдлоо',
+
+  'delete.confirm': '{name}-г устгах уу? Үүнийг буцаах боломжгүй.',
+  'delete.confirmMany': '{count} бичлэг устгах уу? Үүнийг буцаах боломжгүй.',
+  'delete.done': 'Устгагдлаа',
+  'delete.failed': '{name}: {error}',
+
+  'transit.branch': 'Дамжуулалт',
+  'transit.badge': 'Дамжуулалтад',
+  'transit.claim': 'Авах…',
+  'transit.claimTitle': '{name}-г авах',
+  'transit.target': 'Байгууллага руу',
+  'transit.noTarget': 'Үүнийг хүлээн авах байгууллагад танд бичих эрх алга',
+  'transit.claimed': '{name}-г {organization} руу шилжүүллээ',
+  'transit.handOver': 'Шилжүүлэх',
+  'transit.handOverConfirm':
+    '{name}-г дамжуулалтад оруулах уу? Бүх админ энэ бичлэгийг харж, авах боломжтой болох бөгөөд та үүнийг цаашид удирдахгүй.',
+  'transit.handedOver': '{name} дамжуулалтад байна',
+
+  'save.done': 'Хадгалагдлаа',
+  'create.done': 'Үүсгэгдлээ',
+};
+
+const catalogues: Record<string, Catalogue> = { en, fr, mn };
 
 /** Languages the console ships with. */
 export const availableLanguages = Object.keys(catalogues);

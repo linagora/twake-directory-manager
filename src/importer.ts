@@ -369,8 +369,8 @@ export async function lookupResolver(
   return (value: string) => answers.get(value) ?? {};
 }
 
-const TRUE_WORDS = ['true', 'yes', 'y', '1', 'oui', 'o', 'vrai'];
-const FALSE_WORDS = ['false', 'no', 'n', '0', 'non', 'faux'];
+const TRUE_WORDS = ['true', 'yes', 'y', '1', 'oui', 'o', 'vrai', 'тийм'];
+const FALSE_WORDS = ['false', 'no', 'n', '0', 'non', 'faux', 'үгүй'];
 
 /**
  * A date as the directory stores it, from the ways a spreadsheet writes one:
