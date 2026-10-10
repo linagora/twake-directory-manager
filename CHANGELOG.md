@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.4.9 (2026-10-10)
+
+Built on ldap-rest 0.17.1.
+
+### Bug Fixes
+
+- A mail change now renames the Twake Mail account (mailboxes, quota,
+  aliases) even when Twake Mail's directory replica lags behind
+- Deleting a user keeps their Twake Mail data
+- Opening a unit that no longer exists answers "not found" instead of a
+  server error
+
 ## v0.4.8 (2026-10-10)
 
 ### Bug Fixes
