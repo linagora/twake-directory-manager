@@ -14,6 +14,7 @@ import { toTitleCase } from './shared/dom';
 
 import type {
   EntityDescriptor,
+  EntitySchema,
   Entry,
   LocalizedText,
   SchemaAttribute,
@@ -170,6 +171,22 @@ export function formatByteSize(value: string): string {
 }
 
 /**
+ * Read a size the way the server's `parseByteSize` does — `4GB`, `500 MB`,
+ * `2048` or `2048B`, in any case — so that the form refuses before sending
+ * what the server would refuse after.
+ *
+ * @param value value as typed
+ * @returns the size in bytes, or undefined when it is no size
+ */
+export function parseByteSize(value: string): number | undefined {
+  const match = /^(\d+(?:\.\d+)?)\s*(B|KB|MB|GB|TB)?$/i.exec(value.trim());
+  if (!match) return undefined;
+  const unit = (match[2] || 'B').toUpperCase();
+  const size = SIZE_UNITS.find(([name]) => name === unit)?.[1] ?? 1;
+  return Math.round(parseFloat(match[1]) * size);
+}
+
+/**
  * A directory date as a reader writes it.
  *
  * The directory stores a date as a GeneralizedTime, `20310115000000Z`, which
@@ -193,6 +210,62 @@ export function formatDate(value: string, language: string): string {
     dateStyle: 'long',
     timeZone: 'UTC',
   }).format(date);
+}
+
+/**
+ * Whether a directory date falls before today, as the server judges an
+ * expiry: by the day in UTC, the time zone the directory writes its dates in,
+ * so that a date set for today passes.
+ *
+ * @param value value as stored, `20310115000000Z` or `2031-01-15`
+ * @param now the present
+ * @returns true when the day has passed; false for what is no date
+ */
+export function beforeToday(value: string, now: Date = new Date()): boolean {
+  const match = /^(\d{4})-?(\d{2})-?(\d{2})/.exec(value.trim());
+  if (!match) return false;
+  const [year, month, day] = match.slice(1).map(Number);
+  return (
+    Date.UTC(year, month - 1, day) <
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
+}
+
+/**
+ * A server refusal in the words of the form.
+ *
+ * The server names an attribute the way the directory spells it —
+ * `Attribute "twakeDeletionDate" must not be earlier than today` — where the
+ * operator only ever saw its label. A name the schema knows, quoted or
+ * following the word "field", is replaced by its label; the rest of the
+ * message is the server's own.
+ *
+ * @param message what the server answered
+ * @param schema schema of the entry it refused
+ * @param language interface language
+ * @returns the message, naming fields by their labels
+ */
+export function nameAttributes(
+  message: string,
+  schema: EntitySchema,
+  language: string
+): string {
+  const labelOf = (name: string): string | undefined => {
+    const key = Object.keys(schema.attributes).find(
+      candidate => candidate.toLowerCase() === name.toLowerCase()
+    );
+    return key === undefined
+      ? undefined
+      : attributeLabel(key, schema.attributes[key], language);
+  };
+  return message.replace(
+    /"([a-z][\w-]*)"|\b(field) ([a-z][\w-]*)/gi,
+    (match, quoted?: string, word?: string, bare?: string) => {
+      const label = labelOf(quoted ?? bare ?? '');
+      if (label === undefined) return match;
+      return quoted === undefined ? `${word} "${label}"` : `"${label}"`;
+    }
+  );
 }
 
 /**

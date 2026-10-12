@@ -40,7 +40,12 @@ import {
 } from '../src/components/EntityList';
 import { OrganizationTree } from '../src/components/OrganizationTree';
 import { availableLanguages, Translator } from '../src/i18n';
-import { formatByteSize } from '../src/format';
+import {
+  beforeToday,
+  formatByteSize,
+  nameAttributes,
+  parseByteSize,
+} from '../src/format';
 import type {
   EntityDescriptor,
   EntitySchema,
@@ -682,6 +687,33 @@ describe('Directory console', () => {
         .to.contain('prête à importer<')
         .and.contain('en erreur, non importée<')
         .and.contain('Importer 1 entrée<');
+    });
+
+    it('should name a field the server refused on import by its label', async () => {
+      const importer = new EntityImport({
+        entity: users,
+        translator: new Translator('fr'),
+        pointerOptions: () => Promise.resolve([]),
+        create: () =>
+          Promise.reject(new Error('Attribute "cn" must not be empty')),
+        onDone: () => undefined,
+        onClose: () => undefined,
+      });
+      const state = importer as unknown as {
+        rows: {
+          line: number;
+          cells: string[];
+          values: object;
+          errors: string[];
+        }[];
+        failures: { message: string }[];
+        run(): Promise<void>;
+      };
+      state.rows = [{ line: 2, cells: [], values: {}, errors: [] }];
+      await state.run();
+      expect(state.failures.map(failure => failure.message)).to.deep.equal([
+        'Attribute "Nom" must not be empty',
+      ]);
     });
 
     it('should translate every key of every catalogue', () => {
@@ -2864,6 +2896,68 @@ describe('Directory console', () => {
     });
   });
 
+  describe('server rules', () => {
+    it('should read a size as the server does', () => {
+      expect(parseByteSize('4GB')).to.equal(4e9);
+      expect(parseByteSize('500 mb')).to.equal(5e8);
+      expect(parseByteSize('1.5 MB')).to.equal(1500000);
+      expect(parseByteSize('2048')).to.equal(2048);
+      expect(parseByteSize('2048B')).to.equal(2048);
+      expect(parseByteSize('lots')).to.equal(undefined);
+      expect(parseByteSize('4 GiB')).to.equal(undefined);
+      // What the form shows a stored size as is a size the server reads back.
+      expect(parseByteSize(formatByteSize('2000000000'))).to.equal(2e9);
+    });
+
+    it('should judge a date by the day in UTC, today passing', () => {
+      const now = new Date(Date.UTC(2026, 9, 12, 23, 30));
+      expect(beforeToday('20261011000000Z', now)).to.equal(true);
+      expect(beforeToday('20261012000000Z', now)).to.equal(false);
+      expect(beforeToday('2026-10-13', now)).to.equal(false);
+      expect(beforeToday('soon', now)).to.equal(false);
+    });
+
+    it('should name a refused attribute by its label', () => {
+      // The server's refusal named `twakeDeletionDate`, which the operator
+      // had only ever seen as "Deletion date".
+      const schema: EntitySchema = {
+        attributes: {
+          twakeDeletionDate: {
+            type: 'date',
+            label: { en: 'Deletion date', fr: 'Date de suppression' },
+          },
+          mailQuotaSize: { type: 'number', label: { en: 'Mailbox size' } },
+          owner: { type: 'array', label: { en: 'Owners' } },
+        },
+      };
+      expect(
+        nameAttributes(
+          'Attribute "twakeDeletionDate" must not be earlier than today',
+          schema,
+          'fr'
+        )
+      ).to.equal(
+        'Attribute "Date de suppression" must not be earlier than today'
+      );
+      expect(
+        nameAttributes(
+          'Invalid value for attribute "mailquotasize": Expected pattern xGB',
+          schema,
+          'en'
+        )
+      ).to.equal(
+        'Invalid value for attribute "Mailbox size": Expected pattern xGB'
+      );
+      expect(
+        nameAttributes('Invalid value for field owner', schema, 'en')
+      ).to.equal('Invalid value for field "Owners"');
+      // What the schema does not know is the server's own word.
+      expect(
+        nameAttributes('Entry "jsmith" already exists', schema, 'en')
+      ).to.equal('Entry "jsmith" already exists');
+    });
+  });
+
   describe('EntityForm', () => {
     const build = (entry?: Record<string, string | string[]>): EntityForm =>
       new EntityForm({
@@ -2874,6 +2968,79 @@ describe('Directory console', () => {
         onSubmit: () => Promise.resolve(),
         onCancel: () => undefined,
       });
+
+    it('should refuse a size and a past expiry before sending, both at once', async () => {
+      // Neither carries a pattern: their rules are the server's, which
+      // refused them one per round trip, in a toast away from the field.
+      const lifecycle: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            mailQuotaSize: {
+              type: 'number',
+              normalize: 'byteSize',
+              hint: 'Expected pattern xGB, xMB, xKB or a number of bytes',
+            },
+            twakeDeletionDate: { type: 'date', role: 'accountExpiry' },
+          },
+        },
+      };
+      const now = new Date();
+      const today = `${now.getUTCFullYear()}${String(
+        now.getUTCMonth() + 1
+      ).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}000000Z`;
+      const filled = {
+        cn: 'Va Val',
+        mail: 'va.val@example.com',
+        twakeDepartmentLink: 'ou=HR,dc=example,dc=com',
+      };
+      let sent = 0;
+      const form = (entry?: Entry) =>
+        new EntityForm({
+          entity: lifecycle,
+          entry,
+          translator: new Translator('en'),
+          pointerOptions: () => Promise.resolve([]),
+          onSubmit: () => {
+            sent++;
+            return Promise.resolve();
+          },
+          onCancel: () => undefined,
+        }) as unknown as {
+          values: Record<string, string[]>;
+          errors: Record<string, string>;
+          submit(): Promise<void>;
+        };
+
+      const created = form();
+      for (const [name, value] of Object.entries(filled))
+        created.values[name] = [value];
+      created.values.mailQuotaSize = ['lots'];
+      created.values.twakeDeletionDate = ['20201008000000Z'];
+      await created.submit();
+      expect(sent).to.equal(0);
+      expect(created.errors).to.deep.equal({
+        mailQuotaSize: 'Expected pattern xGB, xMB, xKB or a number of bytes',
+        twakeDeletionDate: 'Expected a date not earlier than today',
+      });
+
+      created.values.mailQuotaSize = ['4 GB'];
+      created.values.twakeDeletionDate = [today];
+      await created.submit();
+      expect(created.errors).to.deep.equal({});
+      expect(sent).to.equal(1);
+
+      // A date already stored is not sent back, and not judged again.
+      const edited = form({
+        uid: 'va.val',
+        ...filled,
+        twakeDeletionDate: '20201008000000Z',
+      });
+      await edited.submit();
+      expect(edited.errors).to.deep.equal({});
+      expect(sent).to.equal(2);
+    });
 
     it('should offer a search, not a select, for a pointer into a large branch', async () => {
       const delegates = {

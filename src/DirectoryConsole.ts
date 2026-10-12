@@ -27,6 +27,7 @@ import {
   attributeLabel,
   comparableDn,
   entryValue,
+  nameAttributes,
   pointerLabel,
   rdnValue,
   resolveText,
@@ -1305,7 +1306,7 @@ export class DirectoryConsole {
             );
           }
         } catch (err) {
-          this.toast((err as Error).message, true);
+          this.toast(this.refusal(err, entity), true);
         }
       },
     });
@@ -1371,7 +1372,7 @@ export class DirectoryConsole {
           this.tree?.invalidate();
           await this.renderMain();
         } catch (err) {
-          this.toast((err as Error).message, true);
+          this.toast(this.refusal(err, entity), true);
         }
       },
     });
@@ -1384,6 +1385,15 @@ export class DirectoryConsole {
         void form.render(body);
       },
       !form.wantsPanel
+    );
+  }
+
+  /** A refused save, naming the fields the way the form does. */
+  private refusal(err: unknown, entity: EntityDescriptor): string {
+    return nameAttributes(
+      (err as Error).message,
+      entity.schema,
+      this.translator.language
     );
   }
 

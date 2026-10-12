@@ -17,9 +17,11 @@
 import { escapeHtml } from '../shared/dom';
 import {
   attributeLabel,
+  beforeToday,
   entryValue,
   formatByteSize,
   isDnShaped,
+  parseByteSize,
   rdnValue,
 } from '../format';
 import { hasRole, tooBroad } from '../api/ConsoleApiClient';
@@ -880,6 +882,11 @@ export class EntityForm {
         this.errors[name] = this.options.translator.t('form.required');
         continue;
       }
+      const refused = this.ruleProblem(name, attr, list);
+      if (refused) {
+        this.errors[name] = refused;
+        continue;
+      }
       const pattern = attr.test || attr.items?.test;
       if (!pattern) continue;
       let regex: RegExp;
@@ -917,6 +924,37 @@ export class EntityForm {
           ?.scrollIntoView({ block: 'center' });
     }
     return Object.keys(this.errors).length === 0;
+  }
+
+  /**
+   * What the server's own rules refuse in a field, where the schema marks the
+   * rule rather than spelling it as a pattern: a size it normalizes, and an
+   * expiry, which may not be in the past. A date the entry already holds is
+   * not judged again: the form does not send it back, and the server judges
+   * only what it is sent.
+   *
+   * @param name attribute name
+   * @param attr its schema definition
+   * @param list its values
+   * @returns the message to show under the field, or undefined
+   */
+  private ruleProblem(
+    name: string,
+    attr: SchemaAttribute,
+    list: string[]
+  ): string | undefined {
+    const { translator, entry } = this.options;
+    if (
+      attr.normalize === 'byteSize' &&
+      list.some(value => parseByteSize(value) === undefined)
+    )
+      return attr.hint || translator.t('form.notSize');
+    if (hasRole(attr, 'accountExpiry')) {
+      const stored = toList(entryValue(entry, name));
+      if (list.some(value => !stored.includes(value) && beforeToday(value)))
+        return translator.t('form.pastDate');
+    }
+    return undefined;
   }
 
   /** `20240930220000Z` → `2024-09-30`, for an `input[type=date]`. */

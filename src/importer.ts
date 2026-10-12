@@ -11,7 +11,14 @@
  */
 
 import type { CsvTable } from './csv';
-import { attributeLabel, isDnShaped, rdnValue } from './format';
+import { hasRole } from './api/ConsoleApiClient';
+import {
+  attributeLabel,
+  beforeToday,
+  isDnShaped,
+  parseByteSize,
+  rdnValue,
+} from './format';
 import type { Translator } from './i18n';
 import type { EntityDescriptor, LocalizedText, SchemaAttribute } from './types';
 
@@ -480,8 +487,30 @@ export function prepareRows(
           );
           continue;
         }
+        // The server refuses an expiry already past, as the form does.
+        if (hasRole(attr, 'accountExpiry') && beforeToday(date)) {
+          refused.add(name);
+          errors.push(
+            translator.t('import.pastDate', { value: raw, field: label(name) })
+          );
+          continue;
+        }
         list = [date];
       } else {
+        const unsized =
+          attr.normalize === 'byteSize'
+            ? list.find(value => parseByteSize(value) === undefined)
+            : undefined;
+        if (unsized !== undefined) {
+          refused.add(name);
+          errors.push(
+            translator.t('import.notSize', {
+              value: unsized,
+              field: label(name),
+            })
+          );
+          continue;
+        }
         const pattern = attr.test || attr.items?.test;
         if (pattern) {
           let regex: RegExp | undefined;

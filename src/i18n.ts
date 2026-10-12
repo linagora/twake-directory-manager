@@ -103,6 +103,9 @@ const en: Catalogue = {
     'Type {count} characters of an email address, or a full DN',
   'form.addDn': 'Press Enter to add this DN',
   'form.searching': 'Searching…',
+  'form.notSize':
+    'Expected a size such as 4 GB, 500 MB or 100 KB, or a number of bytes',
+  'form.pastDate': 'Expected a date not earlier than today',
   'form.true': 'Yes',
   'form.false': 'No',
   'import.open': 'Import CSV',
@@ -162,6 +165,8 @@ const en: Catalogue = {
     '{field}: “{value}” is no identifier, and too many entries contain it to rule out another spelling: check it, or use a DN',
   'import.notBoolean': '{field}: “{value}” is neither yes nor no',
   'import.notDate': '{field}: “{value}” is not a date',
+  'import.pastDate': '{field}: “{value}” is earlier than today',
+  'import.notSize': '{field}: “{value}” is not a size, such as 4 GB',
   'import.missing': '{field} is required',
   'import.duplicate': '{field}: “{value}” is already on line {line}',
 
@@ -303,6 +308,9 @@ const fr: Catalogue = {
     'Tapez {count} caractères d’une adresse électronique, ou un DN complet',
   'form.addDn': 'Appuyez sur Entrée pour ajouter ce DN',
   'form.searching': 'Recherche…',
+  'form.notSize':
+    'Attendu : une taille telle que 4 GB, 500 MB ou 100 KB, ou un nombre d’octets',
+  'form.pastDate': 'Attendu : aujourd’hui ou une date ultérieure',
   'form.true': 'Oui',
   'form.false': 'Non',
   'import.open': 'Importer un CSV',
@@ -370,6 +378,9 @@ const fr: Catalogue = {
     '{field} : « {value} » n’est pas un identifiant, et trop d’entrées le contiennent pour exclure une autre écriture : vérifiez-le, ou utilisez un DN',
   'import.notBoolean': '{field} : « {value} » n’est ni oui ni non',
   'import.notDate': '{field} : « {value} » n’est pas une date',
+  'import.pastDate': '{field} : « {value} » est antérieure à aujourd’hui',
+  'import.notSize':
+    '{field} : « {value} » n’est pas une taille, telle que 4 GB',
   'import.missing': '{field} est obligatoire',
   'import.duplicate': '{field} : « {value} » figure déjà ligne {line}',
 
@@ -503,6 +514,9 @@ const mn: Catalogue = {
     'И-мэйл хаягийн {count} тэмдэгт, эсвэл бүтэн DN оруулна уу',
   'form.addDn': 'Энэ DN-ийг нэмэхийн тулд Enter дарна уу',
   'form.searching': 'Хайж байна…',
+  'form.notSize':
+    '4 GB, 500 MB, 100 KB гэх мэт хэмжээ, эсвэл байтын тоо оруулна уу',
+  'form.pastDate': 'Өнөөдөр эсвэл түүнээс хойшх огноо оруулна уу',
   'form.true': 'Тийм',
   'form.false': 'Үгүй',
   'import.open': 'CSV импортлох',
@@ -560,6 +574,8 @@ const mn: Catalogue = {
     '{field}: «{value}» нь танигч биш бөгөөд үүнийг агуулсан бичлэг хэт олон тул өөр бичлэгийг үгүйсгэх боломжгүй: шалгана уу, эсвэл DN ашиглана уу',
   'import.notBoolean': '{field}: «{value}» нь тийм ч биш, үгүй ч биш',
   'import.notDate': '{field}: «{value}» нь огноо биш',
+  'import.pastDate': '{field}: «{value}» нь өнөөдрөөс өмнөх огноо',
+  'import.notSize': '{field}: «{value}» нь 4 GB гэх мэт хэмжээ биш',
   'import.missing': '{field} заавал бөглөнө',
   'import.duplicate': '{field}: «{value}» {line}-р мөрөнд аль хэдийн байна',
 

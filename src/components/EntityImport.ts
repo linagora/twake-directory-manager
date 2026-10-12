@@ -11,7 +11,7 @@
  */
 
 import { parseCsv, writeCsv, type CsvTable } from '../csv';
-import { attributeLabel } from '../format';
+import { attributeLabel, nameAttributes } from '../format';
 import type { Translator } from '../i18n';
 import { tooBroad } from '../api/ConsoleApiClient';
 import {
@@ -477,7 +477,14 @@ export class EntityImport {
           await this.options.create(row.values);
           this.created++;
         } catch (err) {
-          this.failures.push({ row, message: (err as Error).message });
+          this.failures.push({
+            row,
+            message: nameAttributes(
+              (err as Error).message,
+              this.options.entity.schema,
+              this.options.translator.language
+            ),
+          });
         }
         this.processed++;
         this.updateProgress();
