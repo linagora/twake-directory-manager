@@ -86,6 +86,27 @@ export function roleAttribute(
 }
 
 /**
+ * Whether an entry found in an entity's branch is one of its entries: it
+ * holds every attribute the schema requires and the server returns.
+ *
+ * A branch may hold more than the entity's entries. A tree of mail domains
+ * keeps a `dc=com` above `dc=example,dc=com` to hang it from; it is no mail
+ * domain, has no `associatedDomain`, and a pointer must not land on it.
+ *
+ * @param entity the entity the branch belongs to
+ * @param entry an entry read from that branch
+ * @returns false when the entry lacks something the schema requires
+ */
+export function isEntryOf(entity: EntityDescriptor, entry: Entry): boolean {
+  return Object.entries(entity.schema.attributes).every(
+    ([name, attr]) =>
+      !attr.required ||
+      attr.neverReturn ||
+      toValues(entryValue(entry, name)).length > 0
+  );
+}
+
+/**
  * Whether a collection is too large to list unfiltered, or to offer whole in
  * a pointer's select.
  *
@@ -870,10 +891,12 @@ export class ConsoleApiClient {
     );
     if (owner) {
       const list = await this.list(owner);
-      const options = Object.entries(list).map(([id, entry]) => ({
-        id,
-        ...this.pointerOption(owner, id, entry, language),
-      }));
+      const options = Object.entries(list)
+        .filter(([, entry]) => isEntryOf(owner, entry))
+        .map(([id, entry]) => ({
+          id,
+          ...this.pointerOption(owner, id, entry, language),
+        }));
       // Two entries may go by the same name, which a select cannot tell
       // apart: their identifiers can.
       const seen = new Map<string, number>();
@@ -996,6 +1019,7 @@ export class ConsoleApiClient {
           if (status === 404 || status === 400) return undefined;
           throw err;
         }
+        if (!isEntryOf(owner, entry)) return undefined;
         const own = entryValue(entry, main);
         const key = (Array.isArray(own) ? own[0] : own) || rdnValue(id);
         return this.pointerOption(owner, key, entry, language);
@@ -1010,16 +1034,19 @@ export class ConsoleApiClient {
             main,
             POINTER_LOOKUP_LIMIT
           );
-          const options = Object.entries(entries).map(([id, entry]) =>
-            this.pointerOption(owner, id, entry, language)
-          );
+          const found = Object.entries(entries);
+          const options = found
+            .filter(([, entry]) => isEntryOf(owner, entry))
+            .map(([id, entry]) =>
+              this.pointerOption(owner, id, entry, language)
+            );
           return {
             options,
             // Across origins the header may not reach the page — ldap-rest
             // exposes none to CORS — so an answer exactly as long as asked
             // is taken as cut too. Exactly: ldap-rest 0.12.0 ignores the
             // bound, and an answer longer than it is a whole one.
-            truncated: truncated || options.length === POINTER_LOOKUP_LIMIT,
+            truncated: truncated || found.length === POINTER_LOOKUP_LIMIT,
           };
         } catch (err) {
           // Refused as too broad — ldap-rest 0.12.0 honours no bound — says

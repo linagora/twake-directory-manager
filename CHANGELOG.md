@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- A pointer's select, and the CSV import, offer only the entries its schema
+  describes: the DNS levels a tree of mail domains hangs from, `com` or
+  `lin-saas`, are no mail domains (#58)
+
 ## v0.5.0 (2026-10-12)
 
 Built on ldap-rest 0.18.0.

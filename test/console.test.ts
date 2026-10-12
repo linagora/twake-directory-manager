@@ -2573,6 +2573,65 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should offer only the entries of a branch that the schema describes', async () => {
+      // A tree of mail domains keeps DNS levels to hang them from: `dc=com`
+      // has no `associatedDomain`, and is no mail domain to link to (#58).
+      const domains: EntityDescriptor = {
+        key: 'domains',
+        pluralName: 'domains',
+        singularName: 'domain',
+        mainAttribute: 'dc',
+        base: 'ou=domains,ou=nomenclature,dc=example,dc=com',
+        schema: {
+          attributes: {
+            dc: { type: 'string', required: true, role: 'identifier' },
+            associatedDomain: {
+              type: 'string',
+              required: true,
+              role: ['domainName', 'displayName'],
+            },
+            userPassword: { type: 'string', required: true, neverReturn: true },
+          },
+        },
+        endpoint: '/api/v1/ldap/domains',
+        kind: 'flat',
+      };
+      const tree = {
+        com: { dn: `dc=com,${domains.base}`, dc: 'com' },
+        'lin-saas': {
+          dn: `dc=lin-saas,dc=com,${domains.base}`,
+          dc: 'lin-saas',
+        },
+        mongolie: {
+          dn: `dc=mongolie,dc=lin-saas,dc=com,${domains.base}`,
+          dc: 'mongolie',
+          associatedDomain: 'mongolie.lin-saas.com',
+        },
+      };
+      const client = new ConsoleApiClient(baseUrl);
+
+      nock(baseUrl).get('/api/v1/ldap/domains').reply(200, tree);
+      const options = await client.pointerOptions(domains.base as string, [
+        domains,
+      ]);
+      expect(options).to.deep.equal([
+        {
+          dn: `dc=mongolie,dc=lin-saas,dc=com,${domains.base}`,
+          label: 'mongolie.lin-saas.com',
+        },
+      ]);
+
+      // A CSV import finds them the same way.
+      const lookup = client.pointerLookup(domains.base as string, [domains])!;
+      nock(baseUrl).get('/api/v1/ldap/domains').query(true).reply(200, tree);
+      const found = await lookup.search('o');
+      expect(found.options.map(option => option.label)).to.deep.equal([
+        'mongolie.lin-saas.com',
+      ]);
+      nock(baseUrl).get('/api/v1/ldap/domains/com').reply(200, tree.com);
+      expect(await lookup.read('com')).to.equal(undefined);
+    });
+
     it('should name an entry by the attribute its schema calls its display name', async () => {
       // A mail domain is stored as `dc=example` and read as `example.org`.
       const domains: EntityDescriptor = {
