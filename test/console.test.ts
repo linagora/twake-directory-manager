@@ -2246,6 +2246,90 @@ describe('Directory console', () => {
       expect(csvCell('John Smith')).to.equal('John Smith');
       expect(csvCell('Smith, John')).to.equal('"Smith, John"');
     });
+
+    it('should show and clear the selection of a whole page from its header', async () => {
+      // Each repaint is a new set of boxes, as in a browser: only the
+      // listeners of the last one are live.
+      type Box = {
+        checked: boolean;
+        indeterminate: boolean;
+        dataset: Record<string, string>;
+        fire(): void;
+        addEventListener(type: string, handler: (event: unknown) => void): void;
+      };
+      const box = (id?: string): Box => {
+        let handler: ((event: unknown) => void) | undefined;
+        const made: Box = {
+          checked: false,
+          indeterminate: false,
+          dataset: id ? { select: id } : {},
+          fire: () => handler?.({ target: made }),
+          addEventListener: (_type, callback) => {
+            handler = callback;
+          },
+        };
+        return made;
+      };
+      let header = box();
+      let rows: Box[] = [];
+      const container = stubContainer();
+      Object.assign(container, {
+        querySelector: (selector: string) =>
+          selector === '[data-select-all]' ? header : null,
+        querySelectorAll: (selector: string) =>
+          selector === '[data-select]' ? rows : [],
+      });
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () =>
+          Promise.resolve({
+            alice: { dn: 'uid=alice,ou=users,dc=example,dc=com', uid: 'alice' },
+            bob: { dn: 'uid=bob,ou=users,dc=example,dc=com', uid: 'bob' },
+          }),
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      });
+      const repaint = (): void => {
+        header = box();
+        rows = [box('alice'), box('bob')];
+      };
+      repaint();
+      await list.render(container);
+      const selected = (list as unknown as { selected: Set<string> }).selected;
+      const headerTag = (): string =>
+        /<input type="checkbox" data-select-all[^>]*>/.exec(
+          container.innerHTML
+        )?.[0] ?? '';
+
+      // One row of two: neither checked nor clear.
+      const [alice] = rows;
+      alice.checked = true;
+      repaint();
+      alice.fire();
+      expect(headerTag()).to.not.contain('checked');
+      expect(header.indeterminate).to.be.true;
+
+      // The whole page, from the header: shown checked.
+      const before = header;
+      before.checked = true;
+      repaint();
+      before.fire();
+      expect([...selected]).to.have.members(['alice', 'bob']);
+      expect(headerTag()).to.contain('checked');
+      expect(header.indeterminate).to.be.false;
+
+      // Clicked again, it clears the page.
+      const again = header;
+      again.checked = false;
+      repaint();
+      again.fire();
+      expect(selected.size).to.equal(0);
+      expect(headerTag()).to.not.contain('checked');
+      expect(header.indeterminate).to.be.false;
+    });
   });
 
   describe('importing pointers into a large branch', () => {
