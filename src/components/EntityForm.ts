@@ -20,6 +20,7 @@ import {
   attributeLabel,
   beforeToday,
   entryValue,
+  escapeDnValue,
   formatByteSize,
   isDnShaped,
   parseByteSize,
@@ -29,13 +30,23 @@ import {
 import { hasRole, tooBroad } from '../api/ConsoleApiClient';
 import { SEARCH_MINIMUM, listFailure } from './EntityList';
 import type { Translator } from '../i18n';
-import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
+import type {
+  EntityDescriptor,
+  Entry,
+  ExternalMembers,
+  SchemaAttribute,
+} from '../types';
 
 /** An entry a pointer field may land on. */
 interface PointerCandidate {
   dn: string;
   label: string;
+  /** Name of the value once chosen, when the offer reads otherwise */
+  token?: string;
 }
+
+/** An address as typed into a member field, loosely: the server judges. */
+const ADDRESS = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
 
 /** Wait after a keystroke before searching, so a word is one request. */
 const SEARCH_DELAY = 250;
@@ -67,6 +78,11 @@ export interface FormOptions {
   memberSearch?(
     role: 'members' | 'owners'
   ): ((query: string) => Promise<PointerCandidate[]>) | undefined;
+  /**
+   * Where a group's members may be created outside the directory, from an
+   * address no entry holds; undefined when the server takes none
+   */
+  externalMembers?: ExternalMembers;
   /** Called with the attributes to write and those to clear */
   onSubmit(
     values: Record<string, string | string[]>,
@@ -147,6 +163,8 @@ export class EntityForm {
   private readonly picked = new Map<string, string>();
   /** Searched fields that also take a DN typed whole: members, owners */
   private readonly freeform = new Set<string>();
+  /** Member fields that offer to create a member from a typed address */
+  private readonly external = new Set<string>();
 
   constructor(options: FormOptions) {
     this.options = options;
@@ -167,6 +185,8 @@ export class EntityForm {
         if (members) {
           this.searches.set(name, members);
           this.freeform.add(name);
+          if (role === 'members' && options.externalMembers)
+            this.external.add(name);
         }
       }
       // The department an account is attached to is named by its path, which
@@ -202,6 +222,45 @@ export class EntityForm {
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * What an address typed into a member field makes, when no entry found
+   * holds it and the server creates members outside the directory: the DN
+   * it creates the entry under, offered after what the search found. An
+   * address at a domain of the directory belongs to an account, which the
+   * server refuses to create a second time: said instead, when the search
+   * found nothing to choose.
+   *
+   * @param name field typed into
+   * @param query what was typed
+   * @param found what the search answered
+   * @returns the offer, the reason there is none, or undefined
+   */
+  private externalOffer(
+    name: string,
+    query: string,
+    found: PointerCandidate[]
+  ): PointerCandidate | string | undefined {
+    const external = this.options.externalMembers;
+    if (!external || !this.external.has(name) || !ADDRESS.test(query))
+      return undefined;
+    const address = query.toLowerCase();
+    // `Jane Doe <jane@example.com>`, or the bare address of a list.
+    const held = found.some(candidate => {
+      const label = candidate.label.toLowerCase();
+      return label === address || label.endsWith(`<${address}>`);
+    });
+    if (held) return undefined;
+    const { translator } = this.options;
+    const domain = address.slice(address.lastIndexOf('@') + 1);
+    if (external.managedDomains.includes(domain))
+      return translator.t('form.managedDomain', { domain });
+    return {
+      dn: `${external.rdnAttribute}=${escapeDnValue(query)},${external.branch}`,
+      label: translator.t('form.addExternal', { address: query }),
+      token: query,
+    };
   }
 
   /** The caller's search of members or owners, guarded like `searchOf`. */
@@ -576,7 +635,7 @@ export class EntityForm {
       redraw();
     };
     const choose = (candidate: PointerCandidate): void => {
-      this.picked.set(candidate.dn, candidate.label);
+      this.picked.set(candidate.dn, candidate.token ?? candidate.label);
       if (multiple) {
         // DNs compare without regard to case, as a DN typed whole does.
         const held = this.values[name].some(
@@ -606,9 +665,16 @@ export class EntityForm {
           .then(found => {
             if (ticket !== generation) return;
             // What is already chosen is not offered again.
-            candidates = found.filter(
-              candidate => !this.values[name].includes(candidate.dn)
-            );
+            const chosen = (dn: string): boolean =>
+              this.values[name].some(
+                value => value.toLowerCase() === dn.toLowerCase()
+              );
+            candidates = found.filter(candidate => !chosen(candidate.dn));
+            const outside = this.externalOffer(name, query, found);
+            if (typeof outside === 'string' && candidates.length === 0)
+              return message(outside);
+            if (typeof outside === 'object' && !chosen(outside.dn))
+              candidates.push(outside);
             active = candidates.length ? 0 : -1;
             paint();
           })

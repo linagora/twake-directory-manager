@@ -6,7 +6,7 @@
 #
 # The console needs an ldap-rest recent enough to serve the enterprise
 # plugins (enterpriseRules, accountLifecycle, authzScope).
-ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.18.0
+ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.19.0
 
 # The console builds to JavaScript and CSS, which are the same whatever the
 # target architecture, so this stage runs natively. Left to follow the target
@@ -50,8 +50,7 @@ COPY docker/consoleRoot.mjs docker/consoleSettings.mjs /app/plugins/
 #
 # Hidden by default, because nothing in the stack acts on them: the "other
 # mailboxes", which no plugin reads, and the delivery mode, which no plugin
-# applies — and its nomenclature with it. Twake Mail's users set their
-# forwards themselves; see the entrypoint for DM_SYNC_FORWARDS.
+# applies — and its nomenclature with it.
 ENV DM_CONSOLE_PLUGINS=core/static,/app/plugins/consoleRoot.mjs,/app/plugins/consoleSettings.mjs,core/configApi,core/ldap/groups,core/ldap/organizations,core/ldap/enterpriseRules,core/ldap/accountLifecycle,core/auth/authzScope \
  DM_AUTH_PLUGINS=core/auth/openidconnect,core/auth/authzLinid1 \
  DM_EXTRA_PLUGINS= \
@@ -67,11 +66,6 @@ ENV DM_CONSOLE_PLUGINS=core/static,/app/plugins/consoleRoot.mjs,/app/plugins/con
 # ldap-rest (LDAP_REST_IMAGE) does not fall back to mailQuota, which the
 # Twake schemas do not define.
 ENV DM_QUOTA_ATTRIBUTE=mailQuotaSize
-
-# Emptied: the ldap-rest image mirrors mailForwardingAddress to Twake Mail
-# forwards, which Twake Mail's users set themselves. The entrypoint fills it
-# again for DM_SYNC_FORWARDS=true.
-ENV DM_FORWARD_ATTRIBUTE=
 
 EXPOSE 8081
 ENTRYPOINT ["twake-directory-manager"]

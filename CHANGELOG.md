@@ -4,9 +4,17 @@
 
 ### Breaking Changes
 
-- With `core/twake/james`, mail forwards are no longer mirrored to Twake
-  Mail: its users set them there. `DM_SYNC_FORWARDS=true` mirrors them again,
-  the directory then overwriting what users set (#62)
+- Built on ldap-rest 0.19.0. With `core/twake/james`, mail forwards are no
+  longer mirrored to Twake Mail: its users set them there.
+  `DM_JAMES_SYNC_FORWARDS=true` mirrors them again, the directory then
+  overwriting what users set (#62) —
+  [ldap-rest notes](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md#forwards-are-no-longer-copied-to-twake-mail)
+
+### Features
+
+- A mailing list's external member is added by typing its address, with
+  ldap-rest's `externalUsersInGroups`: the full DN is no longer needed (#59)
+- The Twake schemas' labels, hints and form sections are in Mongolian too
 
 ### Bug Fixes
 

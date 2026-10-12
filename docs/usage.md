@@ -124,6 +124,12 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
   ldap-rest that tells that refusal apart says so; a `500`, which is how
   ldap-rest 0.12.0 reports it, suggests narrowing the search.
 - **The page size is remembered**, along with the chosen language.
+- **A group's members are found by email address.** With ldap-rest's
+  `core/ldap/externalUsersInGroups` (ldap-rest 0.19.0 or later), an address no entry holds is offered as an
+  _external member_: the console sends `mail=<address>,<branch>`, and the
+  server creates the entry. An address at one of the directory's own mail
+  domains (`DM_MAIL_DOMAIN`) is refused before sending: it belongs to an
+  account, to be chosen instead.
 - **A deep organization path is shortened** to its root and its leaf, with the
   whole path in the cell's tooltip.
 - **The tree stays on screen** while a node is read or edited.
