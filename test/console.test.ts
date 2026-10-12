@@ -626,6 +626,64 @@ describe('Directory console', () => {
       expect(new Translator('en').t('no.such.key')).to.equal('no.such.key');
     });
 
+    it('should agree with a count of one', () => {
+      // A count of one read "Import 1 entries", and "1 sélectionné(s)" where
+      // French had no other way to say it.
+      const en = new Translator('en');
+      expect(en.t('import.run', { count: 1 })).to.equal('Import 1 entry');
+      expect(en.t('import.run', { count: 2 })).to.equal('Import 2 entries');
+      expect(en.t('import.run', { count: 0 })).to.equal('Import 0 entries');
+      const fr = new Translator('fr');
+      expect(fr.t('import.read', { count: 1, file: 'a.csv' })).to.equal(
+        '1 ligne lue dans a.csv'
+      );
+      expect(fr.t('list.selected', { count: 1 })).to.equal('1 sélectionné');
+      expect(fr.t('list.selected', { count: 3 })).to.equal('3 sélectionnés');
+      // French counts nothing in the singular, where English does not.
+      expect(fr.t('import.run', { count: 0 })).to.equal('Importer 0 entrée');
+    });
+
+    it('should write once what a language does not inflect', () => {
+      // Mongolian leaves a noun as it is after a number: its catalogue holds
+      // the plain key, and every count reads it.
+      const mn = new Translator('mn');
+      expect(mn.t('import.run', { count: 1 })).to.equal('1 бичлэг импортлох');
+      expect(mn.t('import.run', { count: 5 })).to.equal('5 бичлэг импортлох');
+      // A language-wide category the catalogue has no form for falls back
+      // on the general one: French calls a million `many`.
+      expect(new Translator('fr').t('import.run', { count: 1e6 })).to.equal(
+        `Importer ${(1e6).toLocaleString('fr')} entrées`
+      );
+    });
+
+    it('should say the import counts of one in the singular', () => {
+      const importer = new EntityImport({
+        entity: users,
+        translator: new Translator('fr'),
+        pointerOptions: () => Promise.resolve([]),
+        create: () => Promise.resolve(),
+        onDone: () => undefined,
+        onClose: () => undefined,
+      });
+      const state = importer as unknown as {
+        rows: {
+          line: number;
+          cells: string[];
+          values: object;
+          errors: string[];
+        }[];
+        reviewMarkup(): string;
+      };
+      state.rows = [
+        { line: 2, cells: [], values: {}, errors: [] },
+        { line: 3, cells: [], values: {}, errors: ['Nom est obligatoire'] },
+      ];
+      expect(state.reviewMarkup())
+        .to.contain('prête à importer<')
+        .and.contain('en erreur, non importée<')
+        .and.contain('Importer 1 entrée<');
+    });
+
     it('should translate every key of every catalogue', () => {
       // A key present in one catalogue and missing from the other is exactly
       // the mixed-language interface this replaces.
@@ -2264,7 +2322,7 @@ describe('Directory console', () => {
         );
       const cut = await drawnList('fr');
       expect(cut).to.contain(
-        'Seules 1 entrées sont affichées ; il y en a d’autres. Utilisez la recherche pour les trouver.'
+        'Seule 1 entrée est affichée ; il y en a d’autres. Utilisez la recherche pour les trouver.'
       );
       expect(cut).to.contain('jsmith');
 

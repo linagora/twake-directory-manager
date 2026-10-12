@@ -52,10 +52,13 @@ const en: Catalogue = {
   'list.search': 'Search',
   'list.searchIn': 'in',
   'list.searchAnywhere': 'Every field',
-  'list.searchGuard': 'Type at least {count} characters to search',
+  'list.searchGuard.one': 'Type at least {count} character to search',
+  'list.searchGuard.other': 'Type at least {count} characters to search',
   'list.empty': 'Nothing to show',
   'list.noMatch': 'No entry matches this search',
-  'list.truncated':
+  'list.truncated.one':
+    'Only {count} entry is shown; there are more. Search to find the others.',
+  'list.truncated.other':
     'Only {count} entries are shown; there are more. Search to find the others.',
   'list.tooMany': 'Too many entries to show them all: narrow the search.',
   'list.failed':
@@ -86,8 +89,11 @@ const en: Catalogue = {
   'form.removeValue': 'Remove this value',
   'form.none': '—',
   'form.choose': 'Choose…',
-  'form.searchPointer': 'Type {count} characters to search',
-  'form.searchMember':
+  'form.searchPointer.one': 'Type {count} character to search',
+  'form.searchPointer.other': 'Type {count} characters to search',
+  'form.searchMember.one':
+    'Type {count} character of an email address, or a full DN',
+  'form.searchMember.other':
     'Type {count} characters of an email address, or a full DN',
   'form.addDn': 'Press Enter to add this DN',
   'form.searching': 'Searching…',
@@ -108,7 +114,8 @@ const en: Catalogue = {
   'import.template': 'Download an empty file',
   'import.templateSuffix': 'template',
   'import.emptyFile': 'This file holds no rows to import.',
-  'import.read': '{count} rows read from {file}',
+  'import.read.one': '{count} row read from {file}',
+  'import.read.other': '{count} rows read from {file}',
   'import.mappingHelp':
     'Check which field each column fills. A column set to “Ignore” is not imported.',
   'import.column': 'Column',
@@ -128,12 +135,14 @@ const en: Catalogue = {
   'import.serverRules':
     'The server still checks each entry as it creates it — an address already in use, for instance — and refuses those it must.',
   'import.downloadInvalid': 'Download the rows with errors',
-  'import.run': 'Import {count} entries',
+  'import.run.one': 'Import {count} entry',
+  'import.run.other': 'Import {count} entries',
   'import.line': 'Line',
   'import.problem': 'Problem',
   'import.more': 'And {count} more, in the downloadable file.',
   'import.rejectedSuffix': 'rejected',
-  'import.progress': '{done} of {total} entries processed',
+  'import.progress.one': '{done} of {total} entry processed',
+  'import.progress.other': '{done} of {total} entries processed',
   'import.progressDetail': '{created} created, {failed} refused',
   'import.stop': 'Stop',
   'import.stopping': 'Stopping…',
@@ -172,7 +181,8 @@ const en: Catalogue = {
   'password.set': 'Password changed',
 
   'delete.confirm': 'Delete {name}? This cannot be undone.',
-  'delete.confirmMany': 'Delete {count} entries? This cannot be undone.',
+  'delete.confirmMany.one': 'Delete {count} entry? This cannot be undone.',
+  'delete.confirmMany.other': 'Delete {count} entries? This cannot be undone.',
   'delete.done': 'Deleted',
   'delete.failed': '{name}: {error}',
 
@@ -232,10 +242,15 @@ const fr: Catalogue = {
   'list.search': 'Rechercher',
   'list.searchIn': 'dans',
   'list.searchAnywhere': 'Tous les champs',
-  'list.searchGuard': 'Saisissez au moins {count} caractères pour rechercher',
+  'list.searchGuard.one':
+    'Saisissez au moins {count} caractère pour rechercher',
+  'list.searchGuard.other':
+    'Saisissez au moins {count} caractères pour rechercher',
   'list.empty': 'Rien à afficher',
   'list.noMatch': 'Aucune entrée ne correspond',
-  'list.truncated':
+  'list.truncated.one':
+    'Seule {count} entrée est affichée ; il y en a d’autres. Utilisez la recherche pour les trouver.',
+  'list.truncated.other':
     'Seules {count} entrées sont affichées ; il y en a d’autres. Utilisez la recherche pour les trouver.',
   'list.tooMany':
     'Trop d’entrées pour les afficher toutes : affinez la recherche.',
@@ -245,7 +260,8 @@ const fr: Catalogue = {
   'list.perPage': 'Par page',
   'list.previous': 'Précédent',
   'list.next': 'Suivant',
-  'list.selected': '{count} sélectionné(s)',
+  'list.selected.one': '{count} sélectionné',
+  'list.selected.other': '{count} sélectionnés',
   'list.export': 'Exporter la sélection',
   'list.deleteSelected': 'Supprimer la sélection',
   'list.selectAll': 'Sélectionner toutes les lignes de la page',
@@ -267,8 +283,11 @@ const fr: Catalogue = {
   'form.removeValue': 'Retirer cette valeur',
   'form.none': '—',
   'form.choose': 'Choisir…',
-  'form.searchPointer': 'Tapez {count} caractères pour chercher',
-  'form.searchMember':
+  'form.searchPointer.one': 'Tapez {count} caractère pour chercher',
+  'form.searchPointer.other': 'Tapez {count} caractères pour chercher',
+  'form.searchMember.one':
+    'Tapez {count} caractère d’une adresse électronique, ou un DN complet',
+  'form.searchMember.other':
     'Tapez {count} caractères d’une adresse électronique, ou un DN complet',
   'form.addDn': 'Appuyez sur Entrée pour ajouter ce DN',
   'form.searching': 'Recherche…',
@@ -290,7 +309,8 @@ const fr: Catalogue = {
   'import.template': 'Télécharger un fichier vide',
   'import.templateSuffix': 'modele',
   'import.emptyFile': 'Ce fichier ne contient aucune ligne à importer.',
-  'import.read': '{count} lignes lues dans {file}',
+  'import.read.one': '{count} ligne lue dans {file}',
+  'import.read.other': '{count} lignes lues dans {file}',
   'import.mappingHelp':
     'Vérifiez le champ que remplit chaque colonne. Une colonne « Ignorer » n’est pas importée.',
   'import.column': 'Colonne',
@@ -303,26 +323,34 @@ const fr: Catalogue = {
   'import.otherFile': 'Choisir un autre fichier',
   'import.check': 'Vérifier les lignes',
   'import.checking': 'Vérification des lignes…',
-  'import.ready': 'prêtes à importer',
-  'import.invalid': 'en erreur, non importées',
+  'import.ready.one': 'prête à importer',
+  'import.ready.other': 'prêtes à importer',
+  'import.invalid.one': 'en erreur, non importée',
+  'import.invalid.other': 'en erreur, non importées',
   'import.invalidHelp':
     'Ces lignes seront écartées. Téléchargez-les, corrigez-les et importez-les à nouveau.',
   'import.allValid': 'Toutes les lignes ont passé la vérification.',
   'import.serverRules':
     'Le serveur vérifie encore chaque entrée en la créant — une adresse déjà utilisée, par exemple — et refuse celles qu’il doit refuser.',
   'import.downloadInvalid': 'Télécharger les lignes en erreur',
-  'import.run': 'Importer {count} entrées',
+  'import.run.one': 'Importer {count} entrée',
+  'import.run.other': 'Importer {count} entrées',
   'import.line': 'Ligne',
   'import.problem': 'Problème',
-  'import.more': 'Et {count} autres, dans le fichier téléchargeable.',
+  'import.more.one': 'Et {count} autre, dans le fichier téléchargeable.',
+  'import.more.other': 'Et {count} autres, dans le fichier téléchargeable.',
   'import.rejectedSuffix': 'rejets',
-  'import.progress': '{done} entrées traitées sur {total}',
-  'import.progressDetail': '{created} créées, {failed} refusées',
+  'import.progress.one': '{done} sur {total} entrée traitée',
+  'import.progress.other': '{done} sur {total} entrées traitées',
+  'import.progressDetail': 'créées : {created}, refusées : {failed}',
   'import.stop': 'Arrêter',
   'import.stopping': 'Arrêt en cours…',
-  'import.created': 'créées',
-  'import.refused': 'refusées par le serveur',
-  'import.notSent': 'non envoyées, l’import a été arrêté',
+  'import.created.one': 'créée',
+  'import.created.other': 'créées',
+  'import.refused.one': 'refusée par le serveur',
+  'import.refused.other': 'refusées par le serveur',
+  'import.notSent.one': 'non envoyée, l’import a été arrêté',
+  'import.notSent.other': 'non envoyées, l’import a été arrêté',
   'import.downloadRefused': 'Télécharger les lignes refusées',
   'import.ambiguous': '{field} : « {value} » correspond à plusieurs entrées',
   'import.notFound': '{field} : « {value} » introuvable',
@@ -355,7 +383,9 @@ const fr: Catalogue = {
   'password.set': 'Mot de passe modifié',
 
   'delete.confirm': 'Supprimer {name} ? Cette action est irréversible.',
-  'delete.confirmMany':
+  'delete.confirmMany.one':
+    'Supprimer {count} entrée ? Cette action est irréversible.',
+  'delete.confirmMany.other':
     'Supprimer {count} entrées ? Cette action est irréversible.',
   'delete.done': 'Supprimé',
   'delete.failed': '{name} : {error}',
@@ -566,6 +596,8 @@ export const availableLanguages = Object.keys(catalogues);
 
 export class Translator {
   private catalogue: Catalogue;
+  private readonly plurals: Intl.PluralRules;
+  private readonly numbers: Intl.NumberFormat;
   readonly language: string;
 
   /**
@@ -579,6 +611,8 @@ export class Translator {
     const short = wanted.split('-')[0].toLowerCase();
     this.language = catalogues[short] ? short : 'en';
     this.catalogue = catalogues[this.language];
+    this.plurals = new Intl.PluralRules(this.language);
+    this.numbers = new Intl.NumberFormat(this.language);
   }
 
   /**
@@ -587,14 +621,36 @@ export class Translator {
    * An unknown key returns itself rather than an empty string: a missing
    * translation should be visible, not invisible.
    *
+   * A numeric `count` picks the form of the sentence that agrees with it:
+   * `key.one`, `key.other`, or whichever category the language's own rules
+   * name — French puts 0 with 1, English does not. A catalogue holds the
+   * forms its language tells apart and the plain key otherwise, so a
+   * language whose nouns do not change after a number writes it once.
+   * Numbers are written the reader's way, `1,200` or `1 200`.
+   *
    * @param key catalogue key
    * @param values placeholder values
    * @returns the translated string
    */
   t(key: string, values: Record<string, string | number> = {}): string {
-    const template = this.catalogue[key] ?? key;
-    return template.replace(/\{(\w+)\}/g, (match, name: string) =>
-      name in values ? String(values[name]) : match
-    );
+    const template = this.template(key, values.count);
+    return template.replace(/\{(\w+)\}/g, (match, name: string) => {
+      if (!(name in values)) return match;
+      const value = values[name];
+      return typeof value === 'number'
+        ? this.numbers.format(value)
+        : String(value);
+    });
+  }
+
+  /** The form of a key that agrees with a count, when it has several. */
+  private template(key: string, count: string | number | undefined): string {
+    if (typeof count === 'number') {
+      const form =
+        this.catalogue[`${key}.${this.plurals.select(count)}`] ??
+        this.catalogue[`${key}.other`];
+      if (form !== undefined) return form;
+    }
+    return this.catalogue[key] ?? key;
   }
 }
