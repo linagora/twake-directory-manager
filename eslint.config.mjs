@@ -49,7 +49,7 @@ export default [
     },
   },
   {
-    files: ['*.mjs'],
+    files: ['*.mjs', 'docker/*.mjs'],
     languageOptions: { globals: globals.node },
   },
   { ignores: ['dist/', 'node_modules/', 'coverage/'] },
