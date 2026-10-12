@@ -1104,6 +1104,12 @@
   animation: dc-slide-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* Focused only to hold the keyboard when the panel has no field: it is no
+   control, and a ring around the whole panel would say nothing. */
+.dc-panel-inner:focus {
+  outline: none;
+}
+
 /* A table of columns and of rejected rows needs more than a form's width. */
 .dc-panel-wide .dc-panel-inner {
   width: min(880px, 100%);

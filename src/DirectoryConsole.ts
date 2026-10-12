@@ -35,6 +35,7 @@ import {
 } from './format';
 import { availableLanguages, Translator } from './i18n';
 import { signInAgain } from './session';
+import type { ListView } from './components/EntityList';
 import type { PointerLookup } from './importer';
 import type {
   ConsoleOptions,
@@ -116,6 +117,16 @@ const OVERVIEW_ICON =
   '<rect x="1.5" y="9" width="5.5" height="5.5" rx="1.6"/>' +
   '<rect x="9" y="9" width="5.5" height="5.5" rx="1.6"/></svg>';
 
+/** What Tab can reach in the side panel. */
+const FOCUSABLE = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
 /**
  * What a failed read means for the reader.
  *
@@ -124,18 +135,30 @@ const OVERVIEW_ICON =
  * gone sends them looking for the wrong problem — so every view that reads one
  * entry reads its failures here.
  *
+ * A `403` is said plainly too: the server words it for an API client
+ * ("Token does not have permission on this branch"), and a refusal is no
+ * failure of the console to report as one.
+ *
  * @param err failure raised by the API client
  * @param translator interface language
- * @returns the message to show, and whether the entry is simply gone
+ * @returns the message to show, whether the entry is simply gone, and
+ *   whether the reader was refused it
  */
 export function readFailure(
   err: unknown,
   translator: Translator
-): { gone: boolean; message: string } {
-  const gone = (err as { status?: number }).status === 404;
+): { gone: boolean; refused: boolean; message: string } {
+  const status = (err as { status?: number }).status;
+  const gone = status === 404;
+  const refused = status === 403;
   return {
     gone,
-    message: gone ? translator.t('detail.notFound') : (err as Error).message,
+    refused,
+    message: gone
+      ? translator.t('detail.notFound')
+      : refused
+        ? translator.t('detail.refused')
+        : (err as Error).message,
   };
 }
 
@@ -370,6 +393,17 @@ export class DirectoryConsole {
     this.container?.querySelector<HTMLElement>('[data-toast]')
   );
   private tree: OrganizationTree | null = null;
+  /**
+   * Where the reader left the list of each entity, by key. A list is drawn
+   * anew each time its page is shown, and without this Back from a card
+   * found it empty, the search typed and the page reached gone.
+   */
+  private readonly listViews = new Map<string, ListView>();
+  /**
+   * What had the focus when the side panel opened, given it back on close:
+   * a keyboard user is otherwise left at the top of the page.
+   */
+  private panelOpener: HTMLElement | null = null;
 
   constructor(options: ConsoleOptions) {
     this.options = options;
@@ -423,6 +457,7 @@ export class DirectoryConsole {
 
     this.readRoute();
     window.addEventListener('hashchange', () => void this.followHash());
+    document.addEventListener('keydown', event => this.panelKey(event));
 
     this.drawShell();
     await this.renderMain();
@@ -469,6 +504,28 @@ export class DirectoryConsole {
   /** Navigate, letting the hash change drive the render. */
   private go(path: string): void {
     window.location.hash = `#/${path}`;
+  }
+
+  /**
+   * Name the page in the address without drawing it again.
+   *
+   * A node picked in the tree is already on screen, card included: drawing
+   * the view anew for it would repaint the tree and read the card twice. The
+   * address must still name it, or a reload, Back and the view drawn again
+   * after a save forget it. `pushState` and `replaceState` change the
+   * address without the `hashchange` that drives a render.
+   *
+   * @param path what follows `#/`
+   * @param replace take the place of the current address rather than adding
+   *   one, for a page that no longer exists
+   */
+  private record(path: string, replace = false): void {
+    const hash = `#/${path}`;
+    if (window.location.hash !== hash) {
+      if (replace) window.history.replaceState(null, '', hash);
+      else window.history.pushState(null, '', hash);
+    }
+    this.readRoute();
   }
 
   /* ------------------------------------------------------------------ shell */
@@ -551,9 +608,10 @@ export class DirectoryConsole {
           <main class="dc-main" data-main></main>
         </div>
         <div class="dc-panel" data-panel hidden>
-          <div class="dc-panel-inner">
+          <div class="dc-panel-inner" data-panel-dialog role="dialog"
+            aria-modal="true" aria-labelledby="dc-panel-title" tabindex="-1">
             <header class="dc-panel-header">
-              <h2 data-panel-title></h2>
+              <h2 id="dc-panel-title" data-panel-title></h2>
               <button type="button" class="dc-icon-button" data-panel-close
                 aria-label="${escapeHtml(t('app.close'))}">×</button>
             </header>
@@ -725,11 +783,12 @@ export class DirectoryConsole {
 
     if (this.route.view === 'dashboard') return this.renderDashboard(main);
     if (this.route.view === 'organizations')
-      return this.renderOrganizations(main);
+      return this.renderOrganizations(main, generation);
 
     const entity = this.entity(this.route.entity);
     if (!entity) return this.renderDashboard(main);
-    if (entity.kind === 'organization') return this.renderOrganizations(main);
+    if (entity.kind === 'organization')
+      return this.renderOrganizations(main, generation);
     if (this.route.id)
       return this.renderDetail(main, entity, this.route.id, generation);
     return this.renderList(main, entity);
@@ -788,6 +847,23 @@ export class DirectoryConsole {
     if (this.scopeError) return false;
     if (!scopeRestricts(this.scope)) return true;
     return this.scope.branches.some(branch => branch.write);
+  }
+
+  /**
+   * Whether the caller administers no branch at all. The server then refuses
+   * every read, so the views say so calmly rather than ask and show each
+   * refusal as an error. An unrestricted or undescribed scope names no
+   * branch either, but restricts nothing.
+   */
+  private administersNothing(): boolean {
+    return scopeRestricts(this.scope) && this.scope.branches.length === 0;
+  }
+
+  /** The notice standing in for a view the server would refuse whole. */
+  private nothingMarkup(): string {
+    return `<p class="dc-empty">${escapeHtml(
+      this.translator.t('scope.nothing')
+    )}</p>`;
   }
 
   private canDelete(): boolean {
@@ -917,8 +993,18 @@ export class DirectoryConsole {
       .querySelector('[data-import]')
       ?.addEventListener('click', () => this.openImport(entity));
 
+    const holder = main.querySelector<HTMLElement>(
+      '[data-list]'
+    ) as HTMLElement;
+    if (this.administersNothing()) {
+      holder.innerHTML = this.nothingMarkup();
+      return;
+    }
+    const view = this.listViews.get(entity.key) ?? {};
+    this.listViews.set(entity.key, view);
     const list = new EntityList({
       entity,
+      view,
       translator: this.translator,
       listable: !isLarge(entity),
       load: listLoader(this.api, entity),
@@ -929,9 +1015,7 @@ export class DirectoryConsole {
         this.go(`${entity.key}/${encodeURIComponent(id)}`),
       onDelete: (ids: string[]): Promise<void> => this.deleteMany(entity, ids),
     });
-    await list.render(
-      main.querySelector<HTMLElement>('[data-list]') as HTMLElement
-    );
+    await list.render(holder);
   }
 
   /** One entry, read-only, with its actions and its relations. */
@@ -943,6 +1027,10 @@ export class DirectoryConsole {
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
+    if (this.administersNothing()) {
+      main.innerHTML = this.nothingMarkup();
+      return;
+    }
     main.innerHTML = `<p class="dc-empty">${escapeHtml(t('app.loading'))}</p>`;
     let entry: Entry;
     try {
@@ -952,7 +1040,7 @@ export class DirectoryConsole {
       if (!this.current(generation)) return;
       const failure = readFailure(err, this.translator);
       main.innerHTML = `<p class="dc-empty${
-        failure.gone ? '' : ' dc-error-block'
+        failure.gone || failure.refused ? '' : ' dc-error-block'
       }">${escapeHtml(failure.message)}</p>`;
       return;
     }
@@ -1052,8 +1140,20 @@ export class DirectoryConsole {
     this.go(`${owner.key}/${encodeURIComponent(id)}`);
   }
 
-  /** The organization tree, with the selected node's card beside it. */
-  private async renderOrganizations(main: HTMLElement): Promise<void> {
+  /**
+   * The organization tree, with the selected node's card beside it.
+   *
+   * The tree is drawn in place of the one shown last, so the branches the
+   * reader opened stay open; the node the address names is revealed in it.
+   */
+  private async renderOrganizations(
+    main: HTMLElement,
+    generation: number
+  ): Promise<void> {
+    if (this.administersNothing()) {
+      main.innerHTML = this.nothingMarkup();
+      return;
+    }
     const entity = this.entities.find(item => item.kind === 'organization');
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
@@ -1065,36 +1165,41 @@ export class DirectoryConsole {
         </div>
       </section>`;
 
-    this.tree = new OrganizationTree({
-      translator: this.translator,
-      root: (): Promise<OrganizationNode | null> => this.api.organizationTop(),
-      children: (dn: string): Promise<OrganizationNode[]> =>
-        this.api.organizationChildren(dn),
-      transit: this.scope?.transit || undefined,
-      onSelect: (node: OrganizationNode): void => {
-        void this.showOrganization(node);
+    this.tree = new OrganizationTree(
+      {
+        translator: this.translator,
+        root: (): Promise<OrganizationNode | null> =>
+          this.api.organizationTop(),
+        children: (dn: string): Promise<OrganizationNode[]> =>
+          this.api.organizationChildren(dn),
+        transit: this.scope?.transit || undefined,
+        onSelect: (node: OrganizationNode): void => {
+          this.record(`organizations/${encodeURIComponent(node.dn)}`);
+          void this.showOrganization(node);
+        },
+        // A "+" on a node asks a different question from the card on the
+        // overview: the card creates at the top of the tree, which is what the
+        // scope's `organizations.create` answers for, while the "+" creates
+        // under the node it sits on. A local administrator writes in their own
+        // branch and not at the root, and the tree they are shown *is* their
+        // branch, so the offer holds as soon as they may write somewhere.
+        onCreateChild:
+          entity && this.canWrite()
+            ? (node: OrganizationNode): void => {
+                void this.openOrganizationForm(entity, undefined, node.dn);
+              }
+            : undefined,
       },
-      // A "+" on a node asks a different question from the card on the
-      // overview: the card creates at the top of the tree, which is what the
-      // scope's `organizations.create` answers for, while the "+" creates
-      // under the node it sits on. A local administrator writes in their own
-      // branch and not at the root, and the tree they are shown *is* their
-      // branch, so the offer holds as soon as they may write somewhere.
-      onCreateChild:
-        entity && this.canWrite()
-          ? (node: OrganizationNode): void => {
-              void this.openOrganizationForm(entity, undefined, node.dn);
-            }
-          : undefined,
-    });
+      this.tree
+    );
     await this.tree.render(
       main.querySelector<HTMLElement>('[data-tree]') as HTMLElement
     );
 
-    if (this.route.id) {
+    if (this.route.id && this.current(generation)) {
       const node = { dn: this.route.id, name: this.route.id };
-      this.tree.select(this.route.id);
-      await this.showOrganization(node);
+      await this.tree.reveal(this.route.id);
+      if (this.current(generation)) await this.showOrganization(node);
     }
   }
 
@@ -1116,7 +1221,7 @@ export class DirectoryConsole {
       if (!this.current(generation)) return;
       const failure = readFailure(err, this.translator);
       holder.innerHTML = `<p class="dc-empty${
-        failure.gone ? '' : ' dc-error-block'
+        failure.gone || failure.refused ? '' : ' dc-error-block'
       }">${escapeHtml(failure.message)}</p>`;
       return;
     }
@@ -1183,7 +1288,14 @@ export class DirectoryConsole {
       this.container?.querySelector<HTMLElement>('[data-panel-title]');
     const body =
       this.container?.querySelector<HTMLElement>('[data-panel-body]');
+    const dialog = this.container?.querySelector<HTMLElement>(
+      '[data-panel-dialog]'
+    );
     if (!panel || !heading || !body) return;
+    // A panel opened over another keeps the first one's opener: that is
+    // where the reader was before any panel.
+    if (panel.hidden && typeof document !== 'undefined')
+      this.panelOpener = document.activeElement as HTMLElement | null;
     heading.textContent = title;
     panel.classList.toggle('dc-panel-modal', modal);
     panel.classList.toggle('dc-panel-wide', wide);
@@ -1194,11 +1306,62 @@ export class DirectoryConsole {
     // form was left at: the next would open scrolled past its first fields.
     // Reset once shown, since an element with no box ignores the write.
     body.scrollTop = 0;
+    // Into the panel, on its first field: left on the button that opened
+    // it, the keyboard went on through the page behind it. A panel with no
+    // field holds the focus itself.
+    (this.focusables(body)[0] ?? dialog)?.focus();
   }
 
   private closePanel(): void {
     const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
-    if (panel) panel.hidden = true;
+    if (!panel || panel.hidden) return;
+    panel.hidden = true;
+    const opener = this.panelOpener;
+    this.panelOpener = null;
+    if (opener?.isConnected) opener.focus();
+  }
+
+  /** What Tab reaches in an element: its enabled controls not hidden. */
+  private focusables(root: HTMLElement): HTMLElement[] {
+    return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+      element => !element.closest('[hidden]')
+    );
+  }
+
+  /**
+   * Keep the keyboard in the side panel while it is open, and close it on
+   * Escape. Listened to on the document, so that Tab is caught even once
+   * the focus has strayed onto the backdrop.
+   *
+   * @param event the key pressed
+   */
+  private panelKey(event: KeyboardEvent): void {
+    const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
+    const dialog = this.container?.querySelector<HTMLElement>(
+      '[data-panel-dialog]'
+    );
+    if (!panel || panel.hidden || !dialog) return;
+    if (event.key === 'Escape') {
+      // A control that answers Escape itself, such as a picker closing its
+      // suggestions, prevents its default: that press is spent.
+      if (event.defaultPrevented) return;
+      event.preventDefault();
+      this.closePanel();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const items = this.focusables(dialog);
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    const inside = !!active && items.includes(active);
+    if (!first) {
+      event.preventDefault();
+      dialog.focus();
+    } else if (!inside || active === (event.shiftKey ? first : last)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    }
   }
 
   /**
@@ -1352,29 +1515,11 @@ export class DirectoryConsole {
         | ((query: string) => Promise<{ dn: string; label: string }[]>)
         | undefined => this.api.pointerSearch(branch, this.entities, failed),
       onCancel: (): void => this.closePanel(),
-      onSubmit: async (
+      onSubmit: (
         values: Record<string, string | string[]>,
         cleared: string[]
-      ): Promise<void> => {
-        try {
-          if (entry?.dn) {
-            await this.api.updateOrganization(
-              String(entry.dn),
-              values as Record<string, string | string[]>,
-              cleared
-            );
-            this.toast(t('save.done'));
-          } else {
-            await this.api.createOrganization(values, parentDn);
-            this.toast(t('create.done'));
-          }
-          this.closePanel();
-          this.tree?.invalidate();
-          await this.renderMain();
-        } catch (err) {
-          this.toast(this.refusal(err, entity), true);
-        }
-      },
+      ): Promise<void> =>
+        this.submitOrganization(entity, values, cleared, entry, parentDn),
     });
 
     this.openPanel(
@@ -1395,6 +1540,67 @@ export class DirectoryConsole {
       entity.schema,
       this.translator.language
     );
+  }
+
+  /**
+   * Write what the organization form submitted, then draw the view again
+   * with the organization on screen.
+   *
+   * Only the branch the change happened in is read again: the rest of the
+   * tree, and the branches the administrator had opened, stay as they were.
+   *
+   * @param entity the organization entity
+   * @param values what the form submitted
+   * @param cleared attributes the form emptied
+   * @param entry the organization edited; none for a new one
+   * @param parentDn where a new one goes; the server's default when omitted
+   */
+  private async submitOrganization(
+    entity: EntityDescriptor,
+    values: Record<string, string | string[]>,
+    cleared: string[],
+    entry?: Entry,
+    parentDn?: string
+  ): Promise<void> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    try {
+      if (entry?.dn) {
+        const dn = String(entry.dn);
+        await this.api.updateOrganization(dn, values, cleared);
+        this.toast(t('save.done'));
+        this.closePanel();
+        // Its parent's children are read again, for a changed name. The
+        // address already names it, so the view drawn again shows its card,
+        // the tree open down to it.
+        const parent = this.tree?.parentOf(dn);
+        if (parent) await this.tree?.refresh(parent).catch(() => []);
+      } else {
+        await this.api.createOrganization(values, parentDn);
+        this.toast(t('create.done'));
+        this.closePanel();
+        // The new organization is found among its parent's children by the
+        // name it was given, since the server answers no DN. From the tree,
+        // it is then shown and selected where it was created; from the
+        // overview, the overview stays.
+        const children =
+          (await this.tree?.refresh(parentDn).catch(() => [])) ?? [];
+        const raw = values[entity.mainAttribute];
+        const name = String(
+          (Array.isArray(raw) ? raw[0] : raw) ?? ''
+        ).toLowerCase();
+        const created = children.find(
+          child =>
+            rdnValue(child.dn).toLowerCase() === name ||
+            child.name.toLowerCase() === name
+        );
+        if (created && this.route.view !== 'dashboard')
+          this.record(`organizations/${encodeURIComponent(created.dn)}`);
+      }
+      await this.renderMain();
+    } catch (err) {
+      this.toast(this.refusal(err, entity), true);
+    }
   }
 
   /* --------------------------------------------------------------- actions */
@@ -1607,7 +1813,13 @@ export class DirectoryConsole {
     try {
       await this.api.deleteOrganization(dn);
       this.toast(this.translator.t('delete.done'));
-      this.tree?.invalidate();
+      // Its parent takes its place: where it was, beside its siblings. Its
+      // address is replaced, as Back could only lead to a page now gone.
+      const parent = this.tree?.parentOf(dn);
+      if (parent) {
+        await this.tree?.refresh(parent).catch(() => []);
+        this.record(`organizations/${encodeURIComponent(parent)}`, true);
+      } else this.record('organizations', true);
       await this.renderMain();
     } catch (err) {
       this.toast((err as Error).message, true);

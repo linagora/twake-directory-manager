@@ -60,9 +60,11 @@ const GENERIC_FAILURE =
  * What to say about a list, or a search, that could not be loaded.
  *
  * The server's own message is usually the most useful one, and is kept.
- * Not for the failures a search too broad for the directory ends in (see
- * `tooBroad`): `422` is ldap-rest saying so, with wording meant for an API
- * client; `500` is how ldap-rest 0.12.0 reports the same refusal — as
+ * Not for a `403`, worded for an API client ("Token does not have
+ * permission on this branch"): the reader is told plainly they may not see
+ * these entries. Nor for the failures a search too broad for the directory
+ * ends in (see `tooBroad`): `422` is ldap-rest saying so, with wording meant
+ * for an API client; `500` is how ldap-rest 0.12.0 reports the same refusal — as
  * "Internal Server Error", which tells the operator nothing they can act on
  * — and `502` or `504` is a proxy giving up on the unbounded search before
  * the server did. Those can have other causes, hence the hedged wording; and
@@ -76,6 +78,7 @@ const GENERIC_FAILURE =
 export function listFailure(err: unknown, translator: Translator): string {
   const status = (err as { status?: number } | null)?.status;
   const message = err instanceof Error ? err.message : String(err);
+  if (status === 403) return translator.t('list.refused');
   if (!tooBroad(err)) return message;
   if (status === 422) return translator.t('list.tooMany');
   const hedged = translator.t('list.failed');
@@ -114,6 +117,17 @@ export const SEARCH_ANYWHERE = '*';
 const PAGE_SIZES = [25, 50, 100, 200];
 const PAGE_SIZE_KEY = 'ldap-rest.console.pageSize';
 
+/**
+ * Where the reader left a list: what they searched, in which field, whether
+ * they asked for the whole branch, and the page they were on.
+ */
+export interface ListView {
+  search?: string;
+  searchAttribute?: string;
+  listEverything?: boolean;
+  page?: number;
+}
+
 export interface ListOptions {
   entity: EntityDescriptor;
   translator: Translator;
@@ -133,6 +147,12 @@ export interface ListOptions {
   canDelete: boolean;
   /** Readable name of the entry a pointer lands on, when its schema has one */
   pointerLabel?(dn: string): string | undefined;
+  /**
+   * Where the reader left this list last time. The list starts from it and
+   * keeps it up to date as they search and page, so a list drawn again —
+   * Back from a card — opens where it was left rather than empty
+   */
+  view?: ListView;
 }
 
 /** Controls a repaint must not steal the caret from. */
@@ -197,7 +217,10 @@ export class EntityList {
     this.columns = EntityList.chooseColumns(options.entity);
     // Searching everywhere is the default: someone looking for a person by
     // surname should not have to know which attribute holds it first.
-    this.searchAttribute = SEARCH_ANYWHERE;
+    this.searchAttribute = options.view?.searchAttribute ?? SEARCH_ANYWHERE;
+    this.search = options.view?.search ?? '';
+    this.listEverything = options.view?.listEverything ?? false;
+    this.page = options.view?.page ?? 0;
   }
 
   /**
@@ -275,7 +298,12 @@ export class EntityList {
   async render(container: HTMLElement): Promise<void> {
     this.root = container;
     this.draw();
-    if (this.listable() && !this.loaded) await this.reload();
+    // A search left typed is run again, and the page it was left on kept.
+    if (
+      (this.listable() || this.query.length >= SEARCH_MINIMUM) &&
+      !this.loaded
+    )
+      await this.reload(true);
   }
 
   /** Whether the branch may be shown without a search. */
@@ -283,8 +311,13 @@ export class EntityList {
     return this.options.listable || this.listEverything;
   }
 
-  /** Fetch the entries matching the current search. */
-  private async reload(): Promise<void> {
+  /**
+   * Fetch the entries matching the current search.
+   *
+   * @param keepPage stay on the current page, as far as the answer reaches,
+   *   rather than go back to the first
+   */
+  private async reload(keepPage = false): Promise<void> {
     const generation = ++this.generation;
     if (!this.listable() && this.query.length < SEARCH_MINIMUM) {
       this.entries = [];
@@ -306,7 +339,11 @@ export class EntityList {
       );
       this.truncated = list.truncated;
       this.loaded = true;
-      this.page = 0;
+      const last = Math.max(
+        0,
+        Math.ceil(this.entries.length / this.pageSize) - 1
+      );
+      this.page = keepPage ? Math.min(this.page, last) : 0;
       this.selected.clear();
     } catch (err) {
       if (generation !== this.generation) return;
@@ -331,6 +368,8 @@ export class EntityList {
     // debounce threw the caret out of the field they were typing in. What was
     // focused, and where the caret sat in it, is put back afterwards.
     const focus = this.focusState();
+
+    this.remember();
 
     const total = this.entries.length;
     const from = this.page * this.pageSize;
@@ -394,6 +433,17 @@ export class EntityList {
       const picked = slice.filter(([id]) => this.selected.has(id)).length;
       all.indeterminate = picked > 0 && picked < slice.length;
     }
+  }
+
+  /** Keep where the reader is, for the list drawn in this one's place. */
+  private remember(): void {
+    if (!this.options.view) return;
+    Object.assign(this.options.view, {
+      search: this.search,
+      searchAttribute: this.searchAttribute,
+      listEverything: this.listEverything,
+      page: this.page,
+    });
   }
 
   /**
@@ -596,6 +646,7 @@ export class EntityList {
     const search = root.querySelector<HTMLInputElement>('[data-search]');
     search?.addEventListener('input', () => {
       this.search = search.value;
+      this.remember();
       if (this.searchTimer) clearTimeout(this.searchTimer);
       this.searchTimer = setTimeout(() => void this.reload(), 250);
     });

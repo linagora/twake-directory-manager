@@ -10,7 +10,7 @@
  */
 
 import { escapeHtml } from '../shared/dom';
-import { comparableDn } from '../format';
+import { comparableDn, withinDn } from '../format';
 import type { Translator } from '../i18n';
 import type { OrganizationNode } from '../types';
 
@@ -35,8 +35,20 @@ export class OrganizationTree {
   private filter = '';
   private error: string | null = null;
 
-  constructor(options: TreeOptions) {
+  /**
+   * @param options what the tree reads, and whom it tells
+   * @param previous the tree this one is drawn in place of. Its nodes, the
+   *   branches left open and the filter carry over, so a view drawn again —
+   *   after a save, Back, a change of language — finds the tree the way the
+   *   reader left it rather than folded back to its first level
+   */
+  constructor(options: TreeOptions, previous?: OrganizationTree | null) {
     this.options = options;
+    if (previous) {
+      this.tree = previous.tree;
+      this.expanded = previous.expanded;
+      this.filter = previous.filter;
+    }
   }
 
   /**
@@ -67,9 +79,103 @@ export class OrganizationTree {
     this.draw();
   }
 
-  /** Forget what was loaded, so the next render fetches the tree again. */
-  invalidate(): void {
-    this.tree = null;
+  /**
+   * Open the way down to a node, select it and bring it into view.
+   *
+   * A node named from elsewhere — a department link, an address — may sit
+   * under branches never opened, whose children were never read: each is
+   * read and opened on the way down from the root. A branch whose known
+   * children lead nowhere is read again once, as the node may have been
+   * created since.
+   *
+   * @param dn node to show, in any spelling of its DN
+   * @returns whether the tree holds it
+   */
+  async reveal(dn: string): Promise<boolean> {
+    const root = this.tree;
+    if (!root || !withinDn(dn, root.dn)) {
+      this.select(null);
+      return false;
+    }
+    const toward = (parent: OrganizationNode): OrganizationNode | undefined =>
+      parent.children?.find(child => withinDn(dn, child.dn));
+    let node = root;
+    while (comparableDn(node.dn) !== comparableDn(dn)) {
+      let next = node.loaded ? toward(node) : undefined;
+      if (!next) {
+        try {
+          await this.load(node);
+        } catch {
+          // A branch that cannot be read is not opened: the node is not
+          // drawn, and the card beside the tree still says what it is.
+        }
+        next = toward(node);
+      }
+      if (!next) {
+        this.select(null);
+        return false;
+      }
+      this.expanded.add(node.dn);
+      node = next;
+    }
+    this.select(node.dn);
+    // A deep or long tree can hold the node below the fold of its pane.
+    this.container
+      ?.querySelector<HTMLElement>('.dc-selected > .dc-tree-row')
+      ?.scrollIntoView?.({ block: 'nearest' });
+    return true;
+  }
+
+  /**
+   * Read the children of a node again, after an organization was created or
+   * deleted under it or renamed, and repaint. Only that branch is read: the
+   * rest of the tree, and the branches open below it, stay as they were.
+   *
+   * @param dn node to read again, the root when omitted
+   * @returns its children as now read; none when the tree does not hold it
+   */
+  async refresh(dn?: string): Promise<OrganizationNode[]> {
+    const node = dn === undefined ? this.tree : this.find(dn);
+    if (!node) return [];
+    await this.load(node);
+    this.draw();
+    return node.children || [];
+  }
+
+  /**
+   * The node a node hangs from.
+   *
+   * @param dn node to look up
+   * @returns the DN of its parent, or null when the tree does not hold both
+   */
+  parentOf(
+    dn: string,
+    node: OrganizationNode | null = this.tree
+  ): string | null {
+    if (!node) return null;
+    for (const child of node.children || []) {
+      if (comparableDn(child.dn) === comparableDn(dn)) return node.dn;
+      const found = this.parentOf(dn, child);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  /**
+   * Read a node's children, keeping what is known of those still there: a
+   * branch read again keeps the sub-branches that were open under it.
+   */
+  private async load(node: OrganizationNode): Promise<void> {
+    const known = new Map(
+      (node.children || []).map(child => [comparableDn(child.dn), child])
+    );
+    node.children = (await this.options.children(node.dn)).map(child => {
+      const before = known.get(comparableDn(child.dn));
+      return before?.loaded
+        ? { ...child, children: before.children, loaded: true }
+        : child;
+    });
+    node.loaded = true;
   }
 
   /**
@@ -230,13 +336,13 @@ export class OrganizationTree {
     this.draw();
   }
 
-  /** Find a node by DN in the loaded tree. */
+  /** Find a node by DN, in any spelling of it, in the loaded tree. */
   private find(
     dn: string,
     node: OrganizationNode | null = this.tree
   ): OrganizationNode | null {
     if (!node) return null;
-    if (node.dn === dn) return node;
+    if (comparableDn(node.dn) === comparableDn(dn)) return node;
     for (const child of node.children || []) {
       const found = this.find(dn, child);
       if (found) return found;

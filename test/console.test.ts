@@ -610,6 +610,319 @@ describe('Directory console', () => {
     });
   });
 
+  describe('the organization tree, between views', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const sales = `ou=Sales,${top}`;
+    const engineering = `ou=Engineering,${top}`;
+    const backend = `ou=Backend,${engineering}`;
+    const lyon = `ou=Lyon,${engineering}`;
+    const organizations: EntityDescriptor = {
+      key: 'organizations',
+      pluralName: 'organizations',
+      singularName: 'organization',
+      mainAttribute: 'ou',
+      base: top,
+      schema: {
+        attributes: {
+          ou: { type: 'string', role: 'identifier' },
+          description: { type: 'string' },
+        },
+      },
+      endpoint: '/api/v1/ldap/organizations',
+      kind: 'organization',
+    };
+    /** The DN of the node drawn as selected, if any. */
+    const selected = (html: string): string | undefined =>
+      /dc-selected[^]*?data-select="([^"]*)"/.exec(html)?.[1];
+    /** Whether a node is drawn open. */
+    const open = (html: string, dn: string): boolean =>
+      html
+        .replace(/\s+/g, ' ')
+        .includes(`data-toggle="${dn}" aria-expanded="true"`);
+
+    /**
+     * A console on the organization view, its server a few organizations
+     * deep, its address a stub that records what was pushed into it.
+     */
+    const setup = () => {
+      const children: Record<string, { dn: string; name: string }[]> = {
+        [top]: [
+          { dn: sales, name: 'Sales' },
+          { dn: engineering, name: 'Engineering' },
+        ],
+        [sales]: [],
+        [engineering]: [{ dn: backend, name: 'Backend' }],
+        [backend]: [],
+        [lyon]: [],
+      };
+      const asked: string[] = [];
+      const read: string[] = [];
+      const trees: (HTMLElement & TreeContainer)[] = [];
+      const main = {
+        set innerHTML(_html: string) {
+          trees.push(treeContainer());
+        },
+        querySelector: (selector: string) =>
+          selector === '[data-tree]' ? trees[trees.length - 1] : null,
+      };
+      const app = consoleIn({
+        '[data-main]': main,
+        '[data-org-detail]': stubContainer(),
+        '[data-toast]': toastElement(),
+      });
+      Object.assign(app as unknown as { entities: EntityDescriptor[] }, {
+        entities: [organizations],
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        organizationTop: async () => ({ dn: top, name: 'organization' }),
+        organizationChildren: async (dn: string) => {
+          asked.push(dn);
+          return children[dn].map(child => ({ ...child }));
+        },
+        organization: async (dn: string) => {
+          read.push(dn);
+          return { dn, ou: rdnValue(dn) };
+        },
+        organizationMembers: async () => ({ entries: [], truncated: false }),
+        updateOrganization: async () => undefined,
+        createOrganization: async () => {
+          children[engineering].push({ dn: lyon, name: 'Lyon' });
+        },
+        deleteOrganization: async () => undefined,
+      });
+      const location = { hash: '#/organizations' };
+      const pushed: string[] = [];
+      const replaced: string[] = [];
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      g.window = {
+        location,
+        history: {
+          pushState: (_state: unknown, _title: string, hash: string) => {
+            pushed.push(hash);
+            location.hash = hash;
+          },
+          replaceState: (_state: unknown, _title: string, hash: string) => {
+            replaced.push(hash);
+            location.hash = hash;
+          },
+        },
+        confirm: () => true,
+      };
+      return {
+        app: app as unknown as {
+          tree: {
+            options: { onSelect(node: { dn: string; name: string }): void };
+            toggle(dn: string): Promise<void>;
+          };
+          route: { id?: string };
+          followHash(): Promise<void>;
+          submitOrganization(
+            entity: EntityDescriptor,
+            values: Record<string, string | string[]>,
+            cleared: string[],
+            entry?: Entry,
+            parentDn?: string
+          ): Promise<void>;
+          confirmDeleteOrganization(
+            entity: EntityDescriptor,
+            entry: Entry,
+            dn: string
+          ): Promise<void>;
+        },
+        location,
+        asked,
+        read,
+        pushed,
+        replaced,
+        tree: (): string => trees[trees.length - 1].innerHTML,
+        restore: () => {
+          g.window = original;
+        },
+      };
+    };
+
+    it('should open the tree down to the organization an address names', async () => {
+      // The Department path link of an account's card leads here: the card
+      // showed, but the tree stayed folded and nothing in it was selected.
+      const { app, location, asked, read, tree, restore } = setup();
+      try {
+        location.hash = `#/organizations/${encodeURIComponent(backend)}`;
+        await app.followHash();
+      } finally {
+        restore();
+      }
+      expect(asked).to.deep.equal([top, engineering]);
+      expect(open(tree(), engineering)).to.be.true;
+      expect(selected(tree())).to.equal(backend);
+      expect(read).to.deep.equal([backend]);
+    });
+
+    it('should name a node picked in the tree in the address, without drawing the view again', async () => {
+      const { app, pushed, read, tree, restore } = setup();
+      try {
+        await app.followHash();
+        const before = tree();
+        app.tree.options.onSelect({ dn: sales, name: 'Sales' });
+        expect(pushed).to.deep.equal([
+          `#/organizations/${encodeURIComponent(sales)}`,
+        ]);
+        expect(app.route.id).to.equal(sales);
+        // The same tree, not one drawn anew: only the card is read.
+        expect(tree()).to.equal(before);
+        expect(read).to.deep.equal([sales]);
+      } finally {
+        restore();
+      }
+    });
+
+    it('should keep the tree open and the organization on screen after a save', async () => {
+      const { app, asked, read, tree, restore } = setup();
+      try {
+        await app.followHash();
+        await app.tree.toggle(engineering);
+        app.tree.options.onSelect({ dn: backend, name: 'Backend' });
+        asked.length = 0;
+        read.length = 0;
+        await app.submitOrganization(
+          organizations,
+          { description: 'Servers' },
+          [],
+          { dn: backend, ou: 'Backend' }
+        );
+      } finally {
+        restore();
+      }
+      // Its parent is read again for a changed name, and nothing else.
+      expect(asked).to.deep.equal([engineering]);
+      expect(open(tree(), engineering)).to.be.true;
+      expect(selected(tree())).to.equal(backend);
+      expect(read).to.deep.equal([backend]);
+    });
+
+    it('should show and select an organization just created where it was created', async () => {
+      const { app, pushed, read, tree, restore } = setup();
+      try {
+        await app.followHash();
+        await app.tree.toggle(engineering);
+        await app.submitOrganization(
+          organizations,
+          { ou: 'Lyon' },
+          [],
+          undefined,
+          engineering
+        );
+      } finally {
+        restore();
+      }
+      expect(pushed).to.deep.equal([
+        `#/organizations/${encodeURIComponent(lyon)}`,
+      ]);
+      expect(open(tree(), engineering)).to.be.true;
+      expect(tree()).to.include('>Lyon</button>');
+      expect(selected(tree())).to.equal(lyon);
+      expect(read).to.deep.equal([lyon]);
+    });
+
+    it('should select the parent of an organization just deleted', async () => {
+      const { app, location, replaced, read, tree, restore } = setup();
+      try {
+        location.hash = `#/organizations/${encodeURIComponent(backend)}`;
+        await app.followHash();
+        read.length = 0;
+        await app.confirmDeleteOrganization(
+          organizations,
+          { dn: backend, ou: 'Backend' },
+          backend
+        );
+      } finally {
+        restore();
+      }
+      expect(replaced).to.deep.equal([
+        `#/organizations/${encodeURIComponent(engineering)}`,
+      ]);
+      expect(selected(tree())).to.equal(engineering);
+      expect(read).to.deep.equal([engineering]);
+    });
+  });
+
+  describe('OrganizationTree, revealing a node', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const engineering = `ou=Engineering,${top}`;
+    const backend = `ou=Backend,${engineering}`;
+    const options = (asked: string[]) => ({
+      translator: new Translator('en'),
+      root: async () => ({ dn: top, name: 'organization' }),
+      children: async (dn: string) => {
+        asked.push(dn);
+        if (dn === top) return [{ dn: engineering, name: 'Engineering' }];
+        if (dn === engineering) return [{ dn: backend, name: 'Backend' }];
+        return [];
+      },
+      onSelect: () => undefined,
+    });
+
+    it('should find a node however its DN is spelled', async () => {
+      const asked: string[] = [];
+      const container = treeContainer();
+      const tree = new OrganizationTree(options(asked));
+      await tree.render(container);
+      expect(
+        await tree.reveal(
+          'OU=backend, ou=Engineering,ou=organization,dc=example,dc=com'
+        )
+      ).to.be.true;
+      expect(container.innerHTML).to.match(
+        /dc-selected[^]*?data-select="ou=Backend,ou=Engineering,/
+      );
+    });
+
+    it('should select nothing for a node it does not hold', async () => {
+      const tree = new OrganizationTree(options([]));
+      await tree.render(treeContainer());
+      expect(await tree.reveal('ou=Elsewhere,dc=example,dc=org')).to.be.false;
+      expect(await tree.reveal(`ou=Gone,${engineering}`)).to.be.false;
+    });
+
+    it('should read a branch again when it no longer leads to the node', async () => {
+      // Created since the branch was read, by another administrator.
+      const asked: string[] = [];
+      let late = false;
+      const tree = new OrganizationTree({
+        ...options(asked),
+        children: async (dn: string) => {
+          asked.push(dn);
+          if (dn === top)
+            return late
+              ? [
+                  { dn: engineering, name: 'Engineering' },
+                  { dn: `ou=Legal,${top}`, name: 'Legal' },
+                ]
+              : [{ dn: engineering, name: 'Engineering' }];
+          return [];
+        },
+      });
+      const container = treeContainer();
+      await tree.render(container);
+      late = true;
+      expect(await tree.reveal(`ou=Legal,${top}`)).to.be.true;
+      expect(asked).to.deep.equal([top, top]);
+      expect(container.innerHTML).to.include('>Legal</button>');
+    });
+
+    it('should carry the open branches over to the tree drawn in its place', async () => {
+      const asked: string[] = [];
+      const first = new OrganizationTree(options(asked));
+      await first.render(treeContainer());
+      await first.reveal(backend);
+      const container = treeContainer();
+      await new OrganizationTree(options(asked), first).render(container);
+      // Nothing read again, and Backend still drawn under an open Engineering.
+      expect(asked).to.deep.equal([top, engineering]);
+      expect(container.innerHTML).to.include('>Backend</button>');
+    });
+  });
+
   describe('Translator', () => {
     it('should fall back to English for an unknown language', () => {
       expect(new Translator('xx').language).to.equal('en');
@@ -863,6 +1176,7 @@ describe('Directory console', () => {
       let offset = 0;
       const body = {
         innerHTML: '',
+        querySelectorAll: () => [],
         get scrollTop(): number {
           return offset;
         },
@@ -908,6 +1222,139 @@ describe('Directory console', () => {
         g.window = original;
       }
       expect(panel.hidden).to.be.true;
+    });
+
+    describe('and the keyboard', () => {
+      const g = globalThis as Record<string, unknown>;
+      let original: unknown;
+      /** Which element has the focus, as `document.activeElement` says. */
+      const page = { activeElement: null as unknown };
+      beforeEach(() => {
+        original = g.document;
+        page.activeElement = null;
+        g.document = page;
+      });
+      afterEach(() => {
+        g.document = original;
+      });
+
+      const element = (name: string) => {
+        const made = {
+          name,
+          isConnected: true,
+          closest: () => null,
+          focus: () => {
+            page.activeElement = made;
+          },
+        };
+        return made;
+      };
+      const press = (key: string, shiftKey = false, used = false) => ({
+        key,
+        shiftKey,
+        defaultPrevented: used,
+        preventDefault() {
+          this.defaultPrevented = true;
+        },
+      });
+
+      /** A panel whose header holds Close, and whose body a field and Save. */
+      const keyboardSetup = () => {
+        const edit = element('Edit');
+        const close = element('Close');
+        const field = element('Name');
+        const save = element('Save');
+        const panel = { hidden: true, classList: { toggle: () => undefined } };
+        const dialog = {
+          ...element('dialog'),
+          querySelectorAll: () => [close, field, save],
+        };
+        const app = consoleIn({
+          '[data-panel]': panel,
+          '[data-panel-dialog]': dialog,
+          '[data-panel-title]': { textContent: '' },
+          '[data-panel-body]': {
+            innerHTML: '',
+            scrollTop: 0,
+            querySelectorAll: () => [field, save],
+          },
+        }) as unknown as {
+          openPanel(title: string, build: (body: unknown) => void): void;
+          closePanel(): void;
+          panelKey(event: unknown): void;
+        };
+        return { app, panel, edit, close, field, save };
+      };
+
+      it('should be announced as a dialog named by its title', () => {
+        const app = consoleIn({});
+        (app as unknown as { drawShell(): void }).drawShell();
+        const html = (app as unknown as { container: { innerHTML: string } })
+          .container.innerHTML;
+        expect(html).to.match(
+          /<div class="dc-panel-inner" data-panel-dialog role="dialog"\s+aria-modal="true" aria-labelledby="dc-panel-title"/
+        );
+        expect(html).to.contain('<h2 id="dc-panel-title" data-panel-title>');
+      });
+
+      it('should take the focus to its first field, and give it back on close', () => {
+        // The focus stayed on Edit, and Tab went on through the page behind.
+        const { app, edit, field } = keyboardSetup();
+        edit.focus();
+        app.openPanel('Edit — alice', () => undefined);
+        expect(page.activeElement).to.equal(field);
+        app.closePanel();
+        expect(page.activeElement).to.equal(edit);
+      });
+
+      it('should keep Tab and Shift+Tab inside it', () => {
+        const { app, close, field, save } = keyboardSetup();
+        app.openPanel('Edit — alice', () => undefined);
+
+        save.focus();
+        const forward = press('Tab');
+        app.panelKey(forward);
+        expect(forward.defaultPrevented).to.be.true;
+        expect(page.activeElement).to.equal(close);
+
+        const backward = press('Tab', true);
+        app.panelKey(backward);
+        expect(backward.defaultPrevented).to.be.true;
+        expect(page.activeElement).to.equal(save);
+
+        // Between two of its controls, Tab is the browser's to move.
+        field.focus();
+        const within = press('Tab');
+        app.panelKey(within);
+        expect(within.defaultPrevented).to.be.false;
+
+        // From outside it, back in.
+        page.activeElement = null;
+        app.panelKey(press('Tab'));
+        expect(page.activeElement).to.equal(close);
+      });
+
+      it('should close on Escape, but not on one a control in it used', () => {
+        const { app, panel, edit } = keyboardSetup();
+        edit.focus();
+        app.openPanel('Edit — alice', () => undefined);
+        // A picker closing its list of suggestions prevents the default.
+        app.panelKey(press('Escape', false, true));
+        expect(panel.hidden).to.be.false;
+        app.panelKey(press('Escape'));
+        expect(panel.hidden).to.be.true;
+        expect(page.activeElement).to.equal(edit);
+      });
+
+      it('should leave the keys alone while it is closed', () => {
+        const { app, edit } = keyboardSetup();
+        edit.focus();
+        const tab = press('Tab');
+        app.panelKey(tab);
+        app.panelKey(press('Escape'));
+        expect(tab.defaultPrevented).to.be.false;
+        expect(page.activeElement).to.equal(edit);
+      });
     });
   });
 
@@ -1018,28 +1465,233 @@ describe('Directory console', () => {
     });
   });
 
+  describe('the list, between visits', () => {
+    /**
+     * The controls of one drawing of a list. Each repaint binds them again,
+     * so only the listener bound last is live, as in a browser.
+     */
+    const controls = () => {
+      const control = (dataset: Record<string, string> = {}) => {
+        let handler: ((event: unknown) => void) | undefined;
+        const made = {
+          value: '',
+          dataset,
+          fire: () => handler?.({ target: made }),
+          addEventListener: (
+            _type: string,
+            callback: (event: unknown) => void
+          ) => {
+            handler = callback;
+          },
+        };
+        return made;
+      };
+      const search = control();
+      const field = control();
+      const next = control({ page: '1' });
+      const holder = stubContainer();
+      Object.assign(holder, {
+        querySelector: (selector: string) =>
+          selector === '[data-search]'
+            ? search
+            : selector === '[data-search-attribute]'
+              ? field
+              : null,
+        querySelectorAll: (selector: string) =>
+          selector === '[data-page]' ? [next] : [],
+      });
+      return { holder, search, field, next };
+    };
+
+    it('should come back to the search, the field and the page it was left on', async () => {
+      // Back from a card drew the list anew: an empty box, "Every field",
+      // the prompt to type, and no rows.
+      const app = consoleIn({});
+      const loads: [string | undefined, string | undefined][] = [];
+      const entries: Record<string, Entry> = {};
+      for (let i = 10; i < 40; i++)
+        entries[`alice${i}`] = {
+          dn: `uid=alice${i},ou=users,dc=example,dc=com`,
+          uid: `alice${i}`,
+        };
+      Object.assign((app as unknown as { api: object }).api, {
+        listBounded: async (
+          _entity: EntityDescriptor,
+          search?: string,
+          attribute?: string
+        ) => {
+          loads.push([search, attribute]);
+          return { entries, truncated: false };
+        },
+      });
+      const visit = async () => {
+        const list = controls();
+        const main = {
+          innerHTML: '',
+          querySelector: (selector: string) =>
+            selector === '[data-list]' ? list.holder : null,
+        };
+        await (
+          app as unknown as {
+            renderList(main: unknown, entity: EntityDescriptor): Promise<void>;
+          }
+        ).renderList(main, users);
+        return list;
+      };
+
+      const first = await visit();
+      first.field.value = 'mail';
+      first.field.fire();
+      first.search.value = 'alice';
+      first.search.fire();
+      await new Promise(resolve => setTimeout(resolve, 300));
+      first.next.fire();
+      expect(first.holder.innerHTML).to.contain('26–30 of 30');
+      expect(loads).to.deep.equal([['alice', 'mail']]);
+
+      const back = await visit();
+      expect(loads).to.deep.equal([
+        ['alice', 'mail'],
+        ['alice', 'mail'],
+      ]);
+      expect(back.holder.innerHTML)
+        .to.contain('value="alice"')
+        .and.match(/<option value="mail" selected>/)
+        .and.contain('26–30 of 30');
+    });
+  });
+
   describe('reading a failed read', () => {
     it('should say the entry is gone only when it is', () => {
       const translator = new Translator('en');
       const gone = Object.assign(new Error('Not found'), { status: 404 });
       expect(readFailure(gone, translator)).to.deep.equal({
         gone: true,
+        refused: false,
         message: 'This entry no longer exists',
       });
     });
 
-    it('should show what a refusal said, not that the entry is gone', () => {
+    it('should say a refusal is one, not that the entry is gone', () => {
       // Telling the operator an entry no longer exists when they were in fact
       // refused sends them looking for the wrong problem. The organization
-      // card said it for every failure; the entry card never did.
+      // card said it for every failure; the entry card never did. Nor is
+      // the server's wording for an API client the one to show.
       const translator = new Translator('en');
-      const refused = Object.assign(new Error('Out of your scope'), {
-        status: 403,
-      });
+      const refused = Object.assign(
+        new Error('Token does not have permission on this branch'),
+        { status: 403 }
+      );
       expect(readFailure(refused, translator)).to.deep.equal({
         gone: false,
-        message: 'Out of your scope',
+        refused: true,
+        message: 'You may not see this entry',
       });
+    });
+
+    it('should show what any other failure said', () => {
+      const translator = new Translator('en');
+      const failed = Object.assign(new Error('Bad Gateway'), { status: 502 });
+      expect(readFailure(failed, translator)).to.deep.equal({
+        gone: false,
+        refused: false,
+        message: 'Bad Gateway',
+      });
+    });
+  });
+
+  describe('an account administering nothing', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const organizations: EntityDescriptor = {
+      key: 'organizations',
+      pluralName: 'organizations',
+      singularName: 'organization',
+      mainAttribute: 'ou',
+      base: top,
+      schema: { attributes: { ou: { type: 'string', role: 'identifier' } } },
+      endpoint: '/api/v1/ldap/organizations',
+      kind: 'organization',
+    };
+    const notice =
+      'You administer no branch: there is nothing here for you to manage.';
+
+    /** A console with this scope, which records what it asks the server. */
+    const setup = (scope: Scope) => {
+      const asked: string[] = [];
+      const holder = stubContainer();
+      const main = {
+        innerHTML: '',
+        querySelector: (selector: string): unknown =>
+          ({
+            '[data-list]': holder,
+            '[data-detail]': stubContainer(),
+            '[data-tree]': treeContainer(),
+          })[selector] ?? null,
+      };
+      const app = consoleIn({ '[data-main]': main });
+      Object.assign(app as unknown as object, {
+        scope,
+        entities: [users, organizations],
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        listBounded: async () => {
+          asked.push('list');
+          return { entries: {}, truncated: false };
+        },
+        get: async () => {
+          asked.push('get');
+          return { dn: 'uid=bob,ou=users,dc=example,dc=com', uid: 'bob' };
+        },
+        organizationTop: async () => {
+          asked.push('top');
+          return null;
+        },
+      });
+      const views = app as unknown as {
+        renderList(main: unknown, entity: EntityDescriptor): Promise<void>;
+        renderDetail(
+          main: unknown,
+          entity: EntityDescriptor,
+          id: string,
+          generation: number
+        ): Promise<void>;
+        renderOrganizations(main: unknown, generation: number): Promise<void>;
+      };
+      return { views, main, holder, asked };
+    };
+    const nobody: Scope = {
+      user: 'alice',
+      unrestricted: false,
+      described: true,
+      branches: [],
+      entities: [],
+    };
+
+    it('should say there is nothing to manage, and ask nothing the server would refuse', async () => {
+      // Each page answered in red with the server's "Token does not have
+      // permission on this branch".
+      const { views, main, holder, asked } = setup(nobody);
+      await views.renderList(main, users);
+      expect(holder.innerHTML).to.contain(notice).and.not.contain('error');
+      await views.renderDetail(main, users, 'bob', 0);
+      expect(main.innerHTML).to.contain(notice);
+      await views.renderOrganizations(main, 0);
+      expect(main.innerHTML).to.contain(notice);
+      expect(asked).to.deep.equal([]);
+    });
+
+    it('should still read for an unrestricted or undescribed scope, which names no branch either', async () => {
+      for (const scope of [
+        { ...nobody, unrestricted: true },
+        { ...nobody, described: false },
+      ]) {
+        const { views, main, holder, asked } = setup(scope);
+        await views.renderList(main, users);
+        expect(holder.innerHTML).to.not.contain(notice);
+        await views.renderDetail(main, users, 'bob', 0);
+        await views.renderOrganizations(main, 0);
+        expect(asked).to.include.members(['get', 'top']);
+      }
     });
   });
 
@@ -2156,7 +2808,11 @@ describe('Directory console', () => {
       expect(failed(500, 'Invalid DN syntax')).to.equal(
         `${hedged} (Invalid DN syntax)`
       );
-      expect(failed(403, 'Out of your scope')).to.equal('Out of your scope');
+      // Any other failure keeps its own words; a refusal is said plainly.
+      expect(failed(400, 'Unbalanced filter')).to.equal('Unbalanced filter');
+      expect(
+        failed(403, 'Token does not have permission on this branch')
+      ).to.equal('You may not see these entries');
     });
   });
 
@@ -2481,7 +3137,7 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.contain('>a<');
       expect(container.innerHTML).to.not.contain('dc-list-notice');
 
-      answers.push(cut, Object.assign(new Error('Nope'), { status: 403 }));
+      answers.push(cut, Object.assign(new Error('Nope'), { status: 400 }));
       await list.refresh();
       expect(container.innerHTML).to.contain('dc-list-notice');
       await list.refresh();
@@ -2532,12 +3188,21 @@ describe('Directory console', () => {
       );
       expect(failed).to.not.contain('Internal Server Error');
 
-      // Any other refusal says what the server said.
+      // A refusal is said plainly, not in the server's words for an API
+      // client.
+      nock(baseUrl).get('/api/v1/ldap/users').query(true).reply(403, {
+        error: 'Token does not have permission on this branch',
+      });
+      const forbidden = await drawnList('en');
+      expect(forbidden).to.contain('You may not see these entries');
+      expect(forbidden).to.not.contain('Token');
+
+      // Any other failure says what the server said.
       nock(baseUrl)
         .get('/api/v1/ldap/users')
         .query(true)
-        .reply(403, { error: 'Out of your scope' });
-      expect(await drawnList('en')).to.contain('Out of your scope');
+        .reply(400, { error: 'Unbalanced filter' });
+      expect(await drawnList('en')).to.contain('Unbalanced filter');
     });
 
     it('should not let an exported cell become a formula', () => {
@@ -2817,7 +3482,7 @@ describe('Directory console', () => {
         .get('/api/v1/ldap/users')
         .reply(403, { error: 'Out of your scope' });
       const { error } = await check([['new1', 'bob', '']]);
-      expect(error).to.equal('Out of your scope');
+      expect(error).to.equal('You may not see these entries');
       expect(nock.isDone()).to.equal(true);
     });
   });
