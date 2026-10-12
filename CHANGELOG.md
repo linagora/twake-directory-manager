@@ -1,32 +1,26 @@
 # Changelog
 
-## Unreleased
+## v0.6.0 (2026-10-12)
+
+Built on ldap-rest 0.19.0.
 
 ### Breaking Changes
 
-- Built on ldap-rest 0.19.0. With `core/twake/james`, mail forwards are no
-  longer mirrored to Twake Mail: its users set them there.
-  `DM_JAMES_SYNC_FORWARDS=true` mirrors them again, the directory then
-  overwriting what users set (#62) —
+- With `core/twake/james`, mail forwards are no longer mirrored to Twake
+  Mail; `DM_JAMES_SYNC_FORWARDS=true` restores it (#62) —
   [ldap-rest notes](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md#forwards-are-no-longer-copied-to-twake-mail)
 
 ### Features
 
-- A mailing list's external member is added by typing its address, with
-  ldap-rest's `externalUsersInGroups`: the full DN is no longer needed (#59)
-- The Twake schemas' labels, hints and form sections are in Mongolian too
+- A mailing list's external member is added by its address (#59)
+- Twake schemas' labels, hints and form sections in Mongolian
 
 ### Bug Fixes
 
-- The forms, cards, lists and CSV files no longer show _Other mailboxes_ and
-  _Delivery mode_, which nothing in a Twake deployment acts on, nor the
-  _Delivery modes_ reference data; `DM_CONSOLE_HIDDEN_ATTRIBUTES` chooses
-  what is hidden (#62, #63)
-- A pointer's select, and the CSV import, offer only the entries its schema
-  describes: the DNS levels a tree of mail domains hangs from, `org` or
-  `example`, are no mail domains (#58)
-- A card and a list name a mail domain by its name, `sales.example.org`,
-  as the form's select does, not by its RDN (#57)
+- _Other mailboxes_ and _Delivery mode_ are hidden;
+  `DM_CONSOLE_HIDDEN_ATTRIBUTES` chooses what is hidden (#62, #63)
+- A pointer offers only the entries its schema describes (#58)
+- Cards and lists name a mail domain by its name, not its RDN (#57)
 
 ## v0.5.0 (2026-10-12)
 
