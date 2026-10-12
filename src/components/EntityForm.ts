@@ -16,6 +16,7 @@
 
 import { escapeHtml } from '../shared/dom';
 import {
+  attributeHint,
   attributeLabel,
   beforeToday,
   entryValue,
@@ -23,6 +24,7 @@ import {
   isDnShaped,
   parseByteSize,
   rdnValue,
+  resolveText,
 } from '../format';
 import { hasRole, tooBroad } from '../api/ConsoleApiClient';
 import { SEARCH_MINIMUM, listFailure } from './EntityList';
@@ -251,7 +253,7 @@ export class EntityForm {
     const { translator } = this.options;
     const groups = new Map<string, [string, SchemaAttribute][]>();
     for (const field of this.fields) {
-      const group = field[1].group || '';
+      const group = resolveText(field[1].group, translator.language) || '';
       if (!groups.has(group)) groups.set(group, []);
       groups.get(group)!.push(field);
     }
@@ -293,7 +295,7 @@ export class EntityForm {
   /** What a field holds: redrawn alone when a select turns into a search. */
   private fieldContent(name: string, attr: SchemaAttribute): string {
     const id = `dc-field-${name}`;
-    const hint = attr.hint || attr.items?.hint;
+    const hint = attributeHint(attr, this.options.translator.language);
     const required = attr.required ? ' <span class="dc-required">*</span>' : '';
     const control = this.searches.has(name)
       ? this.pickerMarkup(name)
@@ -898,7 +900,8 @@ export class EntityForm {
       const bad = list.find(value => !regex.test(value));
       if (bad !== undefined)
         this.errors[name] =
-          attr.hint || attr.items?.hint || `${bad}: ${String(pattern)}`;
+          attributeHint(attr, this.options.translator.language) ||
+          `${bad}: ${String(pattern)}`;
     }
 
     const root = this.root;
@@ -948,7 +951,9 @@ export class EntityForm {
       attr.normalize === 'byteSize' &&
       list.some(value => parseByteSize(value) === undefined)
     )
-      return attr.hint || translator.t('form.notSize');
+      return (
+        attributeHint(attr, translator.language) || translator.t('form.notSize')
+      );
     if (hasRole(attr, 'accountExpiry')) {
       const stored = toList(entryValue(entry, name));
       if (list.some(value => !stored.includes(value) && beforeToday(value)))

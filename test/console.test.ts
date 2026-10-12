@@ -4320,6 +4320,45 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.include('Expected an email address');
     });
 
+    it('should write hints and section headings in the interface language', async () => {
+      const translated: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            uid: { type: 'string', required: true, role: 'identifier' },
+            mail: {
+              type: 'string',
+              hint: { en: 'An email address', fr: 'Une adresse e-mail' },
+              group: { en: 'Contact', fr: 'Coordonnées' },
+            },
+            mailAlternateAddress: {
+              type: 'array',
+              items: {
+                type: 'string',
+                hint: { en: 'Other addresses', fr: 'Autres adresses' },
+              },
+              group: { en: 'Contact', fr: 'Coordonnées' },
+            },
+          },
+        },
+      };
+      const container = stubContainer();
+      await new EntityForm({
+        entity: translated,
+        translator: new Translator('fr'),
+        pointerOptions: () => Promise.resolve([]),
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+      }).render(container);
+      expect(container.innerHTML).to.include('Une adresse e-mail');
+      expect(container.innerHTML).to.include('Autres adresses');
+      expect(container.innerHTML).not.to.include('[object Object]');
+      // One section for both fields, headed in French.
+      expect(
+        container.innerHTML.match(/<legend>Coordonnées<\/legend>/g)
+      ).to.have.length(1);
+    });
+
     it('should mark required fields and say what the mark means', async () => {
       const container = stubContainer();
       await build().render(container);

@@ -68,6 +68,24 @@ export function attributeLabel(
 }
 
 /**
+ * Plain-language description of what an attribute accepts, in the
+ * interface's language: the attribute's own, or that of its items.
+ *
+ * @param attr its schema definition
+ * @param language language tag the interface is running in
+ * @returns the hint to show, or undefined when there is none
+ */
+export function attributeHint(
+  attr: SchemaAttribute | undefined,
+  language = 'en'
+): string | undefined {
+  return (
+    resolveText(attr?.hint, language) ??
+    resolveText(attr?.items?.hint, language)
+  );
+}
+
+/**
  * Whether a text is written as a DN — `attribute=value` pairs separated by
  * commas, two at least — rather than as a name. An identifier holding an
  * `=` is not one, being a single pair.

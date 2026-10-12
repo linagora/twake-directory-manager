@@ -73,7 +73,7 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 | Schema                  | Effect in the interface                                                   |
 | ----------------------- | ------------------------------------------------------------------------- |
 | `label`                 | Column heading, field label, term in the detail card                      |
-| `hint`                  | Shown under the field, and repeated when a value is refused               |
+| `hint`                  | Shown under the field, in the interface language, and repeated on refusal |
 | `test`                  | Checked before the round trip, so the hint answers before the server does |
 | `required`              | Marked with `*`, with the legend that explains it                         |
 | `generated`, `readOnly` | Shown on the detail card, never offered for editing                       |
@@ -81,7 +81,7 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 | `type: array`           | A list of removable tokens, with the instruction to press Enter           |
 | `type: pointer`         | A select filled from the branch the pointer names                         |
 | `type: boolean`, `date` | A yes/no select, a date picker                                            |
-| `group`                 | Groups the fields under a heading                                         |
+| `group`                 | Groups the fields under a heading, in the interface language              |
 | `states`                | The states the account can be moved to                                    |
 | `role`                  | Which columns the table shows, and which actions appear                   |
 | `entity.large`          | Searched before listed, and searched from a pointer field                 |

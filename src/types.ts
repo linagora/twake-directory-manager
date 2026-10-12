@@ -22,12 +22,17 @@ export type LocalizedText = string | Record<string, string>;
 export interface SchemaAttribute {
   type:
     'string' | 'number' | 'integer' | 'boolean' | 'date' | 'array' | 'pointer';
-  items?: { type: string; test?: string; hint?: string; branch?: string[] };
+  items?: {
+    type: string;
+    test?: string;
+    hint?: LocalizedText;
+    branch?: string[];
+  };
   default?: unknown;
   required?: boolean;
   test?: string;
   /** Plain-language description of `test`, shown under the field */
-  hint?: string;
+  hint?: LocalizedText;
   branch?: string[];
   fixed?: boolean;
   /**
@@ -56,8 +61,8 @@ export interface SchemaAttribute {
   neverReturn?: boolean;
   /** Named lifecycle states this attribute can be moved to */
   states?: Record<string, string>;
-  /** Grouping hint for the form */
-  group?: string;
+  /** Heading the form groups the field under */
+  group?: LocalizedText;
   /** Name to show instead of the attribute name, in one or several languages */
   label?: LocalizedText;
 }
