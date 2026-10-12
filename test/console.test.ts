@@ -849,6 +849,58 @@ describe('Directory console', () => {
       await setStatus('frank', 'archived');
       expect(toast.textContent).to.equal('État passé à archived');
     });
+
+    it('should ask before deleting an organization by its name, not its DN', async () => {
+      const organizations: EntityDescriptor = {
+        key: 'organizations',
+        pluralName: 'organizations',
+        singularName: 'organization',
+        mainAttribute: 'ou',
+        base: 'ou=organization,dc=example,dc=com',
+        schema: {
+          attributes: {
+            ou: { type: 'string', role: 'identifier' },
+            twakeDepartmentPath: { type: 'string', role: 'organizationPath' },
+          },
+        },
+        endpoint: '/api/v1/ldap/organizations',
+        kind: 'organization',
+        organizationPath: 'twakeDepartmentPath',
+      };
+      const dn = 'ou=QA Lab,ou=Engineering,ou=organization,dc=example,dc=com';
+      const app = consoleIn({}) as unknown as {
+        confirmDeleteOrganization(
+          entity: EntityDescriptor,
+          entry: Entry,
+          dn: string
+        ): Promise<void>;
+      };
+      const asked: string[] = [];
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      // Declined: nothing is deleted, and no request is made.
+      g.window = {
+        confirm: (message: string) => {
+          asked.push(message);
+          return false;
+        },
+      };
+      try {
+        await app.confirmDeleteOrganization(
+          organizations,
+          { dn, ou: 'QA Lab', twakeDepartmentPath: 'Engineering / QA Lab' },
+          dn
+        );
+        // An organization with no path is named by its own name.
+        await app.confirmDeleteOrganization(organizations, { dn }, dn);
+      } finally {
+        g.window = original;
+      }
+      expect(asked).to.deep.equal([
+        'Delete Engineering / QA Lab? This cannot be undone.',
+        'Delete QA Lab? This cannot be undone.',
+      ]);
+    });
   });
 
   describe('reading a failed read', () => {

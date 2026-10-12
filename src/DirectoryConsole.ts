@@ -1143,7 +1143,7 @@ export class DirectoryConsole {
         void this.openOrganizationForm(entity, entry);
       },
       onDelete: (): void => {
-        void this.confirmDeleteOrganization(node.dn);
+        void this.confirmDeleteOrganization(entity, entry, node.dn);
       },
       onStatus: (): void => undefined,
       onResetPassword: (): void => undefined,
@@ -1573,9 +1573,21 @@ export class DirectoryConsole {
     }
   }
 
-  private async confirmDeleteOrganization(dn: string): Promise<void> {
-    if (!window.confirm(this.translator.t('delete.confirm', { name: dn })))
-      return;
+  private async confirmDeleteOrganization(
+    entity: EntityDescriptor,
+    entry: Entry,
+    dn: string
+  ): Promise<void> {
+    // Named the way the console shows it, by its path: a DN is no name.
+    const named = (attribute?: string): string | undefined => {
+      const value = attribute ? entryValue(entry, attribute) : undefined;
+      return Array.isArray(value) ? value[0] : value;
+    };
+    const name =
+      named(entity.organizationPath) ||
+      named(entity.mainAttribute) ||
+      rdnValue(dn);
+    if (!window.confirm(this.translator.t('delete.confirm', { name }))) return;
     try {
       await this.api.deleteOrganization(dn);
       this.toast(this.translator.t('delete.done'));
