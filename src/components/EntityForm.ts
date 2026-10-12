@@ -419,16 +419,19 @@ export class EntityForm {
     const { translator } = this.options;
     const isPointer = attr.items?.type === 'pointer';
     const branch = (attr.items?.branch || [])[0] || '';
+    // The id the field's label points at: without it, a screen reader names
+    // the box by its placeholder, and the select by nothing at all.
+    const id = `dc-field-${name}`;
     return `
       <div class="dc-tokens" data-tokens="${escapeHtml(name)}">
         <ul class="dc-token-list">${this.tokenItems(name)}</ul>
         ${
           isPointer
-            ? `<select class="dc-input" data-token-input data-pointer="${escapeHtml(branch)}"
+            ? `<select id="${escapeHtml(id)}" class="dc-input" data-token-input data-pointer="${escapeHtml(branch)}"
                  ${attr.required ? 'data-required="true" ' : ''}disabled aria-busy="true">
                  <option value="" disabled>${escapeHtml(translator.t('form.choose'))}</option>
                </select>`
-            : `<input class="dc-input" data-token-input type="text"
+            : `<input id="${escapeHtml(id)}" class="dc-input" data-token-input type="text"
                  placeholder="${escapeHtml(translator.t('form.addValue'))}" />`
         }
       </div>`;

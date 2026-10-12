@@ -3359,6 +3359,45 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.include('Press Enter to add a value');
     });
 
+    it('should give a multi-valued field’s control the id its label points at', async () => {
+      const domains: EntityDescriptor = {
+        ...users,
+        schema: {
+          ...users.schema,
+          attributes: {
+            ...users.schema.attributes,
+            twakeDomainLink: {
+              type: 'array',
+              items: {
+                type: 'pointer',
+                branch: ['ou=domains,ou=nomenclature,dc=example,dc=com'],
+              },
+            },
+          },
+        },
+      };
+      const container = stubContainer();
+      await new EntityForm({
+        entity: domains,
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+      }).render(container);
+      const html = container.innerHTML;
+      for (const [name, tag] of [
+        ['mailAlternateAddress', 'input'],
+        ['twakeDomainLink', 'select'],
+      ]) {
+        expect(html).to.include(`<label for="dc-field-${name}">`);
+        expect(html).to.match(
+          new RegExp(`<${tag} id="dc-field-${name}"[^>]*data-token-input`)
+        );
+        // Once: a label points at the first element holding its id.
+        expect(html.split(`id="dc-field-${name}"`)).to.have.length(2);
+      }
+    });
+
     it('should not offer the identifier for editing once it exists', async () => {
       const container = stubContainer();
       await build({ uid: 'jsmith', cn: 'John' }).render(container);
