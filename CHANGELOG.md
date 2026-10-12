@@ -1,15 +1,23 @@
 # Changelog
 
-## Unreleased
+## v0.4.10 (2026-10-12)
+
+### Features
+
+- Mongolian locale
+- A group's members and owners are found by email address as you type; a
+  full DN is still accepted (#50)
+- An entry's page shows its DN, with a copy button (#50)
 
 ### Bug Fixes
 
-- A group's members and owners are found by email address as the operator
-  types, instead of being typed as DNs by hand. A full DN is still taken as
-  it is, for whoever has one (#50)
-- An entry's page shows its DN, with a button to copy it (#50)
-- The image sends the bare host (`/`) to the console at `/static/console/`,
-  instead of answering "Cannot GET /" (#51)
+- The bare host (`/`) redirects to the console instead of answering
+  "Cannot GET /" (#51)
+
+### Known issues
+
+- A group that has an owner cannot be saved: ldap-rest 0.17.1 only accepts
+  an owner directly under the directory base
 
 ## v0.4.9 (2026-10-10)
 
