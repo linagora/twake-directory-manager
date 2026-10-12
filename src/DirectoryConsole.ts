@@ -135,18 +135,30 @@ const FOCUSABLE = [
  * gone sends them looking for the wrong problem — so every view that reads one
  * entry reads its failures here.
  *
+ * A `403` is said plainly too: the server words it for an API client
+ * ("Token does not have permission on this branch"), and a refusal is no
+ * failure of the console to report as one.
+ *
  * @param err failure raised by the API client
  * @param translator interface language
- * @returns the message to show, and whether the entry is simply gone
+ * @returns the message to show, whether the entry is simply gone, and
+ *   whether the reader was refused it
  */
 export function readFailure(
   err: unknown,
   translator: Translator
-): { gone: boolean; message: string } {
-  const gone = (err as { status?: number }).status === 404;
+): { gone: boolean; refused: boolean; message: string } {
+  const status = (err as { status?: number }).status;
+  const gone = status === 404;
+  const refused = status === 403;
   return {
     gone,
-    message: gone ? translator.t('detail.notFound') : (err as Error).message,
+    refused,
+    message: gone
+      ? translator.t('detail.notFound')
+      : refused
+        ? translator.t('detail.refused')
+        : (err as Error).message,
   };
 }
 
@@ -837,6 +849,23 @@ export class DirectoryConsole {
     return this.scope.branches.some(branch => branch.write);
   }
 
+  /**
+   * Whether the caller administers no branch at all. The server then refuses
+   * every read, so the views say so calmly rather than ask and show each
+   * refusal as an error. An unrestricted or undescribed scope names no
+   * branch either, but restricts nothing.
+   */
+  private administersNothing(): boolean {
+    return scopeRestricts(this.scope) && this.scope.branches.length === 0;
+  }
+
+  /** The notice standing in for a view the server would refuse whole. */
+  private nothingMarkup(): string {
+    return `<p class="dc-empty">${escapeHtml(
+      this.translator.t('scope.nothing')
+    )}</p>`;
+  }
+
   private canDelete(): boolean {
     if (this.scopeError) return false;
     if (!scopeRestricts(this.scope)) return true;
@@ -964,6 +993,13 @@ export class DirectoryConsole {
       .querySelector('[data-import]')
       ?.addEventListener('click', () => this.openImport(entity));
 
+    const holder = main.querySelector<HTMLElement>(
+      '[data-list]'
+    ) as HTMLElement;
+    if (this.administersNothing()) {
+      holder.innerHTML = this.nothingMarkup();
+      return;
+    }
     const view = this.listViews.get(entity.key) ?? {};
     this.listViews.set(entity.key, view);
     const list = new EntityList({
@@ -979,9 +1015,7 @@ export class DirectoryConsole {
         this.go(`${entity.key}/${encodeURIComponent(id)}`),
       onDelete: (ids: string[]): Promise<void> => this.deleteMany(entity, ids),
     });
-    await list.render(
-      main.querySelector<HTMLElement>('[data-list]') as HTMLElement
-    );
+    await list.render(holder);
   }
 
   /** One entry, read-only, with its actions and its relations. */
@@ -993,6 +1027,10 @@ export class DirectoryConsole {
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
+    if (this.administersNothing()) {
+      main.innerHTML = this.nothingMarkup();
+      return;
+    }
     main.innerHTML = `<p class="dc-empty">${escapeHtml(t('app.loading'))}</p>`;
     let entry: Entry;
     try {
@@ -1002,7 +1040,7 @@ export class DirectoryConsole {
       if (!this.current(generation)) return;
       const failure = readFailure(err, this.translator);
       main.innerHTML = `<p class="dc-empty${
-        failure.gone ? '' : ' dc-error-block'
+        failure.gone || failure.refused ? '' : ' dc-error-block'
       }">${escapeHtml(failure.message)}</p>`;
       return;
     }
@@ -1112,6 +1150,10 @@ export class DirectoryConsole {
     main: HTMLElement,
     generation: number
   ): Promise<void> {
+    if (this.administersNothing()) {
+      main.innerHTML = this.nothingMarkup();
+      return;
+    }
     const entity = this.entities.find(item => item.kind === 'organization');
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
@@ -1179,7 +1221,7 @@ export class DirectoryConsole {
       if (!this.current(generation)) return;
       const failure = readFailure(err, this.translator);
       holder.innerHTML = `<p class="dc-empty${
-        failure.gone ? '' : ' dc-error-block'
+        failure.gone || failure.refused ? '' : ' dc-error-block'
       }">${escapeHtml(failure.message)}</p>`;
       return;
     }

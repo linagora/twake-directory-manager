@@ -33,6 +33,8 @@ const en: Catalogue = {
 
   'scope.title': 'You administer',
   'scope.none': 'You administer no branch',
+  'scope.nothing':
+    'You administer no branch: there is nothing here for you to manage.',
   'scope.unrestricted': 'Unrestricted access',
   'scope.undescribed':
     'Your permissions are not described by the server — it checks each action',
@@ -63,6 +65,7 @@ const en: Catalogue = {
   'list.tooMany': 'Too many entries to show them all: narrow the search.',
   'list.failed':
     'The list could not be loaded. If the directory holds many entries, narrow the search.',
+  'list.refused': 'You may not see these entries',
   'list.count': '{from}–{to} of {total}',
   'list.perPage': 'Per page',
   'list.previous': 'Previous',
@@ -85,6 +88,7 @@ const en: Catalogue = {
     'And more entries than the directory lists at once: search the lists to find them.',
   'detail.actions': 'Actions',
   'detail.notFound': 'This entry no longer exists',
+  'detail.refused': 'You may not see this entry',
   'detail.dn': 'Distinguished name (DN)',
   'detail.copy': 'Copy',
   'detail.copied': 'Copied',
@@ -234,6 +238,8 @@ const fr: Catalogue = {
 
   'scope.title': 'Vous administrez',
   'scope.none': 'Vous n’administrez aucune branche',
+  'scope.nothing':
+    'Vous n’administrez aucune branche : il n’y a rien à gérer ici pour vous.',
   'scope.unrestricted': 'Accès sans restriction',
   'scope.undescribed':
     'Vos droits ne sont pas décrits par le serveur — il vérifie chaque action',
@@ -267,6 +273,7 @@ const fr: Catalogue = {
     'Trop d’entrées pour les afficher toutes : affinez la recherche.',
   'list.failed':
     'La liste n’a pas pu être chargée. Si l’annuaire contient beaucoup d’entrées, affinez la recherche.',
+  'list.refused': 'Vous n’avez pas accès à ces entrées',
   'list.count': '{from}–{to} sur {total}',
   'list.perPage': 'Par page',
   'list.previous': 'Précédent',
@@ -290,6 +297,7 @@ const fr: Catalogue = {
     'Et d’autres entrées, plus que l’annuaire n’en liste d’un coup : recherchez-les dans les listes.',
   'detail.actions': 'Actions',
   'detail.notFound': 'Cette entrée n’existe plus',
+  'detail.refused': 'Vous n’avez pas accès à cette entrée',
   'detail.dn': 'Nom distinctif (DN)',
   'detail.copy': 'Copier',
   'detail.copied': 'Copié',
@@ -451,6 +459,7 @@ const mn: Catalogue = {
 
   'scope.title': 'Таны удирддаг хэсэг',
   'scope.none': 'Та ямар ч салбар удирдахгүй',
+  'scope.nothing': 'Та ямар ч салбар удирдахгүй тул энд удирдах зүйл алга.',
   'scope.unrestricted': 'Хязгааргүй эрх',
   'scope.undescribed':
     'Таны эрхийг сервер тодорхойлоогүй — үйлдэл бүрийг сервер шалгана',
@@ -479,6 +488,7 @@ const mn: Catalogue = {
     'Бүгдийг харуулахад хэт олон бичлэг байна: хайлтаа нарийсгана уу.',
   'list.failed':
     'Жагсаалтыг ачаалж чадсангүй. Лавлахад олон бичлэг байгаа бол хайлтаа нарийсгана уу.',
+  'list.refused': 'Танд эдгээр бичлэгийг харах эрх байхгүй',
   'list.count': '{total}-с {from}–{to}',
   'list.perPage': 'Хуудсанд',
   'list.previous': 'Өмнөх',
@@ -499,6 +509,7 @@ const mn: Catalogue = {
     'Лавлах нэг удаад жагсаахаас олон бичлэг бий: тэдгээрийг жагсаалтаас хайж олно уу.',
   'detail.actions': 'Үйлдлүүд',
   'detail.notFound': 'Энэ бичлэг байхгүй болсон',
+  'detail.refused': 'Танд энэ бичлэгийг харах эрх байхгүй',
   'detail.dn': 'Ялгах нэр (DN)',
   'detail.copy': 'Хуулах',
   'detail.copied': 'Хуулагдлаа',

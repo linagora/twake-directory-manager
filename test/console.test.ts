@@ -1567,22 +1567,131 @@ describe('Directory console', () => {
       const gone = Object.assign(new Error('Not found'), { status: 404 });
       expect(readFailure(gone, translator)).to.deep.equal({
         gone: true,
+        refused: false,
         message: 'This entry no longer exists',
       });
     });
 
-    it('should show what a refusal said, not that the entry is gone', () => {
+    it('should say a refusal is one, not that the entry is gone', () => {
       // Telling the operator an entry no longer exists when they were in fact
       // refused sends them looking for the wrong problem. The organization
-      // card said it for every failure; the entry card never did.
+      // card said it for every failure; the entry card never did. Nor is
+      // the server's wording for an API client the one to show.
       const translator = new Translator('en');
-      const refused = Object.assign(new Error('Out of your scope'), {
-        status: 403,
-      });
+      const refused = Object.assign(
+        new Error('Token does not have permission on this branch'),
+        { status: 403 }
+      );
       expect(readFailure(refused, translator)).to.deep.equal({
         gone: false,
-        message: 'Out of your scope',
+        refused: true,
+        message: 'You may not see this entry',
       });
+    });
+
+    it('should show what any other failure said', () => {
+      const translator = new Translator('en');
+      const failed = Object.assign(new Error('Bad Gateway'), { status: 502 });
+      expect(readFailure(failed, translator)).to.deep.equal({
+        gone: false,
+        refused: false,
+        message: 'Bad Gateway',
+      });
+    });
+  });
+
+  describe('an account administering nothing', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const organizations: EntityDescriptor = {
+      key: 'organizations',
+      pluralName: 'organizations',
+      singularName: 'organization',
+      mainAttribute: 'ou',
+      base: top,
+      schema: { attributes: { ou: { type: 'string', role: 'identifier' } } },
+      endpoint: '/api/v1/ldap/organizations',
+      kind: 'organization',
+    };
+    const notice =
+      'You administer no branch: there is nothing here for you to manage.';
+
+    /** A console with this scope, which records what it asks the server. */
+    const setup = (scope: Scope) => {
+      const asked: string[] = [];
+      const holder = stubContainer();
+      const main = {
+        innerHTML: '',
+        querySelector: (selector: string): unknown =>
+          ({
+            '[data-list]': holder,
+            '[data-detail]': stubContainer(),
+            '[data-tree]': treeContainer(),
+          })[selector] ?? null,
+      };
+      const app = consoleIn({ '[data-main]': main });
+      Object.assign(app as unknown as object, {
+        scope,
+        entities: [users, organizations],
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        listBounded: async () => {
+          asked.push('list');
+          return { entries: {}, truncated: false };
+        },
+        get: async () => {
+          asked.push('get');
+          return { dn: 'uid=bob,ou=users,dc=example,dc=com', uid: 'bob' };
+        },
+        organizationTop: async () => {
+          asked.push('top');
+          return null;
+        },
+      });
+      const views = app as unknown as {
+        renderList(main: unknown, entity: EntityDescriptor): Promise<void>;
+        renderDetail(
+          main: unknown,
+          entity: EntityDescriptor,
+          id: string,
+          generation: number
+        ): Promise<void>;
+        renderOrganizations(main: unknown, generation: number): Promise<void>;
+      };
+      return { views, main, holder, asked };
+    };
+    const nobody: Scope = {
+      user: 'alice',
+      unrestricted: false,
+      described: true,
+      branches: [],
+      entities: [],
+    };
+
+    it('should say there is nothing to manage, and ask nothing the server would refuse', async () => {
+      // Each page answered in red with the server's "Token does not have
+      // permission on this branch".
+      const { views, main, holder, asked } = setup(nobody);
+      await views.renderList(main, users);
+      expect(holder.innerHTML).to.contain(notice).and.not.contain('error');
+      await views.renderDetail(main, users, 'bob', 0);
+      expect(main.innerHTML).to.contain(notice);
+      await views.renderOrganizations(main, 0);
+      expect(main.innerHTML).to.contain(notice);
+      expect(asked).to.deep.equal([]);
+    });
+
+    it('should still read for an unrestricted or undescribed scope, which names no branch either', async () => {
+      for (const scope of [
+        { ...nobody, unrestricted: true },
+        { ...nobody, described: false },
+      ]) {
+        const { views, main, holder, asked } = setup(scope);
+        await views.renderList(main, users);
+        expect(holder.innerHTML).to.not.contain(notice);
+        await views.renderDetail(main, users, 'bob', 0);
+        await views.renderOrganizations(main, 0);
+        expect(asked).to.include.members(['get', 'top']);
+      }
     });
   });
 
@@ -2699,7 +2808,11 @@ describe('Directory console', () => {
       expect(failed(500, 'Invalid DN syntax')).to.equal(
         `${hedged} (Invalid DN syntax)`
       );
-      expect(failed(403, 'Out of your scope')).to.equal('Out of your scope');
+      // Any other failure keeps its own words; a refusal is said plainly.
+      expect(failed(400, 'Unbalanced filter')).to.equal('Unbalanced filter');
+      expect(
+        failed(403, 'Token does not have permission on this branch')
+      ).to.equal('You may not see these entries');
     });
   });
 
@@ -3024,7 +3137,7 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.contain('>a<');
       expect(container.innerHTML).to.not.contain('dc-list-notice');
 
-      answers.push(cut, Object.assign(new Error('Nope'), { status: 403 }));
+      answers.push(cut, Object.assign(new Error('Nope'), { status: 400 }));
       await list.refresh();
       expect(container.innerHTML).to.contain('dc-list-notice');
       await list.refresh();
@@ -3075,12 +3188,21 @@ describe('Directory console', () => {
       );
       expect(failed).to.not.contain('Internal Server Error');
 
-      // Any other refusal says what the server said.
+      // A refusal is said plainly, not in the server's words for an API
+      // client.
+      nock(baseUrl).get('/api/v1/ldap/users').query(true).reply(403, {
+        error: 'Token does not have permission on this branch',
+      });
+      const forbidden = await drawnList('en');
+      expect(forbidden).to.contain('You may not see these entries');
+      expect(forbidden).to.not.contain('Token');
+
+      // Any other failure says what the server said.
       nock(baseUrl)
         .get('/api/v1/ldap/users')
         .query(true)
-        .reply(403, { error: 'Out of your scope' });
-      expect(await drawnList('en')).to.contain('Out of your scope');
+        .reply(400, { error: 'Unbalanced filter' });
+      expect(await drawnList('en')).to.contain('Unbalanced filter');
     });
 
     it('should not let an exported cell become a formula', () => {
@@ -3360,7 +3482,7 @@ describe('Directory console', () => {
         .get('/api/v1/ldap/users')
         .reply(403, { error: 'Out of your scope' });
       const { error } = await check([['new1', 'bob', '']]);
-      expect(error).to.equal('Out of your scope');
+      expect(error).to.equal('You may not see these entries');
       expect(nock.isDone()).to.equal(true);
     });
   });
