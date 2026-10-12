@@ -518,7 +518,12 @@ export class EntityList {
               (Array.isArray(value) ? value : [value])
                 .filter((v): v is string => v !== undefined)
                 .map(v =>
-                  displayValue(attr, String(v), this.options.pointerLabel)
+                  displayValue(
+                    attr,
+                    String(v),
+                    this.options.pointerLabel,
+                    translator.language
+                  )
                 )
             );
             const isPath = name === entity.organizationPath;

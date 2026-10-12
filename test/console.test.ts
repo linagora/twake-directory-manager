@@ -3478,6 +3478,45 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.include('Nom');
     });
 
+    it('should write a date the way the reader does, not as the directory stores it', () => {
+      const dated: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            twakeDeletionDate: { type: 'date' },
+          },
+        },
+      };
+      const card = (language: string): string => {
+        const container = stubContainer();
+        new EntityDetail({
+          entity: dated,
+          entry: { uid: 'imp.two2', twakeDeletionDate: '20310115000000Z' },
+          translator: new Translator(language),
+          canWrite: true,
+          canDelete: true,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          onStatus: () => undefined,
+          onResetPassword: () => undefined,
+        }).render(container);
+        return container.innerHTML;
+      };
+      expect(card('en')).to.include('>January 15, 2031</span>');
+      expect(card('fr')).to.include('>15 janvier 2031</span>');
+      // The stored day, whatever the reader's time zone: a date the form
+      // set is midnight UTC, the evening before west of Greenwich.
+      expect(
+        displayValue({ type: 'date' }, '20240930000000Z', undefined, 'en')
+      ).to.equal('September 30, 2024');
+      // What is no date is shown as it stands.
+      expect(displayValue({ type: 'date' }, '20241399000000Z')).to.equal(
+        '20241399000000Z'
+      );
+      expect(displayValue({ type: 'date' }, 'soon')).to.equal('soon');
+    });
+
     it('should translate the states it knows and keep the ones it does not', () => {
       const entity: EntityDescriptor = {
         ...users,

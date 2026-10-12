@@ -132,17 +132,6 @@ export function entryValue(
 }
 
 /**
- * Text to show for one value.
- *
- * A DN reference is shown by its own name — `active`, `Systems Analyst` — and
- * the full DN belongs in the tooltip, where it is available without being in
- * the way.
- *
- * @param attr schema definition of the attribute
- * @param value value as stored
- * @returns the text to show
- */
-/**
  * Decimal units, the ones `parseByteSize` reads and the ones mail servers
  * report: 1 GB is 10^9 bytes, not 2^30.
  */
@@ -180,14 +169,55 @@ export function formatByteSize(value: string): string {
   return `${bytes} B`;
 }
 
+/**
+ * A directory date as a reader writes it.
+ *
+ * The directory stores a date as a GeneralizedTime, `20310115000000Z`, which
+ * reads as a number. It is shown in the interface's language, and as the day
+ * stored — the one the form's date field shows — whatever the reader's time
+ * zone.
+ *
+ * @param value value as stored
+ * @param language interface language
+ * @returns the date, or the value as it stands when it is no date
+ */
+export function formatDate(value: string, language: string): string {
+  const match = /^(\d{4})-?(\d{2})-?(\d{2})/.exec(value.trim());
+  if (!match) return value;
+  const [year, month, day] = match.slice(1).map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  // `Date.UTC` carries a 13th month or a 32nd day over rather than refuse it.
+  if (date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day)
+    return value;
+  return new Intl.DateTimeFormat(language, {
+    dateStyle: 'long',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
+/**
+ * Text to show for one value.
+ *
+ * A DN reference is shown by its own name — `active`, `Systems Analyst` — and
+ * the full DN belongs in the tooltip, where it is available without being in
+ * the way.
+ *
+ * @param attr schema definition of the attribute
+ * @param value value as stored
+ * @param pointerLabel readable name of the entry a pointer lands on
+ * @param language interface language, to write a date in
+ * @returns the text to show
+ */
 export function displayValue(
   attr: SchemaAttribute | undefined,
   value: string,
-  pointerLabel?: (dn: string) => string | undefined
+  pointerLabel?: (dn: string) => string | undefined,
+  language = 'en'
 ): string {
   const pointer = attr?.type === 'pointer' || attr?.items?.type === 'pointer';
   if (pointer) return pointerLabel?.(value) || rdnValue(value);
   if (attr?.normalize === 'byteSize') return formatByteSize(value);
+  if (attr?.type === 'date') return formatDate(value, language);
   return value;
 }
 

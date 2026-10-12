@@ -216,7 +216,8 @@ export class EntityDetail {
     const shown = displayValue(
       entity.schema.attributes[name],
       value,
-      this.options.pointerLabel
+      this.options.pointerLabel,
+      this.options.translator.language
     );
     return `<span class="dc-value" title="${escapeHtml(value)}">${escapeHtml(shown)}</span>`;
   }
