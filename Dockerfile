@@ -27,6 +27,8 @@ FROM ${LDAP_REST_IMAGE}
 # schemas that directory serves stay reachable for other clients.
 COPY --from=build /build/dist /app/node_modules/ldap-rest/static/console
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/twake-directory-manager
+# Next to ldap-rest's node_modules, so that it finds `ldap-rest/plugin`.
+COPY docker/consoleRoot.mjs /app/plugins/consoleRoot.mjs
 
 # Authentication defaults to OpenID Connect, which a browser console can use
 # with any provider — LemonLDAP::NG included — and which refuses to start
@@ -41,7 +43,10 @@ COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/twake-directory-manager
 # DM_LDAP_FLAT_SCHEMA already creates its own instance, and naming the plugin
 # as well asked for a nameless one on top, which ldap-rest dropped with a
 # warning at every start.
-ENV DM_CONSOLE_PLUGINS=core/static,core/configApi,core/ldap/groups,core/ldap/organizations,core/ldap/enterpriseRules,core/ldap/accountLifecycle,core/auth/authzScope \
+#
+# /app/plugins/consoleRoot.mjs sends the bare host to the console, which
+# otherwise answers "Cannot GET /".
+ENV DM_CONSOLE_PLUGINS=core/static,/app/plugins/consoleRoot.mjs,core/configApi,core/ldap/groups,core/ldap/organizations,core/ldap/enterpriseRules,core/ldap/accountLifecycle,core/auth/authzScope \
  DM_AUTH_PLUGINS=core/auth/openidconnect,core/auth/authzLinid1 \
  DM_EXTRA_PLUGINS= \
  DM_ALLOW_ANONYMOUS=false \

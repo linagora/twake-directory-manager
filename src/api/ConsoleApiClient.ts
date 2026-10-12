@@ -1030,7 +1030,8 @@ export class ConsoleApiClient {
     // entity or the DN above it, and the pointer needs a search either way.
     if (this.inOrganizationTree(branch)) {
       return this.organizationSearchable
-        ? (query: string) => this.organizationSearch(query)
+        ? (query: string): Promise<{ dn: string; label: string }[]> =>
+            this.organizationSearch(query)
         : undefined;
     }
     const owner = entities.find(
@@ -1058,6 +1059,90 @@ export class ConsoleApiClient {
             label: name && name !== id ? `${name} (${id})` : id,
           };
         });
+    };
+  }
+
+  /**
+   * A search for the entries a group's members or owners name, for the form
+   * to offer as the operator types.
+   *
+   * Those attributes hold DNs the schema types as plain strings, so the form
+   * asked for a DN typed by hand: an administrator knows a colleague by their
+   * email address, not by `uid=jdoe,ou=users,dc=example,dc=org`. The search
+   * looks among the entries that have an email address — the accounts, and
+   * for members the groups too, a group being able to hold another — in the
+   * attributes the list searches, and names each by its display name and its
+   * address.
+   *
+   * @param role `members` or `owners`
+   * @param entities entities the console knows
+   * @returns a search, or undefined when no entity has an email address
+   */
+  memberSearch(
+    role: 'members' | 'owners',
+    entities: EntityDescriptor[]
+  ): ((query: string) => Promise<{ dn: string; label: string }[]>) | undefined {
+    const searched = entities.filter(
+      entity =>
+        (entity.kind === 'flat' ||
+          (role === 'members' && entity.kind === 'group')) &&
+        roleAttribute(entity.schema, 'primaryEmail')
+    );
+    if (searched.length === 0) return undefined;
+    return async query => {
+      const found = await Promise.allSettled(
+        searched.map(async entity => {
+          const scope = searchableAttributes(entity)
+            .map(([name]) => name)
+            .join(',');
+          const entries = await this.list(
+            entity,
+            query,
+            scope,
+            POINTER_SEARCH_LIMIT
+          );
+          const mail = roleAttribute(entity.schema, 'primaryEmail') as string;
+          const display = roleAttribute(entity.schema, 'displayName');
+          // An entry answered without its DN cannot be written as a member:
+          // its identifier is no DN, and the save would be refused.
+          return Object.entries(entries)
+            .filter(([, entry]) => entry.dn)
+            .map(([id, entry]) => {
+              const first = (name?: string): string | undefined => {
+                const raw = name ? entryValue(entry, name) : undefined;
+                return Array.isArray(raw) ? raw[0] : raw;
+              };
+              const name = first(display) || id;
+              const address = first(mail);
+              return {
+                dn: String(entry.dn),
+                label: address ? `${name} <${address}>` : name,
+              };
+            });
+        })
+      );
+      // A branch the caller may not read leaves the others to answer; the
+      // search fails only when none could.
+      const answered = found.filter(
+        (result): result is PromiseFulfilledResult<PointerOption[]> =>
+          result.status === 'fulfilled'
+      );
+      if (answered.length === 0)
+        throw (found[0] as PromiseRejectedResult).reason;
+      // Taken in turn from each branch, so that a query matching many
+      // accounts still leaves room for the groups it matches.
+      const lists = answered.map(result => result.value);
+      const options: PointerOption[] = [];
+      for (
+        let index = 0;
+        options.length < POINTER_SEARCH_LIMIT &&
+        lists.some(list => index < list.length);
+        index++
+      )
+        for (const list of lists)
+          if (index < list.length && options.length < POINTER_SEARCH_LIMIT)
+            options.push(list[index]);
+      return options;
     };
   }
 

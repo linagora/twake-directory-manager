@@ -1259,6 +1259,11 @@ export class DirectoryConsole {
       ):
         | ((query: string) => Promise<{ dn: string; label: string }[]>)
         | undefined => this.api.pointerSearch(branch, this.entities, failed),
+      memberSearch: (
+        role: 'members' | 'owners'
+      ):
+        | ((query: string) => Promise<{ dn: string; label: string }[]>)
+        | undefined => this.api.memberSearch(role, this.entities),
       onCancel: (): void => this.closePanel(),
       onSubmit: async (
         values: Record<string, string | string[]>,

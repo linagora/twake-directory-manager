@@ -117,13 +117,32 @@ export class EntityDetail {
 
         <section class="dc-card">
           <h3>${escapeHtml(translator.t('detail.attributes'))}</h3>
-          <dl class="dc-attributes">${this.attributesMarkup()}</dl>
+          <dl class="dc-attributes">${this.dnMarkup()}${this.attributesMarkup()}</dl>
         </section>
 
         ${this.relationsMarkup()}
       </article>`;
 
     this.bind(container);
+  }
+
+  /**
+   * The entry's DN, which no attribute carries: the name a group's members
+   * and owners are written with, and the one an administrator is asked for
+   * elsewhere. Copied in one click rather than read off the address bar.
+   */
+  private dnMarkup(): string {
+    const { entry, translator } = this.options;
+    const dn = entry.dn ? String(entry.dn) : '';
+    if (!dn) return '';
+    return `
+        <div class="dc-attribute dc-attribute-dn">
+          <dt>${escapeHtml(translator.t('detail.dn'))}</dt>
+          <dd><code class="dc-dn">${escapeHtml(dn)}</code>
+            <button type="button" class="dc-button" data-copy-dn>${escapeHtml(
+              translator.t('detail.copy')
+            )}</button></dd>
+        </div>`;
   }
 
   /** Every attribute the schema knows, in schema order, empty ones included. */
@@ -251,6 +270,24 @@ export class EntityDetail {
     container
       .querySelector('[data-hand-over]')
       ?.addEventListener('click', () => this.options.onHandOver?.());
+
+    const copy = container.querySelector<HTMLElement>('[data-copy-dn]');
+    copy?.addEventListener('click', () => {
+      const { entry, translator } = this.options;
+      // Absent outside a secure context, or refused: the DN stays
+      // selectable by hand, and the button says it was not copied.
+      const said = (key: string): void => {
+        copy.textContent = translator.t(key);
+        setTimeout(() => {
+          copy.textContent = translator.t('detail.copy');
+        }, 2000);
+      };
+      if (!navigator.clipboard) return said('detail.copyFailed');
+      navigator.clipboard.writeText(String(entry.dn)).then(
+        () => said('detail.copied'),
+        () => said('detail.copyFailed')
+      );
+    });
 
     const status = container.querySelector<HTMLSelectElement>('[data-status]');
     status?.addEventListener('change', () => {

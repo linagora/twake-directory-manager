@@ -24,8 +24,10 @@ ingress:
   # The certificate is read from <release>-tls.
   tls: false
   annotations: {}
-  # Traefik only: a Middleware sending the bare host to the console, which is
-  # not served at the root. Reference it from the router's annotation:
+  # Traefik only: a Middleware sending the bare host to the console. The
+  # image redirects / to /static/console/ itself, so this is only
+  # needed for a consolePath of its own. Reference it from the router's
+  # annotation:
   # traefik.ingress.kubernetes.io/router.middlewares: <namespace>-<release>-root@kubernetescrd
   redirectRoot: false
   consolePath: /static/console/

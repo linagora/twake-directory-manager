@@ -19,9 +19,10 @@ import {
   attributeLabel,
   entryValue,
   formatByteSize,
+  isDnShaped,
   rdnValue,
 } from '../format';
-import { tooBroad } from '../api/ConsoleApiClient';
+import { hasRole, tooBroad } from '../api/ConsoleApiClient';
 import { SEARCH_MINIMUM, listFailure } from './EntityList';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
@@ -54,6 +55,13 @@ export interface FormOptions {
   pointerSearch?(
     branch: string,
     failed?: boolean
+  ): ((query: string) => Promise<PointerCandidate[]>) | undefined;
+  /**
+   * A search of the entries a group's members or owners may name, or
+   * undefined when there is none: the field then takes DNs typed whole
+   */
+  memberSearch?(
+    role: 'members' | 'owners'
   ): ((query: string) => Promise<PointerCandidate[]>) | undefined;
   /** Called with the attributes to write and those to clear */
   onSubmit(
@@ -133,6 +141,8 @@ export class EntityForm {
   >();
   /** Names of the entries picked by searching, keyed by DN */
   private readonly picked = new Map<string, string>();
+  /** Searched fields that also take a DN typed whole: members, owners */
+  private readonly freeform = new Set<string>();
 
   constructor(options: FormOptions) {
     this.options = options;
@@ -143,6 +153,18 @@ export class EntityForm {
       const branch = (attr.branch || attr.items?.branch || [])[0];
       const search = pointer && branch ? this.searchOf(branch) : undefined;
       if (search) this.searches.set(name, search);
+      // A group's members and owners are DNs the schema types as strings:
+      // found by email address, and still typed whole by who has the DN.
+      const role = (['members', 'owners'] as const).find(candidate =>
+        hasRole(attr, candidate)
+      );
+      if (!search && role && attr.type === 'array') {
+        const members = this.memberSearchOf(role);
+        if (members) {
+          this.searches.set(name, members);
+          this.freeform.add(name);
+        }
+      }
       // The department an account is attached to is named by its path, which
       // the entry already carries: reading it costs no request, where the DN
       // alone would show the bare name of the last organization.
@@ -173,6 +195,17 @@ export class EntityForm {
       return failed
         ? this.options.pointerSearch?.(branch, true)
         : this.options.pointerSearch?.(branch);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** The caller's search of members or owners, guarded like `searchOf`. */
+  private memberSearchOf(
+    role: 'members' | 'owners'
+  ): ((query: string) => Promise<PointerCandidate[]>) | undefined {
+    try {
+      return this.options.memberSearch?.(role);
     } catch {
       return undefined;
     }
@@ -351,7 +384,9 @@ export class EntityForm {
             aria-autocomplete="list" aria-expanded="false"
             aria-controls="${escapeHtml(listId)}"
             placeholder="${escapeHtml(
-              translator.t('form.searchPointer', { count: SEARCH_MINIMUM })
+              this.freeform.has(name)
+                ? translator.t('form.searchMember', { count: SEARCH_MINIMUM })
+                : translator.t('form.searchPointer', { count: SEARCH_MINIMUM })
             )}" />
           <ul class="dc-picker-results" id="${escapeHtml(listId)}"
             role="listbox" hidden></ul>
@@ -513,11 +548,29 @@ export class EntityForm {
           `dc-picker-${name}-${active}`
         );
     };
+    // A DN typed whole, where the field takes one: added as it is, the
+    // directory being the judge of whether it names an entry.
+    const typedDn = (): string | undefined => {
+      const value = input.value.trim();
+      return this.freeform.has(name) && isDnShaped(value) ? value : undefined;
+    };
+    const addTyped = (dn: string): void => {
+      const held = this.values[name].some(
+        value => value.toLowerCase() === dn.toLowerCase()
+      );
+      if (!held) this.values[name].push(dn);
+      input.value = '';
+      close();
+      redraw();
+    };
     const choose = (candidate: PointerCandidate): void => {
       this.picked.set(candidate.dn, candidate.label);
       if (multiple) {
-        if (!this.values[name].includes(candidate.dn))
-          this.values[name].push(candidate.dn);
+        // DNs compare without regard to case, as a DN typed whole does.
+        const held = this.values[name].some(
+          value => value.toLowerCase() === candidate.dn.toLowerCase()
+        );
+        if (!held) this.values[name].push(candidate.dn);
       } else this.values[name] = [candidate.dn];
       input.value = '';
       close();
@@ -528,6 +581,7 @@ export class EntityForm {
       if (timer) clearTimeout(timer);
       const query = input.value.trim();
       const ticket = ++generation;
+      if (typedDn()) return message(translator.t('form.addDn'));
       if (query.length < SEARCH_MINIMUM) {
         if (query.length === 0) close();
         else
@@ -559,6 +613,12 @@ export class EntityForm {
         close();
         return;
       }
+      const dn = typedDn();
+      if (key === 'Enter' && dn) {
+        event.preventDefault();
+        addTyped(dn);
+        return;
+      }
       if (results.hidden || candidates.length === 0) {
         // Enter in an empty search must not submit the whole form.
         if (key === 'Enter') event.preventDefault();
@@ -584,7 +644,13 @@ export class EntityForm {
       event.preventDefault();
       choose(candidates[Number(item.dataset.candidate)]);
     });
-    input.addEventListener('blur', close);
+    input.addEventListener('blur', () => {
+      // A DN typed and left in the box is one the operator meant to add, as
+      // a value left in a token box is.
+      const dn = typedDn();
+      if (dn) addTyped(dn);
+      else close();
+    });
 
     tokens.addEventListener('click', event => {
       const button = (event.target as HTMLElement).closest<HTMLElement>(

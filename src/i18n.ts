@@ -76,6 +76,10 @@ const en: Catalogue = {
   'detail.emptyRelations': 'No related entry',
   'detail.actions': 'Actions',
   'detail.notFound': 'This entry no longer exists',
+  'detail.dn': 'Distinguished name (DN)',
+  'detail.copy': 'Copy',
+  'detail.copied': 'Copied',
+  'detail.copyFailed': 'Select the DN to copy it',
 
   'form.required': 'Fields marked with * are required',
   'form.addValue': 'Press Enter to add a value',
@@ -83,6 +87,9 @@ const en: Catalogue = {
   'form.none': '—',
   'form.choose': 'Choose…',
   'form.searchPointer': 'Type {count} characters to search',
+  'form.searchMember':
+    'Type {count} characters of an email address, or a full DN',
+  'form.addDn': 'Press Enter to add this DN',
   'form.searching': 'Searching…',
   'form.true': 'Yes',
   'form.false': 'No',
@@ -250,6 +257,10 @@ const fr: Catalogue = {
   'detail.emptyRelations': 'Aucune entrée liée',
   'detail.actions': 'Actions',
   'detail.notFound': 'Cette entrée n’existe plus',
+  'detail.dn': 'Nom distinctif (DN)',
+  'detail.copy': 'Copier',
+  'detail.copied': 'Copié',
+  'detail.copyFailed': 'Sélectionnez le DN pour le copier',
 
   'form.required': 'Les champs marqués d’une * sont obligatoires',
   'form.addValue': 'Appuyez sur Entrée pour ajouter une valeur',
@@ -257,6 +268,9 @@ const fr: Catalogue = {
   'form.none': '—',
   'form.choose': 'Choisir…',
   'form.searchPointer': 'Tapez {count} caractères pour chercher',
+  'form.searchMember':
+    'Tapez {count} caractères d’une adresse électronique, ou un DN complet',
+  'form.addDn': 'Appuyez sur Entrée pour ajouter ce DN',
   'form.searching': 'Recherche…',
   'form.true': 'Oui',
   'form.false': 'Non',
@@ -428,6 +442,10 @@ const mn: Catalogue = {
   'detail.emptyRelations': 'Холбоотой бичлэг алга',
   'detail.actions': 'Үйлдлүүд',
   'detail.notFound': 'Энэ бичлэг байхгүй болсон',
+  'detail.dn': 'Ялгах нэр (DN)',
+  'detail.copy': 'Хуулах',
+  'detail.copied': 'Хуулагдлаа',
+  'detail.copyFailed': 'DN-ийг сонгоод хуулна уу',
 
   'form.required': '* тэмдэгтэй талбарыг заавал бөглөнө',
   'form.addValue': 'Утга нэмэхийн тулд Enter дарна уу',
@@ -435,6 +453,9 @@ const mn: Catalogue = {
   'form.none': '—',
   'form.choose': 'Сонгох…',
   'form.searchPointer': 'Хайхын тулд {count} тэмдэгт оруулна уу',
+  'form.searchMember':
+    'И-мэйл хаягийн {count} тэмдэгт, эсвэл бүтэн DN оруулна уу',
+  'form.addDn': 'Энэ DN-ийг нэмэхийн тулд Enter дарна уу',
   'form.searching': 'Хайж байна…',
   'form.true': 'Тийм',
   'form.false': 'Үгүй',

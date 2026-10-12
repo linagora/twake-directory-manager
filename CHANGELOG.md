@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- A group's members and owners are found by email address as the operator
+  types, instead of being typed as DNs by hand. A full DN is still taken as
+  it is, for whoever has one (#50)
+- An entry's page shows its DN, with a button to copy it (#50)
+- The image sends the bare host (`/`) to the console at `/static/console/`,
+  instead of answering "Cannot GET /" (#51)
+
 ## v0.4.9 (2026-10-10)
 
 Built on ldap-rest 0.17.1.
