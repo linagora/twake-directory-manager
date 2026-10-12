@@ -14,7 +14,7 @@ import { escapeHtml } from './shared/dom';
 
 import { ConsoleApiClient, isLarge } from './api/ConsoleApiClient';
 import { CONSOLE_LOGO, LINAGORA_LOGO } from './assets';
-import { EntityDetail } from './components/EntityDetail';
+import { EntityDetail, stateLabel } from './components/EntityDetail';
 import { EntityForm } from './components/EntityForm';
 import { EntityImport } from './components/EntityImport';
 import {
@@ -1390,7 +1390,11 @@ export class DirectoryConsole {
   ): Promise<void> {
     try {
       await this.api.setStatus(entity, id, state);
-      this.toast(this.translator.t('status.changed', { state }));
+      this.toast(
+        this.translator.t('status.changed', {
+          state: stateLabel(this.translator, state),
+        })
+      );
       await this.renderMain();
     } catch (err) {
       this.toast((err as Error).message, true);

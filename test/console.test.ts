@@ -122,6 +122,36 @@ function treeContainer(): HTMLElement & TreeContainer {
   return container as unknown as HTMLElement & TreeContainer;
 }
 
+/**
+ * A console drawn into a container that answers each selector with the
+ * element given for it: enough for an action that writes into the shell.
+ */
+function consoleIn(
+  elements: Record<string, unknown>,
+  language = 'en'
+): DirectoryConsole {
+  const app = new DirectoryConsole({
+    containerId: 'console',
+    apiBaseUrl: baseUrl,
+    language,
+  });
+  (app as unknown as { container: unknown }).container = {
+    querySelector: (selector: string) => elements[selector] ?? null,
+    querySelectorAll: () => [],
+  };
+  return app;
+}
+
+/** A toast element, which records the last message it was given. */
+function toastElement(): { textContent: string } {
+  return {
+    textContent: '',
+    hidden: true,
+    onclick: null,
+    classList: { toggle: () => undefined },
+  } as unknown as { textContent: string };
+}
+
 const usersSchema: EntitySchema = {
   attributes: {
     objectClass: { type: 'array', fixed: true, default: ['top'] },
@@ -750,20 +780,11 @@ describe('Directory console', () => {
           if (!panel.hidden) offset = value;
         },
       };
-      const elements: Record<string, unknown> = {
+      const app = consoleIn({
         '[data-panel]': panel,
         '[data-panel-title]': { textContent: '' },
         '[data-panel-body]': body,
-      };
-      const app = new DirectoryConsole({
-        containerId: 'console',
-        apiBaseUrl: baseUrl,
-        language: 'en',
       });
-      (app as unknown as { container: unknown }).container = {
-        querySelector: (selector: string) => elements[selector] ?? null,
-        querySelectorAll: () => [],
-      };
       return {
         app: app as unknown as {
           openPanel(title: string, build: (body: unknown) => void): void;
@@ -797,6 +818,36 @@ describe('Directory console', () => {
         g.window = original;
       }
       expect(panel.hidden).to.be.true;
+    });
+  });
+
+  describe('console actions', () => {
+    it('should name the new state the way the state select does', async () => {
+      const toast = toastElement();
+      const app = consoleIn({ '[data-toast]': toast }, 'fr');
+      const setStatus = (id: string, state: string): Promise<void> =>
+        (
+          app as unknown as {
+            setStatus(
+              entity: EntityDescriptor,
+              id: string,
+              state: string
+            ): Promise<void>;
+          }
+        ).setStatus(users, id, state);
+
+      nock(baseUrl)
+        .post('/api/v1/ldap/users/frank/status', { state: 'noAccess' })
+        .reply(200, {});
+      await setStatus('frank', 'noAccess');
+      expect(toast.textContent).to.equal('État passé à Sans accès');
+
+      // A state the deployment invented keeps the name it was given.
+      nock(baseUrl)
+        .post('/api/v1/ldap/users/frank/status', { state: 'archived' })
+        .reply(200, {});
+      await setStatus('frank', 'archived');
+      expect(toast.textContent).to.equal('État passé à archived');
     });
   });
 
