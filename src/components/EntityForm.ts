@@ -139,7 +139,7 @@ export class EntityForm {
     string,
     (query: string) => Promise<PointerCandidate[]>
   >();
-  /** Names of the entries picked by searching, keyed by DN */
+  /** Names of the entries picked by searching or offered, keyed by DN */
   private readonly picked = new Map<string, string>();
   /** Searched fields that also take a DN typed whole: members, owners */
   private readonly freeform = new Set<string>();
@@ -419,16 +419,19 @@ export class EntityForm {
     const { translator } = this.options;
     const isPointer = attr.items?.type === 'pointer';
     const branch = (attr.items?.branch || [])[0] || '';
+    // The id the field's label points at: without it, a screen reader names
+    // the box by its placeholder, and the select by nothing at all.
+    const id = `dc-field-${name}`;
     return `
       <div class="dc-tokens" data-tokens="${escapeHtml(name)}">
         <ul class="dc-token-list">${this.tokenItems(name)}</ul>
         ${
           isPointer
-            ? `<select class="dc-input" data-token-input data-pointer="${escapeHtml(branch)}"
+            ? `<select id="${escapeHtml(id)}" class="dc-input" data-token-input data-pointer="${escapeHtml(branch)}"
                  ${attr.required ? 'data-required="true" ' : ''}disabled aria-busy="true">
                  <option value="" disabled>${escapeHtml(translator.t('form.choose'))}</option>
                </select>`
-            : `<input class="dc-input" data-token-input type="text"
+            : `<input id="${escapeHtml(id)}" class="dc-input" data-token-input type="text"
                  placeholder="${escapeHtml(translator.t('form.addValue'))}" />`
         }
       </div>`;
@@ -436,11 +439,16 @@ export class EntityForm {
 
   private tokenItems(name: string): string {
     const { translator } = this.options;
+    const attr = this.fields.find(([field]) => field === name)?.[1];
+    // A DN is named the way its select offers it, the DN kept for the title.
+    const pointer = attr?.items?.type === 'pointer';
     return this.values[name]
       .map(
         (value, index) => `
       <li class="dc-token">
-        <span title="${escapeHtml(value)}">${escapeHtml(value)}</span>
+        <span title="${escapeHtml(value)}">${escapeHtml(
+          pointer ? this.picked.get(value) || rdnValue(value) : value
+        )}</span>
         <button type="button" data-remove="${index}"
           aria-label="${escapeHtml(translator.t('form.removeValue'))}">×</button>
       </li>`
@@ -769,8 +777,27 @@ export class EntityForm {
         select.value = current;
         select.disabled = false;
         select.removeAttribute('aria-busy');
+        if ('tokenInput' in select.dataset) this.nameTokens(select, options);
       })
     );
+  }
+
+  /**
+   * Name the values a token select holds the way it offers them: the tokens
+   * are drawn before the options are known, by the RDN of each DN.
+   *
+   * @param select the select of a multi-valued pointer
+   * @param options what it offers
+   */
+  private nameTokens(
+    select: HTMLSelectElement,
+    options: { dn: string; label: string }[]
+  ): void {
+    for (const option of options) this.picked.set(option.dn, option.label);
+    const field = select.closest<HTMLElement>('[data-tokens]');
+    const name = field?.dataset.tokens;
+    const list = field?.querySelector('.dc-token-list');
+    if (name && list) list.innerHTML = this.tokenItems(name);
   }
 
   /**

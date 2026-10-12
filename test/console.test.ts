@@ -12,6 +12,7 @@ import nock from 'nock';
 import { ConsoleApiClient, isLarge } from '../src/api/ConsoleApiClient';
 import { signInAgain } from '../src/session';
 import {
+  DirectoryConsole,
   ToastController,
   claimRoots,
   createdEntryId,
@@ -119,6 +120,36 @@ function treeContainer(): HTMLElement & TreeContainer {
     },
   };
   return container as unknown as HTMLElement & TreeContainer;
+}
+
+/**
+ * A console drawn into a container that answers each selector with the
+ * element given for it: enough for an action that writes into the shell.
+ */
+function consoleIn(
+  elements: Record<string, unknown>,
+  language = 'en'
+): DirectoryConsole {
+  const app = new DirectoryConsole({
+    containerId: 'console',
+    apiBaseUrl: baseUrl,
+    language,
+  });
+  (app as unknown as { container: unknown }).container = {
+    querySelector: (selector: string) => elements[selector] ?? null,
+    querySelectorAll: () => [],
+  };
+  return app;
+}
+
+/** A toast element, which records the last message it was given. */
+function toastElement(): { textContent: string } {
+  return {
+    textContent: '',
+    hidden: true,
+    onclick: null,
+    classList: { toggle: () => undefined },
+  } as unknown as { textContent: string };
 }
 
 const usersSchema: EntitySchema = {
@@ -730,6 +761,173 @@ describe('Directory console', () => {
     });
   });
 
+  describe('the side panel', () => {
+    /** A console whose panel is made of elements just real enough for it. */
+    const setup = () => {
+      const panel = {
+        hidden: true,
+        classList: { toggle: () => undefined },
+      };
+      // As in a browser, an element with no box keeps its offset whatever
+      // is written to it: the panel's body has none while the panel is hidden.
+      let offset = 0;
+      const body = {
+        innerHTML: '',
+        get scrollTop(): number {
+          return offset;
+        },
+        set scrollTop(value: number) {
+          if (!panel.hidden) offset = value;
+        },
+      };
+      const app = consoleIn({
+        '[data-panel]': panel,
+        '[data-panel-title]': { textContent: '' },
+        '[data-panel-body]': body,
+      });
+      return {
+        app: app as unknown as {
+          openPanel(title: string, build: (body: unknown) => void): void;
+          closePanel(): void;
+          followHash(): Promise<void>;
+        },
+        panel,
+        body,
+      };
+    };
+
+    it('should open every form at its top', () => {
+      const { app, panel, body } = setup();
+      app.openPanel('Edit — bob', () => undefined);
+      body.scrollTop = 739;
+      app.closePanel();
+      app.openPanel('New group', () => undefined);
+      expect(panel.hidden).to.be.false;
+      expect(body.scrollTop).to.equal(0);
+    });
+
+    it('should close the panel when the page changes under it', async () => {
+      const { app, panel } = setup();
+      app.openPanel('Edit — alice', () => undefined);
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      g.window = { location: { hash: '#/organizations' } };
+      try {
+        await app.followHash();
+      } finally {
+        g.window = original;
+      }
+      expect(panel.hidden).to.be.true;
+    });
+  });
+
+  describe('the shell and its actions', () => {
+    it('should name the new state the way the state select does', async () => {
+      const toast = toastElement();
+      const app = consoleIn({ '[data-toast]': toast }, 'fr');
+      const setStatus = (id: string, state: string): Promise<void> =>
+        (
+          app as unknown as {
+            setStatus(
+              entity: EntityDescriptor,
+              id: string,
+              state: string
+            ): Promise<void>;
+          }
+        ).setStatus(users, id, state);
+
+      nock(baseUrl)
+        .post('/api/v1/ldap/users/frank/status', { state: 'noAccess' })
+        .reply(200, {});
+      await setStatus('frank', 'noAccess');
+      expect(toast.textContent).to.equal('État passé à Sans accès');
+
+      // A state the deployment invented keeps the name it was given.
+      nock(baseUrl)
+        .post('/api/v1/ldap/users/frank/status', { state: 'archived' })
+        .reply(200, {});
+      await setStatus('frank', 'archived');
+      expect(toast.textContent).to.equal('État passé à archived');
+    });
+
+    it('should ask before deleting an organization by its name, not its DN', async () => {
+      const organizations: EntityDescriptor = {
+        key: 'organizations',
+        pluralName: 'organizations',
+        singularName: 'organization',
+        mainAttribute: 'ou',
+        base: 'ou=organization,dc=example,dc=com',
+        schema: {
+          attributes: {
+            ou: { type: 'string', role: 'identifier' },
+            twakeDepartmentPath: { type: 'string', role: 'organizationPath' },
+          },
+        },
+        endpoint: '/api/v1/ldap/organizations',
+        kind: 'organization',
+        organizationPath: 'twakeDepartmentPath',
+      };
+      const dn = 'ou=QA Lab,ou=Engineering,ou=organization,dc=example,dc=com';
+      const app = consoleIn({}) as unknown as {
+        confirmDeleteOrganization(
+          entity: EntityDescriptor,
+          entry: Entry,
+          dn: string
+        ): Promise<void>;
+      };
+      const asked: string[] = [];
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      // Declined: nothing is deleted, and no request is made.
+      g.window = {
+        confirm: (message: string) => {
+          asked.push(message);
+          return false;
+        },
+      };
+      try {
+        await app.confirmDeleteOrganization(
+          organizations,
+          { dn, ou: 'QA Lab', twakeDepartmentPath: 'Engineering / QA Lab' },
+          dn
+        );
+        // An organization with no path is named by its own name.
+        await app.confirmDeleteOrganization(organizations, { dn }, dn);
+      } finally {
+        g.window = original;
+      }
+      expect(asked).to.deep.equal([
+        'Delete Engineering / QA Lab? This cannot be undone.',
+        'Delete QA Lab? This cannot be undone.',
+      ]);
+    });
+
+    it('should name the transit branch in the scope banner, tooltip included', () => {
+      const app = consoleIn({}) as unknown as {
+        scope: Scope;
+        scopeMarkup(): string;
+      };
+      app.scope = {
+        user: 'sophie.martin',
+        unrestricted: false,
+        branches: [
+          {
+            dn: 'ou=Sales,ou=organization,dc=example,dc=com',
+            name: 'Sales',
+            path: 'Sales',
+            read: true,
+            write: true,
+          },
+        ],
+        entities: [],
+        transit: 'ou=Transit,ou=organization,dc=example,dc=com',
+      };
+      const markup = app.scopeMarkup();
+      expect(markup).to.contain('title="Transit">Transit</a>');
+      expect(markup).to.not.contain('title="ou=Transit');
+    });
+  });
+
   describe('reading a failed read', () => {
     it('should say the entry is gone only when it is', () => {
       const translator = new Translator('en');
@@ -939,6 +1137,33 @@ describe('Directory console', () => {
           { dn: `ou=a,${orgTop}`, label: 'Government / Alpha' },
           { dn: `ou=b,${orgTop}`, label: 'Government / Beta' },
         ]);
+      });
+
+      it('should search from the caller’s own top, not the directory’s', async () => {
+        const client = await discover('/api/v1/ldap/organizations/:dn/search');
+        const sales = `ou=Sales,${orgTop}`;
+        // A local administrator of Sales: the server narrows the top to it.
+        nock(baseUrl)
+          .get('/api/v1/ldap/organizations/top')
+          .once()
+          .reply(200, { dn: sales, ou: 'Sales' });
+        const searched: string[] = [];
+        nock(baseUrl)
+          .get(/\/api\/v1\/ldap\/organizations\/[^/]+\/search/)
+          .query(true)
+          .times(2)
+          .reply(function (uri) {
+            searched.push(decodeURIComponent(uri.split('/')[5]));
+            return [200, [{ dn: `ou=France,${sales}`, ou: 'France' }]];
+          });
+        const search = client.pointerSearch('dc=example,dc=com', []);
+        expect(await search?.('Fra')).to.deep.equal([
+          { dn: `ou=France,${sales}`, label: 'France' },
+        ]);
+        // The top is asked once for the field, not at every keystroke.
+        await search?.('Fran');
+        expect(searched).to.deep.equal([sales, sales]);
+        expect(nock.isDone()).to.be.true;
       });
     });
 
@@ -2176,6 +2401,90 @@ describe('Directory console', () => {
       expect(csvCell('John Smith')).to.equal('John Smith');
       expect(csvCell('Smith, John')).to.equal('"Smith, John"');
     });
+
+    it('should show and clear the selection of a whole page from its header', async () => {
+      // Each repaint is a new set of boxes, as in a browser: only the
+      // listeners of the last one are live.
+      type Box = {
+        checked: boolean;
+        indeterminate: boolean;
+        dataset: Record<string, string>;
+        fire(): void;
+        addEventListener(type: string, handler: (event: unknown) => void): void;
+      };
+      const box = (id?: string): Box => {
+        let handler: ((event: unknown) => void) | undefined;
+        const made: Box = {
+          checked: false,
+          indeterminate: false,
+          dataset: id ? { select: id } : {},
+          fire: () => handler?.({ target: made }),
+          addEventListener: (_type, callback) => {
+            handler = callback;
+          },
+        };
+        return made;
+      };
+      let header = box();
+      let rows: Box[] = [];
+      const container = stubContainer();
+      Object.assign(container, {
+        querySelector: (selector: string) =>
+          selector === '[data-select-all]' ? header : null,
+        querySelectorAll: (selector: string) =>
+          selector === '[data-select]' ? rows : [],
+      });
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () =>
+          Promise.resolve({
+            alice: { dn: 'uid=alice,ou=users,dc=example,dc=com', uid: 'alice' },
+            bob: { dn: 'uid=bob,ou=users,dc=example,dc=com', uid: 'bob' },
+          }),
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      });
+      const repaint = (): void => {
+        header = box();
+        rows = [box('alice'), box('bob')];
+      };
+      repaint();
+      await list.render(container);
+      const selected = (list as unknown as { selected: Set<string> }).selected;
+      const headerTag = (): string =>
+        /<input type="checkbox" data-select-all[^>]*>/.exec(
+          container.innerHTML
+        )?.[0] ?? '';
+
+      // One row of two: neither checked nor clear.
+      const [alice] = rows;
+      alice.checked = true;
+      repaint();
+      alice.fire();
+      expect(headerTag()).to.not.contain('checked');
+      expect(header.indeterminate).to.be.true;
+
+      // The whole page, from the header: shown checked.
+      const before = header;
+      before.checked = true;
+      repaint();
+      before.fire();
+      expect([...selected]).to.have.members(['alice', 'bob']);
+      expect(headerTag()).to.contain('checked');
+      expect(header.indeterminate).to.be.false;
+
+      // Clicked again, it clears the page.
+      const again = header;
+      again.checked = false;
+      repaint();
+      again.fire();
+      expect(selected.size).to.equal(0);
+      expect(headerTag()).to.not.contain('checked');
+      expect(header.indeterminate).to.be.false;
+    });
   });
 
   describe('importing pointers into a large branch', () => {
@@ -3077,6 +3386,87 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.include('Press Enter to add a value');
     });
 
+    it('should give a multi-valued field’s control the id its label points at', async () => {
+      const domains: EntityDescriptor = {
+        ...users,
+        schema: {
+          ...users.schema,
+          attributes: {
+            ...users.schema.attributes,
+            twakeDomainLink: {
+              type: 'array',
+              items: {
+                type: 'pointer',
+                branch: ['ou=domains,ou=nomenclature,dc=example,dc=com'],
+              },
+            },
+          },
+        },
+      };
+      const container = stubContainer();
+      await new EntityForm({
+        entity: domains,
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+      }).render(container);
+      const html = container.innerHTML;
+      for (const [name, tag] of [
+        ['mailAlternateAddress', 'input'],
+        ['twakeDomainLink', 'select'],
+      ]) {
+        expect(html).to.include(`<label for="dc-field-${name}">`);
+        expect(html).to.match(
+          new RegExp(`<${tag} id="dc-field-${name}"[^>]*data-token-input`)
+        );
+        // Once: a label points at the first element holding its id.
+        expect(html.split(`id="dc-field-${name}"`)).to.have.length(2);
+      }
+    });
+
+    it('should name the tokens of a multi-valued pointer the way its select does', async () => {
+      const branch = 'ou=domains,ou=nomenclature,dc=example,dc=com';
+      const example = `dc=example,${branch}`;
+      const domains: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            uid: users.schema.attributes.uid,
+            twakeDomainLink: {
+              type: 'array',
+              items: { type: 'pointer', branch: [branch] },
+            },
+          },
+        },
+      };
+      // The token select, inside its field, as `fillPointers` finds it.
+      const list = { innerHTML: '' };
+      const field = {
+        dataset: { tokens: 'twakeDomainLink' },
+        querySelector: (selector: string) =>
+          selector === '.dc-token-list' ? list : null,
+      };
+      const select = Object.assign(stubSelect(branch, ''), {
+        closest: (selector: string) =>
+          selector === '[data-tokens]' ? field : null,
+      });
+      (select.dataset as Record<string, string>).tokenInput = '';
+      const container = await renderWith(
+        select,
+        { uid: 'hr', twakeDomainLink: [example] },
+        () => Promise.resolve([{ dn: example, label: 'example.com' }]),
+        domains
+      );
+      // Before the options are known: the RDN, not the DN.
+      expect(container.innerHTML).to.include('>example</span>');
+      expect(container.innerHTML).to.not.include(`>${example}</span>`);
+      // Once they are: the name the select offers, the DN in the title.
+      expect(list.innerHTML).to.include(
+        `<span title="${example}">example.com</span>`
+      );
+    });
+
     it('should not offer the identifier for editing once it exists', async () => {
       const container = stubContainer();
       await build({ uid: 'jsmith', cn: 'John' }).render(container);
@@ -3155,6 +3545,45 @@ describe('Directory console', () => {
         onResetPassword: () => undefined,
       }).render(container);
       expect(container.innerHTML).to.include('Nom');
+    });
+
+    it('should write a date the way the reader does, not as the directory stores it', () => {
+      const dated: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            twakeDeletionDate: { type: 'date' },
+          },
+        },
+      };
+      const card = (language: string): string => {
+        const container = stubContainer();
+        new EntityDetail({
+          entity: dated,
+          entry: { uid: 'imp.two2', twakeDeletionDate: '20310115000000Z' },
+          translator: new Translator(language),
+          canWrite: true,
+          canDelete: true,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          onStatus: () => undefined,
+          onResetPassword: () => undefined,
+        }).render(container);
+        return container.innerHTML;
+      };
+      expect(card('en')).to.include('>January 15, 2031</span>');
+      expect(card('fr')).to.include('>15 janvier 2031</span>');
+      // The stored day, whatever the reader's time zone: a date the form
+      // set is midnight UTC, the evening before west of Greenwich.
+      expect(
+        displayValue({ type: 'date' }, '20240930000000Z', undefined, 'en')
+      ).to.equal('September 30, 2024');
+      // What is no date is shown as it stands.
+      expect(displayValue({ type: 'date' }, '20241399000000Z')).to.equal(
+        '20241399000000Z'
+      );
+      expect(displayValue({ type: 'date' }, 'soon')).to.equal('soon');
     });
 
     it('should translate the states it knows and keep the ones it does not', () => {

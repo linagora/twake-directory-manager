@@ -1725,8 +1725,14 @@ select.dc-input {
     gap: 6px;
   }
 
+  /* The language stays reachable: a short line under the row of entries. */
   .dc-sidebar-footer {
-    display: none;
+    padding: 0 16px 12px;
+    border-top: 0;
+  }
+
+  .dc-language .dc-input {
+    flex: none;
   }
 
   .dc-header,

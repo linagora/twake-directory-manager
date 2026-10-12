@@ -388,6 +388,12 @@ export class EntityList {
 
     this.bind();
     this.restoreFocus(focus);
+    // Half a page selected has no markup: the box shows it as a property.
+    const all = root.querySelector<HTMLInputElement>('[data-select-all]');
+    if (all) {
+      const picked = slice.filter(([id]) => this.selected.has(id)).length;
+      all.indeterminate = picked > 0 && picked < slice.length;
+    }
   }
 
   /**
@@ -449,6 +455,10 @@ export class EntityList {
       )}</p>`;
 
     const attributes = this.options.entity.schema.attributes;
+    // Checked when the whole page is, so that the next click clears the page
+    // rather than selecting it once more.
+    const whole =
+      slice.length > 0 && slice.every(([id]) => this.selected.has(id));
     return `
       ${
         this.truncated
@@ -466,7 +476,7 @@ export class EntityList {
           <thead>
             <tr>
               <th class="dc-checkbox-cell">
-                <input type="checkbox" data-select-all
+                <input type="checkbox" data-select-all ${whole ? 'checked' : ''}
                   aria-label="${escapeHtml(translator.t('list.selectAll'))}" />
               </th>
               ${this.columns
@@ -508,7 +518,12 @@ export class EntityList {
               (Array.isArray(value) ? value : [value])
                 .filter((v): v is string => v !== undefined)
                 .map(v =>
-                  displayValue(attr, String(v), this.options.pointerLabel)
+                  displayValue(
+                    attr,
+                    String(v),
+                    this.options.pointerLabel,
+                    translator.language
+                  )
                 )
             );
             const isPath = name === entity.organizationPath;

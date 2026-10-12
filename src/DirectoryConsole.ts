@@ -14,7 +14,7 @@ import { escapeHtml } from './shared/dom';
 
 import { ConsoleApiClient, isLarge } from './api/ConsoleApiClient';
 import { CONSOLE_LOGO, LINAGORA_LOGO } from './assets';
-import { EntityDetail } from './components/EntityDetail';
+import { EntityDetail, stateLabel } from './components/EntityDetail';
 import { EntityForm } from './components/EntityForm';
 import { EntityImport } from './components/EntityImport';
 import {
@@ -421,10 +421,7 @@ export class DirectoryConsole {
     }
 
     this.readRoute();
-    window.addEventListener('hashchange', () => {
-      this.readRoute();
-      void this.renderMain();
-    });
+    window.addEventListener('hashchange', () => void this.followHash());
 
     this.drawShell();
     await this.renderMain();
@@ -455,6 +452,17 @@ export class DirectoryConsole {
       return;
     }
     this.route = { view: 'entity', entity: first, id: second };
+  }
+
+  /**
+   * Draw the page a new hash names. A side panel belongs to the page it was
+   * opened on: left over a page reached with Back or a typed address, it
+   * covers that page and saves into an entry no longer on screen.
+   */
+  private async followHash(): Promise<void> {
+    this.closePanel();
+    this.readRoute();
+    await this.renderMain();
   }
 
   /** Navigate, letting the hash change drive the render. */
@@ -649,9 +657,11 @@ export class DirectoryConsole {
           ? `<span class="dc-scope-label">${escapeHtml(t('transit.branch'))}</span>
             <a class="dc-scope-transit" href="#/organizations/${encodeURIComponent(
               this.scope.transit
-            )}" title="${escapeHtml(this.scope.transit)}">${escapeHtml(
+            )}" title="${escapeHtml(
+              // Readable, like the branches' paths: the scope gives the
+              // transit branch no path, and its name stands in for one.
               rdnValue(this.scope.transit)
-            )}</a>`
+            )}">${escapeHtml(rdnValue(this.scope.transit))}</a>`
           : ''
       }`;
   }
@@ -1135,7 +1145,7 @@ export class DirectoryConsole {
         void this.openOrganizationForm(entity, entry);
       },
       onDelete: (): void => {
-        void this.confirmDeleteOrganization(node.dn);
+        void this.confirmDeleteOrganization(entity, entry, node.dn);
       },
       onStatus: (): void => undefined,
       onResetPassword: (): void => undefined,
@@ -1175,6 +1185,10 @@ export class DirectoryConsole {
     body.innerHTML = '';
     build(body);
     panel.hidden = false;
+    // One body serves every form, and a hidden one keeps the offset the last
+    // form was left at: the next would open scrolled past its first fields.
+    // Reset once shown, since an element with no box ignores the write.
+    body.scrollTop = 0;
   }
 
   private closePanel(): void {
@@ -1378,7 +1392,11 @@ export class DirectoryConsole {
   ): Promise<void> {
     try {
       await this.api.setStatus(entity, id, state);
-      this.toast(this.translator.t('status.changed', { state }));
+      this.toast(
+        this.translator.t('status.changed', {
+          state: stateLabel(this.translator, state),
+        })
+      );
       await this.renderMain();
     } catch (err) {
       this.toast((err as Error).message, true);
@@ -1557,9 +1575,21 @@ export class DirectoryConsole {
     }
   }
 
-  private async confirmDeleteOrganization(dn: string): Promise<void> {
-    if (!window.confirm(this.translator.t('delete.confirm', { name: dn })))
-      return;
+  private async confirmDeleteOrganization(
+    entity: EntityDescriptor,
+    entry: Entry,
+    dn: string
+  ): Promise<void> {
+    // Named the way the console shows it, by its path: a DN is no name.
+    const named = (attribute?: string): string | undefined => {
+      const value = attribute ? entryValue(entry, attribute) : undefined;
+      return Array.isArray(value) ? value[0] : value;
+    };
+    const name =
+      named(entity.organizationPath) ||
+      named(entity.mainAttribute) ||
+      rdnValue(dn);
+    if (!window.confirm(this.translator.t('delete.confirm', { name }))) return;
     try {
       await this.api.deleteOrganization(dn);
       this.toast(this.translator.t('delete.done'));

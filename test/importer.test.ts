@@ -179,6 +179,48 @@ describe('CSV import', () => {
       ]);
     });
 
+    it('should take a column two attributes fit equally for the required one', () => {
+      // `emailaddress` starts with Email's label and ends with Address's, and
+      // the two labels weigh the same: a file is made to fill the required
+      // fields, and Email is one.
+      expect(
+        guessMapping(
+          [
+            'Employee ID',
+            'Last name',
+            'First name',
+            'Full name',
+            'Email address',
+            'Department',
+            'Phone number',
+          ],
+          fields
+        )
+      ).to.deep.equal([
+        'employeeNumber',
+        'sn',
+        'givenName',
+        'displayName',
+        'mail',
+        'twakeDepartmentLink',
+        'telephoneNumber',
+      ]);
+      // Whichever end of the name the email is at.
+      const french = fields.map(([name, attr]): ImportField =>
+        name === 'postalAddress'
+          ? [name, { ...attr, label: { en: 'Address', fr: 'Adresse' } }]
+          : [name, attr]
+      );
+      expect(guessMapping(['Adresse email'], french)).to.deep.equal(['mail']);
+      // Two optional attributes still leave the choice to the operator.
+      expect(guessMapping(['Mobile phone'], fields)).to.deep.equal(['']);
+      // And a label still counts for more than an attribute name: `Mail
+      // address` ends with Address's label and only starts with mail's name.
+      expect(guessMapping(['Mail address'], fields)).to.deep.equal([
+        'postalAddress',
+      ]);
+    });
+
     it('should match attribute names and labels in any language or case', () => {
       expect(
         guessMapping(['MAIL', 'civilité', 'nom_commun', 'unknown'], fields)

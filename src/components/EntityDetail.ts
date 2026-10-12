@@ -48,6 +48,19 @@ function values(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : [String(value)];
 }
 
+/**
+ * Name of a lifecycle state. A state the catalogue knows is translated; one
+ * the deployment invented keeps the name the deployment gave it.
+ *
+ * @param translator interface language
+ * @param state state key, as the schema declares it
+ * @returns the name to show
+ */
+export function stateLabel(translator: Translator, state: string): string {
+  const shown = translator.t(`state.${state}`);
+  return shown === `state.${state}` ? state : shown;
+}
+
 export class EntityDetail {
   private readonly options: DetailOptions;
 
@@ -203,7 +216,8 @@ export class EntityDetail {
     const shown = displayValue(
       entity.schema.attributes[name],
       value,
-      this.options.pointerLabel
+      this.options.pointerLabel,
+      this.options.translator.language
     );
     return `<span class="dc-value" title="${escapeHtml(value)}">${escapeHtml(shown)}</span>`;
   }
@@ -220,14 +234,12 @@ export class EntityDetail {
         <select class="dc-input" data-status>
           <option value="">${escapeHtml(translator.t('status.change'))}</option>
           ${Object.keys(states)
-            .map(state => {
-              // A state the catalogue knows is translated; one the deployment
-              // invented keeps the name the deployment gave it.
-              const shown = translator.t(`state.${state}`);
-              return `<option value="${escapeHtml(state)}">${escapeHtml(
-                shown === `state.${state}` ? state : shown
-              )}</option>`;
-            })
+            .map(
+              state =>
+                `<option value="${escapeHtml(state)}">${escapeHtml(
+                  stateLabel(translator, state)
+                )}</option>`
+            )
             .join('')}
         </select>
       </label>`;

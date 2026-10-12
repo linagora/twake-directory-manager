@@ -125,18 +125,23 @@ function namesOf(
  * The attribute a column name designates, when one does so better than every
  * other.
  *
- * @param fields candidates, with their names
+ * @param fields candidates, with their names and whether they are required
  * @param matches whether one of the names fits the column
  * @returns the attribute name, or an empty string when none or several fit
  *   equally well
  */
 function best(
-  fields: { name: string; forms: { form: string; weight: number }[] }[],
+  fields: {
+    name: string;
+    forms: { form: string; weight: number }[];
+    required: boolean;
+  }[],
   matches: (form: string) => boolean
 ): string {
   const scored = fields
     .map(field => ({
       name: field.name,
+      required: field.required,
       score: Math.max(
         0,
         ...field.forms
@@ -147,7 +152,12 @@ function best(
     .filter(field => field.score > 0);
   const top = Math.max(0, ...scored.map(field => field.score));
   const winners = scored.filter(field => field.score === top);
-  return winners.length === 1 ? winners[0].name : '';
+  if (winners.length === 1) return winners[0].name;
+  // Of two attributes a name fits equally, the one every entry must have is
+  // the likelier: a file is made to fill those. `Email address` and `Adresse
+  // mail` fit _Email_ as well as _Address_, and are the email.
+  const required = winners.filter(winner => winner.required);
+  return required.length === 1 ? required[0].name : '';
 }
 
 /**
@@ -156,9 +166,9 @@ function best(
  * A column named like an attribute or like one of its labels, in any
  * language, is that attribute. A column whose name only starts or ends with
  * one — `Email address` for _Email_, `Phone number` for _Phone_ — is taken
- * when that attribute is the only one it fits and no other column claims it;
- * anything less sure is left for the operator to choose, since a wrong guess
- * would fill an attribute with another's values.
+ * when that attribute is the only one it fits, or the only required one, and
+ * no other column claims it; anything less sure is left for the operator to
+ * choose, since a wrong guess would fill an attribute with another's values.
  *
  * @param headers header row of the file
  * @param fields attributes a file may fill
@@ -171,6 +181,7 @@ export function guessMapping(
   const named = fields.map(([name, attr]) => ({
     name,
     forms: namesOf(name, attr),
+    required: Boolean(attr.required),
   }));
   const mapping = headers.map(header => {
     const wanted = comparableName(header);
