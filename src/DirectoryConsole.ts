@@ -471,6 +471,28 @@ export class DirectoryConsole {
     window.location.hash = `#/${path}`;
   }
 
+  /**
+   * Name the page in the address without drawing it again.
+   *
+   * A node picked in the tree is already on screen, card included: drawing
+   * the view anew for it would repaint the tree and read the card twice. The
+   * address must still name it, or a reload, Back and the view drawn again
+   * after a save forget it. `pushState` and `replaceState` change the
+   * address without the `hashchange` that drives a render.
+   *
+   * @param path what follows `#/`
+   * @param replace take the place of the current address rather than adding
+   *   one, for a page that no longer exists
+   */
+  private record(path: string, replace = false): void {
+    const hash = `#/${path}`;
+    if (window.location.hash !== hash) {
+      if (replace) window.history.replaceState(null, '', hash);
+      else window.history.pushState(null, '', hash);
+    }
+    this.readRoute();
+  }
+
   /* ------------------------------------------------------------------ shell */
 
   /** Draw the permanent frame: sidebar, scope, main area, side panel. */
@@ -725,11 +747,12 @@ export class DirectoryConsole {
 
     if (this.route.view === 'dashboard') return this.renderDashboard(main);
     if (this.route.view === 'organizations')
-      return this.renderOrganizations(main);
+      return this.renderOrganizations(main, generation);
 
     const entity = this.entity(this.route.entity);
     if (!entity) return this.renderDashboard(main);
-    if (entity.kind === 'organization') return this.renderOrganizations(main);
+    if (entity.kind === 'organization')
+      return this.renderOrganizations(main, generation);
     if (this.route.id)
       return this.renderDetail(main, entity, this.route.id, generation);
     return this.renderList(main, entity);
@@ -1052,8 +1075,16 @@ export class DirectoryConsole {
     this.go(`${owner.key}/${encodeURIComponent(id)}`);
   }
 
-  /** The organization tree, with the selected node's card beside it. */
-  private async renderOrganizations(main: HTMLElement): Promise<void> {
+  /**
+   * The organization tree, with the selected node's card beside it.
+   *
+   * The tree is drawn in place of the one shown last, so the branches the
+   * reader opened stay open; the node the address names is revealed in it.
+   */
+  private async renderOrganizations(
+    main: HTMLElement,
+    generation: number
+  ): Promise<void> {
     const entity = this.entities.find(item => item.kind === 'organization');
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
@@ -1065,36 +1096,41 @@ export class DirectoryConsole {
         </div>
       </section>`;
 
-    this.tree = new OrganizationTree({
-      translator: this.translator,
-      root: (): Promise<OrganizationNode | null> => this.api.organizationTop(),
-      children: (dn: string): Promise<OrganizationNode[]> =>
-        this.api.organizationChildren(dn),
-      transit: this.scope?.transit || undefined,
-      onSelect: (node: OrganizationNode): void => {
-        void this.showOrganization(node);
+    this.tree = new OrganizationTree(
+      {
+        translator: this.translator,
+        root: (): Promise<OrganizationNode | null> =>
+          this.api.organizationTop(),
+        children: (dn: string): Promise<OrganizationNode[]> =>
+          this.api.organizationChildren(dn),
+        transit: this.scope?.transit || undefined,
+        onSelect: (node: OrganizationNode): void => {
+          this.record(`organizations/${encodeURIComponent(node.dn)}`);
+          void this.showOrganization(node);
+        },
+        // A "+" on a node asks a different question from the card on the
+        // overview: the card creates at the top of the tree, which is what the
+        // scope's `organizations.create` answers for, while the "+" creates
+        // under the node it sits on. A local administrator writes in their own
+        // branch and not at the root, and the tree they are shown *is* their
+        // branch, so the offer holds as soon as they may write somewhere.
+        onCreateChild:
+          entity && this.canWrite()
+            ? (node: OrganizationNode): void => {
+                void this.openOrganizationForm(entity, undefined, node.dn);
+              }
+            : undefined,
       },
-      // A "+" on a node asks a different question from the card on the
-      // overview: the card creates at the top of the tree, which is what the
-      // scope's `organizations.create` answers for, while the "+" creates
-      // under the node it sits on. A local administrator writes in their own
-      // branch and not at the root, and the tree they are shown *is* their
-      // branch, so the offer holds as soon as they may write somewhere.
-      onCreateChild:
-        entity && this.canWrite()
-          ? (node: OrganizationNode): void => {
-              void this.openOrganizationForm(entity, undefined, node.dn);
-            }
-          : undefined,
-    });
+      this.tree
+    );
     await this.tree.render(
       main.querySelector<HTMLElement>('[data-tree]') as HTMLElement
     );
 
-    if (this.route.id) {
+    if (this.route.id && this.current(generation)) {
       const node = { dn: this.route.id, name: this.route.id };
-      this.tree.select(this.route.id);
-      await this.showOrganization(node);
+      await this.tree.reveal(this.route.id);
+      if (this.current(generation)) await this.showOrganization(node);
     }
   }
 
@@ -1352,29 +1388,11 @@ export class DirectoryConsole {
         | ((query: string) => Promise<{ dn: string; label: string }[]>)
         | undefined => this.api.pointerSearch(branch, this.entities, failed),
       onCancel: (): void => this.closePanel(),
-      onSubmit: async (
+      onSubmit: (
         values: Record<string, string | string[]>,
         cleared: string[]
-      ): Promise<void> => {
-        try {
-          if (entry?.dn) {
-            await this.api.updateOrganization(
-              String(entry.dn),
-              values as Record<string, string | string[]>,
-              cleared
-            );
-            this.toast(t('save.done'));
-          } else {
-            await this.api.createOrganization(values, parentDn);
-            this.toast(t('create.done'));
-          }
-          this.closePanel();
-          this.tree?.invalidate();
-          await this.renderMain();
-        } catch (err) {
-          this.toast(this.refusal(err, entity), true);
-        }
-      },
+      ): Promise<void> =>
+        this.submitOrganization(entity, values, cleared, entry, parentDn),
     });
 
     this.openPanel(
@@ -1395,6 +1413,67 @@ export class DirectoryConsole {
       entity.schema,
       this.translator.language
     );
+  }
+
+  /**
+   * Write what the organization form submitted, then draw the view again
+   * with the organization on screen.
+   *
+   * Only the branch the change happened in is read again: the rest of the
+   * tree, and the branches the administrator had opened, stay as they were.
+   *
+   * @param entity the organization entity
+   * @param values what the form submitted
+   * @param cleared attributes the form emptied
+   * @param entry the organization edited; none for a new one
+   * @param parentDn where a new one goes; the server's default when omitted
+   */
+  private async submitOrganization(
+    entity: EntityDescriptor,
+    values: Record<string, string | string[]>,
+    cleared: string[],
+    entry?: Entry,
+    parentDn?: string
+  ): Promise<void> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    try {
+      if (entry?.dn) {
+        const dn = String(entry.dn);
+        await this.api.updateOrganization(dn, values, cleared);
+        this.toast(t('save.done'));
+        this.closePanel();
+        // Its parent's children are read again, for a changed name. The
+        // address already names it, so the view drawn again shows its card,
+        // the tree open down to it.
+        const parent = this.tree?.parentOf(dn);
+        if (parent) await this.tree?.refresh(parent).catch(() => []);
+      } else {
+        await this.api.createOrganization(values, parentDn);
+        this.toast(t('create.done'));
+        this.closePanel();
+        // The new organization is found among its parent's children by the
+        // name it was given, since the server answers no DN. From the tree,
+        // it is then shown and selected where it was created; from the
+        // overview, the overview stays.
+        const children =
+          (await this.tree?.refresh(parentDn).catch(() => [])) ?? [];
+        const raw = values[entity.mainAttribute];
+        const name = String(
+          (Array.isArray(raw) ? raw[0] : raw) ?? ''
+        ).toLowerCase();
+        const created = children.find(
+          child =>
+            rdnValue(child.dn).toLowerCase() === name ||
+            child.name.toLowerCase() === name
+        );
+        if (created && this.route.view !== 'dashboard')
+          this.record(`organizations/${encodeURIComponent(created.dn)}`);
+      }
+      await this.renderMain();
+    } catch (err) {
+      this.toast(this.refusal(err, entity), true);
+    }
   }
 
   /* --------------------------------------------------------------- actions */
@@ -1607,7 +1686,13 @@ export class DirectoryConsole {
     try {
       await this.api.deleteOrganization(dn);
       this.toast(this.translator.t('delete.done'));
-      this.tree?.invalidate();
+      // Its parent takes its place: where it was, beside its siblings. Its
+      // address is replaced, as Back could only lead to a page now gone.
+      const parent = this.tree?.parentOf(dn);
+      if (parent) {
+        await this.tree?.refresh(parent).catch(() => []);
+        this.record(`organizations/${encodeURIComponent(parent)}`, true);
+      } else this.record('organizations', true);
       await this.renderMain();
     } catch (err) {
       this.toast((err as Error).message, true);

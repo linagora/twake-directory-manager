@@ -610,6 +610,319 @@ describe('Directory console', () => {
     });
   });
 
+  describe('the organization tree, between views', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const sales = `ou=Sales,${top}`;
+    const engineering = `ou=Engineering,${top}`;
+    const backend = `ou=Backend,${engineering}`;
+    const lyon = `ou=Lyon,${engineering}`;
+    const organizations: EntityDescriptor = {
+      key: 'organizations',
+      pluralName: 'organizations',
+      singularName: 'organization',
+      mainAttribute: 'ou',
+      base: top,
+      schema: {
+        attributes: {
+          ou: { type: 'string', role: 'identifier' },
+          description: { type: 'string' },
+        },
+      },
+      endpoint: '/api/v1/ldap/organizations',
+      kind: 'organization',
+    };
+    /** The DN of the node drawn as selected, if any. */
+    const selected = (html: string): string | undefined =>
+      /dc-selected[^]*?data-select="([^"]*)"/.exec(html)?.[1];
+    /** Whether a node is drawn open. */
+    const open = (html: string, dn: string): boolean =>
+      html
+        .replace(/\s+/g, ' ')
+        .includes(`data-toggle="${dn}" aria-expanded="true"`);
+
+    /**
+     * A console on the organization view, its server a few organizations
+     * deep, its address a stub that records what was pushed into it.
+     */
+    const setup = () => {
+      const children: Record<string, { dn: string; name: string }[]> = {
+        [top]: [
+          { dn: sales, name: 'Sales' },
+          { dn: engineering, name: 'Engineering' },
+        ],
+        [sales]: [],
+        [engineering]: [{ dn: backend, name: 'Backend' }],
+        [backend]: [],
+        [lyon]: [],
+      };
+      const asked: string[] = [];
+      const read: string[] = [];
+      const trees: (HTMLElement & TreeContainer)[] = [];
+      const main = {
+        set innerHTML(_html: string) {
+          trees.push(treeContainer());
+        },
+        querySelector: (selector: string) =>
+          selector === '[data-tree]' ? trees[trees.length - 1] : null,
+      };
+      const app = consoleIn({
+        '[data-main]': main,
+        '[data-org-detail]': stubContainer(),
+        '[data-toast]': toastElement(),
+      });
+      Object.assign(app as unknown as { entities: EntityDescriptor[] }, {
+        entities: [organizations],
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        organizationTop: async () => ({ dn: top, name: 'organization' }),
+        organizationChildren: async (dn: string) => {
+          asked.push(dn);
+          return children[dn].map(child => ({ ...child }));
+        },
+        organization: async (dn: string) => {
+          read.push(dn);
+          return { dn, ou: rdnValue(dn) };
+        },
+        organizationMembers: async () => ({ entries: [], truncated: false }),
+        updateOrganization: async () => undefined,
+        createOrganization: async () => {
+          children[engineering].push({ dn: lyon, name: 'Lyon' });
+        },
+        deleteOrganization: async () => undefined,
+      });
+      const location = { hash: '#/organizations' };
+      const pushed: string[] = [];
+      const replaced: string[] = [];
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      g.window = {
+        location,
+        history: {
+          pushState: (_state: unknown, _title: string, hash: string) => {
+            pushed.push(hash);
+            location.hash = hash;
+          },
+          replaceState: (_state: unknown, _title: string, hash: string) => {
+            replaced.push(hash);
+            location.hash = hash;
+          },
+        },
+        confirm: () => true,
+      };
+      return {
+        app: app as unknown as {
+          tree: {
+            options: { onSelect(node: { dn: string; name: string }): void };
+            toggle(dn: string): Promise<void>;
+          };
+          route: { id?: string };
+          followHash(): Promise<void>;
+          submitOrganization(
+            entity: EntityDescriptor,
+            values: Record<string, string | string[]>,
+            cleared: string[],
+            entry?: Entry,
+            parentDn?: string
+          ): Promise<void>;
+          confirmDeleteOrganization(
+            entity: EntityDescriptor,
+            entry: Entry,
+            dn: string
+          ): Promise<void>;
+        },
+        location,
+        asked,
+        read,
+        pushed,
+        replaced,
+        tree: (): string => trees[trees.length - 1].innerHTML,
+        restore: () => {
+          g.window = original;
+        },
+      };
+    };
+
+    it('should open the tree down to the organization an address names', async () => {
+      // The Department path link of an account's card leads here: the card
+      // showed, but the tree stayed folded and nothing in it was selected.
+      const { app, location, asked, read, tree, restore } = setup();
+      try {
+        location.hash = `#/organizations/${encodeURIComponent(backend)}`;
+        await app.followHash();
+      } finally {
+        restore();
+      }
+      expect(asked).to.deep.equal([top, engineering]);
+      expect(open(tree(), engineering)).to.be.true;
+      expect(selected(tree())).to.equal(backend);
+      expect(read).to.deep.equal([backend]);
+    });
+
+    it('should name a node picked in the tree in the address, without drawing the view again', async () => {
+      const { app, pushed, read, tree, restore } = setup();
+      try {
+        await app.followHash();
+        const before = tree();
+        app.tree.options.onSelect({ dn: sales, name: 'Sales' });
+        expect(pushed).to.deep.equal([
+          `#/organizations/${encodeURIComponent(sales)}`,
+        ]);
+        expect(app.route.id).to.equal(sales);
+        // The same tree, not one drawn anew: only the card is read.
+        expect(tree()).to.equal(before);
+        expect(read).to.deep.equal([sales]);
+      } finally {
+        restore();
+      }
+    });
+
+    it('should keep the tree open and the organization on screen after a save', async () => {
+      const { app, asked, read, tree, restore } = setup();
+      try {
+        await app.followHash();
+        await app.tree.toggle(engineering);
+        app.tree.options.onSelect({ dn: backend, name: 'Backend' });
+        asked.length = 0;
+        read.length = 0;
+        await app.submitOrganization(
+          organizations,
+          { description: 'Servers' },
+          [],
+          { dn: backend, ou: 'Backend' }
+        );
+      } finally {
+        restore();
+      }
+      // Its parent is read again for a changed name, and nothing else.
+      expect(asked).to.deep.equal([engineering]);
+      expect(open(tree(), engineering)).to.be.true;
+      expect(selected(tree())).to.equal(backend);
+      expect(read).to.deep.equal([backend]);
+    });
+
+    it('should show and select an organization just created where it was created', async () => {
+      const { app, pushed, read, tree, restore } = setup();
+      try {
+        await app.followHash();
+        await app.tree.toggle(engineering);
+        await app.submitOrganization(
+          organizations,
+          { ou: 'Lyon' },
+          [],
+          undefined,
+          engineering
+        );
+      } finally {
+        restore();
+      }
+      expect(pushed).to.deep.equal([
+        `#/organizations/${encodeURIComponent(lyon)}`,
+      ]);
+      expect(open(tree(), engineering)).to.be.true;
+      expect(tree()).to.include('>Lyon</button>');
+      expect(selected(tree())).to.equal(lyon);
+      expect(read).to.deep.equal([lyon]);
+    });
+
+    it('should select the parent of an organization just deleted', async () => {
+      const { app, location, replaced, read, tree, restore } = setup();
+      try {
+        location.hash = `#/organizations/${encodeURIComponent(backend)}`;
+        await app.followHash();
+        read.length = 0;
+        await app.confirmDeleteOrganization(
+          organizations,
+          { dn: backend, ou: 'Backend' },
+          backend
+        );
+      } finally {
+        restore();
+      }
+      expect(replaced).to.deep.equal([
+        `#/organizations/${encodeURIComponent(engineering)}`,
+      ]);
+      expect(selected(tree())).to.equal(engineering);
+      expect(read).to.deep.equal([engineering]);
+    });
+  });
+
+  describe('OrganizationTree, revealing a node', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const engineering = `ou=Engineering,${top}`;
+    const backend = `ou=Backend,${engineering}`;
+    const options = (asked: string[]) => ({
+      translator: new Translator('en'),
+      root: async () => ({ dn: top, name: 'organization' }),
+      children: async (dn: string) => {
+        asked.push(dn);
+        if (dn === top) return [{ dn: engineering, name: 'Engineering' }];
+        if (dn === engineering) return [{ dn: backend, name: 'Backend' }];
+        return [];
+      },
+      onSelect: () => undefined,
+    });
+
+    it('should find a node however its DN is spelled', async () => {
+      const asked: string[] = [];
+      const container = treeContainer();
+      const tree = new OrganizationTree(options(asked));
+      await tree.render(container);
+      expect(
+        await tree.reveal(
+          'OU=backend, ou=Engineering,ou=organization,dc=example,dc=com'
+        )
+      ).to.be.true;
+      expect(container.innerHTML).to.match(
+        /dc-selected[^]*?data-select="ou=Backend,ou=Engineering,/
+      );
+    });
+
+    it('should select nothing for a node it does not hold', async () => {
+      const tree = new OrganizationTree(options([]));
+      await tree.render(treeContainer());
+      expect(await tree.reveal('ou=Elsewhere,dc=example,dc=org')).to.be.false;
+      expect(await tree.reveal(`ou=Gone,${engineering}`)).to.be.false;
+    });
+
+    it('should read a branch again when it no longer leads to the node', async () => {
+      // Created since the branch was read, by another administrator.
+      const asked: string[] = [];
+      let late = false;
+      const tree = new OrganizationTree({
+        ...options(asked),
+        children: async (dn: string) => {
+          asked.push(dn);
+          if (dn === top)
+            return late
+              ? [
+                  { dn: engineering, name: 'Engineering' },
+                  { dn: `ou=Legal,${top}`, name: 'Legal' },
+                ]
+              : [{ dn: engineering, name: 'Engineering' }];
+          return [];
+        },
+      });
+      const container = treeContainer();
+      await tree.render(container);
+      late = true;
+      expect(await tree.reveal(`ou=Legal,${top}`)).to.be.true;
+      expect(asked).to.deep.equal([top, top]);
+      expect(container.innerHTML).to.include('>Legal</button>');
+    });
+
+    it('should carry the open branches over to the tree drawn in its place', async () => {
+      const asked: string[] = [];
+      const first = new OrganizationTree(options(asked));
+      await first.render(treeContainer());
+      await first.reveal(backend);
+      const container = treeContainer();
+      await new OrganizationTree(options(asked), first).render(container);
+      // Nothing read again, and Backend still drawn under an open Engineering.
+      expect(asked).to.deep.equal([top, engineering]);
+      expect(container.innerHTML).to.include('>Backend</button>');
+    });
+  });
+
   describe('Translator', () => {
     it('should fall back to English for an unknown language', () => {
       expect(new Translator('xx').language).to.equal('en');
