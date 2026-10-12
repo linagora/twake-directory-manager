@@ -68,6 +68,24 @@ export function attributeLabel(
 }
 
 /**
+ * Plain-language description of what an attribute accepts, in the
+ * interface's language: the attribute's own, or that of its items.
+ *
+ * @param attr its schema definition
+ * @param language language tag the interface is running in
+ * @returns the hint to show, or undefined when there is none
+ */
+export function attributeHint(
+  attr: SchemaAttribute | undefined,
+  language = 'en'
+): string | undefined {
+  return (
+    resolveText(attr?.hint, language) ??
+    resolveText(attr?.items?.hint, language)
+  );
+}
+
+/**
  * Whether a text is written as a DN — `attribute=value` pairs separated by
  * commas, two at least — rather than as a name. An identifier holding an
  * `=` is not one, being a single pair.
@@ -333,6 +351,29 @@ export function pointerLabel(
   const labels = owner?.schema.entity?.valueLabels;
   if (!labels) return undefined;
   return valueLabel(labels, rdnValue(dn), language);
+}
+
+/**
+ * What a nomenclature calls one of its own entries: the name its schema gives
+ * the value of its main attribute — `memberRestrictedList` reads _Members
+ * only_ on its own card and in its list, as it does in the selects pointing
+ * at it.
+ *
+ * @param entity the entity the entry belongs to
+ * @param name attribute the value is held in
+ * @param value the value
+ * @param language interface language
+ * @returns the name, or undefined for another attribute or an unnamed value
+ */
+export function ownValueLabel(
+  entity: EntityDescriptor,
+  name: string,
+  value: string,
+  language: string
+): string | undefined {
+  const labels = entity.schema.entity?.valueLabels;
+  if (!labels || name !== entity.mainAttribute) return undefined;
+  return valueLabel(labels, value, language);
 }
 
 /**

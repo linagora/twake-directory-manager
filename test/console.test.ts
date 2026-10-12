@@ -2573,6 +2573,51 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should name an entry by the attribute its schema calls its display name', async () => {
+      // A mail domain is stored as `dc=example` and read as `example.org`.
+      const domains: EntityDescriptor = {
+        key: 'domains',
+        pluralName: 'domains',
+        singularName: 'domain',
+        mainAttribute: 'dc',
+        base: 'ou=domains,ou=nomenclature,dc=example,dc=com',
+        schema: {
+          attributes: {
+            dc: { type: 'string', role: 'identifier' },
+            associatedDomain: {
+              type: 'string',
+              role: ['domainName', 'displayName'],
+            },
+          },
+        },
+        endpoint: '/api/v1/ldap/domains',
+        kind: 'flat',
+      };
+      nock(baseUrl)
+        .get('/api/v1/ldap/domains')
+        .reply(200, {
+          example: {
+            dn: `dc=example,${domains.base}`,
+            associatedDomain: 'example.org',
+          },
+          bare: { dn: `dc=bare,${domains.base}` },
+          one: { dn: `dc=one,${domains.base}`, associatedDomain: 'twin.org' },
+          two: { dn: `dc=two,${domains.base}`, associatedDomain: 'twin.org' },
+        });
+
+      const options = await new ConsoleApiClient(baseUrl).pointerOptions(
+        domains.base as string,
+        [domains]
+      );
+      // Two entries going by one name are told apart by their identifiers.
+      expect(options.map(option => option.label)).to.deep.equal([
+        'example.org',
+        'bare',
+        'twin.org (one)',
+        'twin.org (two)',
+      ]);
+    });
+
     it('should give a failure its status whatever the body it came with', async () => {
       // Not every answer comes from the API: Express's own 404 page and a
       // proxy's 502 are HTML, and reading the body as JSON first threw a
@@ -2870,6 +2915,27 @@ describe('Directory console', () => {
       expect(EntityList.shortenPath('<A> / B / <D>')).to.equal(
         '&lt;A&gt; / … / &lt;D&gt;'
       );
+    });
+
+    it('should name a nomenclature’s values, and keep the others as stored', async () => {
+      const container = stubContainer();
+      await new EntityList({
+        entity: mailboxTypes,
+        translator: new Translator('fr'),
+        load: () =>
+          Promise.resolve({
+            teamMailbox: { cn: 'teamMailbox' },
+            custom: { cn: 'custom' },
+          }),
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      }).render(container);
+      expect(container.innerHTML).to.include(
+        'title="teamMailbox">Boîte partagée</td>'
+      );
+      expect(container.innerHTML).to.include('title="custom">custom</td>');
     });
 
     it('should search every field the schema marks, not just the identifier', async () => {
@@ -4320,6 +4386,45 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.include('Expected an email address');
     });
 
+    it('should write hints and section headings in the interface language', async () => {
+      const translated: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            uid: { type: 'string', required: true, role: 'identifier' },
+            mail: {
+              type: 'string',
+              hint: { en: 'An email address', fr: 'Une adresse e-mail' },
+              group: { en: 'Contact', fr: 'Coordonnées' },
+            },
+            mailAlternateAddress: {
+              type: 'array',
+              items: {
+                type: 'string',
+                hint: { en: 'Other addresses', fr: 'Autres adresses' },
+              },
+              group: { en: 'Contact', fr: 'Coordonnées' },
+            },
+          },
+        },
+      };
+      const container = stubContainer();
+      await new EntityForm({
+        entity: translated,
+        translator: new Translator('fr'),
+        pointerOptions: () => Promise.resolve([]),
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+      }).render(container);
+      expect(container.innerHTML).to.include('Une adresse e-mail');
+      expect(container.innerHTML).to.include('Autres adresses');
+      expect(container.innerHTML).not.to.include('[object Object]');
+      // One section for both fields, headed in French.
+      expect(
+        container.innerHTML.match(/<legend>Coordonnées<\/legend>/g)
+      ).to.have.length(1);
+    });
+
     it('should mark required fields and say what the mark means', async () => {
       const container = stubContainer();
       await build().render(container);
@@ -4482,6 +4587,26 @@ describe('Directory console', () => {
       }).render(container);
       return container.innerHTML;
     };
+
+    it('should name a nomenclature entry the way its schema does', () => {
+      const container = stubContainer();
+      new EntityDetail({
+        entity: mailboxTypes,
+        entry: { cn: 'teamMailbox' },
+        translator: new Translator('fr'),
+        canWrite: true,
+        canDelete: true,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        onStatus: () => undefined,
+        onResetPassword: () => undefined,
+      }).render(container);
+      expect(container.innerHTML).to.include('<h2>Boîte partagée');
+      // The stored value stays at hand, in the tooltip.
+      expect(container.innerHTML).to.include(
+        'title="teamMailbox">Boîte partagée</span>'
+      );
+    });
 
     it('should name attributes in the reader’s language', () => {
       const container = stubContainer();

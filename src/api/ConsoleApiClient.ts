@@ -870,9 +870,19 @@ export class ConsoleApiClient {
     );
     if (owner) {
       const list = await this.list(owner);
-      return Object.entries(list).map(([id, entry]) =>
-        this.pointerOption(owner, id, entry, language)
-      );
+      const options = Object.entries(list).map(([id, entry]) => ({
+        id,
+        ...this.pointerOption(owner, id, entry, language),
+      }));
+      // Two entries may go by the same name, which a select cannot tell
+      // apart: their identifiers can.
+      const seen = new Map<string, number>();
+      for (const { label } of options)
+        seen.set(label, (seen.get(label) ?? 0) + 1);
+      return options.map(({ id, dn, label }) => ({
+        dn,
+        label: (seen.get(label) ?? 0) > 1 ? `${label} (${id})` : label,
+      }));
     }
     // An unknown branch: ask the raw browser, which every deployment that
     // enables it serves, and give up quietly when it is not there.
@@ -909,10 +919,17 @@ export class ConsoleApiClient {
     language: string
   ): PointerOption {
     const labels = owner.schema.entity?.valueLabels;
+    const display = roleAttribute(owner.schema, 'displayName');
+    const shown = display ? entryValue(entry, display) : undefined;
     return {
       dn: String(entry.dn || id),
-      // A nomenclature names its values; anything else is known by its id.
-      label: (labels && valueLabel(labels, id, language)) || id,
+      // A nomenclature names its values, and an entry may carry its own
+      // readable name — a mail domain its `example.org`; anything else is
+      // known by its id.
+      label:
+        (labels && valueLabel(labels, id, language)) ||
+        (Array.isArray(shown) ? shown[0] : shown) ||
+        id,
     };
   }
 

@@ -15,6 +15,7 @@ import {
   displayValue,
   entryValue,
   isDnShaped,
+  ownValueLabel,
   rdnValue,
 } from '../format';
 import { hasRole } from '../api/ConsoleApiClient';
@@ -87,7 +88,10 @@ export class EntityDetail {
   render(container: HTMLElement): void {
     const { entity, entry, translator, canWrite, canDelete } = this.options;
     const { inTransit, onClaim, onHandOver } = this.options;
-    const title = values(entryValue(entry, entity.mainAttribute))[0] || '';
+    const id = values(entryValue(entry, entity.mainAttribute))[0] || '';
+    const title =
+      ownValueLabel(entity, entity.mainAttribute, id, translator.language) ||
+      id;
 
     container.innerHTML = `
       <article class="dc-detail">
@@ -239,12 +243,10 @@ export class EntityDetail {
       )}" title="${escapeHtml(value)}">${escapeHtml(
         this.options.pointerLabel?.(value) || rdnValue(value)
       )}</button>`;
-    const shown = displayValue(
-      attr,
-      value,
-      this.options.pointerLabel,
-      this.options.translator.language
-    );
+    const { language } = this.options.translator;
+    const shown =
+      ownValueLabel(entity, name, value, language) ||
+      displayValue(attr, value, this.options.pointerLabel, language);
     return `<span class="dc-value" title="${escapeHtml(value)}">${escapeHtml(shown)}</span>`;
   }
 

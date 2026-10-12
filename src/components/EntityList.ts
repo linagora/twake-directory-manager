@@ -21,6 +21,7 @@ import {
   attributeLabel,
   displayValue,
   entryValue,
+  ownValueLabel,
   searchableAttributes,
 } from '../format';
 import type {
@@ -565,13 +566,20 @@ export class EntityList {
             const shown = text(
               (Array.isArray(value) ? value : [value])
                 .filter((v): v is string => v !== undefined)
-                .map(v =>
-                  displayValue(
-                    attr,
-                    String(v),
-                    this.options.pointerLabel,
-                    translator.language
-                  )
+                .map(
+                  v =>
+                    ownValueLabel(
+                      entity,
+                      name,
+                      String(v),
+                      translator.language
+                    ) ||
+                    displayValue(
+                      attr,
+                      String(v),
+                      this.options.pointerLabel,
+                      translator.language
+                    )
                 )
             );
             const isPath = name === entity.organizationPath;

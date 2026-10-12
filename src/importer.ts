@@ -13,6 +13,7 @@
 import type { CsvTable } from './csv';
 import { hasRole } from './api/ConsoleApiClient';
 import {
+  attributeHint,
   attributeLabel,
   beforeToday,
   isDnShaped,
@@ -525,7 +526,7 @@ export function prepareRows(
           if (bad !== undefined) {
             refused.add(name);
             errors.push(
-              `${label(name)}: ${attr.hint || attr.items?.hint || bad}`
+              `${label(name)}: ${attributeHint(attr, translator.language) || bad}`
             );
             continue;
           }
