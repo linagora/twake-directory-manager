@@ -1013,7 +1013,8 @@ export class ConsoleApiClient {
    * The organization tree is searched whenever the server can, listing or not:
    * walking it is bounded, so a directory of a thousand organizations would
    * offer a few hundred of them in a select nobody can read. A server that
-   * cannot search it keeps the select.
+   * cannot search it keeps the select. Either starts from the caller's top
+   * organization, not from the directory's.
    *
    * @param branch DN the pointer must land in
    * @param entities entities the console knows, to find the one owning it
@@ -1029,10 +1030,20 @@ export class ConsoleApiClient {
     // Before the owner is looked for: the tree's branch is the top of an
     // entity or the DN above it, and the pointer needs a search either way.
     if (this.inOrganizationTree(branch)) {
-      return this.organizationSearchable
-        ? (query: string): Promise<{ dn: string; label: string }[]> =>
-            this.organizationSearch(query)
-        : undefined;
+      if (!this.organizationSearchable) return undefined;
+      // From the caller's own top, which the server narrows to their scope,
+      // as the select walks it: the configured root offers departments a
+      // local administrator may not attach anything to. Asked once per field,
+      // and again after a failure.
+      let top: Promise<OrganizationNode | null> | undefined;
+      return async query => {
+        top ??= this.organizationTop().catch((err: unknown) => {
+          top = undefined;
+          throw err;
+        });
+        const root = await top;
+        return root ? this.organizationSearch(query, root.dn) : [];
+      };
     }
     const owner = entities.find(
       entity =>

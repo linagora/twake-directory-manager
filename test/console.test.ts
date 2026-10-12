@@ -1138,6 +1138,33 @@ describe('Directory console', () => {
           { dn: `ou=b,${orgTop}`, label: 'Government / Beta' },
         ]);
       });
+
+      it('should search from the caller’s own top, not the directory’s', async () => {
+        const client = await discover('/api/v1/ldap/organizations/:dn/search');
+        const sales = `ou=Sales,${orgTop}`;
+        // A local administrator of Sales: the server narrows the top to it.
+        nock(baseUrl)
+          .get('/api/v1/ldap/organizations/top')
+          .once()
+          .reply(200, { dn: sales, ou: 'Sales' });
+        const searched: string[] = [];
+        nock(baseUrl)
+          .get(/\/api\/v1\/ldap\/organizations\/[^/]+\/search/)
+          .query(true)
+          .times(2)
+          .reply(function (uri) {
+            searched.push(decodeURIComponent(uri.split('/')[5]));
+            return [200, [{ dn: `ou=France,${sales}`, ou: 'France' }]];
+          });
+        const search = client.pointerSearch('dc=example,dc=com', []);
+        expect(await search?.('Fra')).to.deep.equal([
+          { dn: `ou=France,${sales}`, label: 'France' },
+        ]);
+        // The top is asked once for the field, not at every keystroke.
+        await search?.('Fran');
+        expect(searched).to.deep.equal([sales, sales]);
+        expect(nock.isDone()).to.be.true;
+      });
     });
 
     it('should take an entity’s own names from its schema metadata', async () => {
