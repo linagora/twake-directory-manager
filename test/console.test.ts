@@ -38,7 +38,7 @@ import {
   listFailure,
 } from '../src/components/EntityList';
 import { OrganizationTree } from '../src/components/OrganizationTree';
-import { Translator } from '../src/i18n';
+import { availableLanguages, Translator } from '../src/i18n';
 import { formatByteSize } from '../src/format';
 import type {
   EntityDescriptor,
@@ -581,6 +581,7 @@ describe('Directory console', () => {
 
     it('should read a region tag as its language', () => {
       expect(new Translator('fr-CA').language).to.equal('fr');
+      expect(new Translator('mn-MN').language).to.equal('mn');
     });
 
     it('should substitute placeholders', () => {
@@ -595,12 +596,14 @@ describe('Directory console', () => {
     });
 
     it('should translate every key of every catalogue', () => {
-      const english = new Translator('en');
-      const french = new Translator('fr');
       // A key present in one catalogue and missing from the other is exactly
       // the mixed-language interface this replaces.
-      expect(french.t('list.perPage')).to.not.equal('list.perPage');
-      expect(english.t('list.perPage')).to.not.equal('list.perPage');
+      expect(availableLanguages).to.include.members(['en', 'fr', 'mn']);
+      for (const language of availableLanguages) {
+        expect(new Translator(language).t('list.perPage')).to.not.equal(
+          'list.perPage'
+        );
+      }
     });
   });
 

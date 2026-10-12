@@ -320,12 +320,11 @@ not a failure.
 
 ## Adding a language
 
-The console ships with English and French. A third one is a catalogue in
-`src/browser/directory-console/i18n.ts` plus, on the deployment side, the
-matching key in every schema `label`. The schema test in
-`test/schemas/twakeUsersSchema.test.ts` fails when a shipped schema leaves an
-attribute unnamed or untranslated, which is what keeps a half-translated
-screen from shipping.
+The console ships with English, French and Mongolian. A further one is a
+catalogue in `src/i18n.ts` — `availableLanguages` lists them all, and the
+catalogue test in `test/console.test.ts` walks that list — plus, on the
+deployment side, the matching key in every schema `label`; a label without it
+falls back to English, so a half-translated screen stays readable.
 
 ## Known limits
 
