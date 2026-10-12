@@ -3798,6 +3798,48 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.not.include('data-password');
     });
 
+    it('should name the owners of a group and lead to them', () => {
+      // A group's owners are DNs the schema types as strings, and the card
+      // showed them whole, where its members read as names leading to them.
+      const owned: EntityDescriptor = {
+        ...groups,
+        schema: {
+          attributes: {
+            ...groups.schema.attributes,
+            owner: {
+              type: 'array',
+              role: 'owners',
+              items: { type: 'string' },
+              label: { en: 'Owners' },
+            },
+          },
+        },
+      };
+      const owner = 'uid=sophie.martin,ou=users,dc=example,dc=com';
+      const container = stubContainer();
+      new EntityDetail({
+        entity: owned,
+        entry: { cn: 'sales-team', owner: [owner, 'not a dn'] },
+        translator: new Translator('en'),
+        canWrite: true,
+        canDelete: true,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        onStatus: () => undefined,
+        onResetPassword: () => undefined,
+        relations: { title: 'Members', attribute: 'member', items: [] },
+      }).render(container);
+      expect(container.innerHTML)
+        .to.include(
+          `<button type="button" class="dc-link" data-relation="${owner}" title="${owner}">sophie.martin</button>`
+        )
+        .and.not.include(`>${owner}<`);
+      // What is no DN has nowhere to lead.
+      expect(container.innerHTML).to.include(
+        '<span class="dc-value" title="not a dn">not a dn</span>'
+      );
+    });
+
     it('should say how many related entries the list leaves out', () => {
       const card = (
         language: string,
