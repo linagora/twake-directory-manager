@@ -122,19 +122,19 @@ fill them in expecting one. The console does not show them:
 | Variable                       | Default                               | What it is                                                           |
 | ------------------------------ | ------------------------------------- | -------------------------------------------------------------------- |
 | `DM_CONSOLE_HIDDEN_ATTRIBUTES` | `twakeOtherMailbox,twakeDeliveryMode` | Attributes left out of the forms, the cards, the lists and CSV files |
-| `DM_SYNC_FORWARDS`             | `false`                               | `true` to mirror `mailForwardingAddress` to Twake Mail forwards      |
+| `DM_JAMES_SYNC_FORWARDS`       | `false`                               | `true` to mirror `mailForwardingAddress` to Twake Mail forwards      |
 
 - `twakeOtherMailbox` (_Other mailboxes_) is read by no plugin, and by
   nothing in Twake Mail.
 - `twakeDeliveryMode` is applied by no plugin; new accounts keep receiving
   its default, `normal`.
 - **Forwards are a user setting in Twake Mail**, with "keep a copy in my
-  mailbox". With `core/twake/james`, ldap-rest mirrors `mailForwardingAddress`
-  to them unless told not to; the image tells it not to. `DM_SYNC_FORWARDS=true`
-  is for a deployment where the directory owns forwards: **the directory then
-  overwrites what users set in Twake Mail**, change after change, and is not
-  told of what they set there. A `DM_FORWARD_ATTRIBUTE` naming another
-  attribute is synced whatever `DM_SYNC_FORWARDS` says.
+  mailbox", and ldap-rest leaves them to it since 0.19.0.
+  `DM_JAMES_SYNC_FORWARDS=true` (ldap-rest's `--james-sync-forwards`) is for a
+  deployment where the directory owns forwards: with `core/twake/james`,
+  `DM_FORWARD_ATTRIBUTE` (`mailForwardingAddress`) is then mirrored to them, and
+  **the directory overwrites what users set in Twake Mail**, change after
+  change, without being told of what they set there.
 
 Hidden attributes stay in the directory as they are: the console neither
 shows nor sends them. An empty `DM_CONSOLE_HIDDEN_ATTRIBUTES` shows them all

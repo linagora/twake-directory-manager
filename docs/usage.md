@@ -125,8 +125,7 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
   ldap-rest 0.12.0 reports it, suggests narrowing the search.
 - **The page size is remembered**, along with the chosen language.
 - **A group's members are found by email address.** With ldap-rest's
-  `core/ldap/externalUsersInGroups` (and an ldap-rest that publishes its
-  branch, later than 0.18.0), an address no entry holds is offered as an
+  `core/ldap/externalUsersInGroups` (ldap-rest 0.19.0 or later), an address no entry holds is offered as an
   _external member_: the console sends `mail=<address>,<branch>`, and the
   server creates the entry. An address at one of the directory's own mail
   domains (`DM_MAIL_DOMAIN`) is refused before sending: it belongs to an
