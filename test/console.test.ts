@@ -2597,15 +2597,15 @@ describe('Directory console', () => {
         kind: 'flat',
       };
       const tree = {
-        com: { dn: `dc=com,${domains.base}`, dc: 'com' },
-        'lin-saas': {
-          dn: `dc=lin-saas,dc=com,${domains.base}`,
-          dc: 'lin-saas',
+        org: { dn: `dc=org,${domains.base}`, dc: 'org' },
+        example: {
+          dn: `dc=example,dc=org,${domains.base}`,
+          dc: 'example',
         },
-        mongolie: {
-          dn: `dc=mongolie,dc=lin-saas,dc=com,${domains.base}`,
-          dc: 'mongolie',
-          associatedDomain: 'mongolie.lin-saas.com',
+        sales: {
+          dn: `dc=sales,dc=example,dc=org,${domains.base}`,
+          dc: 'sales',
+          associatedDomain: 'sales.example.org',
         },
       };
       const client = new ConsoleApiClient(baseUrl);
@@ -2616,8 +2616,8 @@ describe('Directory console', () => {
       ]);
       expect(options).to.deep.equal([
         {
-          dn: `dc=mongolie,dc=lin-saas,dc=com,${domains.base}`,
-          label: 'mongolie.lin-saas.com',
+          dn: `dc=sales,dc=example,dc=org,${domains.base}`,
+          label: 'sales.example.org',
         },
       ]);
 
@@ -2626,10 +2626,10 @@ describe('Directory console', () => {
       nock(baseUrl).get('/api/v1/ldap/domains').query(true).reply(200, tree);
       const found = await lookup.search('o');
       expect(found.options.map(option => option.label)).to.deep.equal([
-        'mongolie.lin-saas.com',
+        'sales.example.org',
       ]);
-      nock(baseUrl).get('/api/v1/ldap/domains/com').reply(200, tree.com);
-      expect(await lookup.read('com')).to.equal(undefined);
+      nock(baseUrl).get('/api/v1/ldap/domains/org').reply(200, tree.org);
+      expect(await lookup.read('org')).to.equal(undefined);
     });
 
     it('should name an entry by the attribute its schema calls its display name', async () => {
