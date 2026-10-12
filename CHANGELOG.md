@@ -15,8 +15,10 @@
   _Delivery modes_ reference data; `DM_CONSOLE_HIDDEN_ATTRIBUTES` chooses
   what is hidden (#62, #63)
 - A pointer's select, and the CSV import, offer only the entries its schema
-  describes: the DNS levels a tree of mail domains hangs from, `com` or
-  `lin-saas`, are no mail domains (#58)
+  describes: the DNS levels a tree of mail domains hangs from, `org` or
+  `example`, are no mail domains (#58)
+- A card and a list name a mail domain by its name, `sales.example.org`,
+  as the form's select does, not by its RDN (#57)
 
 ## v0.5.0 (2026-10-12)
 

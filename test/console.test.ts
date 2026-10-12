@@ -846,6 +846,90 @@ describe('Directory console', () => {
     });
   });
 
+  describe('pointers named by the entry they land on', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const domainsBase = 'ou=domains,ou=nomenclature,dc=example,dc=com';
+    const sales = `dc=sales,dc=example,dc=org,${domainsBase}`;
+    const acme = `ou=Acme,${top}`;
+    const organizations: EntityDescriptor = {
+      key: 'organizations',
+      pluralName: 'organizations',
+      singularName: 'organization',
+      mainAttribute: 'ou',
+      base: top,
+      schema: {
+        attributes: {
+          ou: { type: 'string', role: 'identifier' },
+          twakeDomainLink: {
+            type: 'array',
+            items: { type: 'pointer', branch: [domainsBase] },
+            label: { en: 'Mail domains' },
+          },
+        },
+      },
+      endpoint: '/api/v1/ldap/organizations',
+      kind: 'organization',
+    };
+    const domains: EntityDescriptor = {
+      key: 'domains',
+      pluralName: 'domains',
+      singularName: 'domain',
+      mainAttribute: 'dc',
+      base: domainsBase,
+      schema: {
+        attributes: {
+          dc: { type: 'string', role: 'identifier' },
+          associatedDomain: {
+            type: 'string',
+            role: ['domainName', 'displayName'],
+          },
+        },
+      },
+      endpoint: '/api/v1/ldap/domains',
+      kind: 'flat',
+    };
+
+    /** An organization card, its domains branch answering `options`. */
+    const card = async (
+      options: () => Promise<{ dn: string; label: string }[]>
+    ): Promise<string> => {
+      const holder = stubContainer();
+      const app = consoleIn({ '[data-org-detail]': holder });
+      Object.assign(app as unknown as { entities: EntityDescriptor[] }, {
+        entities: [organizations, domains],
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        organization: async (dn: string) => ({
+          dn,
+          ou: 'Acme',
+          twakeDomainLink: [sales],
+        }),
+        organizationMembers: async () => ({ entries: [], truncated: false }),
+        pointerOptions: options,
+      });
+      await (
+        app as unknown as {
+          showOrganization(node: { dn: string; name: string }): Promise<void>;
+        }
+      ).showOrganization({ dn: acme, name: 'Acme' });
+      return holder.innerHTML;
+    };
+
+    it('should name a mail domain on a card the way the select does', async () => {
+      // The card read `sales`, the RDN, where the form's select offered
+      // `sales.example.org` (#57).
+      const html = await card(async () => [
+        { dn: sales, label: 'sales.example.org' },
+      ]);
+      expect(html).to.include(`title="${sales}">sales.example.org<`);
+    });
+
+    it('should fall back on the RDN when the branch cannot be read', async () => {
+      const html = await card(() => Promise.reject(new Error('Forbidden')));
+      expect(html).to.include(`title="${sales}">sales<`);
+    });
+  });
+
   describe('OrganizationTree, revealing a node', () => {
     const top = 'ou=organization,dc=example,dc=com';
     const engineering = `ou=Engineering,${top}`;
@@ -2634,15 +2718,15 @@ describe('Directory console', () => {
         kind: 'flat',
       };
       const tree = {
-        com: { dn: `dc=com,${domains.base}`, dc: 'com' },
-        'lin-saas': {
-          dn: `dc=lin-saas,dc=com,${domains.base}`,
-          dc: 'lin-saas',
+        org: { dn: `dc=org,${domains.base}`, dc: 'org' },
+        example: {
+          dn: `dc=example,dc=org,${domains.base}`,
+          dc: 'example',
         },
-        mongolie: {
-          dn: `dc=mongolie,dc=lin-saas,dc=com,${domains.base}`,
-          dc: 'mongolie',
-          associatedDomain: 'mongolie.lin-saas.com',
+        sales: {
+          dn: `dc=sales,dc=example,dc=org,${domains.base}`,
+          dc: 'sales',
+          associatedDomain: 'sales.example.org',
         },
       };
       const client = new ConsoleApiClient(baseUrl);
@@ -2653,8 +2737,8 @@ describe('Directory console', () => {
       ]);
       expect(options).to.deep.equal([
         {
-          dn: `dc=mongolie,dc=lin-saas,dc=com,${domains.base}`,
-          label: 'mongolie.lin-saas.com',
+          dn: `dc=sales,dc=example,dc=org,${domains.base}`,
+          label: 'sales.example.org',
         },
       ]);
 
@@ -2663,10 +2747,10 @@ describe('Directory console', () => {
       nock(baseUrl).get('/api/v1/ldap/domains').query(true).reply(200, tree);
       const found = await lookup.search('o');
       expect(found.options.map(option => option.label)).to.deep.equal([
-        'mongolie.lin-saas.com',
+        'sales.example.org',
       ]);
-      nock(baseUrl).get('/api/v1/ldap/domains/com').reply(200, tree.com);
-      expect(await lookup.read('com')).to.equal(undefined);
+      nock(baseUrl).get('/api/v1/ldap/domains/org').reply(200, tree.org);
+      expect(await lookup.read('org')).to.equal(undefined);
     });
 
     it('should name an entry by the attribute its schema calls its display name', async () => {
