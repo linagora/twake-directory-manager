@@ -12,7 +12,11 @@
 
 import { escapeHtml } from './shared/dom';
 
-import { ConsoleApiClient, isLarge } from './api/ConsoleApiClient';
+import {
+  ConsoleApiClient,
+  isLarge,
+  roleAttribute,
+} from './api/ConsoleApiClient';
 import { CONSOLE_LOGO, LINAGORA_LOGO } from './assets';
 import { EntityDetail, stateLabel } from './components/EntityDetail';
 import { EntityForm } from './components/EntityForm';
@@ -1000,6 +1004,7 @@ export class DirectoryConsole {
       holder.innerHTML = this.nothingMarkup();
       return;
     }
+    const named = await this.pointerNames(entity);
     const view = this.listViews.get(entity.key) ?? {};
     this.listViews.set(entity.key, view);
     const list = new EntityList({
@@ -1009,8 +1014,7 @@ export class DirectoryConsole {
       listable: !isLarge(entity),
       load: listLoader(this.api, entity),
       canDelete: this.canDelete(),
-      pointerLabel: (dn: string): string | undefined =>
-        pointerLabel(this.entities, dn, this.translator.language),
+      pointerLabel: named,
       onOpen: (id: string): void =>
         this.go(`${entity.key}/${encodeURIComponent(id)}`),
       onDelete: (ids: string[]): Promise<void> => this.deleteMany(entity, ids),
@@ -1032,6 +1036,7 @@ export class DirectoryConsole {
       return;
     }
     main.innerHTML = `<p class="dc-empty">${escapeHtml(t('app.loading'))}</p>`;
+    const naming = this.pointerNames(entity);
     let entry: Entry;
     try {
       entry = await this.api.get(entity, id);
@@ -1056,6 +1061,8 @@ export class DirectoryConsole {
       .querySelector('[data-back]')
       ?.addEventListener('click', () => this.go(entity.key));
 
+    const named = await naming;
+    if (!this.current(generation)) return;
     const transit = transitState(this.scope, entity, entry);
     const detail = new EntityDetail({
       entity,
@@ -1070,8 +1077,7 @@ export class DirectoryConsole {
       onHandOver: transit.handOver
         ? (): void => void this.handOver(entity, id)
         : undefined,
-      pointerLabel: (dn: string): string | undefined =>
-        pointerLabel(this.entities, dn, this.translator.language),
+      pointerLabel: named,
       relations: this.relations(entity, entry),
       onEdit: (): void => {
         void this.openForm(entity, entry);
@@ -1228,9 +1234,12 @@ export class DirectoryConsole {
 
     // "Who is in this department?" is the question an organization card is
     // opened to answer, and the tree deliberately does not show accounts.
-    const members = await this.api
-      .organizationMembers(node.dn)
-      .catch(() => ({ entries: [], truncated: false, more: undefined }));
+    const [members, named] = await Promise.all([
+      this.api
+        .organizationMembers(node.dn)
+        .catch(() => ({ entries: [], truncated: false, more: undefined })),
+      this.pointerNames(entity),
+    ]);
     if (!this.current(generation)) return;
 
     new EntityDetail({
@@ -1239,8 +1248,7 @@ export class DirectoryConsole {
       translator: this.translator,
       canWrite: this.canWrite(),
       canDelete: this.canDelete(),
-      pointerLabel: (dn: string): string | undefined =>
-        pointerLabel(this.entities, dn, this.translator.language),
+      pointerLabel: named,
       relations: {
         title: this.translator.t('detail.members'),
         items: members.entries.map(member => ({
@@ -1531,6 +1539,61 @@ export class DirectoryConsole {
       },
       !form.wantsPanel
     );
+  }
+
+  /**
+   * How a card or a list names the entries an entity's pointers land on.
+   *
+   * A schema names a nomenclature's values itself, and `pointerLabel` reads
+   * them there. An entry that carries its own name — a mail domain, stored
+   * as `dc=sales` and called `sales.example.org` — has to be read:
+   * its branch is listed, as the form's select lists it, when its entity
+   * marks a display name and is small enough to list. Read on every view
+   * rather than kept, so a domain renamed a moment ago reads renamed. A
+   * branch that cannot be read leaves its entries named by their RDN.
+   *
+   * @param entity the entity whose entries are shown
+   * @returns the names, by DN, falling back on the schema's
+   */
+  private async pointerNames(
+    entity: EntityDescriptor
+  ): Promise<(dn: string) => string | undefined> {
+    const { language } = this.translator;
+    const branches = new Set<string>();
+    for (const attr of Object.values(entity.schema.attributes)) {
+      if (attr.type !== 'pointer' && attr.items?.type !== 'pointer') continue;
+      for (const branch of attr.branch || attr.items?.branch || []) {
+        const owner = this.entities.find(
+          candidate =>
+            candidate.base &&
+            comparableDn(candidate.base) === comparableDn(branch)
+        );
+        if (
+          owner &&
+          !isLarge(owner) &&
+          roleAttribute(owner.schema, 'displayName')
+        )
+          branches.add(owner.base);
+      }
+    }
+    const names = new Map<string, string>();
+    await Promise.all(
+      [...branches].map(async branch => {
+        try {
+          const options = await this.api.pointerOptions(
+            branch,
+            this.entities,
+            language
+          );
+          for (const { dn, label } of options)
+            names.set(comparableDn(dn), label);
+        } catch {
+          // Named by their RDN, as before the branch was read.
+        }
+      })
+    );
+    return (dn: string): string | undefined =>
+      names.get(comparableDn(dn)) ?? pointerLabel(this.entities, dn, language);
   }
 
   /** A refused save, naming the fields the way the form does. */
