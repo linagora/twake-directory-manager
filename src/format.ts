@@ -354,6 +354,29 @@ export function pointerLabel(
 }
 
 /**
+ * What a nomenclature calls one of its own entries: the name its schema gives
+ * the value of its main attribute — `memberRestrictedList` reads _Members
+ * only_ on its own card and in its list, as it does in the selects pointing
+ * at it.
+ *
+ * @param entity the entity the entry belongs to
+ * @param name attribute the value is held in
+ * @param value the value
+ * @param language interface language
+ * @returns the name, or undefined for another attribute or an unnamed value
+ */
+export function ownValueLabel(
+  entity: EntityDescriptor,
+  name: string,
+  value: string,
+  language: string
+): string | undefined {
+  const labels = entity.schema.entity?.valueLabels;
+  if (!labels || name !== entity.mainAttribute) return undefined;
+  return valueLabel(labels, value, language);
+}
+
+/**
  * The readable name of one value in a `valueLabels` map. A directory answers
  * with its own spelling of a value, so the key is found whatever its case.
  *

@@ -2917,6 +2917,27 @@ describe('Directory console', () => {
       );
     });
 
+    it('should name a nomenclature’s values, and keep the others as stored', async () => {
+      const container = stubContainer();
+      await new EntityList({
+        entity: mailboxTypes,
+        translator: new Translator('fr'),
+        load: () =>
+          Promise.resolve({
+            teamMailbox: { cn: 'teamMailbox' },
+            custom: { cn: 'custom' },
+          }),
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      }).render(container);
+      expect(container.innerHTML).to.include(
+        'title="teamMailbox">Boîte partagée</td>'
+      );
+      expect(container.innerHTML).to.include('title="custom">custom</td>');
+    });
+
     it('should search every field the schema marks, not just the identifier', async () => {
       // Looking for a person by surname meant knowing which attribute holds
       // it and switching a selector to it first — schema knowledge asked of
@@ -4566,6 +4587,26 @@ describe('Directory console', () => {
       }).render(container);
       return container.innerHTML;
     };
+
+    it('should name a nomenclature entry the way its schema does', () => {
+      const container = stubContainer();
+      new EntityDetail({
+        entity: mailboxTypes,
+        entry: { cn: 'teamMailbox' },
+        translator: new Translator('fr'),
+        canWrite: true,
+        canDelete: true,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        onStatus: () => undefined,
+        onResetPassword: () => undefined,
+      }).render(container);
+      expect(container.innerHTML).to.include('<h2>Boîte partagée');
+      // The stored value stays at hand, in the tooltip.
+      expect(container.innerHTML).to.include(
+        'title="teamMailbox">Boîte partagée</span>'
+      );
+    });
 
     it('should name attributes in the reader’s language', () => {
       const container = stubContainer();
