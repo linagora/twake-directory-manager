@@ -566,8 +566,11 @@ export class EntityForm {
     const choose = (candidate: PointerCandidate): void => {
       this.picked.set(candidate.dn, candidate.label);
       if (multiple) {
-        if (!this.values[name].includes(candidate.dn))
-          this.values[name].push(candidate.dn);
+        // DNs compare without regard to case, as a DN typed whole does.
+        const held = this.values[name].some(
+          value => value.toLowerCase() === candidate.dn.toLowerCase()
+        );
+        if (!held) this.values[name].push(candidate.dn);
       } else this.values[name] = [candidate.dn];
       input.value = '';
       close();

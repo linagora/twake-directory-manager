@@ -1486,6 +1486,41 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should leave room for the groups when many accounts match', async () => {
+      const lists: EntityDescriptor = {
+        ...groups,
+        schema: {
+          attributes: {
+            ...groups.schema.attributes,
+            mail: { type: 'string', role: 'primaryEmail' },
+          },
+        },
+      };
+      const accounts: Record<string, Entry> = {};
+      for (let i = 0; i < 30; i++)
+        accounts[`jane${i}`] = {
+          dn: `uid=jane${i},ou=users,dc=example,dc=com`,
+          cn: `Jane ${i}`,
+        };
+      // Answered without its DN: no member can be written from it.
+      accounts.nodn = { cn: 'No DN' };
+      nock(baseUrl).get('/api/v1/ldap/users').query(true).reply(200, accounts);
+      nock(baseUrl)
+        .get('/api/v1/ldap/groups')
+        .query(true)
+        .reply(200, {
+          'jane-team': { dn: 'cn=jane-team,ou=groups,dc=example,dc=com' },
+        });
+      const found = await new ConsoleApiClient(baseUrl).memberSearch(
+        'members',
+        [users, lists]
+      )!('jane');
+      expect(found.map(option => option.dn)).to.include(
+        'cn=jane-team,ou=groups,dc=example,dc=com'
+      );
+      expect(found.map(option => option.label)).not.to.include('No DN');
+    });
+
     it('should name a nomenclature value the way its schema does', async () => {
       nock(baseUrl)
         .get('/api/v1/ldap/mailboxTypes')
@@ -2740,6 +2775,17 @@ describe('Directory console', () => {
         input.value = jane.toUpperCase();
         input.fire('blur');
         expect(members(form)).to.deep.equal([alice, jane]);
+      });
+
+      it('should not pick a member twice in another case', async () => {
+        const { form, input } = await memberForm(() =>
+          Promise.resolve([{ dn: alice.toUpperCase(), label: 'Alice' }])
+        );
+        input.value = 'alice';
+        input.fire('input');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        input.fire('keydown', enter);
+        expect(members(form)).to.deep.equal([alice]);
       });
 
       it('should keep a plain token box when there is no search', async () => {

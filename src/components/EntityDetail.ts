@@ -274,13 +274,19 @@ export class EntityDetail {
     const copy = container.querySelector<HTMLElement>('[data-copy-dn]');
     copy?.addEventListener('click', () => {
       const { entry, translator } = this.options;
-      // Absent outside a secure context: the DN stays selectable by hand.
-      void navigator.clipboard
-        ?.writeText(String(entry.dn))
-        .then(() => {
-          copy.textContent = translator.t('detail.copied');
-        })
-        .catch(() => undefined);
+      // Absent outside a secure context, or refused: the DN stays
+      // selectable by hand, and the button says it was not copied.
+      const said = (key: string): void => {
+        copy.textContent = translator.t(key);
+        setTimeout(() => {
+          copy.textContent = translator.t('detail.copy');
+        }, 2000);
+      };
+      if (!navigator.clipboard) return said('detail.copyFailed');
+      navigator.clipboard.writeText(String(entry.dn)).then(
+        () => said('detail.copied'),
+        () => said('detail.copyFailed')
+      );
     });
 
     const status = container.querySelector<HTMLSelectElement>('[data-status]');

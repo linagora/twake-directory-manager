@@ -45,14 +45,17 @@ variable too — see the
 
 `DM_PLUGINS` is composed when the container starts, from three parts:
 
-| Variable             | Default                                                                                                                                                                                                 | What it is                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `DM_AUTH_PLUGINS`    | `core/auth/openidconnect,core/auth/authzLinid1`                                                                                                                                                         | Who the caller is, and which branches they administer                       |
-| `DM_CONSOLE_PLUGINS` | `core/static`, `/app/plugins/consoleRoot.mjs` (redirects `/` to the console), `core/configApi`, `core/ldap/{flatGeneric,groups,organizations,enterpriseRules,accountLifecycle}`, `core/auth/authzScope` | What the console reads and writes                                           |
-| `DM_EXTRA_PLUGINS`   | _(empty)_                                                                                                                                                                                               | Anything else: `core/twake/james`, `core/ldap/trash`, `core/auth/crowdsec`… |
+| Variable             | Default                                                                                                                                                                  | What it is                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `DM_AUTH_PLUGINS`    | `core/auth/openidconnect,core/auth/authzLinid1`                                                                                                                          | Who the caller is, and which branches they administer                       |
+| `DM_CONSOLE_PLUGINS` | `core/static`, `/app/plugins/consoleRoot.mjs`, `core/configApi`, `core/ldap/{flatGeneric,groups,organizations,enterpriseRules,accountLifecycle}`, `core/auth/authzScope` | What the console reads and writes                                           |
+| `DM_EXTRA_PLUGINS`   | _(empty)_                                                                                                                                                                | Anything else: `core/twake/james`, `core/ldap/trash`, `core/auth/crowdsec`… |
 
 `DM_PLUGINS_OVERRIDE` replaces the whole list, for a deployment that knows
 exactly what it wants.
+
+`/app/plugins/consoleRoot.mjs` sends the bare host to the console; a list
+that leaves it out leaves `/` unanswered.
 
 **The container refuses to start with `DM_AUTH_PLUGINS` empty.** ldap-rest
 without an authentication plugin serves every request, and this interface

@@ -79,6 +79,7 @@ const en: Catalogue = {
   'detail.dn': 'Distinguished name (DN)',
   'detail.copy': 'Copy',
   'detail.copied': 'Copied',
+  'detail.copyFailed': 'Select the DN to copy it',
 
   'form.required': 'Fields marked with * are required',
   'form.addValue': 'Press Enter to add a value',
@@ -259,6 +260,7 @@ const fr: Catalogue = {
   'detail.dn': 'Nom distinctif (DN)',
   'detail.copy': 'Copier',
   'detail.copied': 'Copié',
+  'detail.copyFailed': 'Sélectionnez le DN pour le copier',
 
   'form.required': 'Les champs marqués d’une * sont obligatoires',
   'form.addValue': 'Appuyez sur Entrée pour ajouter une valeur',
@@ -443,6 +445,7 @@ const mn: Catalogue = {
   'detail.dn': 'Ялгах нэр (DN)',
   'detail.copy': 'Хуулах',
   'detail.copied': 'Хуулагдлаа',
+  'detail.copyFailed': 'DN-ийг сонгоод хуулна уу',
 
   'form.required': '* тэмдэгтэй талбарыг заавал бөглөнө',
   'form.addValue': 'Утга нэмэхийн тулд Enter дарна уу',

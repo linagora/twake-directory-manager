@@ -1081,39 +1081,43 @@ export class ConsoleApiClient {
     role: 'members' | 'owners',
     entities: EntityDescriptor[]
   ): ((query: string) => Promise<{ dn: string; label: string }[]>) | undefined {
-    const owners = entities.filter(
+    const searched = entities.filter(
       entity =>
         (entity.kind === 'flat' ||
           (role === 'members' && entity.kind === 'group')) &&
         roleAttribute(entity.schema, 'primaryEmail')
     );
-    if (owners.length === 0) return undefined;
+    if (searched.length === 0) return undefined;
     return async query => {
       const found = await Promise.allSettled(
-        owners.map(async owner => {
-          const scope = searchableAttributes(owner)
+        searched.map(async entity => {
+          const scope = searchableAttributes(entity)
             .map(([name]) => name)
             .join(',');
           const entries = await this.list(
-            owner,
+            entity,
             query,
             scope,
             POINTER_SEARCH_LIMIT
           );
-          const mail = roleAttribute(owner.schema, 'primaryEmail') as string;
-          const display = roleAttribute(owner.schema, 'displayName');
-          return Object.entries(entries).map(([id, entry]) => {
-            const first = (name?: string): string | undefined => {
-              const raw = name ? entryValue(entry, name) : undefined;
-              return Array.isArray(raw) ? raw[0] : raw;
-            };
-            const name = first(display) || id;
-            const address = first(mail);
-            return {
-              dn: String(entry.dn || id),
-              label: address ? `${name} <${address}>` : name,
-            };
-          });
+          const mail = roleAttribute(entity.schema, 'primaryEmail') as string;
+          const display = roleAttribute(entity.schema, 'displayName');
+          // An entry answered without its DN cannot be written as a member:
+          // its identifier is no DN, and the save would be refused.
+          return Object.entries(entries)
+            .filter(([, entry]) => entry.dn)
+            .map(([id, entry]) => {
+              const first = (name?: string): string | undefined => {
+                const raw = name ? entryValue(entry, name) : undefined;
+                return Array.isArray(raw) ? raw[0] : raw;
+              };
+              const name = first(display) || id;
+              const address = first(mail);
+              return {
+                dn: String(entry.dn),
+                label: address ? `${name} <${address}>` : name,
+              };
+            });
         })
       );
       // A branch the caller may not read leaves the others to answer; the
@@ -1124,9 +1128,20 @@ export class ConsoleApiClient {
       );
       if (answered.length === 0)
         throw (found[0] as PromiseRejectedResult).reason;
-      return answered
-        .flatMap(result => result.value)
-        .slice(0, POINTER_SEARCH_LIMIT);
+      // Taken in turn from each branch, so that a query matching many
+      // accounts still leaves room for the groups it matches.
+      const lists = answered.map(result => result.value);
+      const options: PointerOption[] = [];
+      for (
+        let index = 0;
+        options.length < POINTER_SEARCH_LIMIT &&
+        lists.some(list => index < list.length);
+        index++
+      )
+        for (const list of lists)
+          if (index < list.length && options.length < POINTER_SEARCH_LIMIT)
+            options.push(list[index]);
+      return options;
     };
   }
 
