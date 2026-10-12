@@ -1,22 +1,29 @@
 # Changelog
 
-## Unreleased
+## v0.5.0 (2026-10-12)
+
+Built on ldap-rest 0.18.0.
+
+### Breaking Changes
+
+- With `core/twake/james`, mailing lists are no longer copied to James
+  address groups: Twake Mail reads them from LDAP. Delete the address groups
+  already created —
+  [ldap-rest notes](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md#mailing-lists-are-no-longer-copied-to-james)
 
 ### Features
 
-- Built on ldap-rest 0.18.0:
-  - a group with an owner can be saved again (#23)
-  - field hints and form sections read in the interface language (#24)
-  - reference data has labelled Name and Description columns (#33)
-  - an account's card lists its mailing lists, given the directory's
-    `memberof` overlay (#35)
-  - adding a member that does not exist says so (#42)
-  - a mail domain is offered by its name, `example.org`, not its identifier
+- Field hints and form sections in the interface language (#24)
+- Reference data shows readable names under Name and Description columns
+  (#33)
+- An account's card lists its mailing lists, given the directory's
+  `memberof` overlay (#35)
+- A mail domain is offered by its name, `example.org`, not its identifier
 
 ### Bug Fixes
 
-- Reference data lists and cards name their values, "Members only" rather
-  than `memberRestrictedList` (#33)
+- A group with an owner can be saved again (#23)
+- Adding a member that does not exist says so (#42)
 - The side panel opens at its top, and closes when the page changes under it
   (Back, a typed address) (#44, #45)
 - The list's header checkbox shows a selected page and can clear it (#34)
