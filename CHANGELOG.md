@@ -14,6 +14,9 @@
   _Delivery mode_, which nothing in a Twake deployment acts on, nor the
   _Delivery modes_ reference data; `DM_CONSOLE_HIDDEN_ATTRIBUTES` chooses
   what is hidden (#62, #63)
+- A pointer's select, and the CSV import, offer only the entries its schema
+  describes: the DNS levels a tree of mail domains hangs from, `com` or
+  `lin-saas`, are no mail domains (#58)
 
 ## v0.5.0 (2026-10-12)
 
