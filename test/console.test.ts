@@ -3398,6 +3398,48 @@ describe('Directory console', () => {
       }
     });
 
+    it('should name the tokens of a multi-valued pointer the way its select does', async () => {
+      const branch = 'ou=domains,ou=nomenclature,dc=example,dc=com';
+      const example = `dc=example,${branch}`;
+      const domains: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            uid: users.schema.attributes.uid,
+            twakeDomainLink: {
+              type: 'array',
+              items: { type: 'pointer', branch: [branch] },
+            },
+          },
+        },
+      };
+      // The token select, inside its field, as `fillPointers` finds it.
+      const list = { innerHTML: '' };
+      const field = {
+        dataset: { tokens: 'twakeDomainLink' },
+        querySelector: (selector: string) =>
+          selector === '.dc-token-list' ? list : null,
+      };
+      const select = Object.assign(stubSelect(branch, ''), {
+        closest: (selector: string) =>
+          selector === '[data-tokens]' ? field : null,
+      });
+      (select.dataset as Record<string, string>).tokenInput = '';
+      const container = await renderWith(
+        select,
+        { uid: 'hr', twakeDomainLink: [example] },
+        () => Promise.resolve([{ dn: example, label: 'example.com' }]),
+        domains
+      );
+      // Before the options are known: the RDN, not the DN.
+      expect(container.innerHTML).to.include('>example</span>');
+      expect(container.innerHTML).to.not.include(`>${example}</span>`);
+      // Once they are: the name the select offers, the DN in the title.
+      expect(list.innerHTML).to.include(
+        `<span title="${example}">example.com</span>`
+      );
+    });
+
     it('should not offer the identifier for editing once it exists', async () => {
       const container = stubContainer();
       await build({ uid: 'jsmith', cn: 'John' }).render(container);
