@@ -35,6 +35,7 @@ import {
 } from './format';
 import { availableLanguages, Translator } from './i18n';
 import { signInAgain } from './session';
+import type { ListView } from './components/EntityList';
 import type { PointerLookup } from './importer';
 import type {
   ConsoleOptions,
@@ -370,6 +371,12 @@ export class DirectoryConsole {
     this.container?.querySelector<HTMLElement>('[data-toast]')
   );
   private tree: OrganizationTree | null = null;
+  /**
+   * Where the reader left the list of each entity, by key. A list is drawn
+   * anew each time its page is shown, and without this Back from a card
+   * found it empty, the search typed and the page reached gone.
+   */
+  private readonly listViews = new Map<string, ListView>();
 
   constructor(options: ConsoleOptions) {
     this.options = options;
@@ -940,8 +947,11 @@ export class DirectoryConsole {
       .querySelector('[data-import]')
       ?.addEventListener('click', () => this.openImport(entity));
 
+    const view = this.listViews.get(entity.key) ?? {};
+    this.listViews.set(entity.key, view);
     const list = new EntityList({
       entity,
+      view,
       translator: this.translator,
       listable: !isLarge(entity),
       load: listLoader(this.api, entity),
