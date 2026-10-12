@@ -18,6 +18,19 @@ export type SchemaRole = string;
  */
 export type LocalizedText = string | Record<string, string>;
 
+/**
+ * Where a group takes members outside the directory: a member named by its
+ * address alone is created there by the server's `externalUsersInGroups`.
+ */
+export interface ExternalMembers {
+  /** DN the server creates external members under */
+  branch: string;
+  /** Attribute of their RDN, holding the address */
+  rdnAttribute: string;
+  /** Lower-cased domains whose addresses belong to accounts instead */
+  managedDomains: string[];
+}
+
 /** One attribute of an entity schema. */
 export interface SchemaAttribute {
   type:

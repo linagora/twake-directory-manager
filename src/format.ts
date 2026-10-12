@@ -96,6 +96,18 @@ export function isDnShaped(text: string): boolean {
   );
 }
 
+/**
+ * A value written into a DN, escaped as RFC 4514 asks: `a+b@example.com`
+ * becomes `a\+b@example.com`, whose `+` would otherwise join a second
+ * attribute to the RDN. The inverse of `rdnValue`.
+ */
+export function escapeDnValue(value: string): string {
+  return value
+    .replace(/[\\,+"<>;=]/g, '\\$&')
+    .replace(/^([ #])/, '\\$1')
+    .replace(/ $/, '\\ ');
+}
+
 /** Value of the first RDN of a DN, with its escapes removed. */
 export function rdnValue(dn: string): string {
   const match = /^[^=]+=((?:\\.|[^,])*)/.exec(dn);

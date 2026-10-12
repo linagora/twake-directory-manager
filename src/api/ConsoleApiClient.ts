@@ -14,6 +14,7 @@ import type {
   EntitySchema,
   Entry,
   EntryList,
+  ExternalMembers,
   LocalizedText,
   OrganizationNode,
   Scope,
@@ -62,6 +63,12 @@ interface ConfigResponse {
     openidconnect?: { endpoints?: { logout?: string } };
     /** What the image's own plugin says about the console itself */
     console?: { hiddenAttributes?: string[] };
+    externalUsersInGroups?: {
+      enabled?: boolean;
+      branch?: string;
+      rdnAttribute?: string;
+      managedDomains?: string[];
+    };
   };
 }
 
@@ -223,6 +230,8 @@ export class ConsoleApiClient {
   private organizationClasses: string[] = [];
   /** Route that ends the session, when the server's authentication has one */
   private logoutPath?: string;
+  /** Where groups take external members; see externalMembers */
+  private external?: ExternalMembers;
   /** Attributes the deployment hides, lowercased; see describe() */
   private hidden = new Set<string>();
   /**
@@ -270,6 +279,11 @@ export class ConsoleApiClient {
   /** Root of the organization tree, when the server serves one. */
   get organizationRoot(): string | undefined {
     return this.topOrganization;
+  }
+
+  /** Where groups take members outside the directory, when they do. */
+  get externalMembers(): ExternalMembers | undefined {
+    return this.external;
   }
 
   /**
@@ -342,6 +356,17 @@ export class ConsoleApiClient {
     this.apiPrefix = config.apiPrefix || this.apiPrefix;
     this.ldapBase = config.ldapBase || '';
     this.logoutPath = config.features.openidconnect?.endpoints?.logout;
+    const external = config.features.externalUsersInGroups;
+    this.external =
+      external?.enabled && external.branch
+        ? {
+            branch: external.branch,
+            rdnAttribute: external.rdnAttribute || 'mail',
+            managedDomains: (external.managedDomains || []).map(domain =>
+              domain.toLowerCase()
+            ),
+          }
+        : undefined;
     this.hidden = new Set(
       (config.features.console?.hiddenAttributes || []).map(name =>
         name.toLowerCase()

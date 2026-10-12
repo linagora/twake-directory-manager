@@ -25,6 +25,8 @@ import {
 import {
   attributeLabel,
   displayValue,
+  escapeDnValue,
+  isDnShaped,
   pointerLabel,
   rdnValue,
   resolveText,
@@ -51,6 +53,7 @@ import type {
   EntitySchema,
   Entry,
   EntryList,
+  ExternalMembers,
   Scope,
 } from '../src/types';
 
@@ -1880,6 +1883,37 @@ describe('Directory console', () => {
       expect(client.organizationRoot).to.equal(
         'ou=organization,dc=example,dc=com'
       );
+    });
+
+    it('should learn where groups take members outside the directory', async () => {
+      nock(baseUrl)
+        .get('/api/v1/config')
+        .reply(200, {
+          apiPrefix: '/api',
+          features: {
+            externalUsersInGroups: {
+              enabled: true,
+              branch: 'ou=external,dc=example,dc=com',
+              rdnAttribute: 'mail',
+              managedDomains: ['Example.com'],
+            },
+          },
+        });
+      const client = new ConsoleApiClient(baseUrl);
+      expect(client.externalMembers).to.equal(undefined);
+      await client.discover();
+      expect(client.externalMembers).to.deep.equal({
+        branch: 'ou=external,dc=example,dc=com',
+        rdnAttribute: 'mail',
+        managedDomains: ['example.com'],
+      });
+
+      // An ldap-rest that predates it publishes nothing.
+      nock(baseUrl)
+        .get('/api/v1/config')
+        .reply(200, { apiPrefix: '/api', features: {} });
+      await client.discover();
+      expect(client.externalMembers).to.equal(undefined);
     });
 
     it('should leave out the attributes the deployment hides', async () => {
@@ -3869,6 +3903,27 @@ describe('Directory console', () => {
     });
   });
 
+  describe('escapeDnValue', () => {
+    it('should escape what RFC 4514 asks, and read back through rdnValue', () => {
+      for (const value of [
+        'a+b@example.com',
+        'x,y=z',
+        '"quoted" <a;b>',
+        'back\\slash',
+        ' lead and trail ',
+        '#hash',
+      ]) {
+        const escaped = escapeDnValue(value);
+        expect(
+          rdnValue(`mail=${escaped},ou=external,dc=example,dc=com`)
+        ).to.equal(value);
+        expect(isDnShaped(`mail=${escaped},ou=external`)).to.equal(true);
+      }
+      expect(escapeDnValue('a+b@example.com')).to.equal('a\\+b@example.com');
+      expect(escapeDnValue('#x ')).to.equal('\\#x\\ ');
+    });
+  });
+
   describe('EntityForm', () => {
     const build = (entry?: Record<string, string | string[]>): EntityForm =>
       new EntityForm({
@@ -4207,17 +4262,22 @@ describe('Directory console', () => {
 
       /** A group form whose member field is wired to recorders. */
       const memberForm = async (
-        search: (query: string) => Promise<{ dn: string; label: string }[]>
+        search: (query: string) => Promise<{ dn: string; label: string }[]>,
+        externalMembers?: ExternalMembers
       ): Promise<{
         form: EntityForm;
         input: ReturnType<typeof recorder>;
+        results: ReturnType<typeof recorder>;
+        tokens: ReturnType<typeof recorder>;
         container: HTMLElement & { innerHTML: string };
       }> => {
         const input = recorder();
+        const results = recorder();
+        const tokens = recorder();
         const field = recorder({
           '[data-picker-input]': input,
-          '.dc-picker-results': recorder(),
-          '.dc-token-list': recorder(),
+          '.dc-picker-results': results,
+          '.dc-token-list': tokens,
         });
         const container = stubContainer();
         (
@@ -4230,11 +4290,12 @@ describe('Directory console', () => {
           translator: new Translator('en'),
           pointerOptions: () => Promise.resolve([]),
           memberSearch: role => (role === 'members' ? search : undefined),
+          externalMembers,
           onSubmit: () => Promise.resolve(),
           onCancel: () => undefined,
         });
         await form.render(container);
-        return { form, input, container };
+        return { form, input, results, tokens, container };
       };
       const members = (form: EntityForm): string[] =>
         (form as unknown as { values: Record<string, string[]> }).values.member;
@@ -4293,6 +4354,77 @@ describe('Directory console', () => {
         await new Promise(resolve => setTimeout(resolve, 300));
         input.fire('keydown', enter);
         expect(members(form)).to.deep.equal([alice]);
+      });
+
+      describe('outside the directory', () => {
+        const external: ExternalMembers = {
+          branch: 'ou=external,dc=example,dc=com',
+          rdnAttribute: 'mail',
+          managedDomains: ['example.com'],
+        };
+        /** Type an address, and wait for the search it issues. */
+        const type = async (
+          input: ReturnType<typeof recorder>,
+          text: string
+        ): Promise<void> => {
+          input.value = text;
+          input.fire('input');
+          await new Promise(resolve => setTimeout(resolve, 300));
+        };
+
+        it('should offer to add an address no entry holds as an external member', async () => {
+          // Only the full DN worked, which administrators do not know (#59).
+          const { form, input, results, tokens } = await memberForm(
+            () => Promise.resolve([]),
+            external
+          );
+          await type(input, 'Some.One+lists@partner.org');
+          expect(results.innerHTML).to.include(
+            'Add Some.One+lists@partner.org as an external member'
+          );
+          input.fire('keydown', enter);
+          // Escaped as a DN value: a bare `+` joins a second attribute.
+          expect(members(form)).to.deep.equal([
+            alice,
+            'mail=Some.One\\+lists@partner.org,ou=external,dc=example,dc=com',
+          ]);
+          // Named by its address, not by the offer.
+          expect(tokens.innerHTML).to.include('Some.One+lists@partner.org<');
+        });
+
+        it('should offer the account, not an external member, for an address an entry holds', async () => {
+          const { results, input } = await memberForm(
+            () =>
+              Promise.resolve([
+                { dn: jane, label: 'Jane Doe <jane@partner.org>' },
+              ]),
+            external
+          );
+          await type(input, 'JANE@partner.org');
+          expect(results.innerHTML).to.include('Jane Doe');
+          expect(results.innerHTML).not.to.include('external member');
+        });
+
+        it('should say an address at a domain of the directory is an account’s', async () => {
+          const { form, input, results } = await memberForm(
+            () => Promise.resolve([]),
+            external
+          );
+          await type(input, 'nobody@Example.com');
+          expect(results.innerHTML).to.include(
+            'example.com is a domain of this directory: choose the account instead'
+          );
+          input.fire('keydown', enter);
+          expect(members(form)).to.deep.equal([alice]);
+        });
+
+        it('should offer nothing outside when the server takes no external member', async () => {
+          const { results, input } = await memberForm(() =>
+            Promise.resolve([])
+          );
+          await type(input, 'someone@partner.org');
+          expect(results.innerHTML).to.include('No entry matches this search');
+        });
       });
 
       it('should keep a plain token box when there is no search', async () => {

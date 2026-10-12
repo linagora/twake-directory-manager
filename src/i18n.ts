@@ -106,6 +106,9 @@ const en: Catalogue = {
   'form.searchMember.other':
     'Type {count} characters of an email address, or a full DN',
   'form.addDn': 'Press Enter to add this DN',
+  'form.addExternal': 'Add {address} as an external member',
+  'form.managedDomain':
+    '{domain} is a domain of this directory: choose the account instead',
   'form.searching': 'Searching…',
   'form.notSize':
     'Expected a size such as 4 GB, 500 MB or 100 KB, or a number of bytes',
@@ -315,6 +318,9 @@ const fr: Catalogue = {
   'form.searchMember.other':
     'Tapez {count} caractères d’une adresse électronique, ou un DN complet',
   'form.addDn': 'Appuyez sur Entrée pour ajouter ce DN',
+  'form.addExternal': 'Ajouter {address} comme membre externe',
+  'form.managedDomain':
+    '{domain} est un domaine de cet annuaire : choisissez plutôt le compte',
   'form.searching': 'Recherche…',
   'form.notSize':
     'Attendu : une taille telle que 4 GB, 500 MB ou 100 KB, ou un nombre d’octets',
@@ -524,6 +530,9 @@ const mn: Catalogue = {
   'form.searchMember':
     'И-мэйл хаягийн {count} тэмдэгт, эсвэл бүтэн DN оруулна уу',
   'form.addDn': 'Энэ DN-ийг нэмэхийн тулд Enter дарна уу',
+  'form.addExternal': '{address} хаягийг гадны гишүүнээр нэмэх',
+  'form.managedDomain':
+    '{domain} нь энэ лавлахын домэйн тул бүртгэлийг нь сонгоно уу',
   'form.searching': 'Хайж байна…',
   'form.notSize':
     '4 GB, 500 MB, 100 KB гэх мэт хэмжээ, эсвэл байтын тоо оруулна уу',
