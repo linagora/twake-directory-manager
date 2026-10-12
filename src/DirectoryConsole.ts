@@ -657,9 +657,11 @@ export class DirectoryConsole {
           ? `<span class="dc-scope-label">${escapeHtml(t('transit.branch'))}</span>
             <a class="dc-scope-transit" href="#/organizations/${encodeURIComponent(
               this.scope.transit
-            )}" title="${escapeHtml(this.scope.transit)}">${escapeHtml(
+            )}" title="${escapeHtml(
+              // Readable, like the branches' paths: the scope gives the
+              // transit branch no path, and its name stands in for one.
               rdnValue(this.scope.transit)
-            )}</a>`
+            )}">${escapeHtml(rdnValue(this.scope.transit))}</a>`
           : ''
       }`;
   }

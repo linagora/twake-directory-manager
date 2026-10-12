@@ -821,7 +821,7 @@ describe('Directory console', () => {
     });
   });
 
-  describe('console actions', () => {
+  describe('the shell and its actions', () => {
     it('should name the new state the way the state select does', async () => {
       const toast = toastElement();
       const app = consoleIn({ '[data-toast]': toast }, 'fr');
@@ -900,6 +900,31 @@ describe('Directory console', () => {
         'Delete Engineering / QA Lab? This cannot be undone.',
         'Delete QA Lab? This cannot be undone.',
       ]);
+    });
+
+    it('should name the transit branch in the scope banner, tooltip included', () => {
+      const app = consoleIn({}) as unknown as {
+        scope: Scope;
+        scopeMarkup(): string;
+      };
+      app.scope = {
+        user: 'sophie.martin',
+        unrestricted: false,
+        branches: [
+          {
+            dn: 'ou=Sales,ou=organization,dc=example,dc=com',
+            name: 'Sales',
+            path: 'Sales',
+            read: true,
+            write: true,
+          },
+        ],
+        entities: [],
+        transit: 'ou=Transit,ou=organization,dc=example,dc=com',
+      };
+      const markup = app.scopeMarkup();
+      expect(markup).to.contain('title="Transit">Transit</a>');
+      expect(markup).to.not.contain('title="ou=Transit');
     });
   });
 
