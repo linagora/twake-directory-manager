@@ -1062,6 +1062,75 @@ export class ConsoleApiClient {
   }
 
   /**
+   * A search for the entries a group's members or owners name, for the form
+   * to offer as the operator types.
+   *
+   * Those attributes hold DNs the schema types as plain strings, so the form
+   * asked for a DN typed by hand: an administrator knows a colleague by their
+   * email address, not by `uid=jdoe,ou=users,dc=example,dc=org`. The search
+   * looks among the entries that have an email address — the accounts, and
+   * for members the groups too, a group being able to hold another — in the
+   * attributes the list searches, and names each by its display name and its
+   * address.
+   *
+   * @param role `members` or `owners`
+   * @param entities entities the console knows
+   * @returns a search, or undefined when no entity has an email address
+   */
+  memberSearch(
+    role: 'members' | 'owners',
+    entities: EntityDescriptor[]
+  ): ((query: string) => Promise<{ dn: string; label: string }[]>) | undefined {
+    const owners = entities.filter(
+      entity =>
+        (entity.kind === 'flat' ||
+          (role === 'members' && entity.kind === 'group')) &&
+        roleAttribute(entity.schema, 'primaryEmail')
+    );
+    if (owners.length === 0) return undefined;
+    return async query => {
+      const found = await Promise.allSettled(
+        owners.map(async owner => {
+          const scope = searchableAttributes(owner)
+            .map(([name]) => name)
+            .join(',');
+          const entries = await this.list(
+            owner,
+            query,
+            scope,
+            POINTER_SEARCH_LIMIT
+          );
+          const mail = roleAttribute(owner.schema, 'primaryEmail') as string;
+          const display = roleAttribute(owner.schema, 'displayName');
+          return Object.entries(entries).map(([id, entry]) => {
+            const first = (name?: string): string | undefined => {
+              const raw = name ? entryValue(entry, name) : undefined;
+              return Array.isArray(raw) ? raw[0] : raw;
+            };
+            const name = first(display) || id;
+            const address = first(mail);
+            return {
+              dn: String(entry.dn || id),
+              label: address ? `${name} <${address}>` : name,
+            };
+          });
+        })
+      );
+      // A branch the caller may not read leaves the others to answer; the
+      // search fails only when none could.
+      const answered = found.filter(
+        (result): result is PromiseFulfilledResult<PointerOption[]> =>
+          result.status === 'fulfilled'
+      );
+      if (answered.length === 0)
+        throw (found[0] as PromiseRejectedResult).reason;
+      return answered
+        .flatMap(result => result.value)
+        .slice(0, POINTER_SEARCH_LIMIT);
+    };
+  }
+
+  /**
    * Every organization, as pointer candidates labelled by their readable path.
    *
    * The walk is breadth-first and bounded: a directory with a very wide tree

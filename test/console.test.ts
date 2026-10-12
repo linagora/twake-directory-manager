@@ -1409,6 +1409,83 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should search members by email among accounts and groups', async () => {
+      const lists: EntityDescriptor = {
+        ...groups,
+        schema: {
+          attributes: {
+            ...groups.schema.attributes,
+            mail: { type: 'string', role: 'primaryEmail', searchable: true },
+          },
+        },
+      };
+      const client = new ConsoleApiClient(baseUrl);
+      // Neither a nomenclature nor anything else without an address.
+      expect(client.memberSearch('members', [mailboxTypes])).to.equal(
+        undefined
+      );
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(query => query.match === 'jane' && Boolean(query.attribute))
+        .twice()
+        .reply(200, {
+          jane: {
+            dn: 'uid=jane,ou=users,dc=example,dc=com',
+            cn: 'Jane Doe',
+            mail: 'jane@example.com',
+          },
+        });
+      nock(baseUrl)
+        .get('/api/v1/ldap/groups')
+        .query(query => query.match === 'jane')
+        .reply(200, {
+          'jane-team': {
+            dn: 'cn=jane-team,ou=groups,dc=example,dc=com',
+            mail: 'jane-team@example.com',
+          },
+        });
+      const members = client.memberSearch('members', [users, lists]);
+      expect(await members!('jane')).to.deep.equal([
+        {
+          dn: 'uid=jane,ou=users,dc=example,dc=com',
+          label: 'Jane Doe <jane@example.com>',
+        },
+        {
+          dn: 'cn=jane-team,ou=groups,dc=example,dc=com',
+          label: 'jane-team <jane-team@example.com>',
+        },
+      ]);
+      // An owner is an account: the groups are not asked.
+      const owners = client.memberSearch('owners', [users, lists]);
+      expect(await owners!('jane')).to.have.length(1);
+    });
+
+    it('should search the members a caller can read when a branch refuses', async () => {
+      const lists: EntityDescriptor = {
+        ...groups,
+        schema: {
+          attributes: {
+            ...groups.schema.attributes,
+            mail: { type: 'string', role: 'primaryEmail' },
+          },
+        },
+      };
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .query(true)
+        .reply(200, {
+          jane: { dn: 'uid=jane,ou=users,dc=example,dc=com', cn: 'Jane' },
+        });
+      nock(baseUrl).get('/api/v1/ldap/groups').query(true).reply(403, {});
+      const search = new ConsoleApiClient(baseUrl).memberSearch('members', [
+        users,
+        lists,
+      ]);
+      expect(await search!('jane')).to.deep.equal([
+        { dn: 'uid=jane,ou=users,dc=example,dc=com', label: 'Jane' },
+      ]);
+    });
+
     it('should name a nomenclature value the way its schema does', async () => {
       nock(baseUrl)
         .get('/api/v1/ldap/mailboxTypes')
@@ -2582,6 +2659,103 @@ describe('Directory console', () => {
       ).to.deep.equal([alice, jane]);
     });
 
+    describe('a group’s members', () => {
+      const alice = 'uid=alice,ou=users,dc=example,dc=com';
+      const jane = 'uid=jane,ou=users,dc=example,dc=com';
+
+      /** A group form whose member field is wired to recorders. */
+      const memberForm = async (
+        search: (query: string) => Promise<{ dn: string; label: string }[]>
+      ): Promise<{
+        form: EntityForm;
+        input: ReturnType<typeof recorder>;
+        container: HTMLElement & { innerHTML: string };
+      }> => {
+        const input = recorder();
+        const field = recorder({
+          '[data-picker-input]': input,
+          '.dc-picker-results': recorder(),
+          '.dc-token-list': recorder(),
+        });
+        const container = stubContainer();
+        (
+          container as unknown as { querySelector(s: string): unknown }
+        ).querySelector = selector =>
+          selector === '[data-field="member"]' ? field : null;
+        const form = new EntityForm({
+          entity: groups,
+          entry: { ...staff, member: [alice] },
+          translator: new Translator('en'),
+          pointerOptions: () => Promise.resolve([]),
+          memberSearch: role => (role === 'members' ? search : undefined),
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        });
+        await form.render(container);
+        return { form, input, container };
+      };
+      const members = (form: EntityForm): string[] =>
+        (form as unknown as { values: Record<string, string[]> }).values.member;
+      const enter = { key: 'Enter', preventDefault: () => undefined };
+
+      it('should find a member by email address rather than ask for a DN', async () => {
+        const asked: string[] = [];
+        const { form, input, container } = await memberForm(query => {
+          asked.push(query);
+          return Promise.resolve([
+            { dn: jane, label: 'Jane Doe <jane@example.com>' },
+          ]);
+        });
+        expect(container.innerHTML).to.include('data-picker="member"');
+        expect(container.innerHTML).to.include('of an email address');
+
+        input.value = 'jane@exa';
+        input.fire('input');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        input.fire('keydown', enter);
+        expect(asked).to.deep.equal(['jane@exa']);
+        expect(members(form)).to.deep.equal([alice, jane]);
+      });
+
+      it('should take a DN typed whole, without searching it', async () => {
+        let searched = false;
+        const { form, input } = await memberForm(() => {
+          searched = true;
+          return Promise.resolve([]);
+        });
+        input.value = ` ${jane} `;
+        input.fire('input');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        expect(searched).to.equal(false);
+        input.fire('keydown', enter);
+        expect(members(form)).to.deep.equal([alice, jane]);
+        expect(input.value).to.equal('');
+      });
+
+      it('should add a DN left in the box, once', async () => {
+        const { form, input } = await memberForm(() => Promise.resolve([]));
+        input.value = jane;
+        input.fire('blur');
+        // The same DN in another case is the same member.
+        input.value = jane.toUpperCase();
+        input.fire('blur');
+        expect(members(form)).to.deep.equal([alice, jane]);
+      });
+
+      it('should keep a plain token box when there is no search', async () => {
+        const container = stubContainer();
+        await new EntityForm({
+          entity: groups,
+          entry: staff,
+          translator: new Translator('en'),
+          pointerOptions: () => Promise.resolve([]),
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        }).render(container);
+        expect(container.innerHTML).to.include('data-tokens="member"');
+      });
+    });
+
     describe('a pointer branch that could not be listed', () => {
       const translator = new Translator('en');
       const failure = (status: number, message: string): Error =>
@@ -2975,6 +3149,18 @@ describe('Directory console', () => {
       expect(html).to.include('Name');
       expect(html).to.include('Telephone Number');
       expect(html).to.include('Twake Department Link');
+    });
+
+    it('should show the entry’s DN, which no attribute carries', () => {
+      const html = render({
+        dn: 'uid=jsmith,ou=users,dc=example,dc=com',
+        uid: 'jsmith',
+      });
+      expect(html).to.include('Distinguished name (DN)');
+      expect(html).to.include(
+        '<code class="dc-dn">uid=jsmith,ou=users,dc=example,dc=com</code>'
+      );
+      expect(html).to.include('data-copy-dn');
     });
 
     it('should never show a write-only attribute', () => {

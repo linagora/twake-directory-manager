@@ -34,7 +34,8 @@ docker run -p 8081:8081 \
 `DM_LDAP_BASE` is required: ldap-rest refuses to start without it, and every
 search — the one finding who signed in included — runs under it.
 
-The console is then at `https://directory.example.org/static/console/`, behind
+The console is then at `https://directory.example.org/static/console/` (the
+bare `https://directory.example.org/` redirects there), behind
 the HTTPS reverse proxy that serves that name, and the API
 it uses under `/api`. Every other ldap-rest setting is an environment
 variable too — see the
@@ -44,11 +45,11 @@ variable too — see the
 
 `DM_PLUGINS` is composed when the container starts, from three parts:
 
-| Variable             | Default                                                                                                                                  | What it is                                                                  |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `DM_AUTH_PLUGINS`    | `core/auth/openidconnect,core/auth/authzLinid1`                                                                                          | Who the caller is, and which branches they administer                       |
-| `DM_CONSOLE_PLUGINS` | `core/static`, `core/configApi`, `core/ldap/{flatGeneric,groups,organizations,enterpriseRules,accountLifecycle}`, `core/auth/authzScope` | What the console reads and writes                                           |
-| `DM_EXTRA_PLUGINS`   | _(empty)_                                                                                                                                | Anything else: `core/twake/james`, `core/ldap/trash`, `core/auth/crowdsec`… |
+| Variable             | Default                                                                                                                                                                                                 | What it is                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `DM_AUTH_PLUGINS`    | `core/auth/openidconnect,core/auth/authzLinid1`                                                                                                                                                         | Who the caller is, and which branches they administer                       |
+| `DM_CONSOLE_PLUGINS` | `core/static`, `/app/plugins/consoleRoot.mjs` (redirects `/` to the console), `core/configApi`, `core/ldap/{flatGeneric,groups,organizations,enterpriseRules,accountLifecycle}`, `core/auth/authzScope` | What the console reads and writes                                           |
+| `DM_EXTRA_PLUGINS`   | _(empty)_                                                                                                                                                                                               | Anything else: `core/twake/james`, `core/ldap/trash`, `core/auth/crowdsec`… |
 
 `DM_PLUGINS_OVERRIDE` replaces the whole list, for a deployment that knows
 exactly what it wants.

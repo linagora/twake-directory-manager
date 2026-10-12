@@ -1,7 +1,6 @@
 {{- if .Values.ingress.redirectRoot }}
-# The console is served under /static/console/, so the bare host has no route
-# and answers Express's own "Cannot GET /". Anyone typing the hostname lands
-# there, which is the first thing they see of the product.
+# The image already sends / to /static/console/; this Middleware is for a
+# console served under another path, which the image does not know.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
