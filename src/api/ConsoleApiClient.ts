@@ -1030,7 +1030,8 @@ export class ConsoleApiClient {
     // entity or the DN above it, and the pointer needs a search either way.
     if (this.inOrganizationTree(branch)) {
       return this.organizationSearchable
-        ? (query: string) => this.organizationSearch(query)
+        ? (query: string): Promise<{ dn: string; label: string }[]> =>
+            this.organizationSearch(query)
         : undefined;
     }
     const owner = entities.find(
