@@ -421,10 +421,7 @@ export class DirectoryConsole {
     }
 
     this.readRoute();
-    window.addEventListener('hashchange', () => {
-      this.readRoute();
-      void this.renderMain();
-    });
+    window.addEventListener('hashchange', () => void this.followHash());
 
     this.drawShell();
     await this.renderMain();
@@ -455,6 +452,17 @@ export class DirectoryConsole {
       return;
     }
     this.route = { view: 'entity', entity: first, id: second };
+  }
+
+  /**
+   * Draw the page a new hash names. A side panel belongs to the page it was
+   * opened on: left over a page reached with Back or a typed address, it
+   * covers that page and saves into an entry no longer on screen.
+   */
+  private async followHash(): Promise<void> {
+    this.closePanel();
+    this.readRoute();
+    await this.renderMain();
   }
 
   /** Navigate, letting the hash change drive the render. */
@@ -1175,6 +1183,10 @@ export class DirectoryConsole {
     body.innerHTML = '';
     build(body);
     panel.hidden = false;
+    // One body serves every form, and a hidden one keeps the offset the last
+    // form was left at: the next would open scrolled past its first fields.
+    // Reset once shown, since an element with no box ignores the write.
+    body.scrollTop = 0;
   }
 
   private closePanel(): void {

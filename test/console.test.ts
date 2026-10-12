@@ -12,6 +12,7 @@ import nock from 'nock';
 import { ConsoleApiClient, isLarge } from '../src/api/ConsoleApiClient';
 import { signInAgain } from '../src/session';
 import {
+  DirectoryConsole,
   ToastController,
   claimRoots,
   createdEntryId,
@@ -727,6 +728,75 @@ describe('Directory console', () => {
       expect(element.hidden, 'hidden by the first timer').to.be.false;
       await wait(20);
       expect(element.hidden).to.be.true;
+    });
+  });
+
+  describe('the side panel', () => {
+    /** A console whose panel is made of elements just real enough for it. */
+    const setup = () => {
+      const panel = {
+        hidden: true,
+        classList: { toggle: () => undefined },
+      };
+      // As in a browser, an element with no box keeps its offset whatever
+      // is written to it: the panel's body has none while the panel is hidden.
+      let offset = 0;
+      const body = {
+        innerHTML: '',
+        get scrollTop(): number {
+          return offset;
+        },
+        set scrollTop(value: number) {
+          if (!panel.hidden) offset = value;
+        },
+      };
+      const elements: Record<string, unknown> = {
+        '[data-panel]': panel,
+        '[data-panel-title]': { textContent: '' },
+        '[data-panel-body]': body,
+      };
+      const app = new DirectoryConsole({
+        containerId: 'console',
+        apiBaseUrl: baseUrl,
+        language: 'en',
+      });
+      (app as unknown as { container: unknown }).container = {
+        querySelector: (selector: string) => elements[selector] ?? null,
+        querySelectorAll: () => [],
+      };
+      return {
+        app: app as unknown as {
+          openPanel(title: string, build: (body: unknown) => void): void;
+          closePanel(): void;
+          followHash(): Promise<void>;
+        },
+        panel,
+        body,
+      };
+    };
+
+    it('should open every form at its top', () => {
+      const { app, panel, body } = setup();
+      app.openPanel('Edit — bob', () => undefined);
+      body.scrollTop = 739;
+      app.closePanel();
+      app.openPanel('New group', () => undefined);
+      expect(panel.hidden).to.be.false;
+      expect(body.scrollTop).to.equal(0);
+    });
+
+    it('should close the panel when the page changes under it', async () => {
+      const { app, panel } = setup();
+      app.openPanel('Edit — alice', () => undefined);
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      g.window = { location: { hash: '#/organizations' } };
+      try {
+        await app.followHash();
+      } finally {
+        g.window = original;
+      }
+      expect(panel.hidden).to.be.true;
     });
   });
 
