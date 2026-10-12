@@ -425,6 +425,53 @@ describe('CSV import', () => {
       ]);
     });
 
+    it('should refuse a size or a past expiry, as the server would', () => {
+      const ruled: ImportField[] = [
+        ['uid', { type: 'string', required: true, label: { en: 'Login' } }],
+        [
+          'mailQuotaSize',
+          {
+            type: 'number',
+            normalize: 'byteSize',
+            label: { en: 'Mailbox size' },
+          },
+        ],
+        [
+          'twakeDeletionDate',
+          {
+            type: 'date',
+            role: 'accountExpiry',
+            label: { en: 'Deletion date' },
+          },
+        ],
+      ];
+      const columns = ['uid', 'mailQuotaSize', 'twakeDeletionDate'];
+      const rows = prepareRows(
+        {
+          headers: columns,
+          rows: [
+            ['a', 'lots', '2020-01-01'],
+            ['b', '4 GB', '2999-01-01'],
+          ],
+          delimiter: ';',
+        },
+        columns,
+        ruled,
+        {},
+        translator
+      );
+      expect(rows[0].errors).to.deep.equal([
+        'Mailbox size: “lots” is not a size, such as 4 GB',
+        'Deletion date: “2020-01-01” is earlier than today',
+      ]);
+      expect(rows[1].errors).to.deep.equal([]);
+      expect(rows[1].values).to.deep.equal({
+        uid: 'b',
+        mailQuotaSize: '4 GB',
+        twakeDeletionDate: '29990101000000Z',
+      });
+    });
+
     it('should refuse a row repeating a unique value of an earlier one', () => {
       const unique: ImportField[] = fields.map(([name, attr]) => {
         if (name === 'mail')

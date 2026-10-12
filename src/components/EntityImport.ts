@@ -11,7 +11,7 @@
  */
 
 import { parseCsv, writeCsv, type CsvTable } from '../csv';
-import { attributeLabel } from '../format';
+import { attributeLabel, nameAttributes } from '../format';
 import type { Translator } from '../i18n';
 import { tooBroad } from '../api/ConsoleApiClient';
 import {
@@ -343,11 +343,11 @@ export class EntityImport {
       <div class="dc-import-summary">
         <div class="dc-import-stat dc-import-stat-ok">
           <strong>${valid.length}</strong>
-          <span>${escapeHtml(this.t('import.ready'))}</span>
+          <span>${escapeHtml(this.t('import.ready', { count: valid.length }))}</span>
         </div>
         <div class="dc-import-stat${invalid.length ? ' dc-import-stat-bad' : ''}">
           <strong>${invalid.length}</strong>
-          <span>${escapeHtml(this.t('import.invalid'))}</span>
+          <span>${escapeHtml(this.t('import.invalid', { count: invalid.length }))}</span>
         </div>
       </div>
       ${
@@ -435,7 +435,11 @@ export class EntityImport {
       : 0;
     return `
       <p>${escapeHtml(
-        this.t('import.progress', { done: this.processed, total: this.total })
+        this.t('import.progress', {
+          done: this.processed,
+          total: this.total,
+          count: this.total,
+        })
       )}</p>
       <div class="dc-progress" role="progressbar" aria-valuemin="0"
         aria-valuemax="${this.total}" aria-valuenow="${this.processed}">
@@ -473,7 +477,14 @@ export class EntityImport {
           await this.options.create(row.values);
           this.created++;
         } catch (err) {
-          this.failures.push({ row, message: (err as Error).message });
+          this.failures.push({
+            row,
+            message: nameAttributes(
+              (err as Error).message,
+              this.options.entity.schema,
+              this.options.translator.language
+            ),
+          });
         }
         this.processed++;
         this.updateProgress();
@@ -507,6 +518,7 @@ export class EntityImport {
       texts[0].textContent = this.t('import.progress', {
         done: this.processed,
         total: this.total,
+        count: this.total,
       });
     if (texts[1])
       texts[1].textContent = this.t('import.progressDetail', {
@@ -523,17 +535,17 @@ export class EntityImport {
       <div class="dc-import-summary">
         <div class="dc-import-stat dc-import-stat-ok">
           <strong>${this.created}</strong>
-          <span>${escapeHtml(this.t('import.created'))}</span>
+          <span>${escapeHtml(this.t('import.created', { count: this.created }))}</span>
         </div>
         <div class="dc-import-stat${this.failures.length ? ' dc-import-stat-bad' : ''}">
           <strong>${this.failures.length}</strong>
-          <span>${escapeHtml(this.t('import.refused'))}</span>
+          <span>${escapeHtml(this.t('import.refused', { count: this.failures.length }))}</span>
         </div>
         ${
           skipped
             ? `<div class="dc-import-stat">
                 <strong>${skipped}</strong>
-                <span>${escapeHtml(this.t('import.notSent'))}</span>
+                <span>${escapeHtml(this.t('import.notSent', { count: skipped }))}</span>
               </div>`
             : ''
         }

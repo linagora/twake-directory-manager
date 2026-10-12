@@ -40,7 +40,12 @@ import {
 } from '../src/components/EntityList';
 import { OrganizationTree } from '../src/components/OrganizationTree';
 import { availableLanguages, Translator } from '../src/i18n';
-import { formatByteSize } from '../src/format';
+import {
+  beforeToday,
+  formatByteSize,
+  nameAttributes,
+  parseByteSize,
+} from '../src/format';
 import type {
   EntityDescriptor,
   EntitySchema,
@@ -624,6 +629,91 @@ describe('Directory console', () => {
 
     it('should show an untranslated key rather than nothing', () => {
       expect(new Translator('en').t('no.such.key')).to.equal('no.such.key');
+    });
+
+    it('should agree with a count of one', () => {
+      // A count of one read "Import 1 entries", and "1 sélectionné(s)" where
+      // French had no other way to say it.
+      const en = new Translator('en');
+      expect(en.t('import.run', { count: 1 })).to.equal('Import 1 entry');
+      expect(en.t('import.run', { count: 2 })).to.equal('Import 2 entries');
+      expect(en.t('import.run', { count: 0 })).to.equal('Import 0 entries');
+      const fr = new Translator('fr');
+      expect(fr.t('import.read', { count: 1, file: 'a.csv' })).to.equal(
+        '1 ligne lue dans a.csv'
+      );
+      expect(fr.t('list.selected', { count: 1 })).to.equal('1 sélectionné');
+      expect(fr.t('list.selected', { count: 3 })).to.equal('3 sélectionnés');
+      // French counts nothing in the singular, where English does not.
+      expect(fr.t('import.run', { count: 0 })).to.equal('Importer 0 entrée');
+    });
+
+    it('should write once what a language does not inflect', () => {
+      // Mongolian leaves a noun as it is after a number: its catalogue holds
+      // the plain key, and every count reads it.
+      const mn = new Translator('mn');
+      expect(mn.t('import.run', { count: 1 })).to.equal('1 бичлэг импортлох');
+      expect(mn.t('import.run', { count: 5 })).to.equal('5 бичлэг импортлох');
+      // A language-wide category the catalogue has no form for falls back
+      // on the general one: French calls a million `many`.
+      expect(new Translator('fr').t('import.run', { count: 1e6 })).to.equal(
+        `Importer ${(1e6).toLocaleString('fr')} entrées`
+      );
+    });
+
+    it('should say the import counts of one in the singular', () => {
+      const importer = new EntityImport({
+        entity: users,
+        translator: new Translator('fr'),
+        pointerOptions: () => Promise.resolve([]),
+        create: () => Promise.resolve(),
+        onDone: () => undefined,
+        onClose: () => undefined,
+      });
+      const state = importer as unknown as {
+        rows: {
+          line: number;
+          cells: string[];
+          values: object;
+          errors: string[];
+        }[];
+        reviewMarkup(): string;
+      };
+      state.rows = [
+        { line: 2, cells: [], values: {}, errors: [] },
+        { line: 3, cells: [], values: {}, errors: ['Nom est obligatoire'] },
+      ];
+      expect(state.reviewMarkup())
+        .to.contain('prête à importer<')
+        .and.contain('en erreur, non importée<')
+        .and.contain('Importer 1 entrée<');
+    });
+
+    it('should name a field the server refused on import by its label', async () => {
+      const importer = new EntityImport({
+        entity: users,
+        translator: new Translator('fr'),
+        pointerOptions: () => Promise.resolve([]),
+        create: () =>
+          Promise.reject(new Error('Attribute "cn" must not be empty')),
+        onDone: () => undefined,
+        onClose: () => undefined,
+      });
+      const state = importer as unknown as {
+        rows: {
+          line: number;
+          cells: string[];
+          values: object;
+          errors: string[];
+        }[];
+        failures: { message: string }[];
+        run(): Promise<void>;
+      };
+      state.rows = [{ line: 2, cells: [], values: {}, errors: [] }];
+      await state.run();
+      expect(state.failures.map(failure => failure.message)).to.deep.equal([
+        'Attribute "Nom" must not be empty',
+      ]);
     });
 
     it('should translate every key of every catalogue', () => {
@@ -1410,7 +1500,69 @@ describe('Directory console', () => {
       const members = await new ConsoleApiClient(baseUrl).organizationMembers(
         dn
       );
-      expect(members.map(member => member.label)).to.deep.equal(['jsmith']);
+      expect(members.entries.map(member => member.label)).to.deep.equal([
+        'jsmith',
+      ]);
+    });
+
+    it('should keep the count of the attached entries the server left out', async () => {
+      // The card listed the fifty names the server sent and stopped there,
+      // reading as a department of fifty: the count went with the row.
+      const dn = 'ou=Sales,ou=organization,dc=example,dc=com';
+      const subnodes = (rows: object[]) =>
+        nock(baseUrl)
+          .get(`/api/v1/ldap/organizations/${encodeURIComponent(dn)}/subnodes`)
+          .reply(200, [
+            {
+              dn: 'uid=jsmith,ou=users,dc=example,dc=com',
+              objectClass: ['inetOrgPerson'],
+            },
+            ...rows,
+          ]);
+      const client = new ConsoleApiClient(baseUrl);
+
+      subnodes([
+        {
+          dn: `more-${dn}`,
+          objectClass: ['moreIndicator'],
+          _isMoreIndicator: 'true',
+          _totalCount: '98',
+          _displayedCount: '50',
+        },
+      ]);
+      expect(await client.organizationMembers(dn)).to.deep.include({
+        truncated: true,
+        more: 48,
+      });
+
+      // A directory refusing to list them all lets nothing count the rest.
+      subnodes([
+        {
+          dn: `more-${dn}`,
+          objectClass: ['moreIndicator'],
+          _isMoreIndicator: 'true',
+          _displayedCount: '50',
+        },
+      ]);
+      const uncounted = await client.organizationMembers(dn);
+      expect(uncounted.truncated).to.equal(true);
+      expect(uncounted.more).to.equal(undefined);
+
+      // The child organizations' own row says nothing of the entries.
+      subnodes([
+        {
+          dn: `more-organizations-${dn}`,
+          objectClass: ['moreIndicator'],
+          _isMoreIndicator: 'true',
+          _displayedCount: '50',
+        },
+      ]);
+      expect(await client.organizationMembers(dn)).to.deep.equal({
+        entries: [
+          { dn: 'uid=jsmith,ou=users,dc=example,dc=com', label: 'jsmith' },
+        ],
+        truncated: false,
+      });
     });
 
     it('should read the configuration at the prefix it was given', async () => {
@@ -2264,7 +2416,7 @@ describe('Directory console', () => {
         );
       const cut = await drawnList('fr');
       expect(cut).to.contain(
-        'Seules 1 entrées sont affichées ; il y en a d’autres. Utilisez la recherche pour les trouver.'
+        'Seule 1 entrée est affichée ; il y en a d’autres. Utilisez la recherche pour les trouver.'
       );
       expect(cut).to.contain('jsmith');
 
@@ -2744,6 +2896,68 @@ describe('Directory console', () => {
     });
   });
 
+  describe('server rules', () => {
+    it('should read a size as the server does', () => {
+      expect(parseByteSize('4GB')).to.equal(4e9);
+      expect(parseByteSize('500 mb')).to.equal(5e8);
+      expect(parseByteSize('1.5 MB')).to.equal(1500000);
+      expect(parseByteSize('2048')).to.equal(2048);
+      expect(parseByteSize('2048B')).to.equal(2048);
+      expect(parseByteSize('lots')).to.equal(undefined);
+      expect(parseByteSize('4 GiB')).to.equal(undefined);
+      // What the form shows a stored size as is a size the server reads back.
+      expect(parseByteSize(formatByteSize('2000000000'))).to.equal(2e9);
+    });
+
+    it('should judge a date by the day in UTC, today passing', () => {
+      const now = new Date(Date.UTC(2026, 9, 12, 23, 30));
+      expect(beforeToday('20261011000000Z', now)).to.equal(true);
+      expect(beforeToday('20261012000000Z', now)).to.equal(false);
+      expect(beforeToday('2026-10-13', now)).to.equal(false);
+      expect(beforeToday('soon', now)).to.equal(false);
+    });
+
+    it('should name a refused attribute by its label', () => {
+      // The server's refusal named `twakeDeletionDate`, which the operator
+      // had only ever seen as "Deletion date".
+      const schema: EntitySchema = {
+        attributes: {
+          twakeDeletionDate: {
+            type: 'date',
+            label: { en: 'Deletion date', fr: 'Date de suppression' },
+          },
+          mailQuotaSize: { type: 'number', label: { en: 'Mailbox size' } },
+          owner: { type: 'array', label: { en: 'Owners' } },
+        },
+      };
+      expect(
+        nameAttributes(
+          'Attribute "twakeDeletionDate" must not be earlier than today',
+          schema,
+          'fr'
+        )
+      ).to.equal(
+        'Attribute "Date de suppression" must not be earlier than today'
+      );
+      expect(
+        nameAttributes(
+          'Invalid value for attribute "mailquotasize": Expected pattern xGB',
+          schema,
+          'en'
+        )
+      ).to.equal(
+        'Invalid value for attribute "Mailbox size": Expected pattern xGB'
+      );
+      expect(
+        nameAttributes('Invalid value for field owner', schema, 'en')
+      ).to.equal('Invalid value for field "Owners"');
+      // What the schema does not know is the server's own word.
+      expect(
+        nameAttributes('Entry "jsmith" already exists', schema, 'en')
+      ).to.equal('Entry "jsmith" already exists');
+    });
+  });
+
   describe('EntityForm', () => {
     const build = (entry?: Record<string, string | string[]>): EntityForm =>
       new EntityForm({
@@ -2754,6 +2968,79 @@ describe('Directory console', () => {
         onSubmit: () => Promise.resolve(),
         onCancel: () => undefined,
       });
+
+    it('should refuse a size and a past expiry before sending, both at once', async () => {
+      // Neither carries a pattern: their rules are the server's, which
+      // refused them one per round trip, in a toast away from the field.
+      const lifecycle: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            mailQuotaSize: {
+              type: 'number',
+              normalize: 'byteSize',
+              hint: 'Expected pattern xGB, xMB, xKB or a number of bytes',
+            },
+            twakeDeletionDate: { type: 'date', role: 'accountExpiry' },
+          },
+        },
+      };
+      const now = new Date();
+      const today = `${now.getUTCFullYear()}${String(
+        now.getUTCMonth() + 1
+      ).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}000000Z`;
+      const filled = {
+        cn: 'Va Val',
+        mail: 'va.val@example.com',
+        twakeDepartmentLink: 'ou=HR,dc=example,dc=com',
+      };
+      let sent = 0;
+      const form = (entry?: Entry) =>
+        new EntityForm({
+          entity: lifecycle,
+          entry,
+          translator: new Translator('en'),
+          pointerOptions: () => Promise.resolve([]),
+          onSubmit: () => {
+            sent++;
+            return Promise.resolve();
+          },
+          onCancel: () => undefined,
+        }) as unknown as {
+          values: Record<string, string[]>;
+          errors: Record<string, string>;
+          submit(): Promise<void>;
+        };
+
+      const created = form();
+      for (const [name, value] of Object.entries(filled))
+        created.values[name] = [value];
+      created.values.mailQuotaSize = ['lots'];
+      created.values.twakeDeletionDate = ['20201008000000Z'];
+      await created.submit();
+      expect(sent).to.equal(0);
+      expect(created.errors).to.deep.equal({
+        mailQuotaSize: 'Expected pattern xGB, xMB, xKB or a number of bytes',
+        twakeDeletionDate: 'Expected a date not earlier than today',
+      });
+
+      created.values.mailQuotaSize = ['4 GB'];
+      created.values.twakeDeletionDate = [today];
+      await created.submit();
+      expect(created.errors).to.deep.equal({});
+      expect(sent).to.equal(1);
+
+      // A date already stored is not sent back, and not judged again.
+      const edited = form({
+        uid: 'va.val',
+        ...filled,
+        twakeDeletionDate: '20201008000000Z',
+      });
+      await edited.submit();
+      expect(edited.errors).to.deep.equal({});
+      expect(sent).to.equal(2);
+    });
 
     it('should offer a search, not a select, for a pointer into a large branch', async () => {
       const delegates = {
@@ -3676,6 +3963,89 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.not.include('data-delete');
       expect(container.innerHTML).to.not.include('data-status');
       expect(container.innerHTML).to.not.include('data-password');
+    });
+
+    it('should name the owners of a group and lead to them', () => {
+      // A group's owners are DNs the schema types as strings, and the card
+      // showed them whole, where its members read as names leading to them.
+      const owned: EntityDescriptor = {
+        ...groups,
+        schema: {
+          attributes: {
+            ...groups.schema.attributes,
+            owner: {
+              type: 'array',
+              role: 'owners',
+              items: { type: 'string' },
+              label: { en: 'Owners' },
+            },
+          },
+        },
+      };
+      const owner = 'uid=sophie.martin,ou=users,dc=example,dc=com';
+      const container = stubContainer();
+      new EntityDetail({
+        entity: owned,
+        entry: { cn: 'sales-team', owner: [owner, 'not a dn'] },
+        translator: new Translator('en'),
+        canWrite: true,
+        canDelete: true,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        onStatus: () => undefined,
+        onResetPassword: () => undefined,
+        relations: { title: 'Members', attribute: 'member', items: [] },
+      }).render(container);
+      expect(container.innerHTML)
+        .to.include(
+          `<button type="button" class="dc-link" data-relation="${owner}" title="${owner}">sophie.martin</button>`
+        )
+        .and.not.include(`>${owner}<`);
+      // What is no DN has nowhere to lead.
+      expect(container.innerHTML).to.include(
+        '<span class="dc-value" title="not a dn">not a dn</span>'
+      );
+    });
+
+    it('should say how many related entries the list leaves out', () => {
+      const card = (
+        language: string,
+        relations: { truncated?: boolean; more?: number }
+      ): string => {
+        const container = stubContainer();
+        new EntityDetail({
+          entity: groups,
+          entry: { cn: 'Human Resources' },
+          translator: new Translator(language),
+          canWrite: true,
+          canDelete: true,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          onStatus: () => undefined,
+          onResetPassword: () => undefined,
+          relations: {
+            title: 'Attached entries',
+            items: [
+              { id: 'uid=erin,ou=users,dc=example,dc=com', label: 'erin' },
+            ],
+            ...relations,
+          },
+        }).render(container);
+        return container.innerHTML;
+      };
+      expect(card('en', { truncated: true, more: 48 })).to.include(
+        'And 48 more entries, not listed here'
+      );
+      expect(card('en', { truncated: true, more: 1 })).to.include(
+        'And 1 more entry, not listed here'
+      );
+      expect(card('fr', { truncated: true, more: 1 })).to.include(
+        'Et 1 autre entrée, non affichée ici'
+      );
+      expect(card('en', { truncated: true })).to.include(
+        'And more entries than the directory lists at once'
+      );
+      expect(card('en', {})).to.not.include('more entr');
     });
 
     it('should escape what the directory holds', () => {

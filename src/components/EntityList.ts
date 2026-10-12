@@ -465,9 +465,7 @@ export class EntityList {
           ? `<p class="dc-list-notice" role="status">${escapeHtml(
               // What was received, not what was asked: a server may cap
               // lower than the console asked.
-              translator.t('list.truncated', {
-                count: this.entries.length.toLocaleString(translator.language),
-              })
+              translator.t('list.truncated', { count: this.entries.length })
             )}</p>`
           : ''
       }

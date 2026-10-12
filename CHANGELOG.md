@@ -16,6 +16,15 @@
 - CSV import maps an "Email address" column to Email (#25)
 - The language selector stays reachable on narrow screens (#26)
 - Multi-valued fields are labelled for screen readers (#29)
+- A count of one reads in the singular: "Import 1 entry", "1 row read",
+  "Importer 1 entrée" (#49)
+- An organization's card says how many attached entries it does not list,
+  past the server's limit of 50 (#43)
+- A group's owners are named and lead to their entries, not shown as DNs
+  (#48)
+- The form and the CSV import check a mailbox size and a deletion date
+  before sending, and a refusal from the server names fields by their
+  labels (#28)
 
 ## v0.4.10 (2026-10-12)
 

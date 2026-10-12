@@ -10,7 +10,14 @@
  */
 
 import { escapeHtml } from '../shared/dom';
-import { attributeLabel, displayValue, entryValue } from '../format';
+import {
+  attributeLabel,
+  displayValue,
+  entryValue,
+  isDnShaped,
+  rdnValue,
+} from '../format';
+import { hasRole } from '../api/ConsoleApiClient';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
 
@@ -38,6 +45,10 @@ export interface DetailOptions {
     /** Attribute the list came from, so the card does not repeat it */
     attribute?: string;
     items: { id: string; label: string }[];
+    /** The server listed only some of them */
+    truncated?: boolean;
+    /** How many it left out, when it counted them */
+    more?: number;
   };
   onOpenRelation?(id: string): void;
 }
@@ -200,9 +211,15 @@ export class EntityDetail {
    * in the tree, not a way to somewhere else — so on its own card it stays
    * text. A link from an entry to itself is one more thing to click for
    * nothing.
+   *
+   * A group's members and owners are DNs the schema types as strings, not as
+   * pointers. They are named and followed the way the related entries are,
+   * so the owners of a group read as the accounts they are rather than as
+   * DNs, and lead to them.
    */
   private valueMarkup(name: string, value: string): string {
     const { entity, entry } = this.options;
+    const attr = entity.schema.attributes[name];
     const link =
       name === entity.organizationPath && entity.organizationLink
         ? values(entryValue(entry, entity.organizationLink))[0]
@@ -213,8 +230,17 @@ export class EntityDetail {
       )}" class="dc-path-link" title="${escapeHtml(value)}">${escapeHtml(
         value
       )}</a>`;
+    if (
+      (hasRole(attr, 'members') || hasRole(attr, 'owners')) &&
+      isDnShaped(value)
+    )
+      return `<button type="button" class="dc-link" data-relation="${escapeHtml(
+        value
+      )}" title="${escapeHtml(value)}">${escapeHtml(
+        this.options.pointerLabel?.(value) || rdnValue(value)
+      )}</button>`;
     const shown = displayValue(
-      entity.schema.attributes[name],
+      attr,
       value,
       this.options.pointerLabel,
       this.options.translator.language
@@ -263,7 +289,22 @@ export class EntityDetail {
                 )
                 .join('')}</ul>`
         }
+        ${this.moreMarkup()}
       </section>`;
+  }
+
+  /**
+   * What the list leaves out, said where it stops: a department whose card
+   * lists fifty names otherwise reads as a department of fifty.
+   */
+  private moreMarkup(): string {
+    const { relations, translator } = this.options;
+    if (!relations?.truncated) return '';
+    return `<p class="dc-muted" role="status">${escapeHtml(
+      relations.more === undefined
+        ? translator.t('detail.moreUncounted')
+        : translator.t('detail.more', { count: relations.more })
+    )}</p>`;
   }
 
   private bind(container: HTMLElement): void {
