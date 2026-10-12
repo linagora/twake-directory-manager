@@ -1798,6 +1798,43 @@ describe('Directory console', () => {
       );
     });
 
+    it('should leave out the attributes the deployment hides', async () => {
+      // Under "Mailbox settings" with no effect in a Twake deployment, they
+      // were filled in by administrators expecting one (#62, #63).
+      nock(baseUrl)
+        .get('/api/v1/config')
+        .reply(200, {
+          apiPrefix: '/api',
+          features: {
+            console: { hiddenAttributes: ['twakeOtherMailbox', 'MAIL'] },
+            ldapFlatGeneric: {
+              flatResources: [
+                {
+                  name: 'twakeUser',
+                  singularName: 'user',
+                  pluralName: 'users',
+                  mainAttribute: 'uid',
+                  base: 'ou=users,dc=example,dc=com',
+                  schema: {
+                    attributes: {
+                      ...usersSchema.attributes,
+                      twakeOtherMailbox: { type: 'array' },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        });
+      const [user] = await new ConsoleApiClient(baseUrl).discover();
+      expect(user.schema.attributes).to.not.have.property('twakeOtherMailbox');
+      // Named whatever the case, as LDAP names attributes.
+      expect(user.schema.attributes).to.not.have.property('mail');
+      expect(user.schema.attributes).to.have.property('uid');
+      // The server's own schema is left as it came.
+      expect(usersSchema.attributes).to.have.property('mail');
+    });
+
     describe('searching the organization tree', () => {
       const orgTop = 'ou=organization,dc=example,dc=com';
       const discover = async (search?: string): Promise<ConsoleApiClient> => {

@@ -22,4 +22,15 @@ else
 fi
 export DM_PLUGINS
 
+# Forwards are a user setting in Twake Mail. Mirrored from the directory as
+# well, they would have two writers and no reconciliation: ldap-rest pushes
+# the difference of each LDAP change, and overwrites what users set. The
+# image empties DM_FORWARD_ATTRIBUTE, which the ldap-rest image sets; it is
+# filled again only for a deployment that says the directory owns forwards.
+# One naming an attribute of its own keeps it.
+if [ "$DM_SYNC_FORWARDS" = "true" ] && [ -z "$DM_FORWARD_ATTRIBUTE" ]; then
+  DM_FORWARD_ATTRIBUTE=mailForwardingAddress
+  export DM_FORWARD_ATTRIBUTE
+fi
+
 exec "$@"

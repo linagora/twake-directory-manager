@@ -28,7 +28,7 @@ FROM ${LDAP_REST_IMAGE}
 COPY --from=build /build/dist /app/node_modules/ldap-rest/static/console
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/twake-directory-manager
 # Next to ldap-rest's node_modules, so that it finds `ldap-rest/plugin`.
-COPY docker/consoleRoot.mjs /app/plugins/consoleRoot.mjs
+COPY docker/consoleRoot.mjs docker/consoleSettings.mjs /app/plugins/
 
 # Authentication defaults to OpenID Connect, which a browser console can use
 # with any provider — LemonLDAP::NG included — and which refuses to start
@@ -45,12 +45,19 @@ COPY docker/consoleRoot.mjs /app/plugins/consoleRoot.mjs
 # warning at every start.
 #
 # /app/plugins/consoleRoot.mjs sends the bare host to the console, which
-# otherwise answers "Cannot GET /".
-ENV DM_CONSOLE_PLUGINS=core/static,/app/plugins/consoleRoot.mjs,core/configApi,core/ldap/groups,core/ldap/organizations,core/ldap/enterpriseRules,core/ldap/accountLifecycle,core/auth/authzScope \
+# otherwise answers "Cannot GET /". /app/plugins/consoleSettings.mjs passes
+# DM_CONSOLE_HIDDEN_ATTRIBUTES on to the console.
+#
+# Hidden by default, because nothing in the stack acts on them: the "other
+# mailboxes", which no plugin reads, and the delivery mode, which no plugin
+# applies — and its nomenclature with it. Twake Mail's users set their
+# forwards themselves; see the entrypoint for DM_SYNC_FORWARDS.
+ENV DM_CONSOLE_PLUGINS=core/static,/app/plugins/consoleRoot.mjs,/app/plugins/consoleSettings.mjs,core/configApi,core/ldap/groups,core/ldap/organizations,core/ldap/enterpriseRules,core/ldap/accountLifecycle,core/auth/authzScope \
  DM_AUTH_PLUGINS=core/auth/openidconnect,core/auth/authzLinid1 \
  DM_EXTRA_PLUGINS= \
+ DM_CONSOLE_HIDDEN_ATTRIBUTES=twakeOtherMailbox,twakeDeliveryMode \
  DM_ALLOW_ANONYMOUS=false \
- DM_LDAP_FLAT_SCHEMA=/app/node_modules/ldap-rest/static/schemas/twake/users.json,/app/node_modules/ldap-rest/static/schemas/twake/positions.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeTitle.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeAccountStatus.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeDeliveryMode.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeListType.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeMailboxType.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeDomain.json \
+ DM_LDAP_FLAT_SCHEMA=/app/node_modules/ldap-rest/static/schemas/twake/users.json,/app/node_modules/ldap-rest/static/schemas/twake/positions.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeTitle.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeAccountStatus.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeListType.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeMailboxType.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeDomain.json \
  DM_GROUP_SCHEMA=/app/node_modules/ldap-rest/static/schemas/twake/groups.json \
  DM_ORGANIZATION_SCHEMA=/app/node_modules/ldap-rest/static/schemas/twake/organizations.json
 
@@ -60,6 +67,11 @@ ENV DM_CONSOLE_PLUGINS=core/static,/app/plugins/consoleRoot.mjs,core/configApi,c
 # ldap-rest (LDAP_REST_IMAGE) does not fall back to mailQuota, which the
 # Twake schemas do not define.
 ENV DM_QUOTA_ATTRIBUTE=mailQuotaSize
+
+# Emptied: the ldap-rest image mirrors mailForwardingAddress to Twake Mail
+# forwards, which Twake Mail's users set themselves. The entrypoint fills it
+# again for DM_SYNC_FORWARDS=true.
+ENV DM_FORWARD_ATTRIBUTE=
 
 EXPOSE 8081
 ENTRYPOINT ["twake-directory-manager"]

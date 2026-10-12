@@ -45,17 +45,19 @@ variable too — see the
 
 `DM_PLUGINS` is composed when the container starts, from three parts:
 
-| Variable             | Default                                                                                                                                                                  | What it is                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `DM_AUTH_PLUGINS`    | `core/auth/openidconnect,core/auth/authzLinid1`                                                                                                                          | Who the caller is, and which branches they administer                       |
-| `DM_CONSOLE_PLUGINS` | `core/static`, `/app/plugins/consoleRoot.mjs`, `core/configApi`, `core/ldap/{flatGeneric,groups,organizations,enterpriseRules,accountLifecycle}`, `core/auth/authzScope` | What the console reads and writes                                           |
-| `DM_EXTRA_PLUGINS`   | _(empty)_                                                                                                                                                                | Anything else: `core/twake/james`, `core/ldap/trash`, `core/auth/crowdsec`… |
+| Variable             | Default                                                                                                                                                                                    | What it is                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `DM_AUTH_PLUGINS`    | `core/auth/openidconnect,core/auth/authzLinid1`                                                                                                                                            | Who the caller is, and which branches they administer                       |
+| `DM_CONSOLE_PLUGINS` | `core/static`, `/app/plugins/{consoleRoot,consoleSettings}.mjs`, `core/configApi`, `core/ldap/{flatGeneric,groups,organizations,enterpriseRules,accountLifecycle}`, `core/auth/authzScope` | What the console reads and writes                                           |
+| `DM_EXTRA_PLUGINS`   | _(empty)_                                                                                                                                                                                  | Anything else: `core/twake/james`, `core/ldap/trash`, `core/auth/crowdsec`… |
 
 `DM_PLUGINS_OVERRIDE` replaces the whole list, for a deployment that knows
 exactly what it wants.
 
 `/app/plugins/consoleRoot.mjs` sends the bare host to the console; a list
-that leaves it out leaves `/` unanswered.
+that leaves it out leaves `/` unanswered. `/app/plugins/consoleSettings.mjs`
+passes `DM_CONSOLE_HIDDEN_ATTRIBUTES` on to the console; without it, nothing
+is hidden.
 
 **The container refuses to start with `DM_AUTH_PLUGINS` empty.** ldap-rest
 without an authentication plugin serves every request, and this interface
@@ -104,11 +106,39 @@ The Twake schemas that ship with ldap-rest are loaded by default:
 
 under `/app/node_modules/ldap-rest/static/schemas/`.
 
-The nomenclatures — titles, account states, delivery modes, list and mailbox
-types, mail domains — are loaded as entities of their own. They have to be: a
+The nomenclatures — titles, account states, list and mailbox types, mail
+domains — are loaded as entities of their own. They have to be: a
 select in a form is filled by listing the entity whose base its `branch`
 names, and a nomenclature nobody loaded leaves its select empty. A deployment
-replacing `DM_LDAP_FLAT_SCHEMA` keeps them in its list.
+replacing `DM_LDAP_FLAT_SCHEMA` keeps them in its list. The delivery modes
+(`twake/nomenclature/twakeDeliveryMode.json`) are not loaded: see below.
+
+### Hidden attributes and forwards
+
+Some attributes of the Twake user schema have no effect in a Twake
+deployment, and an administrator finding them under _Mailbox settings_ would
+fill them in expecting one. The console does not show them:
+
+| Variable                       | Default                               | What it is                                                           |
+| ------------------------------ | ------------------------------------- | -------------------------------------------------------------------- |
+| `DM_CONSOLE_HIDDEN_ATTRIBUTES` | `twakeOtherMailbox,twakeDeliveryMode` | Attributes left out of the forms, the cards, the lists and CSV files |
+| `DM_SYNC_FORWARDS`             | `false`                               | `true` to mirror `mailForwardingAddress` to Twake Mail forwards      |
+
+- `twakeOtherMailbox` (_Other mailboxes_) is read by no plugin, and by
+  nothing in Twake Mail.
+- `twakeDeliveryMode` is applied by no plugin; new accounts keep receiving
+  its default, `normal`.
+- **Forwards are a user setting in Twake Mail**, with "keep a copy in my
+  mailbox". With `core/twake/james`, ldap-rest mirrors `mailForwardingAddress`
+  to them unless told not to; the image tells it not to. `DM_SYNC_FORWARDS=true`
+  is for a deployment where the directory owns forwards: **the directory then
+  overwrites what users set in Twake Mail**, change after change, and is not
+  told of what they set there. A `DM_FORWARD_ATTRIBUTE` naming another
+  attribute is synced whatever `DM_SYNC_FORWARDS` says.
+
+Hidden attributes stay in the directory as they are: the console neither
+shows nor sends them. An empty `DM_CONSOLE_HIDDEN_ATTRIBUTES` shows them all
+again.
 
 A deployment with its own
 schemas mounts them and points these variables at them: the mail domains, the

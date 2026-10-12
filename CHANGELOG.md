@@ -2,8 +2,18 @@
 
 ## Unreleased
 
+### Breaking Changes
+
+- With `core/twake/james`, mail forwards are no longer mirrored to Twake
+  Mail: its users set them there. `DM_SYNC_FORWARDS=true` mirrors them again,
+  the directory then overwriting what users set (#62)
+
 ### Bug Fixes
 
+- The forms, cards, lists and CSV files no longer show _Other mailboxes_ and
+  _Delivery mode_, which nothing in a Twake deployment acts on, nor the
+  _Delivery modes_ reference data; `DM_CONSOLE_HIDDEN_ATTRIBUTES` chooses
+  what is hidden (#62, #63)
 - A pointer's select, and the CSV import, offer only the entries its schema
   describes: the DNS levels a tree of mail domains hangs from, `com` or
   `lin-saas`, are no mail domains (#58)

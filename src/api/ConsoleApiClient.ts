@@ -60,6 +60,8 @@ interface ConfigResponse {
       schema?: EntitySchema;
     };
     openidconnect?: { endpoints?: { logout?: string } };
+    /** What the image's own plugin says about the console itself */
+    console?: { hiddenAttributes?: string[] };
   };
 }
 
@@ -221,6 +223,8 @@ export class ConsoleApiClient {
   private organizationClasses: string[] = [];
   /** Route that ends the session, when the server's authentication has one */
   private logoutPath?: string;
+  /** Attributes the deployment hides, lowercased; see describe() */
+  private hidden = new Set<string>();
   /**
    * Whether the API lives on another origin than the page. `same-origin`
    * attaches no cookie to a cross-origin request, so a deployment that points
@@ -338,6 +342,11 @@ export class ConsoleApiClient {
     this.apiPrefix = config.apiPrefix || this.apiPrefix;
     this.ldapBase = config.ldapBase || '';
     this.logoutPath = config.features.openidconnect?.endpoints?.logout;
+    this.hidden = new Set(
+      (config.features.console?.hiddenAttributes || []).map(name =>
+        name.toLowerCase()
+      )
+    );
     const entities: EntityDescriptor[] = [];
 
     for (const resource of config.features.ldapFlatGeneric?.flatResources ||
@@ -411,13 +420,34 @@ export class ConsoleApiClient {
     return entities;
   }
 
-  /** Fill in the role-derived fields of a descriptor. */
+  /**
+   * Fill in the role-derived fields of a descriptor, and leave out of its
+   * schema the attributes the deployment hides.
+   *
+   * A hidden attribute is one nothing in the deployment acts on — an
+   * address no plugin reads, a delivery mode nothing applies — and that an
+   * administrator, finding it under "Mailbox settings", would fill in
+   * expecting an effect. Left out of the schema, it is left out of the
+   * form, the card, the list and the CSV files alike; what the directory
+   * holds in it is left as it is.
+   */
   private describe(
-    base: Omit<
+    entity: Omit<
       EntityDescriptor,
       'organizationLink' | 'organizationPath' | 'accountStatus' | 'password'
     >
   ): EntityDescriptor {
+    const base = {
+      ...entity,
+      schema: {
+        ...entity.schema,
+        attributes: Object.fromEntries(
+          Object.entries(entity.schema.attributes).filter(
+            ([name]) => !this.hidden.has(name.toLowerCase())
+          )
+        ),
+      },
+    };
     return {
       ...base,
       organizationLink: roleAttribute(base.schema, 'organizationLink'),
