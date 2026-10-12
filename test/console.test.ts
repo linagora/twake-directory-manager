@@ -2573,6 +2573,51 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should name an entry by the attribute its schema calls its display name', async () => {
+      // A mail domain is stored as `dc=example` and read as `example.org`.
+      const domains: EntityDescriptor = {
+        key: 'domains',
+        pluralName: 'domains',
+        singularName: 'domain',
+        mainAttribute: 'dc',
+        base: 'ou=domains,ou=nomenclature,dc=example,dc=com',
+        schema: {
+          attributes: {
+            dc: { type: 'string', role: 'identifier' },
+            associatedDomain: {
+              type: 'string',
+              role: ['domainName', 'displayName'],
+            },
+          },
+        },
+        endpoint: '/api/v1/ldap/domains',
+        kind: 'flat',
+      };
+      nock(baseUrl)
+        .get('/api/v1/ldap/domains')
+        .reply(200, {
+          example: {
+            dn: `dc=example,${domains.base}`,
+            associatedDomain: 'example.org',
+          },
+          bare: { dn: `dc=bare,${domains.base}` },
+          one: { dn: `dc=one,${domains.base}`, associatedDomain: 'twin.org' },
+          two: { dn: `dc=two,${domains.base}`, associatedDomain: 'twin.org' },
+        });
+
+      const options = await new ConsoleApiClient(baseUrl).pointerOptions(
+        domains.base as string,
+        [domains]
+      );
+      // Two entries going by one name are told apart by their identifiers.
+      expect(options.map(option => option.label)).to.deep.equal([
+        'example.org',
+        'bare',
+        'twin.org (one)',
+        'twin.org (two)',
+      ]);
+    });
+
     it('should give a failure its status whatever the body it came with', async () => {
       // Not every answer comes from the API: Express's own 404 page and a
       // proxy's 502 are HTML, and reading the body as JSON first threw a
