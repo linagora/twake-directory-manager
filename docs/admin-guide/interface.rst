@@ -122,4 +122,4 @@ Appearance
 
 The console follows the system’s light or dark setting. On a narrow screen (a
 phone, a tablet held upright), the sidebar becomes a row of entries that
-scrolls sideways.
+scrolls sideways, with the :guilabel:`Language` selector under it.
