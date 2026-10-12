@@ -25,6 +25,16 @@
 - The form and the CSV import check a mailbox size and a deletion date
   before sending, and a refusal from the server names fields by their
   labels (#28)
+- The organization tree stays open after a save, a creation or a deletion,
+  with the organization still shown, and opens down to the organization an
+  address or a Department path link names (#31, #38)
+- Back from a card returns to the list as it was left: same search, field
+  and page (#40)
+- The side panel takes the keyboard focus, keeps Tab inside, closes on
+  Escape and is announced as a dialog (#32)
+- An account administering no branch is told there is nothing to manage
+  rather than shown red permission errors; a refused read is said plainly
+  (#30)
 
 ## v0.4.10 (2026-10-12)
 
