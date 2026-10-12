@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- The side panel opens at its top, and closes when the page changes under it
+  (Back, a typed address) (#44, #45)
+- The list's header checkbox shows a selected page and can clear it (#34)
+- Dates read as dates in the interface's language, not `20310115000000Z` (#41)
+- An organization, a state and the transit branch are named, not shown by
+  their DN or key, in the delete confirmation, the state toast and the scope
+  banner (#36, #37, #46)
+- A multi-valued pointer's values are named, not shown as DNs (#27)
+- The department search stays within the administrator's scope (#22)
+- CSV import maps an "Email address" column to Email (#25)
+- The language selector stays reachable on narrow screens (#26)
+- Multi-valued fields are labelled for screen readers (#29)
+
 ## v0.4.10 (2026-10-12)
 
 ### Features
