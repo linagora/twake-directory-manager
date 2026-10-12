@@ -77,6 +77,12 @@ const en: Catalogue = {
   'detail.relations': 'Related entries',
   'detail.members': 'Attached entries',
   'detail.emptyRelations': 'No related entry',
+  'detail.more.one':
+    'And {count} more entry, not listed here: search the lists to find it.',
+  'detail.more.other':
+    'And {count} more entries, not listed here: search the lists to find them.',
+  'detail.moreUncounted':
+    'And more entries than the directory lists at once: search the lists to find them.',
   'detail.actions': 'Actions',
   'detail.notFound': 'This entry no longer exists',
   'detail.dn': 'Distinguished name (DN)',
@@ -271,6 +277,12 @@ const fr: Catalogue = {
   'detail.relations': 'Entrées liées',
   'detail.members': 'Entrées rattachées',
   'detail.emptyRelations': 'Aucune entrée liée',
+  'detail.more.one':
+    'Et {count} autre entrée, non affichée ici : recherchez-la dans les listes.',
+  'detail.more.other':
+    'Et {count} autres entrées, non affichées ici : recherchez-les dans les listes.',
+  'detail.moreUncounted':
+    'Et d’autres entrées, plus que l’annuaire n’en liste d’un coup : recherchez-les dans les listes.',
   'detail.actions': 'Actions',
   'detail.notFound': 'Cette entrée n’existe plus',
   'detail.dn': 'Nom distinctif (DN)',
@@ -470,6 +482,10 @@ const mn: Catalogue = {
   'detail.relations': 'Холбоотой бичлэгүүд',
   'detail.members': 'Хавсаргасан бичлэгүүд',
   'detail.emptyRelations': 'Холбоотой бичлэг алга',
+  'detail.more':
+    'Өөр {count} бичлэг энд харагдахгүй байна: тэдгээрийг жагсаалтаас хайж олно уу.',
+  'detail.moreUncounted':
+    'Лавлах нэг удаад жагсаахаас олон бичлэг бий: тэдгээрийг жагсаалтаас хайж олно уу.',
   'detail.actions': 'Үйлдлүүд',
   'detail.notFound': 'Энэ бичлэг байхгүй болсон',
   'detail.dn': 'Ялгах нэр (DN)',

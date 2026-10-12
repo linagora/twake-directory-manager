@@ -1468,7 +1468,69 @@ describe('Directory console', () => {
       const members = await new ConsoleApiClient(baseUrl).organizationMembers(
         dn
       );
-      expect(members.map(member => member.label)).to.deep.equal(['jsmith']);
+      expect(members.entries.map(member => member.label)).to.deep.equal([
+        'jsmith',
+      ]);
+    });
+
+    it('should keep the count of the attached entries the server left out', async () => {
+      // The card listed the fifty names the server sent and stopped there,
+      // reading as a department of fifty: the count went with the row.
+      const dn = 'ou=Sales,ou=organization,dc=example,dc=com';
+      const subnodes = (rows: object[]) =>
+        nock(baseUrl)
+          .get(`/api/v1/ldap/organizations/${encodeURIComponent(dn)}/subnodes`)
+          .reply(200, [
+            {
+              dn: 'uid=jsmith,ou=users,dc=example,dc=com',
+              objectClass: ['inetOrgPerson'],
+            },
+            ...rows,
+          ]);
+      const client = new ConsoleApiClient(baseUrl);
+
+      subnodes([
+        {
+          dn: `more-${dn}`,
+          objectClass: ['moreIndicator'],
+          _isMoreIndicator: 'true',
+          _totalCount: '98',
+          _displayedCount: '50',
+        },
+      ]);
+      expect(await client.organizationMembers(dn)).to.deep.include({
+        truncated: true,
+        more: 48,
+      });
+
+      // A directory refusing to list them all lets nothing count the rest.
+      subnodes([
+        {
+          dn: `more-${dn}`,
+          objectClass: ['moreIndicator'],
+          _isMoreIndicator: 'true',
+          _displayedCount: '50',
+        },
+      ]);
+      const uncounted = await client.organizationMembers(dn);
+      expect(uncounted.truncated).to.equal(true);
+      expect(uncounted.more).to.equal(undefined);
+
+      // The child organizations' own row says nothing of the entries.
+      subnodes([
+        {
+          dn: `more-organizations-${dn}`,
+          objectClass: ['moreIndicator'],
+          _isMoreIndicator: 'true',
+          _displayedCount: '50',
+        },
+      ]);
+      expect(await client.organizationMembers(dn)).to.deep.equal({
+        entries: [
+          { dn: 'uid=jsmith,ou=users,dc=example,dc=com', label: 'jsmith' },
+        ],
+        truncated: false,
+      });
     });
 
     it('should read the configuration at the prefix it was given', async () => {
@@ -3734,6 +3796,47 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.not.include('data-delete');
       expect(container.innerHTML).to.not.include('data-status');
       expect(container.innerHTML).to.not.include('data-password');
+    });
+
+    it('should say how many related entries the list leaves out', () => {
+      const card = (
+        language: string,
+        relations: { truncated?: boolean; more?: number }
+      ): string => {
+        const container = stubContainer();
+        new EntityDetail({
+          entity: groups,
+          entry: { cn: 'Human Resources' },
+          translator: new Translator(language),
+          canWrite: true,
+          canDelete: true,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          onStatus: () => undefined,
+          onResetPassword: () => undefined,
+          relations: {
+            title: 'Attached entries',
+            items: [
+              { id: 'uid=erin,ou=users,dc=example,dc=com', label: 'erin' },
+            ],
+            ...relations,
+          },
+        }).render(container);
+        return container.innerHTML;
+      };
+      expect(card('en', { truncated: true, more: 48 })).to.include(
+        'And 48 more entries, not listed here'
+      );
+      expect(card('en', { truncated: true, more: 1 })).to.include(
+        'And 1 more entry, not listed here'
+      );
+      expect(card('fr', { truncated: true, more: 1 })).to.include(
+        'Et 1 autre entrée, non affichée ici'
+      );
+      expect(card('en', { truncated: true })).to.include(
+        'And more entries than the directory lists at once'
+      );
+      expect(card('en', {})).to.not.include('more entr');
     });
 
     it('should escape what the directory holds', () => {

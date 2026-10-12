@@ -38,6 +38,10 @@ export interface DetailOptions {
     /** Attribute the list came from, so the card does not repeat it */
     attribute?: string;
     items: { id: string; label: string }[];
+    /** The server listed only some of them */
+    truncated?: boolean;
+    /** How many it left out, when it counted them */
+    more?: number;
   };
   onOpenRelation?(id: string): void;
 }
@@ -263,7 +267,22 @@ export class EntityDetail {
                 )
                 .join('')}</ul>`
         }
+        ${this.moreMarkup()}
       </section>`;
+  }
+
+  /**
+   * What the list leaves out, said where it stops: a department whose card
+   * lists fifty names otherwise reads as a department of fifty.
+   */
+  private moreMarkup(): string {
+    const { relations, translator } = this.options;
+    if (!relations?.truncated) return '';
+    return `<p class="dc-muted" role="status">${escapeHtml(
+      relations.more === undefined
+        ? translator.t('detail.moreUncounted')
+        : translator.t('detail.more', { count: relations.more })
+    )}</p>`;
   }
 
   private bind(container: HTMLElement): void {

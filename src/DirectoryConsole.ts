@@ -1122,7 +1122,9 @@ export class DirectoryConsole {
 
     // "Who is in this department?" is the question an organization card is
     // opened to answer, and the tree deliberately does not show accounts.
-    const members = await this.api.organizationMembers(node.dn).catch(() => []);
+    const members = await this.api
+      .organizationMembers(node.dn)
+      .catch(() => ({ entries: [], truncated: false, more: undefined }));
     if (!this.current(generation)) return;
 
     new EntityDetail({
@@ -1135,10 +1137,12 @@ export class DirectoryConsole {
         pointerLabel(this.entities, dn, this.translator.language),
       relations: {
         title: this.translator.t('detail.members'),
-        items: members.map(member => ({
+        items: members.entries.map(member => ({
           id: member.dn,
           label: member.label,
         })),
+        truncated: members.truncated,
+        more: members.more,
       },
       onOpenRelation: (target: string): void => this.openRelation(target),
       onEdit: (): void => {

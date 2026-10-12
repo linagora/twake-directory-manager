@@ -115,6 +115,15 @@ export interface EntryList {
   truncated: boolean;
 }
 
+/** Entries attached to an organization, as many as the server listed. */
+export interface AttachedEntries {
+  entries: { dn: string; label: string }[];
+  /** The server left some out */
+  truncated: boolean;
+  /** How many it left out, when the directory let it count them */
+  more?: number;
+}
+
 /** Answer of `GET /v1/authz/scope`. */
 export interface Scope {
   user: string | null;

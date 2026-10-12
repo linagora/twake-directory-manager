@@ -9,6 +9,7 @@
  */
 
 import type {
+  AttachedEntries,
   EntityDescriptor,
   EntitySchema,
   Entry,
@@ -767,20 +768,38 @@ export class ConsoleApiClient {
    * Entries attached to an organization without being one — the accounts and
    * groups that answer "who is in this department?".
    *
+   * Past `ldap_organization_max_subnodes` the answer is cut, and its
+   * indicator row says so, counting the rest when the directory let it.
+   * That is kept: a card listing fifty names and stopping there reads as a
+   * department of fifty.
+   *
    * @param dn organization to read
-   * @returns DN and readable name of each attached entry
+   * @returns DN and readable name of each attached entry, whether the server
+   *          left some out, and how many when it counted them
    */
-  async organizationMembers(
-    dn: string
-  ): Promise<{ dn: string; label: string }[]> {
-    return (await this.subnodes(dn))
-      .filter(entry => !isMoreIndicator(entry) && !this.isOrganization(entry))
-      .map(entry => ({
-        dn: String(entry.dn || ''),
-        // `rdnValue` is what the rest of the console reads a DN's own name
-        // with: splitting on the first comma loses `cn=Smith\, John`.
-        label: rdnValue(String(entry.dn || '')),
-      }));
+  async organizationMembers(dn: string): Promise<AttachedEntries> {
+    const rows = await this.subnodes(dn);
+    // The child organizations have an indicator of their own, which says
+    // nothing about the entries attached to this one.
+    const indicator = rows.find(
+      row =>
+        isMoreIndicator(row) &&
+        !String(row.dn || '').startsWith('more-organizations-')
+    );
+    const total = Number(indicator?._totalCount);
+    const displayed = Number(indicator?._displayedCount);
+    return {
+      entries: rows
+        .filter(entry => !isMoreIndicator(entry) && !this.isOrganization(entry))
+        .map(entry => ({
+          dn: String(entry.dn || ''),
+          // `rdnValue` is what the rest of the console reads a DN's own name
+          // with: splitting on the first comma loses `cn=Smith\, John`.
+          label: rdnValue(String(entry.dn || '')),
+        })),
+      truncated: Boolean(indicator),
+      ...(total > displayed ? { more: total - displayed } : {}),
+    };
   }
 
   /** Read one organization. */
