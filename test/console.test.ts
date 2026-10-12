@@ -1176,6 +1176,7 @@ describe('Directory console', () => {
       let offset = 0;
       const body = {
         innerHTML: '',
+        querySelectorAll: () => [],
         get scrollTop(): number {
           return offset;
         },
@@ -1221,6 +1222,139 @@ describe('Directory console', () => {
         g.window = original;
       }
       expect(panel.hidden).to.be.true;
+    });
+
+    describe('and the keyboard', () => {
+      const g = globalThis as Record<string, unknown>;
+      let original: unknown;
+      /** Which element has the focus, as `document.activeElement` says. */
+      const page = { activeElement: null as unknown };
+      beforeEach(() => {
+        original = g.document;
+        page.activeElement = null;
+        g.document = page;
+      });
+      afterEach(() => {
+        g.document = original;
+      });
+
+      const element = (name: string) => {
+        const made = {
+          name,
+          isConnected: true,
+          closest: () => null,
+          focus: () => {
+            page.activeElement = made;
+          },
+        };
+        return made;
+      };
+      const press = (key: string, shiftKey = false, used = false) => ({
+        key,
+        shiftKey,
+        defaultPrevented: used,
+        preventDefault() {
+          this.defaultPrevented = true;
+        },
+      });
+
+      /** A panel whose header holds Close, and whose body a field and Save. */
+      const keyboardSetup = () => {
+        const edit = element('Edit');
+        const close = element('Close');
+        const field = element('Name');
+        const save = element('Save');
+        const panel = { hidden: true, classList: { toggle: () => undefined } };
+        const dialog = {
+          ...element('dialog'),
+          querySelectorAll: () => [close, field, save],
+        };
+        const app = consoleIn({
+          '[data-panel]': panel,
+          '[data-panel-dialog]': dialog,
+          '[data-panel-title]': { textContent: '' },
+          '[data-panel-body]': {
+            innerHTML: '',
+            scrollTop: 0,
+            querySelectorAll: () => [field, save],
+          },
+        }) as unknown as {
+          openPanel(title: string, build: (body: unknown) => void): void;
+          closePanel(): void;
+          panelKey(event: unknown): void;
+        };
+        return { app, panel, edit, close, field, save };
+      };
+
+      it('should be announced as a dialog named by its title', () => {
+        const app = consoleIn({});
+        (app as unknown as { drawShell(): void }).drawShell();
+        const html = (app as unknown as { container: { innerHTML: string } })
+          .container.innerHTML;
+        expect(html).to.match(
+          /<div class="dc-panel-inner" data-panel-dialog role="dialog"\s+aria-modal="true" aria-labelledby="dc-panel-title"/
+        );
+        expect(html).to.contain('<h2 id="dc-panel-title" data-panel-title>');
+      });
+
+      it('should take the focus to its first field, and give it back on close', () => {
+        // The focus stayed on Edit, and Tab went on through the page behind.
+        const { app, edit, field } = keyboardSetup();
+        edit.focus();
+        app.openPanel('Edit — alice', () => undefined);
+        expect(page.activeElement).to.equal(field);
+        app.closePanel();
+        expect(page.activeElement).to.equal(edit);
+      });
+
+      it('should keep Tab and Shift+Tab inside it', () => {
+        const { app, close, field, save } = keyboardSetup();
+        app.openPanel('Edit — alice', () => undefined);
+
+        save.focus();
+        const forward = press('Tab');
+        app.panelKey(forward);
+        expect(forward.defaultPrevented).to.be.true;
+        expect(page.activeElement).to.equal(close);
+
+        const backward = press('Tab', true);
+        app.panelKey(backward);
+        expect(backward.defaultPrevented).to.be.true;
+        expect(page.activeElement).to.equal(save);
+
+        // Between two of its controls, Tab is the browser's to move.
+        field.focus();
+        const within = press('Tab');
+        app.panelKey(within);
+        expect(within.defaultPrevented).to.be.false;
+
+        // From outside it, back in.
+        page.activeElement = null;
+        app.panelKey(press('Tab'));
+        expect(page.activeElement).to.equal(close);
+      });
+
+      it('should close on Escape, but not on one a control in it used', () => {
+        const { app, panel, edit } = keyboardSetup();
+        edit.focus();
+        app.openPanel('Edit — alice', () => undefined);
+        // A picker closing its list of suggestions prevents the default.
+        app.panelKey(press('Escape', false, true));
+        expect(panel.hidden).to.be.false;
+        app.panelKey(press('Escape'));
+        expect(panel.hidden).to.be.true;
+        expect(page.activeElement).to.equal(edit);
+      });
+
+      it('should leave the keys alone while it is closed', () => {
+        const { app, edit } = keyboardSetup();
+        edit.focus();
+        const tab = press('Tab');
+        app.panelKey(tab);
+        app.panelKey(press('Escape'));
+        expect(tab.defaultPrevented).to.be.false;
+        expect(page.activeElement).to.equal(edit);
+      });
     });
   });
 

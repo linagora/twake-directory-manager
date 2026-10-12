@@ -117,6 +117,16 @@ const OVERVIEW_ICON =
   '<rect x="1.5" y="9" width="5.5" height="5.5" rx="1.6"/>' +
   '<rect x="9" y="9" width="5.5" height="5.5" rx="1.6"/></svg>';
 
+/** What Tab can reach in the side panel. */
+const FOCUSABLE = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
+
 /**
  * What a failed read means for the reader.
  *
@@ -377,6 +387,11 @@ export class DirectoryConsole {
    * found it empty, the search typed and the page reached gone.
    */
   private readonly listViews = new Map<string, ListView>();
+  /**
+   * What had the focus when the side panel opened, given it back on close:
+   * a keyboard user is otherwise left at the top of the page.
+   */
+  private panelOpener: HTMLElement | null = null;
 
   constructor(options: ConsoleOptions) {
     this.options = options;
@@ -430,6 +445,7 @@ export class DirectoryConsole {
 
     this.readRoute();
     window.addEventListener('hashchange', () => void this.followHash());
+    document.addEventListener('keydown', event => this.panelKey(event));
 
     this.drawShell();
     await this.renderMain();
@@ -580,9 +596,10 @@ export class DirectoryConsole {
           <main class="dc-main" data-main></main>
         </div>
         <div class="dc-panel" data-panel hidden>
-          <div class="dc-panel-inner">
+          <div class="dc-panel-inner" data-panel-dialog role="dialog"
+            aria-modal="true" aria-labelledby="dc-panel-title" tabindex="-1">
             <header class="dc-panel-header">
-              <h2 data-panel-title></h2>
+              <h2 id="dc-panel-title" data-panel-title></h2>
               <button type="button" class="dc-icon-button" data-panel-close
                 aria-label="${escapeHtml(t('app.close'))}">×</button>
             </header>
@@ -1229,7 +1246,14 @@ export class DirectoryConsole {
       this.container?.querySelector<HTMLElement>('[data-panel-title]');
     const body =
       this.container?.querySelector<HTMLElement>('[data-panel-body]');
+    const dialog = this.container?.querySelector<HTMLElement>(
+      '[data-panel-dialog]'
+    );
     if (!panel || !heading || !body) return;
+    // A panel opened over another keeps the first one's opener: that is
+    // where the reader was before any panel.
+    if (panel.hidden && typeof document !== 'undefined')
+      this.panelOpener = document.activeElement as HTMLElement | null;
     heading.textContent = title;
     panel.classList.toggle('dc-panel-modal', modal);
     panel.classList.toggle('dc-panel-wide', wide);
@@ -1240,11 +1264,62 @@ export class DirectoryConsole {
     // form was left at: the next would open scrolled past its first fields.
     // Reset once shown, since an element with no box ignores the write.
     body.scrollTop = 0;
+    // Into the panel, on its first field: left on the button that opened
+    // it, the keyboard went on through the page behind it. A panel with no
+    // field holds the focus itself.
+    (this.focusables(body)[0] ?? dialog)?.focus();
   }
 
   private closePanel(): void {
     const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
-    if (panel) panel.hidden = true;
+    if (!panel || panel.hidden) return;
+    panel.hidden = true;
+    const opener = this.panelOpener;
+    this.panelOpener = null;
+    if (opener?.isConnected) opener.focus();
+  }
+
+  /** What Tab reaches in an element: its enabled controls not hidden. */
+  private focusables(root: HTMLElement): HTMLElement[] {
+    return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+      element => !element.closest('[hidden]')
+    );
+  }
+
+  /**
+   * Keep the keyboard in the side panel while it is open, and close it on
+   * Escape. Listened to on the document, so that Tab is caught even once
+   * the focus has strayed onto the backdrop.
+   *
+   * @param event the key pressed
+   */
+  private panelKey(event: KeyboardEvent): void {
+    const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
+    const dialog = this.container?.querySelector<HTMLElement>(
+      '[data-panel-dialog]'
+    );
+    if (!panel || panel.hidden || !dialog) return;
+    if (event.key === 'Escape') {
+      // A control that answers Escape itself, such as a picker closing its
+      // suggestions, prevents its default: that press is spent.
+      if (event.defaultPrevented) return;
+      event.preventDefault();
+      this.closePanel();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const items = this.focusables(dialog);
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    const inside = !!active && items.includes(active);
+    if (!first) {
+      event.preventDefault();
+      dialog.focus();
+    } else if (!inside || active === (event.shiftKey ? first : last)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    }
   }
 
   /**
