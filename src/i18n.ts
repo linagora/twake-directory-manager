@@ -401,7 +401,7 @@ const mn: Catalogue = {
   'list.open': 'Нээх',
   'list.listEverything': 'Хайлтгүйгээр жагсаах',
   'list.search': 'Хайх',
-  'list.searchIn': 'хаана:',
+  'list.searchIn': 'Хайх талбар:',
   'list.searchAnywhere': 'Бүх талбар',
   'list.searchGuard': 'Хайхын тулд дор хаяж {count} тэмдэгт оруулна уу',
   'list.empty': 'Харуулах зүйл алга',
@@ -507,9 +507,9 @@ const mn: Catalogue = {
   'state.enabled': 'Идэвхтэй',
   'state.disabled': 'Идэвхгүй',
   'state.noAccess': 'Хандах эрхгүй',
-  'state.toDelete': 'Устгах',
+  'state.toDelete': 'Устгагдах',
 
-  'password.title': 'Нууц үг шинэчлэх',
+  'password.title': 'Нууц үг дахин тохируулах',
   'password.generate': 'Нууц үг үүсгэх',
   'password.choose': 'Нууц үг тохируулах',
   'password.forceChange': 'Дараагийн нэвтрэлтэд солихыг шаардах',
@@ -531,7 +531,7 @@ const mn: Catalogue = {
   'transit.claimed': '{name}-г {organization} руу шилжүүллээ',
   'transit.handOver': 'Шилжүүлэх',
   'transit.handOverConfirm':
-    '{name}-г дамжуулалтад оруулах уу? Бүх админ энэ бичлэгийг харж, авах боломжтой болох бөгөөд та үүнийг цаашид удирдахгүй.',
+    '{name}-г дамжуулалтад оруулах уу? Бүх администратор энэ бичлэгийг харж, авах боломжтой болох бөгөөд та үүнийг цаашид удирдахгүй.',
   'transit.handedOver': '{name} дамжуулалтад байна',
 
   'save.done': 'Хадгалагдлаа',
