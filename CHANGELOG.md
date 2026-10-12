@@ -8,6 +8,11 @@
   Mail: its users set them there. `DM_SYNC_FORWARDS=true` mirrors them again,
   the directory then overwriting what users set (#62)
 
+### Features
+
+- A mailing list's external member is added by typing its address, with
+  ldap-rest's `externalUsersInGroups`: the full DN is no longer needed (#59)
+
 ### Bug Fixes
 
 - The forms, cards, lists and CSV files no longer show _Other mailboxes_ and
