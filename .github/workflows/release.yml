@@ -141,18 +141,28 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # One manifest per registry carrying all its tags, both registries at
+      # once. Each push is awaited on its own: a bare `wait` would hide a
+      # failure.
       - name: Create and push multi-arch manifests
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
           MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
 
+          PIDS=()
           for IMAGE in "$IMAGE_GHCR" "$IMAGE_DOCKER"; do
+            TAGS=()
             for TAG in "$VERSION" "$MAJOR_MINOR" "$MAJOR" "latest"; do
-              docker buildx imagetools create -t "${IMAGE}:${TAG}" \
-                "${IMAGE}:${VERSION}-amd64" \
-                "${IMAGE}:${VERSION}-arm64"
+              TAGS+=(-t "${IMAGE}:${TAG}")
             done
+            docker buildx imagetools create "${TAGS[@]}" \
+              "${IMAGE}:${VERSION}-amd64" \
+              "${IMAGE}:${VERSION}-arm64" &
+            PIDS+=($!)
+          done
+          for PID in "${PIDS[@]}"; do
+            wait "$PID"
           done
 
   # Package the chart under the tag's version and push it as an OCI artifact.
