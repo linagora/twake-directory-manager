@@ -21,6 +21,9 @@ import type {
   SchemaAttribute,
 } from '../types';
 import type { PointerLookup, PointerOption } from '../importer';
+
+/** A member found by searching, with its address when it has one. */
+type MemberOption = PointerOption & { mail?: string };
 import {
   comparableDn,
   entryValue,
@@ -69,6 +72,8 @@ interface ConfigResponse {
       rdnAttribute?: string;
       managedDomains?: string[];
     };
+    /** ldap-rest's `twake/james` */
+    james?: { teamMailboxAnyDomain?: boolean };
   };
 }
 
@@ -232,6 +237,8 @@ export class ConsoleApiClient {
   private logoutPath?: string;
   /** Where groups take external members; see externalMembers */
   private external?: ExternalMembers;
+  /** Whether the server keeps team mailboxes to their domain; see below */
+  private teamMailboxDomain = false;
   /** Attributes the deployment hides, lowercased; see describe() */
   private hidden = new Set<string>();
   /**
@@ -284,6 +291,16 @@ export class ConsoleApiClient {
   /** Where groups take members outside the directory, when they do. */
   get externalMembers(): ExternalMembers | undefined {
     return this.external;
+  }
+
+  /**
+   * Whether a team mailbox only takes members whose address is at its
+   * domain: what ldap-rest's `twake/james` enforces unless
+   * `--james-team-mailbox-any-domain` (linagora/twake-directory-manager#66).
+   * A server that publishes nothing about it enforces nothing.
+   */
+  get teamMailboxesKeepDomain(): boolean {
+    return this.teamMailboxDomain;
   }
 
   /**
@@ -367,6 +384,8 @@ export class ConsoleApiClient {
             ),
           }
         : undefined;
+    const james = config.features.james;
+    this.teamMailboxDomain = james !== undefined && !james.teamMailboxAnyDomain;
     this.hidden = new Set(
       (config.features.console?.hiddenAttributes || []).map(name =>
         name.toLowerCase()
@@ -1210,7 +1229,11 @@ export class ConsoleApiClient {
   memberSearch(
     role: 'members' | 'owners',
     entities: EntityDescriptor[]
-  ): ((query: string) => Promise<{ dn: string; label: string }[]>) | undefined {
+  ):
+    | ((
+        query: string
+      ) => Promise<{ dn: string; label: string; mail?: string }[]>)
+    | undefined {
     const searched = entities.filter(
       entity =>
         (entity.kind === 'flat' ||
@@ -1246,6 +1269,8 @@ export class ConsoleApiClient {
               return {
                 dn: String(entry.dn),
                 label: address ? `${name} <${address}>` : name,
+                // What a team mailbox judges a member by.
+                ...(address ? { mail: address } : {}),
               };
             });
         })
@@ -1253,7 +1278,7 @@ export class ConsoleApiClient {
       // A branch the caller may not read leaves the others to answer; the
       // search fails only when none could.
       const answered = found.filter(
-        (result): result is PromiseFulfilledResult<PointerOption[]> =>
+        (result): result is PromiseFulfilledResult<MemberOption[]> =>
           result.status === 'fulfilled'
       );
       if (answered.length === 0)
@@ -1261,7 +1286,7 @@ export class ConsoleApiClient {
       // Taken in turn from each branch, so that a query matching many
       // accounts still leaves room for the groups it matches.
       const lists = answered.map(result => result.value);
-      const options: PointerOption[] = [];
+      const options: MemberOption[] = [];
       for (
         let index = 0;
         options.length < POINTER_SEARCH_LIMIT &&

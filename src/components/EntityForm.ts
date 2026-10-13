@@ -43,6 +43,8 @@ interface PointerCandidate {
   label: string;
   /** Name of the value once chosen, when the offer reads otherwise */
   token?: string;
+  /** Address of a member found by searching, when it has one */
+  mail?: string;
 }
 
 /** An address as typed into a member field, loosely: the server judges. */
@@ -83,6 +85,12 @@ export interface FormOptions {
    * address no entry holds; undefined when the server takes none
    */
   externalMembers?: ExternalMembers;
+  /**
+   * Whether the server keeps a team mailbox's members to its mail domain:
+   * the member search of one then offers accounts of that domain only, and
+   * no external member
+   */
+  teamMailboxesKeepDomain?: boolean;
   /** Called with the attributes to write and those to clear */
   onSubmit(
     values: Record<string, string | string[]>,
@@ -165,6 +173,8 @@ export class EntityForm {
   private readonly freeform = new Set<string>();
   /** Member fields that offer to create a member from a typed address */
   private readonly external = new Set<string>();
+  /** Searched member fields, which a team mailbox keeps to its domain */
+  private readonly memberFields = new Set<string>();
 
   constructor(options: FormOptions) {
     this.options = options;
@@ -185,6 +195,7 @@ export class EntityForm {
         if (members) {
           this.searches.set(name, members);
           this.freeform.add(name);
+          if (role === 'members') this.memberFields.add(name);
           if (role === 'members' && options.externalMembers)
             this.external.add(name);
         }
@@ -261,6 +272,36 @@ export class EntityForm {
       label: translator.t('form.addExternal', { address: query }),
       token: query,
     };
+  }
+
+  /**
+   * The mail domain the group being edited keeps its members to, lower-cased:
+   * when the server keeps team mailboxes to theirs and the group is one. Read
+   * from the form, so that an address or a type just changed counts.
+   *
+   * @returns the domain, or undefined when members may be at any
+   */
+  private teamMailboxDomain(): string | undefined {
+    if (!this.options.teamMailboxesKeepDomain) return undefined;
+    const { attributes } = this.options.entity.schema;
+    const named = (role: string): string | undefined =>
+      Object.keys(attributes).find(name => hasRole(attributes[name], role));
+    const value = (name: string): string[] =>
+      this.values[name] ?? toList(entryValue(this.options.entry, name));
+    const type = named('mailboxType');
+    const mail = named('primaryEmail');
+    if (!type || !mail) return undefined;
+    // The value is the DN of a nomenclature entry: `cn=teamMailbox,…`.
+    if (!value(type).some(dn => /^\s*cn=teamMailbox\s*,/i.test(dn)))
+      return undefined;
+    const address = value(mail)[0] ?? '';
+    const at = address.lastIndexOf('@');
+    return at > 0
+      ? address
+          .slice(at + 1)
+          .trim()
+          .toLowerCase()
+      : undefined;
   }
 
   /** The caller's search of members or owners, guarded like `searchOf`. */
@@ -669,8 +710,29 @@ export class EntityForm {
               this.values[name].some(
                 value => value.toLowerCase() === dn.toLowerCase()
               );
-            candidates = found.filter(candidate => !chosen(candidate.dn));
-            const outside = this.externalOffer(name, query, found);
+            // A team mailbox takes the accounts of its domain only, and no
+            // external member: what the server would refuse is not offered.
+            const domain = this.memberFields.has(name)
+              ? this.teamMailboxDomain()
+              : undefined;
+            const atDomain = (candidate: PointerCandidate): boolean =>
+              !domain ||
+              candidate.mail
+                ?.slice(candidate.mail.lastIndexOf('@') + 1)
+                .toLowerCase() === domain;
+            candidates = found.filter(
+              candidate => !chosen(candidate.dn) && atDomain(candidate)
+            );
+            if (
+              domain &&
+              candidates.length === 0 &&
+              (found.some(candidate => !chosen(candidate.dn)) ||
+                ADDRESS.test(query))
+            )
+              return message(translator.t('form.otherDomain', { domain }));
+            const outside = domain
+              ? undefined
+              : this.externalOffer(name, query, found);
             if (typeof outside === 'string' && candidates.length === 0)
               return message(outside);
             if (typeof outside === 'object' && !chosen(outside.dn))

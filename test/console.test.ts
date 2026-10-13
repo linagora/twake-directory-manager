@@ -1916,6 +1916,26 @@ describe('Directory console', () => {
       expect(client.externalMembers).to.equal(undefined);
     });
 
+    it('should learn whether team mailboxes keep their members to their domain', async () => {
+      const client = new ConsoleApiClient(baseUrl);
+      const learn = async (features: object): Promise<boolean> => {
+        nock(baseUrl)
+          .get('/api/v1/config')
+          .reply(200, { apiPrefix: '/api', features });
+        await client.discover();
+        return client.teamMailboxesKeepDomain;
+      };
+      expect(client.teamMailboxesKeepDomain).to.equal(false);
+      expect(await learn({ james: { teamMailboxAnyDomain: false } })).to.equal(
+        true
+      );
+      expect(await learn({ james: { teamMailboxAnyDomain: true } })).to.equal(
+        false
+      );
+      // An ldap-rest that predates the rule, or no Twake Mail: nothing kept.
+      expect(await learn({})).to.equal(false);
+    });
+
     it('should leave out the attributes the deployment hides', async () => {
       // Under "Mailbox settings" with no effect in a Twake deployment, they
       // were filled in by administrators expecting one (#62, #63).
@@ -2633,10 +2653,12 @@ describe('Directory console', () => {
         {
           dn: 'uid=jane,ou=users,dc=example,dc=com',
           label: 'Jane Doe <jane@example.com>',
+          mail: 'jane@example.com',
         },
         {
           dn: 'cn=jane-team,ou=groups,dc=example,dc=com',
           label: 'jane-team <jane-team@example.com>',
+          mail: 'jane-team@example.com',
         },
       ]);
       // An owner is an account: the groups are not asked.
@@ -4424,6 +4446,145 @@ describe('Directory console', () => {
           );
           await type(input, 'someone@partner.org');
           expect(results.innerHTML).to.include('No entry matches this search');
+        });
+      });
+
+      // linagora/twake-directory-manager#66: the server refuses a team
+      // mailbox a member of another domain, so none is offered.
+      describe('of a team mailbox', () => {
+        const mailboxes: EntityDescriptor = {
+          ...groups,
+          schema: {
+            attributes: {
+              ...groups.schema.attributes,
+              mail: { type: 'string', role: 'primaryEmail' },
+              twakeMailboxType: {
+                type: 'pointer',
+                role: 'mailboxType',
+                branch: [mailboxTypes.base as string],
+              },
+            },
+          },
+        };
+        const team = `cn=teamMailbox,${mailboxTypes.base}`;
+        const list = `cn=mailingList,${mailboxTypes.base}`;
+        const external: ExternalMembers = {
+          branch: 'ou=external,dc=example,dc=com',
+          rdnAttribute: 'mail',
+          managedDomains: ['example.com'],
+        };
+        const found = [
+          {
+            dn: jane,
+            label: 'Jane Doe <jane@Example.com>',
+            mail: 'jane@Example.com',
+          },
+          {
+            dn: 'uid=bob,ou=users,dc=example,dc=com',
+            label: 'Bob <bob@other.org>',
+            mail: 'bob@other.org',
+          },
+        ];
+
+        /** Type into the member field of a group, and wait for its search. */
+        const typed = async (
+          text: string,
+          type: string,
+          options: {
+            keep?: boolean;
+            answer?: { dn: string; label: string; mail?: string }[];
+          } = {}
+        ): Promise<{ form: EntityForm; html: string }> => {
+          const input = recorder();
+          const results = recorder();
+          const field = recorder({
+            '[data-picker-input]': input,
+            '.dc-picker-results': results,
+            '.dc-token-list': recorder(),
+          });
+          const container = stubContainer();
+          (
+            container as unknown as { querySelector(s: string): unknown }
+          ).querySelector = selector =>
+            selector === '[data-field="member"]' ? field : null;
+          const form = new EntityForm({
+            entity: mailboxes,
+            entry: {
+              ...staff,
+              member: [alice],
+              mail: 'sales@example.com',
+              twakeMailboxType: type,
+            },
+            translator: new Translator('en'),
+            pointerOptions: () => Promise.resolve([]),
+            memberSearch: role =>
+              role === 'members'
+                ? () => Promise.resolve(options.answer ?? found)
+                : undefined,
+            externalMembers: external,
+            teamMailboxesKeepDomain: options.keep ?? true,
+            onSubmit: () => Promise.resolve(),
+            onCancel: () => undefined,
+          });
+          await form.render(container);
+          input.value = text;
+          input.fire('input');
+          await new Promise(resolve => setTimeout(resolve, 300));
+          return { form, html: results.innerHTML };
+        };
+
+        it('should offer the accounts of its domain only', async () => {
+          const { html } = await typed('jane', team);
+          expect(html).to.include('Jane Doe');
+          expect(html).not.to.include('bob@other.org');
+        });
+
+        it('should say why an account of another domain is not offered', async () => {
+          const { html } = await typed('bob', team, {
+            answer: [found[1]],
+          });
+          expect(html).to.include(
+            'A shared mailbox at example.com only takes accounts of example.com'
+          );
+        });
+
+        it('should offer no external member', async () => {
+          const { form, html } = await typed('someone@partner.org', team, {
+            answer: [],
+          });
+          expect(html).not.to.include('external member');
+          expect(html).to.include('only takes accounts of example.com');
+          expect(members(form)).to.deep.equal([alice]);
+        });
+
+        it('should follow an address changed in the form', async () => {
+          const { form } = await typed('', team);
+          (
+            form as unknown as { values: Record<string, string[]> }
+          ).values.mail = ['sales@other.org'];
+          expect(
+            (
+              form as unknown as { teamMailboxDomain(): string | undefined }
+            ).teamMailboxDomain()
+          ).to.equal('other.org');
+        });
+
+        it('should offer every domain, and outside, to a mailing list', async () => {
+          const { html } = await typed('someone@partner.org', list, {
+            answer: [],
+          });
+          expect(html).to.include(
+            'Add someone@partner.org as an external member'
+          );
+          const { html: both } = await typed('anyone', list);
+          expect(both).to.include('Jane Doe');
+          expect(both).to.include('bob@other.org');
+        });
+
+        it('should offer every domain when the server keeps none', async () => {
+          const { html } = await typed('anyone', team, { keep: false });
+          expect(html).to.include('Jane Doe');
+          expect(html).to.include('bob@other.org');
         });
       });
 
