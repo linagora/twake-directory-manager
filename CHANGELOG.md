@@ -1,12 +1,21 @@
 # Changelog
 
-## Unreleased
+## v0.6.1 (2026-10-13)
+
+Built on ldap-rest 0.19.1.
 
 ### Features
 
 - A shared mailbox's member search offers only the accounts of its mail
-  domain, and no external member, when ldap-rest keeps team mailboxes to
+  domain, and no external member, once ldap-rest keeps team mailboxes to
   their domain (#66, linagora/ldap-rest#327)
+
+### Bug Fixes
+
+- A local administrator could change the members of any group, link a
+  sub-organization to any mail domain, and read or unlock any account's
+  password state; ldap-rest 0.19.1 holds them to their branch
+  (linagora/ldap-rest#325)
 
 ## v0.6.0 (2026-10-12)
 
