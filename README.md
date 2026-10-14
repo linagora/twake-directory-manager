@@ -113,6 +113,13 @@ names, and a nomenclature nobody loaded leaves its select empty. A deployment
 replacing `DM_LDAP_FLAT_SCHEMA` keeps them in its list. The delivery modes
 (`twake/nomenclature/twakeDeliveryMode.json`) are not loaded: see below.
 
+An account's card lists its mailing lists from `memberOf` when the directory
+maintains it — OpenLDAP's `memberof` overlay, set for `groupOfNames` and
+`member`. Otherwise it searches the groups whose `member` holds the
+account's DN; for a DN containing `.`, `@`, `+` or `'`, that search needs an
+ldap-rest including linagora/ldap-rest#328, and the section stays empty
+without it.
+
 ### Hidden attributes and forwards
 
 Some attributes of the Twake user schema have no effect in a Twake

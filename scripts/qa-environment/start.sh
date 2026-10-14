@@ -1,8 +1,9 @@
 #!/bin/bash
 #
 # Starts a long lived console + OpenLDAP + Dex stack for manual or agent driven exploratory QA.
-# OpenLDAP gets the Twake schemas (ldap/*-schema.ldif), the ppolicy overlay (pwdReset) and the
-# seed data of ldap/seed.ldif; Dex authenticates against it.
+# OpenLDAP gets the Twake schemas (ldap/*-schema.ldif), the ppolicy overlay (pwdReset), the
+# memberof overlay (an account's mailing lists) and the seed data of ldap/seed.ldif; Dex
+# authenticates against it.
 #
 #   scripts/qa-environment/build.sh    # once, and whenever the code under test changes
 #   scripts/qa-environment/start.sh
@@ -113,6 +114,22 @@ changetype: add
 objectClass: olcOverlayConfig
 objectClass: olcPPolicyConfig
 olcOverlay: ppolicy
+LDIF
+  # memberOf, which an account's card lists its mailing lists from, is kept by the memberof
+  # overlay. The image loads it (and refint) for groupOfUniqueNames, the Twake groups are
+  # groupOfNames. It only computes memberOf for memberships written after it, hence before the
+  # seed data.
+  ldap_exec ldapmodify -Q -Y EXTERNAL -H ldapi:/// >/dev/null <<'LDIF'
+dn: olcOverlay={0}memberof,olcDatabase={1}mdb,cn=config
+changetype: modify
+replace: olcMemberOfGroupOC
+olcMemberOfGroupOC: groupOfNames
+-
+replace: olcMemberOfMemberAD
+olcMemberOfMemberAD: member
+-
+replace: olcMemberOfMemberOfAD
+olcMemberOfMemberOfAD: memberOf
 LDIF
 fi
 if ldap_exec ldapsearch -x -H ldap://localhost -D cn=admin,dc=example,dc=com -w admin \

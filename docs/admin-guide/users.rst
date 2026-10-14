@@ -73,7 +73,13 @@ Filled automatically, and shown on the card only:
 - the :guilabel:`Department path`;
 - the :guilabel:`Status`, ``Active`` on creation;
 - the :guilabel:`Delivery mode`;
-- the :guilabel:`Mailing lists` the account belongs to.
+- the :guilabel:`Mailing lists` the account belongs to: read from
+  ``memberOf`` when the directory maintains it (OpenLDAP's ``memberof``
+  overlay), otherwise searched among the groups whose ``member`` holds the
+  account's DN. For a DN containing ``.``, ``@``, ``+`` or ``'``, that
+  search needs an ldap-rest including `linagora/ldap-rest#328
+  <https://github.com/linagora/ldap-rest/pull/328>`_; the list stays empty
+  without it.
 
 .. _email-address:
 
