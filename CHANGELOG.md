@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- The sidebar entry of the page being shown is now marked with
+  `aria-current="page"`, for screen readers (#69)
+- The admin guide no longer presents the Delivery mode, Delivery modes and
+  Other mailboxes fields as always shown: they are hidden by default (#71)
+- Format errors of a CSV import and of the forms put a space before the colon
+  in French (#72)
+- Deleting an organization that is not empty says so in the interface
+  language, by the organization's name, instead of the server's English
+  message with its DN (#73)
+- The reset password dialog says that leaving the field empty generates a
+  password, and the hint is linked to the field for screen readers (#74)
+
 ## v0.6.2 (2026-10-13)
 
 Built on ldap-rest 0.20.0.
