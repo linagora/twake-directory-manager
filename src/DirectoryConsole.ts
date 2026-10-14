@@ -775,6 +775,8 @@ export class DirectoryConsole {
         (this.route.view === 'organizations' && key === 'organizations') ||
         (this.route.view === 'entity' && key === this.route.entity);
       button.classList.toggle('dc-active', active);
+      if (active) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
       // Reference data is tucked away, not out of reach: a page of it being
       // shown opens its section, or the reader would not see where they are.
       if (active && button.classList.contains('dc-nav-item-reference'))
