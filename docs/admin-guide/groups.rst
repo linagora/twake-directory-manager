@@ -58,7 +58,7 @@ click on a member opens their card. Conversely, the card of an account lists,
 under :guilabel:`Mailing lists`, the groups it belongs to — from its
 ``memberOf`` when the directory maintains it (OpenLDAP's ``memberof``
 overlay), otherwise by searching the groups whose ``member`` holds its DN.
-That search needs, for a DN containing ``.``, ``@``, ``+`` or ``'``, an
+That search needs, for a DN containing ``.``, ``@`` or ``'``, an
 ldap-rest including `linagora/ldap-rest#328
 <https://github.com/linagora/ldap-rest/pull/328>`_.
 

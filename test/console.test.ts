@@ -2139,12 +2139,27 @@ describe('Directory console', () => {
           .get('/api/v1/ldap/groups')
           .query(true)
           .reply(200, { staff });
-        const found = await new ConsoleApiClient(baseUrl).memberships(
+        const client = new ConsoleApiClient(baseUrl);
+        // An escaped comma, and a `+` joining a second attribute to the RDN,
+        // which ldap-rest refuses in a filter.
+        for (const dn of [
           'cn=Smith\\, John,ou=users,dc=example,dc=com',
-          [twakeGroups]
-        );
-        expect(found).to.deep.equal([]);
+          'cn=John+uid=jdoe,ou=users,dc=example,dc=com',
+        ])
+          expect(await client.memberships(dn, [twakeGroups])).to.deep.equal([]);
         expect(groupList.isDone()).to.equal(false);
+      });
+
+      it('should search a DN holding an apostrophe', async () => {
+        const dn = "uid=o'brien,ou=users,dc=example,dc=com";
+        nock(baseUrl)
+          .get('/api/v1/ldap/groups')
+          .query({ match: `(member=${dn})`, attributes: 'cn' })
+          .reply(200, { staff: { dn: staff.dn, cn: 'staff' } });
+        const found = await new ConsoleApiClient(baseUrl).memberships(dn, [
+          twakeGroups,
+        ]);
+        expect(found).to.deep.equal([staff.dn]);
       });
     });
 

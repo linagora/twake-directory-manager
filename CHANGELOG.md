@@ -6,7 +6,7 @@
 
 - An account's card lists its mailing lists without the directory's
   `memberof` overlay too, by searching the groups whose `member` holds its
-  DN; for a DN containing `.`, `@`, `+` or `'`, this needs an ldap-rest
+  DN; for a DN containing `.`, `@` or `'`, this needs an ldap-rest
   including linagora/ldap-rest#328 (#70)
 
 ## v0.6.2 (2026-10-13)

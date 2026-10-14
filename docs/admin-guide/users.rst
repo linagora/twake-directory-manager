@@ -76,7 +76,7 @@ Filled automatically, and shown on the card only:
 - the :guilabel:`Mailing lists` the account belongs to: read from
   ``memberOf`` when the directory maintains it (OpenLDAP's ``memberof``
   overlay), otherwise searched among the groups whose ``member`` holds the
-  account's DN. For a DN containing ``.``, ``@``, ``+`` or ``'``, that
+  account's DN. For a DN containing ``.``, ``@`` or ``'``, that
   search needs an ldap-rest including `linagora/ldap-rest#328
   <https://github.com/linagora/ldap-rest/pull/328>`_; the list stays empty
   without it.

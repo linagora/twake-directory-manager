@@ -147,11 +147,11 @@ const POINTER_LOOKUP_LIMIT = 50;
 
 /**
  * A DN the group list can take in a raw filter: ldap-rest refuses any other
- * character there — `.`, `@`, `+` and `'` until linagora/ldap-rest#328 — and
- * `*`, `(`, `)`, `&` and `|`, which it accepts, would change what the filter
- * means.
+ * character there — `.`, `@` and `'` until linagora/ldap-rest#328, `+`
+ * still — and `*`, `(`, `)`, `&` and `|`, which it accepts, would change what
+ * the filter means.
  */
-const FILTER_SAFE_DN = /^[\w=, .@+'-]+$/;
+const FILTER_SAFE_DN = /^[\w=, .@'-]+$/;
 
 /** Organizations walked before a pointer listing stops asking for more. */
 const ORGANIZATION_OPTION_LIMIT = 200;
