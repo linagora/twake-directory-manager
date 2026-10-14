@@ -247,6 +247,22 @@ const groups: EntityDescriptor = {
   kind: 'group',
 };
 
+/** Groups as the Twake schema has them: attached to the organization tree. */
+const twakeGroups: EntityDescriptor = {
+  ...groups,
+  schema: {
+    attributes: {
+      ...groups.schema.attributes,
+      twakeDepartmentLink: {
+        type: 'pointer',
+        role: 'organizationLink',
+        branch: ['ou=organization,dc=example,dc=com'],
+      },
+    },
+  },
+  organizationLink: 'twakeDepartmentLink',
+};
+
 const mailboxTypes: EntityDescriptor = {
   key: 'mailboxTypes',
   pluralName: 'mailboxTypes',
@@ -1782,6 +1798,117 @@ describe('Directory console', () => {
     });
   });
 
+  describe('an account’s mailing lists', () => {
+    const john = 'uid=john.doe,ou=users,dc=example,dc=com';
+    const accounts: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          ...usersSchema.attributes,
+          memberOf: {
+            type: 'array',
+            readOnly: true,
+            items: { type: 'string' },
+            role: 'groupMemberships',
+            label: { en: 'Mailing lists' },
+          },
+        },
+      },
+    };
+    /** The search the card makes for John's groups. */
+    const search = () =>
+      nock(baseUrl)
+        .get('/api/v1/ldap/groups')
+        .query({ match: `(member=${john})`, attributes: 'cn' });
+
+    /** A console about to draw John's card, read as `entry`. */
+    const setup = (entry: Entry) => {
+      const detail = stubContainer();
+      const main = {
+        innerHTML: '',
+        querySelector: (selector: string): unknown =>
+          selector === '[data-detail]' ? detail : null,
+      };
+      const app = consoleIn({ '[data-main]': main });
+      Object.assign(app as unknown as object, {
+        entities: [accounts, twakeGroups],
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        get: async () => entry,
+      });
+      const render = (generation = 0): Promise<void> =>
+        (
+          app as unknown as {
+            renderDetail(
+              main: unknown,
+              entity: EntityDescriptor,
+              id: string,
+              generation: number
+            ): Promise<void>;
+          }
+        ).renderDetail(main, accounts, 'john.doe', generation);
+      return { app, detail, render };
+    };
+
+    it('should search the groups when the directory keeps no memberOf', async () => {
+      // Without the memberof overlay the section was always empty (#70).
+      for (const memberOf of [undefined, []]) {
+        const asked = search().reply(200, {
+          staff: { dn: staff.dn, cn: 'staff' },
+        });
+        const { detail, render } = setup({
+          dn: john,
+          uid: 'john.doe',
+          memberOf,
+        });
+        await render();
+        expect(asked.isDone()).to.equal(true);
+        expect(detail.innerHTML).to.include('Mailing lists');
+        expect(detail.innerHTML).to.include(
+          `data-relation="${staff.dn}">staff<`
+        );
+      }
+    });
+
+    it('should read memberOf when the directory keeps it, and search nothing', async () => {
+      const asked = search().reply(200, {});
+      const { detail, render } = setup({
+        dn: john,
+        uid: 'john.doe',
+        memberOf: [staff.dn as string],
+      });
+      await render();
+      expect(asked.isDone()).to.equal(false);
+      expect(detail.innerHTML).to.include(`data-relation="${staff.dn}">staff<`);
+    });
+
+    it('should show the card, with no mailing list, when the search is refused', async () => {
+      // ldap-rest before linagora/ldap-rest#328 refuses a dot in the filter.
+      search().reply(400, { error: 'Invalid match query' });
+      const { detail, render } = setup({ dn: john, uid: 'john.doe' });
+      await render();
+      expect(detail.innerHTML).to.include('Mailing lists');
+      expect(detail.innerHTML).to.include('No related entry');
+    });
+
+    it('should not draw a card the reader left while its groups were searched', async () => {
+      let answer: (dns: string[]) => void = () => undefined;
+      const { app, detail, render } = setup({ dn: john, uid: 'john.doe' });
+      Object.assign((app as unknown as { api: object }).api, {
+        memberships: () =>
+          new Promise<string[]>(resolve => {
+            answer = resolve;
+          }),
+      });
+      const drawn = render();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      (app as unknown as { viewGeneration: number }).viewGeneration++;
+      answer([staff.dn as string]);
+      await drawn;
+      expect(detail.innerHTML).to.equal('');
+    });
+  });
+
   describe('signInAgain', () => {
     const g = globalThis as Record<string, unknown>;
     let originals: Record<string, unknown>;
@@ -1971,6 +2098,54 @@ describe('Directory console', () => {
       expect(user.schema.attributes).to.have.property('uid');
       // The server's own schema is left as it came.
       expect(usersSchema.attributes).to.have.property('mail');
+    });
+
+    describe('the groups an account belongs to', () => {
+      const john = 'uid=john.doe,ou=users,dc=example,dc=com';
+
+      it('should search the groups holding the DN as a member', async () => {
+        // Without the memberof overlay, `memberOf` is empty and the card
+        // listed no mailing list (#70). The Twake groups are large, being
+        // attached to the organization tree: the exact search is bounded
+        // by itself, and asked all the same.
+        expect(isLarge(twakeGroups)).to.equal(true);
+        nock(baseUrl)
+          .get('/api/v1/ldap/groups')
+          .query({ match: `(member=${john})`, attributes: 'cn' })
+          .reply(200, {
+            staff: { dn: staff.dn, cn: 'staff' },
+          });
+        const found = await new ConsoleApiClient(baseUrl).memberships(john, [
+          users,
+          twakeGroups,
+        ]);
+        expect(found).to.deep.equal([staff.dn]);
+      });
+
+      it('should find no group where ldap-rest refuses the filter', async () => {
+        // ldap-rest before linagora/ldap-rest#328 refused a dot in it.
+        nock(baseUrl)
+          .get('/api/v1/ldap/groups')
+          .query(true)
+          .reply(400, { error: 'Invalid match query' });
+        const found = await new ConsoleApiClient(baseUrl).memberships(john, [
+          twakeGroups,
+        ]);
+        expect(found).to.deep.equal([]);
+      });
+
+      it('should ask nothing for a DN no filter can hold', async () => {
+        const groupList = nock(baseUrl)
+          .get('/api/v1/ldap/groups')
+          .query(true)
+          .reply(200, { staff });
+        const found = await new ConsoleApiClient(baseUrl).memberships(
+          'cn=Smith\\, John,ou=users,dc=example,dc=com',
+          [twakeGroups]
+        );
+        expect(found).to.deep.equal([]);
+        expect(groupList.isDone()).to.equal(false);
+      });
     });
 
     describe('searching the organization tree', () => {

@@ -145,6 +145,14 @@ const POINTER_SEARCH_LIMIT = 20;
  */
 const POINTER_LOOKUP_LIMIT = 50;
 
+/**
+ * A DN the group list can take in a raw filter: ldap-rest refuses any other
+ * character there — `.`, `@`, `+` and `'` until linagora/ldap-rest#328 — and
+ * `*`, `(`, `)`, `&` and `|`, which it accepts, would change what the filter
+ * means.
+ */
+const FILTER_SAFE_DN = /^[\w=, .@+'-]+$/;
+
 /** Organizations walked before a pointer listing stops asking for more. */
 const ORGANIZATION_OPTION_LIMIT = 200;
 
@@ -722,6 +730,52 @@ export class ConsoleApiClient {
         encodeURIComponent(member),
       { method: 'DELETE' }
     );
+  }
+
+  /**
+   * The groups holding a DN among their members, for an account whose
+   * `memberOf` the directory does not maintain: only OpenLDAP's `memberof`
+   * overlay does.
+   *
+   * The group list takes a raw LDAP filter in `match`, and `(member=<dn>)`
+   * answers exactly the account's groups, however many the directory holds.
+   * Nothing else does: a substring search finds nothing, `member` having no
+   * substring matching rule, and a flat entity takes no raw filter. An
+   * entity that cannot be asked, or refuses — ldap-rest before
+   * linagora/ldap-rest#328 answers `400` for a DN holding a dot — adds no
+   * group: reading every group with its members to compare them here would
+   * not hold on a large directory.
+   *
+   * @param dn DN of the member
+   * @param entities entities the console knows: the groups among them are read
+   * @returns DN of every group holding it
+   */
+  async memberships(
+    dn: string,
+    entities: EntityDescriptor[]
+  ): Promise<string[]> {
+    if (!FILTER_SAFE_DN.test(dn)) return [];
+    const found = await Promise.all(
+      entities.map(async entity => {
+        const members = roleAttribute(entity.schema, 'members');
+        if (!members || entity.kind !== 'group') return [];
+        const params = new URLSearchParams({
+          match: `(${members}=${dn})`,
+          attributes: entity.mainAttribute,
+        });
+        try {
+          const entries = await this.call<Record<string, Entry>>(
+            `${entity.endpoint}?${params.toString()}`
+          );
+          return Object.values(entries)
+            .filter(entry => entry.dn)
+            .map(entry => String(entry.dn));
+        } catch {
+          return [];
+        }
+      })
+    );
+    return found.flat();
   }
 
   /** Delete an entry. */

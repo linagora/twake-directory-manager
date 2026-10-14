@@ -1061,7 +1061,10 @@ export class DirectoryConsole {
       .querySelector('[data-back]')
       ?.addEventListener('click', () => this.go(entity.key));
 
-    const named = await naming;
+    const [named, relations] = await Promise.all([
+      naming,
+      this.relations(entity, entry),
+    ]);
     if (!this.current(generation)) return;
     const transit = transitState(this.scope, entity, entry);
     const detail = new EntityDetail({
@@ -1078,7 +1081,7 @@ export class DirectoryConsole {
         ? (): void => void this.handOver(entity, id)
         : undefined,
       pointerLabel: named,
-      relations: this.relations(entity, entry),
+      relations,
       onEdit: (): void => {
         void this.openForm(entity, entry);
       },
@@ -1102,23 +1105,33 @@ export class DirectoryConsole {
    * Entries related to this one: the members of a group, the groups an account
    * belongs to. Both are read from roles, so an entity that models them under
    * other names still gets the section.
+   *
+   * An account's groups come from its `memberOf`, which only a directory
+   * running OpenLDAP's `memberof` overlay fills in. Without it they are
+   * searched among the groups; a search that fails leaves the section empty
+   * rather than the card unshown.
    */
-  private relations(
+  private async relations(
     entity: EntityDescriptor,
     entry: Entry
-  ):
+  ): Promise<
     | {
         title: string;
         attribute: string;
         items: { id: string; label: string }[];
       }
-    | undefined {
+    | undefined
+  > {
     for (const role of ['members', 'groupMemberships']) {
       for (const [name, attr] of Object.entries(entity.schema.attributes)) {
         const roles = Array.isArray(attr.role) ? attr.role : [attr.role];
         if (!roles.includes(role)) continue;
         const raw = entryValue(entry, name);
-        const list = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
+        let list = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
+        if (role === 'groupMemberships' && !list.length && entry.dn)
+          list = await this.api
+            .memberships(entry.dn, this.entities)
+            .catch(() => []);
         return {
           title: attributeLabel(name, attr, this.translator.language),
           attribute: name,
