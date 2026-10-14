@@ -1,26 +1,18 @@
 # Changelog
 
-## Unreleased
+## v0.6.3 (2026-10-14)
 
 Built on ldap-rest 0.20.1.
 
 ### Bug Fixes
 
-- The sidebar entry of the page being shown is now marked with
-  `aria-current="page"`, for screen readers (#69)
-- The admin guide no longer presents the Delivery mode, Delivery modes and
-  Other mailboxes fields as always shown: they are hidden by default (#71)
-- Format errors of a CSV import and of the forms put a space before the colon
-  in French (#72)
-- Deleting an organization that is not empty says so in the interface
-  language, by the organization's name, instead of the server's English
-  message with its DN (#73)
-- The reset password dialog says that leaving the field empty generates a
-  password, and the hint is linked to the field for screen readers (#74)
-- An account's card lists its mailing lists without the directory's
-  `memberof` overlay too, by searching the groups whose `member` holds its
-  DN, whatever it holds (`.`, `@`, `'`), with ldap-rest 0.20.1 (#70,
+- An account's mailing lists show without the `memberof` overlay (#70,
   linagora/ldap-rest#328)
+- Refusing to delete a non-empty organization names it, translated (#73)
+- The reset password dialog says an empty field generates one (#74)
+- French format errors space their colon (#72)
+- The current sidebar entry carries `aria-current` (#69)
+- Admin guide: Delivery mode and Other mailboxes are hidden by default (#71)
 
 ## v0.6.2 (2026-10-13)
 
