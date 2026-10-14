@@ -367,6 +367,22 @@ describe('CSV import', () => {
         translator
       );
 
+    it('should space the colon of a format error in French', () => {
+      const french = new Translator('fr');
+      const [row] = prepareRows(
+        {
+          headers,
+          rows: [['E1', 'Doe', '', '', '', 'not an address']],
+          delimiter: ';',
+        },
+        mapping,
+        fields,
+        resolvers,
+        french
+      );
+      expect(row.errors).to.include('Email : Expected an email address');
+    });
+
     it('should build what the form would send', () => {
       const [row] = prepare([
         [

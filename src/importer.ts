@@ -526,7 +526,10 @@ export function prepareRows(
           if (bad !== undefined) {
             refused.add(name);
             errors.push(
-              `${label(name)}: ${attributeHint(attr, translator.language) || bad}`
+              translator.t('import.badFormat', {
+                field: label(name),
+                hint: attributeHint(attr, translator.language) || bad,
+              })
             );
             continue;
           }
