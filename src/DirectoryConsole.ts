@@ -1889,7 +1889,10 @@ export class DirectoryConsole {
       } else this.record('organizations', true);
       await this.renderMain();
     } catch (err) {
-      this.toast((err as Error).message, true);
+      // The server's refusal names the DN, in English: say it in words.
+      if ((err as { status?: number }).status === 409)
+        this.toast(this.translator.t('delete.notEmpty', { name }), true);
+      else this.toast((err as Error).message, true);
     }
   }
 

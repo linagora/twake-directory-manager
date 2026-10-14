@@ -202,6 +202,7 @@ const en: Catalogue = {
     'New password: {password} — copy it now, it will not be shown again',
   'password.set': 'Password changed',
 
+  'delete.notEmpty': '{name} is not empty: move or delete its entries first',
   'delete.confirm': 'Delete {name}? This cannot be undone.',
   'delete.confirmMany.one': 'Delete {count} entry? This cannot be undone.',
   'delete.confirmMany.other': 'Delete {count} entries? This cannot be undone.',
@@ -427,6 +428,8 @@ const fr: Catalogue = {
     'Nouveau mot de passe : {password} — copiez-le maintenant, il ne sera plus affiché',
   'password.set': 'Mot de passe modifié',
 
+  'delete.notEmpty':
+    '{name} n’est pas vide : déplacez ou supprimez d’abord ses entrées',
   'delete.confirm': 'Supprimer {name} ? Cette action est irréversible.',
   'delete.confirmMany.one':
     'Supprimer {count} entrée ? Cette action est irréversible.',
@@ -632,6 +635,8 @@ const mn: Catalogue = {
     'Шинэ нууц үг: {password} — одоо хуулж авна уу, дахин харагдахгүй',
   'password.set': 'Нууц үг солигдлоо',
 
+  'delete.notEmpty':
+    '{name} хоосон биш: эхлээд доторх бичлэгүүдийг зөөх эсвэл устгана уу',
   'delete.confirm': '{name}-г устгах уу? Үүнийг буцаах боломжгүй.',
   'delete.confirmMany': '{count} бичлэг устгах уу? Үүнийг буцаах боломжгүй.',
   'delete.done': 'Устгагдлаа',

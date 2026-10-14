@@ -1526,6 +1526,34 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should explain a refused deletion of a non-empty organization', async () => {
+      const toast = toastElement();
+      const app = consoleIn({ '[data-toast]': toast }, 'fr');
+      const dn = 'ou=QA Lab,ou=organization,dc=example,dc=com';
+      const organizations = { key: 'organizations' } as EntityDescriptor;
+      const call = app as unknown as {
+        confirmDeleteOrganization(
+          entity: EntityDescriptor,
+          entry: Entry,
+          dn: string
+        ): Promise<void>;
+      };
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      g.window = { confirm: () => true };
+      try {
+        nock(baseUrl)
+          .delete(`/api/v1/ldap/organizations/${encodeURIComponent(dn)}`)
+          .reply(409, { error: `Entry ${dn} is not empty` });
+        await call.confirmDeleteOrganization(organizations, { dn }, dn);
+        expect(toast.textContent).to.equal(
+          'QA Lab n’est pas vide : déplacez ou supprimez d’abord ses entrées'
+        );
+      } finally {
+        g.window = original;
+      }
+    });
+
     it('should name the transit branch in the scope banner, tooltip included', () => {
       const app = consoleIn({}) as unknown as {
         scope: Scope;
