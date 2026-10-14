@@ -1706,8 +1706,9 @@ export class DirectoryConsole {
           <div class="dc-field">
             <label for="dc-new-password">${escapeHtml(t('password.choose'))}</label>
             <input id="dc-new-password" class="dc-input" type="password"
-              autocomplete="new-password" />
-            <p class="dc-hint">${escapeHtml(t('password.generate'))}</p>
+              autocomplete="new-password"
+              aria-describedby="dc-new-password-hint" />
+            <p id="dc-new-password-hint" class="dc-hint">${escapeHtml(t('password.generateHint'))}</p>
           </div>
           <div class="dc-field dc-field-inline">
             <input id="dc-force-change" type="checkbox" checked />

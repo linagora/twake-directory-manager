@@ -195,7 +195,7 @@ const en: Catalogue = {
   'state.toDelete': 'To be deleted',
 
   'password.title': 'Reset password',
-  'password.generate': 'Generate a password',
+  'password.generateHint': 'Leave empty to generate a password',
   'password.choose': 'Set a password',
   'password.forceChange': 'Require a change at next sign-in',
   'password.generated':
@@ -421,7 +421,7 @@ const fr: Catalogue = {
   'state.toDelete': 'À supprimer',
 
   'password.title': 'Réinitialiser le mot de passe',
-  'password.generate': 'Générer un mot de passe',
+  'password.generateHint': 'Laissez vide pour générer un mot de passe',
   'password.choose': 'Définir un mot de passe',
   'password.forceChange': 'Exiger un changement à la prochaine connexion',
   'password.generated':
@@ -628,7 +628,7 @@ const mn: Catalogue = {
   'state.toDelete': 'Устгагдах',
 
   'password.title': 'Нууц үг дахин тохируулах',
-  'password.generate': 'Нууц үг үүсгэх',
+  'password.generateHint': 'Нууц үг үүсгэхийн тулд талбарыг хоосон орхино уу',
   'password.choose': 'Нууц үг тохируулах',
   'password.forceChange': 'Дараагийн нэвтрэлтэд солихыг шаардах',
   'password.generated':
