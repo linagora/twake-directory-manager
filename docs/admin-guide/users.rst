@@ -74,7 +74,10 @@ Filled automatically, and shown on the card only:
   sign-in name and **cannot be changed afterwards**;
 - the :guilabel:`Department path`;
 - the :guilabel:`Status`, ``Active`` on creation;
-- the :guilabel:`Mailing lists` the account belongs to.
+- the :guilabel:`Mailing lists` the account belongs to: read from
+  ``memberOf`` when the directory maintains it (OpenLDAP's ``memberof``
+  overlay), otherwise searched among the groups whose ``member`` holds the
+  account's DN (this needs ldap-rest 0.20.1).
 
 .. note::
 

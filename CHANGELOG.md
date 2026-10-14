@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+Built on ldap-rest 0.20.1.
+
 ### Bug Fixes
 
 - The sidebar entry of the page being shown is now marked with
@@ -15,6 +17,10 @@
   message with its DN (#73)
 - The reset password dialog says that leaving the field empty generates a
   password, and the hint is linked to the field for screen readers (#74)
+- An account's card lists its mailing lists without the directory's
+  `memberof` overlay too, by searching the groups whose `member` holds its
+  DN, whatever it holds (`.`, `@`, `'`), with ldap-rest 0.20.1 (#70,
+  linagora/ldap-rest#328)
 
 ## v0.6.2 (2026-10-13)
 
