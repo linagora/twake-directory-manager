@@ -94,6 +94,7 @@ const en: Catalogue = {
   'detail.copied': 'Copied',
   'detail.copyFailed': 'Select the DN to copy it',
 
+  'form.badFormat': '{value}: {pattern}',
   'form.required': 'Fields marked with * are required',
   'form.addValue': 'Press Enter to add a value',
   'form.removeValue': 'Remove this value',
@@ -174,6 +175,7 @@ const en: Catalogue = {
     '{field}: “{value}” is no identifier, and too many entries contain it to rule out another spelling: check it, or use a DN',
   'import.notBoolean': '{field}: “{value}” is neither yes nor no',
   'import.notDate': '{field}: “{value}” is not a date',
+  'import.badFormat': '{field}: {hint}',
   'import.pastDate': '{field}: “{value}” is earlier than today',
   'import.notSize': '{field}: “{value}” is not a size, such as 4 GB',
   'import.missing': '{field} is required',
@@ -193,13 +195,14 @@ const en: Catalogue = {
   'state.toDelete': 'To be deleted',
 
   'password.title': 'Reset password',
-  'password.generate': 'Generate a password',
+  'password.generateHint': 'Leave empty to generate a password',
   'password.choose': 'Set a password',
   'password.forceChange': 'Require a change at next sign-in',
   'password.generated':
     'New password: {password} — copy it now, it will not be shown again',
   'password.set': 'Password changed',
 
+  'delete.notEmpty': '{name} is not empty: move or delete its entries first',
   'delete.confirm': 'Delete {name}? This cannot be undone.',
   'delete.confirmMany.one': 'Delete {count} entry? This cannot be undone.',
   'delete.confirmMany.other': 'Delete {count} entries? This cannot be undone.',
@@ -308,6 +311,7 @@ const fr: Catalogue = {
   'detail.copied': 'Copié',
   'detail.copyFailed': 'Sélectionnez le DN pour le copier',
 
+  'form.badFormat': '{value} : {pattern}',
   'form.required': 'Les champs marqués d’une * sont obligatoires',
   'form.addValue': 'Appuyez sur Entrée pour ajouter une valeur',
   'form.removeValue': 'Retirer cette valeur',
@@ -396,6 +400,7 @@ const fr: Catalogue = {
     '{field} : « {value} » n’est pas un identifiant, et trop d’entrées le contiennent pour exclure une autre écriture : vérifiez-le, ou utilisez un DN',
   'import.notBoolean': '{field} : « {value} » n’est ni oui ni non',
   'import.notDate': '{field} : « {value} » n’est pas une date',
+  'import.badFormat': '{field} : {hint}',
   'import.pastDate': '{field} : « {value} » est antérieure à aujourd’hui',
   'import.notSize':
     '{field} : « {value} » n’est pas une taille, telle que 4 GB',
@@ -416,13 +421,15 @@ const fr: Catalogue = {
   'state.toDelete': 'À supprimer',
 
   'password.title': 'Réinitialiser le mot de passe',
-  'password.generate': 'Générer un mot de passe',
+  'password.generateHint': 'Laissez vide pour générer un mot de passe',
   'password.choose': 'Définir un mot de passe',
   'password.forceChange': 'Exiger un changement à la prochaine connexion',
   'password.generated':
     'Nouveau mot de passe : {password} — copiez-le maintenant, il ne sera plus affiché',
   'password.set': 'Mot de passe modifié',
 
+  'delete.notEmpty':
+    '{name} n’est pas vide : déplacez ou supprimez d’abord ses entrées',
   'delete.confirm': 'Supprimer {name} ? Cette action est irréversible.',
   'delete.confirmMany.one':
     'Supprimer {count} entrée ? Cette action est irréversible.',
@@ -525,6 +532,7 @@ const mn: Catalogue = {
   'detail.copied': 'Хуулагдлаа',
   'detail.copyFailed': 'DN-ийг сонгоод хуулна уу',
 
+  'form.badFormat': '{value}: {pattern}',
   'form.required': '* тэмдэгтэй талбарыг заавал бөглөнө',
   'form.addValue': 'Утга нэмэхийн тулд Enter дарна уу',
   'form.removeValue': 'Энэ утгыг хасах',
@@ -600,6 +608,7 @@ const mn: Catalogue = {
     '{field}: «{value}» нь танигч биш бөгөөд үүнийг агуулсан бичлэг хэт олон тул өөр бичлэгийг үгүйсгэх боломжгүй: шалгана уу, эсвэл DN ашиглана уу',
   'import.notBoolean': '{field}: «{value}» нь тийм ч биш, үгүй ч биш',
   'import.notDate': '{field}: «{value}» нь огноо биш',
+  'import.badFormat': '{field}: {hint}',
   'import.pastDate': '{field}: «{value}» нь өнөөдрөөс өмнөх огноо',
   'import.notSize': '{field}: «{value}» нь 4 GB гэх мэт хэмжээ биш',
   'import.missing': '{field} заавал бөглөнө',
@@ -619,13 +628,15 @@ const mn: Catalogue = {
   'state.toDelete': 'Устгагдах',
 
   'password.title': 'Нууц үг дахин тохируулах',
-  'password.generate': 'Нууц үг үүсгэх',
+  'password.generateHint': 'Нууц үг үүсгэхийн тулд талбарыг хоосон орхино уу',
   'password.choose': 'Нууц үг тохируулах',
   'password.forceChange': 'Дараагийн нэвтрэлтэд солихыг шаардах',
   'password.generated':
     'Шинэ нууц үг: {password} — одоо хуулж авна уу, дахин харагдахгүй',
   'password.set': 'Нууц үг солигдлоо',
 
+  'delete.notEmpty':
+    '{name} хоосон биш: эхлээд доторх бичлэгүүдийг зөөх эсвэл устгана уу',
   'delete.confirm': '{name}-г устгах уу? Үүнийг буцаах боломжгүй.',
   'delete.confirmMany': '{count} бичлэг устгах уу? Үүнийг буцаах боломжгүй.',
   'delete.done': 'Устгагдлаа',

@@ -17,7 +17,8 @@ values the forms pick from. With the default Twake schemas:
    * - :guilabel:`Account states`
      - The :guilabel:`Status` of accounts.
    * - :guilabel:`Delivery modes`
-     - The :guilabel:`Delivery mode` of accounts.
+     - The :guilabel:`Delivery mode` of accounts. Not loaded by default,
+       and the field is hidden: see the note below.
    * - :guilabel:`Mail domains`
      - The :guilabel:`Mail domains` field of organizations.
    * - :guilabel:`List types`
@@ -47,3 +48,12 @@ added — a new position, a new mail domain — ask them.
    understood by the services connected to the directory, not only by the
    console: a value those services do not know has no effect, or an
    unexpected one. Adding one is a change of configuration, not of data.
+
+.. note::
+
+   :guilabel:`Delivery modes` (and the :guilabel:`Delivery mode` field of
+   accounts) have no effect in a Twake deployment, so both are left out by
+   default. The page appears only when ``DM_LDAP_FLAT_SCHEMA`` loads
+   ``twake/nomenclature/twakeDeliveryMode.json``, and the field only when
+   ``DM_CONSOLE_HIDDEN_ATTRIBUTES`` no longer lists ``twakeDeliveryMode``:
+   both are needed to see and use delivery modes.
