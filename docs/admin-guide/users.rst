@@ -60,10 +60,12 @@ With the default Twake schemas:
        follows from it.
    * - :guilabel:`Deletion date`
      - The date the account is due to be deleted; not earlier than today.
-   * - *Mailbox Settings* section: :guilabel:`Other mailboxes`,
-       :guilabel:`Mailbox size`, :guilabel:`Delegates`
+   * - *Mailbox Settings* section: :guilabel:`Mailbox size`,
+       :guilabel:`Delegates`
      - Mailbox settings. The size is written like ``5GB`` or ``500MB``.
-       Delegates are accounts allowed into the mailbox.
+       Delegates are accounts allowed into the mailbox. The
+       :guilabel:`Other mailboxes` field is hidden by default (see the
+       note below).
 
 Filled automatically, and shown on the card only:
 
@@ -72,7 +74,6 @@ Filled automatically, and shown on the card only:
   sign-in name and **cannot be changed afterwards**;
 - the :guilabel:`Department path`;
 - the :guilabel:`Status`, ``Active`` on creation;
-- the :guilabel:`Delivery mode`;
 - the :guilabel:`Mailing lists` the account belongs to: read from
   ``memberOf`` when the directory maintains it (OpenLDAP's ``memberof``
   overlay), otherwise searched among the groups whose ``member`` holds the
@@ -80,6 +81,13 @@ Filled automatically, and shown on the card only:
   search needs an ldap-rest including `linagora/ldap-rest#328
   <https://github.com/linagora/ldap-rest/pull/328>`_; the list stays empty
   without it.
+
+.. note::
+
+   :guilabel:`Other mailboxes` and :guilabel:`Delivery mode` have no effect
+   in a Twake deployment, so the console hides them by default. They appear
+   only when the administrator of the console empties or changes
+   ``DM_CONSOLE_HIDDEN_ATTRIBUTES``.
 
 .. _email-address:
 

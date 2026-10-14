@@ -1029,7 +1029,10 @@ export class EntityForm {
       if (bad !== undefined)
         this.errors[name] =
           attributeHint(attr, this.options.translator.language) ||
-          `${bad}: ${String(pattern)}`;
+          this.options.translator.t('form.badFormat', {
+            value: bad,
+            pattern: String(pattern),
+          });
     }
 
     const root = this.root;
