@@ -57,10 +57,8 @@ The members of a group are listed on its card, under :guilabel:`Members`; a
 click on a member opens their card. Conversely, the card of an account lists,
 under :guilabel:`Mailing lists`, the groups it belongs to — from its
 ``memberOf`` when the directory maintains it (OpenLDAP's ``memberof``
-overlay), otherwise by searching the groups whose ``member`` holds its DN.
-That search needs, for a DN containing ``.``, ``@`` or ``'``, an
-ldap-rest including `linagora/ldap-rest#328
-<https://github.com/linagora/ldap-rest/pull/328>`_.
+overlay), otherwise by searching the groups whose ``member`` holds its DN
+(this needs ldap-rest 0.20.1).
 
 Members are designated by their **directory name** (DN), such as
 ``uid=jdoe,ou=users,dc=example,dc=org``: an account’s identifier preceded by

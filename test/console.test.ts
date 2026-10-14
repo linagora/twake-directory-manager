@@ -1911,7 +1911,7 @@ describe('Directory console', () => {
     });
 
     it('should show the card, with no mailing list, when the search is refused', async () => {
-      // ldap-rest before linagora/ldap-rest#328 refuses a dot in the filter.
+      // ldap-rest before 0.20.1 refuses a dot in the filter.
       search().reply(400, { error: 'Invalid match query' });
       const { detail, render } = setup({ dn: john, uid: 'john.doe' });
       await render();
@@ -2151,7 +2151,7 @@ describe('Directory console', () => {
       });
 
       it('should find no group where ldap-rest refuses the filter', async () => {
-        // ldap-rest before linagora/ldap-rest#328 refused a dot in it.
+        // ldap-rest before 0.20.1 refused a dot in it.
         nock(baseUrl)
           .get('/api/v1/ldap/groups')
           .query(true)

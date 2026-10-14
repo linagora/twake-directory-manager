@@ -147,7 +147,7 @@ const POINTER_LOOKUP_LIMIT = 50;
 
 /**
  * A DN the group list can take in a raw filter: ldap-rest refuses any other
- * character there — `.`, `@` and `'` until linagora/ldap-rest#328, `+`
+ * character there — `.`, `@` and `'` before ldap-rest 0.20.1, `+`
  * still — and `*`, `(`, `)`, `&` and `|`, which it accepts, would change what
  * the filter means.
  */
@@ -742,7 +742,7 @@ export class ConsoleApiClient {
    * Nothing else does: a substring search finds nothing, `member` having no
    * substring matching rule, and a flat entity takes no raw filter. An
    * entity that cannot be asked, or refuses — ldap-rest before
-   * linagora/ldap-rest#328 answers `400` for a DN holding a dot — adds no
+   * 0.20.1 answers `400` for a DN holding a dot — adds no
    * group: reading every group with its members to compare them here would
    * not hold on a large directory.
    *
