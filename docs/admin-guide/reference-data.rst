@@ -27,7 +27,9 @@ values the forms pick from. With the default Twake schemas:
      - The :guilabel:`Group type` field of groups.
 
 These lists are browsed like the others (see :doc:`lists`), and shown whole
-without having to search.
+without having to search. The section also holds the
+:guilabel:`Password policies`, for the administrators who manage them (see
+:doc:`password-policies`).
 
 Who maintains them
 ------------------

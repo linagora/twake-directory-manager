@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- The password policies page is shown to whoever the server lets read
+  them, rather than to callers whose scope restricts nothing: with
+  `authzLinid1` that was nobody. With ldap-rest's
+  `DM_AUTHZ_GLOBAL_BRANCHES`, only the administrators of the top
+  organization, or of `DM_AUTHZ_GLOBAL_ORGANIZATION`, see it (see the README).
+  It moves to the Reference data section of the sidebar
+
 ## v0.7.0 (2026-10-20)
 
 Built on ldap-rest 0.21.0.

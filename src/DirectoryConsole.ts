@@ -414,6 +414,8 @@ export class DirectoryConsole {
    * offers nothing rather than every button.
    */
   private scopeError: string | null = null;
+  /** Whether the server lets the caller read the password policies */
+  private policiesReadable = false;
   /**
    * Which view is the current one. Opening an entry, then another before the
    * first has answered, raced exactly the way the entity list did: whichever
@@ -488,6 +490,7 @@ export class DirectoryConsole {
       this.scope = null;
       this.scopeError = (err as Error).message;
     }
+    this.policiesReadable = await this.readsPolicies();
 
     this.readRoute();
     window.addEventListener('hashchange', () => void this.followHash());
@@ -575,6 +578,7 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     const { primary, reference } = splitEntities(this.entities);
+    const settings = this.settings(reference);
 
     container.innerHTML = `
       <div class="dc-app">
@@ -602,17 +606,7 @@ export class DirectoryConsole {
               )
               .join('')}
             ${
-              this.managesPolicies()
-                ? `<button type="button" class="dc-nav-item" data-nav="${POLICIES_KEY}">
-                    <span class="dc-nav-icon" aria-hidden="true">${escapeHtml(
-                      initial(t('nav.policies'))
-                    )}</span>
-                    <span class="dc-nav-label">${escapeHtml(t('nav.policies'))}</span>
-                  </button>`
-                : ''
-            }
-            ${
-              reference.length
+              settings.length
                 ? `<div class="dc-nav-section">
                     <button type="button" class="dc-nav-toggle" data-nav-toggle
                       aria-expanded="false" aria-controls="dc-nav-reference">
@@ -620,13 +614,13 @@ export class DirectoryConsole {
                       <span class="dc-nav-chevron">${CHEVRON_ICON}</span>
                     </button>
                     <div class="dc-nav-reference" id="dc-nav-reference" hidden>
-                      ${reference
+                      ${settings
                         .map(
-                          entity =>
+                          ({ key, label }) =>
                             `<button type="button" class="dc-nav-item dc-nav-item-reference" data-nav="${escapeHtml(
-                              entity.key
+                              key
                             )}"><span class="dc-nav-label">${escapeHtml(
-                              this.plural(entity)
+                              label
                             )}</span></button>`
                         )
                         .join('')}
@@ -954,16 +948,42 @@ export class DirectoryConsole {
   }
 
   /**
-   * Whether the caller manages the password policies: the server serves
-   * them, and the caller's scope restricts nothing. A policy applies across
-   * the directory, so it is no local administrator's to set.
+   * Whether the caller manages the password policies. Asked of the server
+   * rather than read from the scope: who holds them is its rule
+   * (`--authz-global-branches`), and the scope names no branch outside the
+   * tree. A refusal hides the page; any other failure shows it, with the
+   * failure on it.
    */
+  private async readsPolicies(): Promise<boolean> {
+    if (!this.api.servesPasswordPolicies) return false;
+    try {
+      await this.api.passwordPolicies();
+      return true;
+    } catch (err) {
+      return (err as { status?: number }).status !== 403;
+    }
+  }
+
+  /**
+   * What the reference section lists: the reference data, and the password
+   * policies, set up once and rarely touched like it.
+   */
+  private settings(
+    reference: EntityDescriptor[]
+  ): { key: string; label: string }[] {
+    return [
+      ...reference.map(entity => ({
+        key: entity.key,
+        label: this.plural(entity),
+      })),
+      ...(this.managesPolicies()
+        ? [{ key: POLICIES_KEY, label: this.translator.t('nav.policies') }]
+        : []),
+    ];
+  }
+
   private managesPolicies(): boolean {
-    return (
-      this.api.servesPasswordPolicies &&
-      !this.scopeError &&
-      !scopeRestricts(this.scope)
-    );
+    return this.policiesReadable;
   }
 
   private canDelete(): boolean {
@@ -981,6 +1001,7 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     const { primary, reference } = splitEntities(this.entities);
+    const settings = this.settings(reference);
     main.innerHTML = `
       <section class="dc-dashboard">
         <h1>${escapeHtml(t('app.title'))}</h1>
@@ -1024,15 +1045,15 @@ export class DirectoryConsole {
             .join('')}
         </ul>
         ${
-          reference.length
+          settings.length
             ? `<h2>${escapeHtml(t('nav.reference'))}</h2>
               <ul class="dc-reference">
-                ${reference
+                ${settings
                   .map(
-                    entity =>
+                    ({ key, label }) =>
                       `<li><button type="button" class="dc-reference-link" data-open="${escapeHtml(
-                        entity.key
-                      )}">${escapeHtml(this.plural(entity))}</button></li>`
+                        key
+                      )}">${escapeHtml(label)}</button></li>`
                   )
                   .join('')}
               </ul>`

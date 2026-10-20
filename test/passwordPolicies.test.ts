@@ -321,27 +321,71 @@ describe('Password policies', () => {
       return app;
     }
 
-    const manages = (app: DirectoryConsole): boolean =>
-      (app as unknown as { managesPolicies(): boolean }).managesPolicies();
+    const reads = (app: DirectoryConsole): Promise<boolean> =>
+      (app as unknown as { readsPolicies(): Promise<boolean> }).readsPolicies();
 
-    it('should leave the policies to callers whose scope restricts nothing', async () => {
-      expect(manages(await consoleFor(null))).to.equal(true);
+    it('should offer the policies to whoever the server lets read them', async () => {
+      // Its rule, not the scope's: a local administrator of the branch the
+      // policies belong to holds them (ldap-rest --authz-global-organization)
+      const app = await consoleFor({
+        unrestricted: false,
+        branches: [
+          { dn: 'ou=sales,dc=example,dc=com', read: true, write: true },
+        ],
+        entities: [],
+      } as unknown as Scope);
+      nock(baseUrl)
+        .get('/api/v1/password-policies')
+        .reply(200, { policies: [] });
+      expect(await reads(app)).to.equal(true);
+      nock(baseUrl)
+        .get('/api/v1/password-policies')
+        .reply(403, { error: 'Forbidden' });
+      expect(await reads(app)).to.equal(false);
+      // Any other failure is shown on the page rather than hiding it
+      nock(baseUrl)
+        .get('/api/v1/password-policies')
+        .reply(500, { error: 'LDAP error' });
+      expect(await reads(app)).to.equal(true);
+    });
+
+    it('should list the policies with the reference data', async () => {
+      const container = {
+        innerHTML: '',
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      };
+      const app = await consoleFor(null);
+      const inner = app as unknown as {
+        container: unknown;
+        policiesReadable: boolean;
+        drawShell(): void;
+      };
+      inner.container = container;
+      inner.policiesReadable = true;
+      inner.drawShell();
+      const section = container.innerHTML.slice(
+        container.innerHTML.indexOf('id="dc-nav-reference"')
+      );
+      expect(section).to.match(
+        /class="dc-nav-item dc-nav-item-reference" data-nav="password-policies"/
+      );
       expect(
-        manages(
-          await consoleFor({
-            unrestricted: false,
-            branches: [
-              {
-                dn: 'ou=sales,dc=example,dc=com',
-                read: true,
-                write: true,
-                delete: true,
-              },
-            ],
-            entities: [],
-          } as unknown as Scope)
-        )
-      ).to.equal(false);
+        container.innerHTML.match(/data-nav="password-policies"/g)
+      ).to.have.length(1);
+    });
+
+    it('should not ask a server that manages no policy', async () => {
+      const app = new DirectoryConsole({
+        containerId: 'console',
+        apiBaseUrl: baseUrl,
+      });
+      nock(baseUrl)
+        .get('/api/v1/config')
+        .reply(200, { apiPrefix: '/api', features: {} });
+      await (app as unknown as { api: ConsoleApiClient }).api.discover();
+      expect(await reads(app)).to.equal(false);
+      expect(nock.pendingMocks()).to.deep.equal([]);
     });
 
     it('should say in words why a policy cannot be deleted', async () => {
