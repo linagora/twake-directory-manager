@@ -1,12 +1,22 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 (2026-10-20)
+
+Built on ldap-rest 0.21.0.
+
+### Breaking Changes
+
+- The image loads `core/ldap/passwordPolicy`: with several password
+  policies, set `DM_PPOLICY_DEFAULT_DN` (see the README) —
+  [ldap-rest notes](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md#several-password-policies)
 
 ### Features
 
 - Global administrators edit the password policies: expiry, quality, the
-  check module's configuration, lockout. Needs ldap-rest 0.21.0, and
-  `DM_PPOLICY_DEFAULT_DN` with several policies (see the README)
+  check module's configuration, lockout (#87)
+- An administrator of a branch below the tree root creates organizations in
+  it, choosing the parent when they write several branches; the tree offers
+  "+" only where they may create (#86)
 
 ## v0.6.3 (2026-10-14)
 
