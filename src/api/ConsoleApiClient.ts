@@ -17,6 +17,7 @@ import type {
   ExternalMembers,
   LocalizedText,
   OrganizationNode,
+  PasswordPolicy,
   Scope,
   SchemaAttribute,
 } from '../types';
@@ -74,6 +75,8 @@ interface ConfigResponse {
     };
     /** ldap-rest's `twake/james` */
     james?: { teamMailboxAnyDomain?: boolean };
+    /** ldap-rest's `core/ldap/passwordPolicy`, which manages policies from 0.21.0 */
+    ldapPasswordPolicy?: { endpoints?: { listPolicies?: string } };
   };
 }
 
@@ -249,6 +252,8 @@ export class ConsoleApiClient {
   private teamMailboxDomain = false;
   /** Attributes the deployment hides, lowercased; see describe() */
   private hidden = new Set<string>();
+  /** Where the password policies are served, when they are */
+  private policiesPath?: string;
   /**
    * Whether the API lives on another origin than the page. `same-origin`
    * attaches no cookie to a cross-origin request, so a deployment that points
@@ -309,6 +314,11 @@ export class ConsoleApiClient {
    */
   get teamMailboxesKeepDomain(): boolean {
     return this.teamMailboxDomain;
+  }
+
+  /** Whether the server lets password policies be managed. */
+  get servesPasswordPolicies(): boolean {
+    return !!this.policiesPath;
   }
 
   /**
@@ -392,6 +402,8 @@ export class ConsoleApiClient {
             ),
           }
         : undefined;
+    this.policiesPath =
+      config.features.ldapPasswordPolicy?.endpoints?.listPolicies;
     const james = config.features.james;
     this.teamMailboxDomain = james !== undefined && !james.teamMailboxAnyDomain;
     this.hidden = new Set(
@@ -827,6 +839,61 @@ export class ConsoleApiClient {
         body: JSON.stringify({ password, forceChange }),
       }
     );
+  }
+
+  /** The password policies, sorted by name. */
+  async passwordPolicies(): Promise<PasswordPolicy[]> {
+    const { policies } = await this.call<{ policies: PasswordPolicy[] }>(
+      this.policyPath()
+    );
+    return policies;
+  }
+
+  /**
+   * Create a password policy.
+   *
+   * @param cn its name
+   * @param values the attributes to set
+   * @returns the policy as created
+   */
+  async createPasswordPolicy(
+    cn: string,
+    values: Record<string, unknown>
+  ): Promise<PasswordPolicy> {
+    return this.call<PasswordPolicy>(this.policyPath(), {
+      method: 'POST',
+      body: JSON.stringify({ ...values, cn }),
+    });
+  }
+
+  /**
+   * Change a password policy.
+   *
+   * @param cn its name
+   * @param changes the attributes to set, `null` removing one
+   * @returns the policy as changed
+   */
+  async updatePasswordPolicy(
+    cn: string,
+    changes: Record<string, unknown>
+  ): Promise<PasswordPolicy> {
+    return this.call<PasswordPolicy>(this.policyPath(cn), {
+      method: 'PATCH',
+      body: JSON.stringify(changes),
+    });
+  }
+
+  /** Delete a password policy. */
+  async deletePasswordPolicy(cn: string): Promise<void> {
+    await this.call(this.policyPath(cn), { method: 'DELETE' });
+  }
+
+  private policyPath(cn?: string): string {
+    if (!this.policiesPath)
+      throw new Error('The server manages no password policy');
+    return cn === undefined
+      ? this.policiesPath
+      : `${this.policiesPath}/${encodeURIComponent(cn)}`;
   }
 
   /**

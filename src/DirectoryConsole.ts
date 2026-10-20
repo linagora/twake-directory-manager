@@ -27,6 +27,7 @@ import {
   SEARCH_MINIMUM,
 } from './components/EntityList';
 import { OrganizationTree } from './components/OrganizationTree';
+import { PolicyForm, policyTableMarkup } from './components/PasswordPolicies';
 import {
   attributeLabel,
   comparableDn,
@@ -47,17 +48,19 @@ import type {
   Entry,
   EntryList,
   OrganizationNode,
+  PasswordPolicy,
   Scope,
 } from './types';
 
 /** Where the console currently is. */
 interface Route {
-  view: 'dashboard' | 'entity' | 'organizations';
+  view: 'dashboard' | 'entity' | 'organizations' | 'policies';
   entity?: string;
   id?: string;
 }
 
 const LANGUAGE_KEY = 'ldap-rest.console.language';
+const POLICIES_KEY = 'password-policies';
 const REFERENCE_OPEN_KEY = 'ldap-rest.console.referenceOpen';
 
 /**
@@ -491,6 +494,10 @@ export class DirectoryConsole {
       this.route = { view: 'organizations', id: second };
       return;
     }
+    if (first === POLICIES_KEY) {
+      this.route = { view: 'policies' };
+      return;
+    }
     this.route = { view: 'entity', entity: first, id: second };
   }
 
@@ -567,6 +574,16 @@ export class DirectoryConsole {
                   </button>`
               )
               .join('')}
+            ${
+              this.managesPolicies()
+                ? `<button type="button" class="dc-nav-item" data-nav="${POLICIES_KEY}">
+                    <span class="dc-nav-icon" aria-hidden="true">${escapeHtml(
+                      initial(t('nav.policies'))
+                    )}</span>
+                    <span class="dc-nav-label">${escapeHtml(t('nav.policies'))}</span>
+                  </button>`
+                : ''
+            }
             ${
               reference.length
                 ? `<div class="dc-nav-section">
@@ -773,6 +790,7 @@ export class DirectoryConsole {
       const active =
         (this.route.view === 'dashboard' && key === '') ||
         (this.route.view === 'organizations' && key === 'organizations') ||
+        (this.route.view === 'policies' && key === POLICIES_KEY) ||
         (this.route.view === 'entity' && key === this.route.entity);
       button.classList.toggle('dc-active', active);
       if (active) button.setAttribute('aria-current', 'page');
@@ -790,6 +808,10 @@ export class DirectoryConsole {
     if (this.route.view === 'dashboard') return this.renderDashboard(main);
     if (this.route.view === 'organizations')
       return this.renderOrganizations(main, generation);
+    if (this.route.view === 'policies')
+      return this.managesPolicies()
+        ? this.renderPolicies(main, generation)
+        : this.renderDashboard(main);
 
     const entity = this.entity(this.route.entity);
     if (!entity) return this.renderDashboard(main);
@@ -870,6 +892,19 @@ export class DirectoryConsole {
     return `<p class="dc-empty">${escapeHtml(
       this.translator.t('scope.nothing')
     )}</p>`;
+  }
+
+  /**
+   * Whether the caller manages the password policies: the server serves
+   * them, and the caller's scope restricts nothing. A policy applies across
+   * the directory, so it is no local administrator's to set.
+   */
+  private managesPolicies(): boolean {
+    return (
+      this.api.servesPasswordPolicies &&
+      !this.scopeError &&
+      !scopeRestricts(this.scope)
+    );
   }
 
   private canDelete(): boolean {
@@ -1430,6 +1465,114 @@ export class DirectoryConsole {
       false,
       true
     );
+  }
+
+  /** The table of the password policies. */
+  private async renderPolicies(
+    main: HTMLElement,
+    generation: number
+  ): Promise<void> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    main.innerHTML = `
+      <section class="dc-view">
+        <header class="dc-view-header">
+          <h1>${escapeHtml(t('nav.policies'))}</h1>
+          <div class="dc-view-actions">
+            <button type="button" class="dc-button dc-button-primary" data-new>${escapeHtml(
+              t('policy.new')
+            )}</button>
+          </div>
+        </header>
+        <div data-list><p class="dc-empty">${escapeHtml(t('app.loading'))}</p></div>
+      </section>`;
+    main
+      .querySelector('[data-new]')
+      ?.addEventListener('click', () => this.openPolicyForm());
+
+    const holder = main.querySelector<HTMLElement>(
+      '[data-list]'
+    ) as HTMLElement;
+    let policies: PasswordPolicy[];
+    try {
+      policies = await this.api.passwordPolicies();
+    } catch (err) {
+      if (!this.current(generation)) return;
+      const failure = readFailure(err, this.translator);
+      holder.innerHTML = `<p class="dc-empty${
+        failure.refused ? '' : ' dc-error-block'
+      }">${escapeHtml(failure.message)}</p>`;
+      return;
+    }
+    if (!this.current(generation)) return;
+    holder.innerHTML = policyTableMarkup(this.translator, policies);
+    for (const row of Array.from(
+      holder.querySelectorAll<HTMLElement>('[data-policy]')
+    )) {
+      const open = (): void => {
+        const policy = policies.find(item => item.cn === row.dataset.policy);
+        if (policy) this.openPolicyForm(policy);
+      };
+      row.addEventListener('click', open);
+      row.addEventListener('keydown', event => {
+        if (event.key === 'Enter') open();
+      });
+    }
+  }
+
+  /** Create a password policy, or edit one. */
+  private openPolicyForm(policy?: PasswordPolicy): void {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    this.openPanel(
+      policy
+        ? t('policy.title.edit', { name: policy.cn })
+        : t('policy.title.new'),
+      body =>
+        new PolicyForm({
+          translator: this.translator,
+          policy,
+          canDelete: this.canDelete(),
+          onSave: async (cn, values): Promise<void> => {
+            try {
+              if (policy) await this.api.updatePasswordPolicy(cn, values);
+              else await this.api.createPasswordPolicy(cn, values);
+            } catch (err) {
+              this.toast((err as Error).message, true);
+              return;
+            }
+            this.closePanel();
+            this.toast(t(policy ? 'policy.saved' : 'policy.created'));
+            await this.renderMain();
+          },
+          onDelete: (): void =>
+            void this.deletePolicy(policy as PasswordPolicy),
+          onCancel: (): void => this.closePanel(),
+        }).render(body),
+      false,
+      true
+    );
+  }
+
+  private async deletePolicy(policy: PasswordPolicy): Promise<void> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    if (!window.confirm(t('policy.deleteConfirm', { name: policy.cn }))) return;
+    try {
+      await this.api.deletePasswordPolicy(policy.cn);
+    } catch (err) {
+      // The server's refusal names the DN, in English: say it in words.
+      this.toast(
+        (err as { status?: number }).status === 409
+          ? t('policy.inUse', { name: policy.cn })
+          : (err as Error).message,
+        true
+      );
+      return;
+    }
+    this.closePanel();
+    this.toast(t('policy.deleted'));
+    await this.renderMain();
   }
 
   /** Create or edit an entry of a flat or group entity. */

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- Global administrators edit the password policies: expiry, quality, the
+  check module's configuration, lockout. Needs ldap-rest 0.21.0, and
+  `DM_PPOLICY_DEFAULT_DN` with several policies (see the README)
+
 ## v0.6.3 (2026-10-14)
 
 Built on ldap-rest 0.20.1.

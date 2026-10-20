@@ -26,4 +26,5 @@ default, behind OpenID Connect authentication (single sign-on and sign-out).
    transit
    import
    reference-data
+   password-policies
    troubleshooting
