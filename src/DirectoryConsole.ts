@@ -302,6 +302,33 @@ export function claimRoots(scope: Scope): OrganizationNode[] {
 }
 
 /**
+ * The branches a new organization can go under: the organizations the caller
+ * writes, each standing for its subtree. The server judges a creation on the
+ * parent it is given, so these are the parents it would accept.
+ *
+ * The transit branch is left out: every administrator writes it to hand
+ * entries over, which makes it no organization of theirs to grow. One a
+ * written branch above it holds is still covered by that branch.
+ *
+ * @param scope what `GET /v1/authz/scope` answered
+ * @param top the root of the organization tree
+ * @returns the branches, as the scope names them
+ */
+export function organizationParents(
+  scope: Scope,
+  top: string
+): Scope['branches'] {
+  const transit = scope.transit;
+  return scope.branches.filter(
+    branch =>
+      branch.write &&
+      !!top &&
+      withinDn(branch.dn, top) &&
+      !(transit && withinDn(branch.dn, transit))
+  );
+}
+
+/**
  * How the list of an entity fetches its entries: a search once the operator
  * typed enough of one, the whole branch otherwise.
  *
@@ -845,7 +872,39 @@ export class DirectoryConsole {
     // The server enumerates every entity it serves, so an entity it did not
     // name is one it does not know: its add hook is what would answer, and it
     // would answer 403.
-    return declared ? declared.create : false;
+    if (!declared) return false;
+    return declared.create || this.creationParents(entity).length > 0;
+  }
+
+  /**
+   * Where a new organization goes when the caller may not create one at the
+   * root of the tree.
+   *
+   * `organizations.create` answers for a creation without a parent, which
+   * lands at the root: a global administrator appointed one level below it
+   * read "Creation not allowed here", though the server accepts the
+   * organization under any branch they write. Those branches are offered
+   * instead, by the name the banner gives them.
+   *
+   * @param entity the entity about to be created
+   * @returns the parents to offer, sorted; none when the root is allowed,
+   *   when the scope restricts nothing, or for any other entity
+   */
+  private creationParents(
+    entity: EntityDescriptor
+  ): { dn: string; label: string }[] {
+    if (entity.kind !== 'organization' || !scopeRestricts(this.scope))
+      return [];
+    const declared = this.scope.entities.find(
+      item => item.name === entity.pluralName
+    );
+    if (!declared || declared.create) return [];
+    return organizationParents(this.scope, entity.base)
+      .map(branch => ({
+        dn: branch.dn,
+        label: branch.path || branch.name || branch.dn,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }
 
   /** Whether the caller may write anywhere at all. */
@@ -1186,6 +1245,16 @@ export class DirectoryConsole {
         </div>
       </section>`;
 
+    // Every written branch counts here, not only the organizations among
+    // them: a branch written above the root of the tree, as an administrator
+    // of the whole directory has, covers every node. The transit branch is
+    // still no organization of theirs to grow.
+    const transit = this.scope?.transit;
+    const writable = scopeRestricts(this.scope)
+      ? this.scope.branches.filter(
+          branch => branch.write && !(transit && withinDn(branch.dn, transit))
+        )
+      : undefined;
     this.tree = new OrganizationTree(
       {
         translator: this.translator,
@@ -1199,17 +1268,22 @@ export class DirectoryConsole {
           void this.showOrganization(node);
         },
         // A "+" on a node asks a different question from the card on the
-        // overview: the card creates at the top of the tree, which is what the
-        // scope's `organizations.create` answers for, while the "+" creates
-        // under the node it sits on. A local administrator writes in their own
-        // branch and not at the root, and the tree they are shown *is* their
-        // branch, so the offer holds as soon as they may write somewhere.
+        // overview: the card creates where the scope's `organizations.create`
+        // or the caller's written branches allow, while the "+" creates under
+        // the node it sits on. The server judges that on the node, so the "+"
+        // shows only where the caller writes: a tree drawn from the root
+        // offered it on the root to an administrator of a branch below it,
+        // and creating there was refused.
         onCreateChild:
           entity && this.canWrite()
             ? (node: OrganizationNode): void => {
                 void this.openOrganizationForm(entity, undefined, node.dn);
               }
             : undefined,
+        canCreateChild: writable
+          ? (node: OrganizationNode): boolean =>
+              writable.some(branch => withinDn(node.dn, branch.dn))
+          : undefined,
       },
       this.tree
     );
@@ -1513,6 +1587,10 @@ export class DirectoryConsole {
   /**
    * Organizations live in the tree, so their form writes through the
    * organization endpoints rather than the flat ones.
+   *
+   * A new one given no parent goes where the caller may create it: at the
+   * root when the scope allows it there, otherwise under their one written
+   * branch, or under the one they pick when they write several.
    */
   private async openOrganizationForm(
     entity: EntityDescriptor,
@@ -1521,6 +1599,13 @@ export class DirectoryConsole {
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
+    const parents = entry || parentDn ? [] : this.creationParents(entity);
+    if (parents.length === 1) parentDn = parents[0].dn;
+    let picker: HTMLSelectElement | null = null;
+    const parent = (): string | undefined =>
+      parents.length > 1
+        ? (parents.find(item => item.dn === picker?.value) ?? parents[0]).dn
+        : parentDn;
     const form = new EntityForm({
       entity,
       entry,
@@ -1544,7 +1629,7 @@ export class DirectoryConsole {
         values: Record<string, string | string[]>,
         cleared: string[]
       ): Promise<void> =>
-        this.submitOrganization(entity, values, cleared, entry, parentDn),
+        this.submitOrganization(entity, values, cleared, entry, parent()),
     });
 
     this.openPanel(
@@ -1552,7 +1637,33 @@ export class DirectoryConsole {
         ? `${t('app.edit')} — ${String(entryValue(entry, entity.mainAttribute) ?? '')}`
         : t('dashboard.create', { entity: this.singular(entity) }),
       (body: HTMLElement): void => {
-        void form.render(body);
+        if (parents.length < 2) {
+          void form.render(body);
+          return;
+        }
+        body.innerHTML = `
+          <div class="dc-field">
+            <label for="dc-organization-parent">${escapeHtml(t('tree.parent'))}</label>
+            <select id="dc-organization-parent" class="dc-input">
+              ${parents
+                .map(
+                  item =>
+                    `<option value="${escapeHtml(item.dn)}">${escapeHtml(
+                      item.label
+                    )}</option>`
+                )
+                .join('')}
+            </select>
+          </div>
+          <div data-organization-form></div>`;
+        picker = body.querySelector<HTMLSelectElement>(
+          '#dc-organization-parent'
+        );
+        void form.render(
+          body.querySelector<HTMLElement>(
+            '[data-organization-form]'
+          ) as HTMLElement
+        );
       },
       !form.wantsPanel
     );

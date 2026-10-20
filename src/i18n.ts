@@ -185,6 +185,7 @@ const en: Catalogue = {
   'tree.filter': 'Filter',
   'tree.empty': 'Select an organization',
   'tree.addChild': 'New organization here',
+  'tree.parent': 'Parent organization',
 
   'status.title': 'Account state',
   'status.change': 'Change state',
@@ -411,6 +412,7 @@ const fr: Catalogue = {
   'tree.filter': 'Filtrer',
   'tree.empty': 'Sélectionnez une organisation',
   'tree.addChild': 'Nouvelle organisation ici',
+  'tree.parent': 'Organisation parente',
 
   'status.title': 'État du compte',
   'status.change': 'Changer l’état',
@@ -618,6 +620,7 @@ const mn: Catalogue = {
   'tree.filter': 'Шүүх',
   'tree.empty': 'Байгууллага сонгоно уу',
   'tree.addChild': 'Энд шинэ байгууллага',
+  'tree.parent': 'Дээд байгууллага',
 
   'status.title': 'Бүртгэлийн төлөв',
   'status.change': 'Төлөв өөрчлөх',

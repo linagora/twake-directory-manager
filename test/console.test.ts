@@ -863,6 +863,256 @@ describe('Directory console', () => {
       expect(selected(tree())).to.equal(engineering);
       expect(read).to.deep.equal([engineering]);
     });
+
+    /** The nodes drawn with a "+". */
+    const adds = (html: string): string[] =>
+      [...html.matchAll(/data-add="([^"]*)"/g)].map(match => match[1]);
+
+    it('should offer a "+" only where a restricted administrator writes', async () => {
+      // The tree is drawn from the root, and its "+" there ended in a 403 for
+      // an administrator of a branch below it.
+      const { app, tree, restore } = setup();
+      (app as unknown as { scope: Scope }).scope = {
+        user: 'alice',
+        unrestricted: false,
+        described: true,
+        branches: [
+          { dn: top, name: 'organization', read: true },
+          {
+            dn: 'ou=engineering, OU=Organization,dc=example,dc=com',
+            name: 'Engineering',
+            read: true,
+            write: true,
+          },
+        ],
+        entities: [{ name: 'organizations', base: top, create: false }],
+      };
+      try {
+        await app.followHash();
+        expect(adds(tree())).to.deep.equal([engineering]);
+        await app.tree.toggle(engineering);
+        expect(adds(tree())).to.deep.equal([engineering, backend]);
+      } finally {
+        restore();
+      }
+    });
+
+    it('should offer a "+" on every node when the scope restricts nothing', async () => {
+      const { app, tree, restore } = setup();
+      (app as unknown as { scope: Scope }).scope = {
+        user: 'admin',
+        unrestricted: true,
+        branches: [],
+        entities: [],
+      };
+      try {
+        await app.followHash();
+        expect(adds(tree())).to.deep.equal([top, sales, engineering]);
+      } finally {
+        restore();
+      }
+    });
+
+    it('should offer a "+" on every node to a branch written above the root', async () => {
+      // An administrator of the whole directory writes no organization as
+      // such: the "+" disappeared from the tree altogether.
+      const { app, tree, restore } = setup();
+      (app as unknown as { scope: Scope }).scope = {
+        user: 'admin',
+        unrestricted: false,
+        described: true,
+        branches: [{ dn: 'dc=example,dc=com', read: true, write: true }],
+        entities: [{ name: 'organizations', base: top, create: true }],
+      };
+      try {
+        await app.followHash();
+        expect(adds(tree())).to.deep.equal([top, sales, engineering]);
+      } finally {
+        restore();
+      }
+    });
+  });
+
+  describe('creating an organization from the overview', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const government = `ou=Government of Mongolia,${top}`;
+    const ministry = `ou=Ministry of Health,${top}`;
+    const transit = `ou=Transit,${top}`;
+    const organizations: EntityDescriptor = {
+      key: 'organizations',
+      pluralName: 'organizations',
+      singularName: 'organization',
+      mainAttribute: 'ou',
+      base: top,
+      schema: {
+        attributes: {
+          ou: { type: 'string', role: 'identifier' },
+          description: { type: 'string' },
+        },
+      },
+      endpoint: '/api/v1/ldap/organizations',
+      kind: 'organization',
+    };
+    const scope = (over: Partial<Scope>): Scope => ({
+      user: 'alice',
+      unrestricted: false,
+      described: true,
+      branches: [],
+      entities: [{ name: 'organizations', base: top, create: false }],
+      transit,
+      ...over,
+    });
+    const writes = (dn: string, path?: string): Scope['branches'][number] => ({
+      dn,
+      name: rdnValue(dn),
+      path,
+      read: true,
+      write: true,
+    });
+
+    /**
+     * A console on the overview, its panel just real enough to hold the
+     * organization form, and its server recording the creations.
+     */
+    const setup = (granted: Scope) => {
+      const main = { innerHTML: '', querySelectorAll: () => [] };
+      let submit: ((event: unknown) => void) | undefined;
+      const form = {
+        addEventListener: (
+          type: string,
+          callback: (event: unknown) => void
+        ) => {
+          if (type === 'submit') submit = callback;
+        },
+      };
+      const holder = {
+        innerHTML: '',
+        querySelector: (selector: string) =>
+          selector === 'form' ? form : null,
+        querySelectorAll: () => [],
+      };
+      const picker = { value: '' };
+      const body = {
+        innerHTML: '',
+        querySelector: (selector: string) =>
+          selector === '#dc-organization-parent'
+            ? picker
+            : selector === '[data-organization-form]'
+              ? holder
+              : selector === 'form'
+                ? form
+                : null,
+        querySelectorAll: () => [],
+      };
+      const app = consoleIn({
+        '[data-main]': main,
+        '[data-panel]': {
+          hidden: true,
+          classList: { toggle: () => undefined },
+        },
+        '[data-panel-title]': { textContent: '' },
+        '[data-panel-body]': body,
+        '[data-toast]': toastElement(),
+      });
+      Object.assign(app, {
+        entities: [organizations],
+        scope: granted,
+        renderMain: async () => undefined,
+      });
+      const created: (string | undefined)[] = [];
+      Object.assign((app as unknown as { api: object }).api, {
+        createOrganization: async (_values: unknown, parentDn?: string) => {
+          created.push(parentDn);
+        },
+      });
+      const views = app as unknown as {
+        renderDashboard(main: unknown): void;
+        openForm(entity: EntityDescriptor): Promise<void>;
+      };
+      return {
+        dashboard: (): string => {
+          views.renderDashboard(main);
+          return main.innerHTML;
+        },
+        open: () => views.openForm(organizations),
+        submit: async (): Promise<void> => {
+          submit?.({ preventDefault: () => undefined });
+          await new Promise(resolve => setImmediate(resolve));
+        },
+        body,
+        picker,
+        created,
+      };
+    };
+
+    it('should create under the one branch a restricted administrator writes', async () => {
+      // A global administrator appointed below the root read "Creation not
+      // allowed here", though the server takes the organization under their
+      // branch.
+      const { dashboard, open, submit, body, created } = setup(
+        scope({ branches: [writes(government), writes(transit)] })
+      );
+      expect(dashboard())
+        .to.include('data-new="organizations"')
+        .and.not.include('Creation not allowed here');
+      await open();
+      expect(body.innerHTML).to.not.include('dc-organization-parent');
+      await submit();
+      expect(created).to.deep.equal([government]);
+    });
+
+    it('should let an administrator of several branches pick the parent', async () => {
+      const { dashboard, open, submit, body, picker, created } = setup(
+        scope({
+          branches: [
+            writes(ministry, 'Ministry of Health'),
+            writes(government, 'Government of Mongolia'),
+            writes(transit),
+          ],
+        })
+      );
+      expect(dashboard()).to.include('data-new="organizations"');
+      await open();
+      // Sorted by name, the transit branch left out.
+      const options = [...body.innerHTML.matchAll(/<option value="([^"]*)"/g)];
+      expect(options.map(match => match[1])).to.deep.equal([
+        government,
+        ministry,
+      ]);
+      expect(body.innerHTML).to.include('Parent organization');
+      picker.value = ministry;
+      await submit();
+      expect(created).to.deep.equal([ministry]);
+    });
+
+    it('should create at the root, without a picker, where the scope allows it', async () => {
+      const { dashboard, open, submit, body, created } = setup(
+        scope({
+          branches: [writes(top), writes(government)],
+          entities: [{ name: 'organizations', base: top, create: true }],
+        })
+      );
+      expect(dashboard()).to.include('data-new="organizations"');
+      await open();
+      expect(body.innerHTML).to.not.include('dc-organization-parent');
+      await submit();
+      expect(created).to.deep.equal([undefined]);
+    });
+
+    it('should still refuse a creation to an administrator writing no organization', () => {
+      const { dashboard } = setup(
+        scope({
+          branches: [
+            { dn: government, name: 'Government of Mongolia', read: true },
+            writes(transit),
+            writes('ou=users,dc=example,dc=com'),
+          ],
+        })
+      );
+      expect(dashboard())
+        .to.include('Creation not allowed here')
+        .and.not.include('data-new="organizations"');
+    });
   });
 
   describe('pointers named by the entry they land on', () => {

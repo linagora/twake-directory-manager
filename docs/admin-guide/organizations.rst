@@ -72,15 +72,18 @@ Creating an organization
 To create a sub-organization:
 
 #. In the tree, hover the parent organization and click its :guilabel:`+`
-   button (:guilabel:`New organization here`).
+   button (:guilabel:`New organization here`). The button shows only on the
+   organizations one administers and those under them.
 #. Fill in the form; fields marked with ``*`` are required.
 #. Click :guilabel:`Create`.
 
 The new organization appears in the tree under its parent.
 
 The :guilabel:`New organization` button of the overview creates an
-organization at the first level of the tree: it is meant for global
-administrators.
+organization at the first level of the tree when one administers the root.
+Otherwise it creates it under the organization one administers; an
+administrator of several picks it in :guilabel:`Parent organization`, above
+the form.
 
 Editing an organization
 -----------------------
