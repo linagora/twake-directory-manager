@@ -178,7 +178,8 @@ export class EntityDetail {
     const { entity, entry, translator } = this.options;
     const rows: string[] = [];
     for (const [name, attr] of Object.entries(entity.schema.attributes)) {
-      if (name === 'objectClass') continue;
+      // The same on every entry of the entity: it says nothing about this one
+      if (name === 'objectClass' || attr.fixed) continue;
       // A write-only attribute has nothing to show: the API never returns it.
       if (attr.neverReturn) continue;
       // The related-entries section below shows this one in full.

@@ -23,6 +23,7 @@ default, behind OpenID Connect authentication (single sign-on and sign-out).
    organizations
    users
    groups
+   team-mailboxes
    transit
    import
    reference-data
