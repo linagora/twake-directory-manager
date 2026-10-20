@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- A card no longer shows what every entry of its entity holds, such as the
+  fixed type of a team mailbox in their own tab (see the README)
+
 ## v0.7.1 (2026-10-20)
 
 Built on ldap-rest 0.21.1.

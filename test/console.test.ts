@@ -5549,6 +5549,42 @@ describe('Directory console', () => {
       );
     });
 
+    it('should leave off the card a value every entry of the entity holds', () => {
+      const teamMailboxes: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...users.schema.attributes,
+            twakeMailboxType: {
+              type: 'string',
+              fixed: true,
+              default:
+                'cn=teamMailbox,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com',
+              label: { en: 'Mailbox type' },
+            },
+          },
+        },
+      };
+      const container = stubContainer();
+      new EntityDetail({
+        entity: teamMailboxes,
+        entry: {
+          uid: 'support',
+          twakeMailboxType:
+            'cn=teamMailbox,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com',
+        },
+        translator: new Translator('en'),
+        canWrite: true,
+        canDelete: true,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        onStatus: () => undefined,
+        onResetPassword: () => undefined,
+      }).render(container);
+      expect(container.innerHTML).not.to.include('Mailbox type');
+      expect(container.innerHTML).to.include('support');
+    });
+
     it('should name attributes in the reader’s language', () => {
       const container = stubContainer();
       new EntityDetail({

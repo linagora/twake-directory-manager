@@ -80,6 +80,16 @@ to `DM_PPOLICY_BASE`: only the administrators of the top organization, or of
 administrator reads them and nobody changes them
 ([global branches](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/auth/authz-linid1.md#global-branches)).
 
+### Team mailboxes
+
+Twake Mail expands every group of its mailing list branch: a team mailbox
+created among the lists would deliver twice. ldap-rest's
+`twake/teamMailboxes.json` schema keeps them in a branch of their own,
+`ou=teammailboxes,ou=groups`, with a sidebar entry of their own: append it to
+`DM_LDAP_FLAT_SCHEMA`, and set `DM_JAMES_MAILING_LIST_BRANCHES` to the lists
+branch so that ldap-rest refuses a team mailbox there. See ldap-rest's
+[team mailboxes](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/integrations/james-mailboxes.md#team-mailboxes-in-a-branch-of-their-own).
+
 ### Authentication
 
 The default is OpenID Connect, with any provider — LemonLDAP::NG is one. The
