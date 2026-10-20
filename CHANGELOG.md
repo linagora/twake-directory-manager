@@ -1,11 +1,19 @@
 # Changelog
 
-## Unreleased
+## v0.7.2 (2026-10-20)
+
+Built on ldap-rest 0.21.2.
+
+### Features
+
+- Team mailboxes in a tab of their own, kept out of the lists Twake Mail
+  expands, with ldap-rest's `twake/teamMailboxes.json` (see the README,
+  linagora/ldap-rest#358)
 
 ### Bug Fixes
 
-- A card no longer shows what every entry of its entity holds, such as the
-  fixed type of a team mailbox in their own tab (see the README)
+- A card no longer shows a value every entry of its entity holds, such as a
+  team mailbox's fixed type (#89)
 
 ## v0.7.1 (2026-10-20)
 
