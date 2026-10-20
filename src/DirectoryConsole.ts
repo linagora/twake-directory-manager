@@ -1245,10 +1245,16 @@ export class DirectoryConsole {
         </div>
       </section>`;
 
-    const writable =
-      entity && scopeRestricts(this.scope)
-        ? organizationParents(this.scope, entity.base)
-        : undefined;
+    // Every written branch counts here, not only the organizations among
+    // them: a branch written above the root of the tree, as an administrator
+    // of the whole directory has, covers every node. The transit branch is
+    // still no organization of theirs to grow.
+    const transit = this.scope?.transit;
+    const writable = scopeRestricts(this.scope)
+      ? this.scope.branches.filter(
+          branch => branch.write && !(transit && withinDn(branch.dn, transit))
+        )
+      : undefined;
     this.tree = new OrganizationTree(
       {
         translator: this.translator,

@@ -912,6 +912,25 @@ describe('Directory console', () => {
         restore();
       }
     });
+
+    it('should offer a "+" on every node to a branch written above the root', async () => {
+      // An administrator of the whole directory writes no organization as
+      // such: the "+" disappeared from the tree altogether.
+      const { app, tree, restore } = setup();
+      (app as unknown as { scope: Scope }).scope = {
+        user: 'admin',
+        unrestricted: false,
+        described: true,
+        branches: [{ dn: 'dc=example,dc=com', read: true, write: true }],
+        entities: [{ name: 'organizations', base: top, create: true }],
+      };
+      try {
+        await app.followHash();
+        expect(adds(tree())).to.deep.equal([top, sales, engineering]);
+      } finally {
+        restore();
+      }
+    });
   });
 
   describe('creating an organization from the overview', () => {
