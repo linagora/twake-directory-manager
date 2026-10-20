@@ -1687,6 +1687,62 @@ select.dc-input {
 
 /* --------------------------------------------------------------- responsive */
 
+.dc-policy-table td:nth-child(2) {
+  font-weight: inherit;
+}
+
+.dc-policy-table td:first-child {
+  font-weight: 550;
+}
+
+.dc-policy-table tbody tr:focus-visible {
+  outline: none;
+  box-shadow: inset var(--dc-focus);
+}
+
+.dc-policy-attribute {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--dc-muted);
+}
+
+.dc-policy-duration {
+  display: flex;
+  gap: 8px;
+}
+
+.dc-policy-duration .dc-input:first-child {
+  flex: 1 1 auto;
+}
+
+.dc-policy-duration select.dc-input {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+textarea.dc-policy-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.dc-policy-fixed {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.dc-policy-fixed dt {
+  color: var(--dc-muted);
+}
+
+.dc-policy-fixed dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
   .dc-app {
     grid-template-columns: minmax(0, 1fr);

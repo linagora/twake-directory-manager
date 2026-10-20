@@ -6,7 +6,7 @@
 #
 # The console needs an ldap-rest recent enough to serve the enterprise
 # plugins (enterpriseRules, accountLifecycle, authzScope).
-ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.20.3
+ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.21.0
 
 # The console builds to JavaScript and CSS, which are the same whatever the
 # target architecture, so this stage runs natively. Left to follow the target
@@ -51,7 +51,7 @@ COPY docker/consoleRoot.mjs docker/consoleSettings.mjs /app/plugins/
 # Hidden by default, because nothing in the stack acts on them: the "other
 # mailboxes", which no plugin reads, and the delivery mode, which no plugin
 # applies — and its nomenclature with it.
-ENV DM_CONSOLE_PLUGINS=core/static,/app/plugins/consoleRoot.mjs,/app/plugins/consoleSettings.mjs,core/configApi,core/ldap/groups,core/ldap/organizations,core/ldap/enterpriseRules,core/ldap/accountLifecycle,core/auth/authzScope \
+ENV DM_CONSOLE_PLUGINS=core/static,/app/plugins/consoleRoot.mjs,/app/plugins/consoleSettings.mjs,core/configApi,core/ldap/groups,core/ldap/organizations,core/ldap/enterpriseRules,core/ldap/accountLifecycle,core/ldap/passwordPolicy,core/auth/authzScope \
  DM_AUTH_PLUGINS=core/auth/openidconnect,core/auth/authzLinid1 \
  DM_EXTRA_PLUGINS= \
  DM_CONSOLE_HIDDEN_ATTRIBUTES=twakeOtherMailbox,twakeDeliveryMode \

@@ -45,11 +45,11 @@ variable too — see the
 
 `DM_PLUGINS` is composed when the container starts, from three parts:
 
-| Variable             | Default                                                                                                                                                                                    | What it is                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `DM_AUTH_PLUGINS`    | `core/auth/openidconnect,core/auth/authzLinid1`                                                                                                                                            | Who the caller is, and which branches they administer                       |
-| `DM_CONSOLE_PLUGINS` | `core/static`, `/app/plugins/{consoleRoot,consoleSettings}.mjs`, `core/configApi`, `core/ldap/{flatGeneric,groups,organizations,enterpriseRules,accountLifecycle}`, `core/auth/authzScope` | What the console reads and writes                                           |
-| `DM_EXTRA_PLUGINS`   | _(empty)_                                                                                                                                                                                  | Anything else: `core/twake/james`, `core/ldap/trash`, `core/auth/crowdsec`… |
+| Variable             | Default                                                                                                                                                                                                   | What it is                                                                  |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `DM_AUTH_PLUGINS`    | `core/auth/openidconnect,core/auth/authzLinid1`                                                                                                                                                           | Who the caller is, and which branches they administer                       |
+| `DM_CONSOLE_PLUGINS` | `core/static`, `/app/plugins/{consoleRoot,consoleSettings}.mjs`, `core/configApi`, `core/ldap/{flatGeneric,groups,organizations,enterpriseRules,accountLifecycle,passwordPolicy}`, `core/auth/authzScope` | What the console reads and writes                                           |
+| `DM_EXTRA_PLUGINS`   | _(empty)_                                                                                                                                                                                                 | Anything else: `core/twake/james`, `core/ldap/trash`, `core/auth/crowdsec`… |
 
 `DM_PLUGINS_OVERRIDE` replaces the whole list, for a deployment that knows
 exactly what it wants.
@@ -63,6 +63,15 @@ is hidden.
 without an authentication plugin serves every request, and this interface
 creates accounts, resets passwords and deletes organizations. Set
 `DM_ALLOW_ANONYMOUS=true` for a test instance that nobody else can reach.
+
+### Password policies
+
+The console edits the OpenLDAP password policies kept under
+`DM_PPOLICY_BASE` (the top of the directory by default). With several
+policies, set `DM_PPOLICY_DEFAULT_DN` to the one slapd applies by default
+(`olcPPolicyDefault`): ldap-rest cannot read it, and without it no policy is
+the default one. See ldap-rest's
+[password policy plugin](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/ldap/password-policy.md).
 
 ### Authentication
 

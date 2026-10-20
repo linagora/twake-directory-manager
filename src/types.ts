@@ -193,3 +193,16 @@ export interface OrganizationNode {
   children?: OrganizationNode[];
   loaded?: boolean;
 }
+
+/**
+ * An OpenLDAP password policy, as ldap-rest's `core/ldap/passwordPolicy`
+ * serves it: the attributes the entry holds, durations in seconds, `TRUE` /
+ * `FALSE` as booleans. An attribute the entry lacks is absent.
+ */
+export interface PasswordPolicy {
+  dn: string;
+  cn: string;
+  /** The policy accounts without `pwdPolicySubentry` get */
+  isDefault: boolean;
+  [attribute: string]: unknown;
+}
