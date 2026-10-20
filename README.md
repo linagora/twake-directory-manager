@@ -85,9 +85,11 @@ administrator reads them and nobody changes them
 Twake Mail expands every group of its mailing list branch: a team mailbox
 created among the lists would deliver twice. ldap-rest's
 `twake/teamMailboxes.json` schema keeps them in a branch of their own,
-`ou=teammailboxes,ou=groups`, with a sidebar entry of their own: append it to
-`DM_LDAP_FLAT_SCHEMA`, and set `DM_JAMES_MAILING_LIST_BRANCHES` to the lists
-branch so that ldap-rest refuses a team mailbox there. See ldap-rest's
+`ou=teammailboxes` under `DM_LDAP_BASE`, with a sidebar entry of their own:
+create that branch, append the schema to `DM_LDAP_FLAT_SCHEMA`, and set
+`DM_JAMES_MAILING_LIST_BRANCHES` to the lists branch so that ldap-rest
+refuses a team mailbox there. Leave `cn=teamMailbox` out of the mailbox type
+nomenclature: the groups form then does not offer it. See ldap-rest's
 [team mailboxes](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/integrations/james-mailboxes.md#team-mailboxes-in-a-branch-of-their-own).
 
 ### Authentication
