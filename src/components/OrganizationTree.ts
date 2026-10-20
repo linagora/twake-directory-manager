@@ -24,6 +24,12 @@ export interface TreeOptions {
   transit?: string;
   onSelect(node: OrganizationNode): void;
   onCreateChild?(parent: OrganizationNode): void;
+  /**
+   * Whether a node takes a new child, its "+" drawn only then; every node
+   * does when omitted. The server judges a creation on its parent, and a
+   * "+" it would refuse is one the reader should not be offered
+   */
+  canCreateChild?(node: OrganizationNode): boolean;
 }
 
 export class OrganizationTree {
@@ -254,7 +260,8 @@ export class OrganizationTree {
               : ''
           }
           ${
-            this.options.onCreateChild
+            this.options.onCreateChild &&
+            (this.options.canCreateChild?.(node) ?? true)
               ? `<button type="button" class="dc-tree-add" data-add="${escapeHtml(node.dn)}"
                    title="${escapeHtml(this.options.translator.t('tree.addChild'))}">+</button>`
               : ''
