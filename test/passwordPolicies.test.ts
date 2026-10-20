@@ -349,6 +349,32 @@ describe('Password policies', () => {
       expect(await reads(app)).to.equal(true);
     });
 
+    it('should list the policies with the reference data', async () => {
+      const container = {
+        innerHTML: '',
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      };
+      const app = await consoleFor(null);
+      const inner = app as unknown as {
+        container: unknown;
+        policiesReadable: boolean;
+        drawShell(): void;
+      };
+      inner.container = container;
+      inner.policiesReadable = true;
+      inner.drawShell();
+      const section = container.innerHTML.slice(
+        container.innerHTML.indexOf('id="dc-nav-reference"')
+      );
+      expect(section).to.match(
+        /class="dc-nav-item dc-nav-item-reference" data-nav="password-policies"/
+      );
+      expect(
+        container.innerHTML.match(/data-nav="password-policies"/g)
+      ).to.have.length(1);
+    });
+
     it('should not ask a server that manages no policy', async () => {
       const app = new DirectoryConsole({
         containerId: 'console',
