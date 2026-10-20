@@ -414,6 +414,8 @@ export class DirectoryConsole {
    * offers nothing rather than every button.
    */
   private scopeError: string | null = null;
+  /** Whether the server lets the caller read the password policies */
+  private policiesReadable = false;
   /**
    * Which view is the current one. Opening an entry, then another before the
    * first has answered, raced exactly the way the entity list did: whichever
@@ -488,6 +490,7 @@ export class DirectoryConsole {
       this.scope = null;
       this.scopeError = (err as Error).message;
     }
+    this.policiesReadable = await this.readsPolicies();
 
     this.readRoute();
     window.addEventListener('hashchange', () => void this.followHash());
@@ -954,16 +957,24 @@ export class DirectoryConsole {
   }
 
   /**
-   * Whether the caller manages the password policies: the server serves
-   * them, and the caller's scope restricts nothing. A policy applies across
-   * the directory, so it is no local administrator's to set.
+   * Whether the caller manages the password policies. Asked of the server
+   * rather than read from the scope: who holds them is its rule
+   * (`--authz-global-branches`), and the scope names no branch outside the
+   * tree. A refusal hides the page; any other failure shows it, with the
+   * failure on it.
    */
+  private async readsPolicies(): Promise<boolean> {
+    if (!this.api.servesPasswordPolicies) return false;
+    try {
+      await this.api.passwordPolicies();
+      return true;
+    } catch (err) {
+      return (err as { status?: number }).status !== 403;
+    }
+  }
+
   private managesPolicies(): boolean {
-    return (
-      this.api.servesPasswordPolicies &&
-      !this.scopeError &&
-      !scopeRestricts(this.scope)
-    );
+    return this.policiesReadable;
   }
 
   private canDelete(): boolean {

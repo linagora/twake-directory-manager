@@ -73,6 +73,13 @@ policies, set `DM_PPOLICY_DEFAULT_DN` to the one slapd applies by default
 the default one. See ldap-rest's
 [password policy plugin](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/ldap/password-policy.md).
 
+Who manages them is the server's rule, and the console shows the page to
+whoever it lets read them. With `authzLinid1`, set `DM_AUTHZ_GLOBAL_BRANCHES`
+to `DM_PPOLICY_BASE`: only the administrators of the top organization, or of
+`DM_AUTHZ_GLOBAL_ORGANIZATION`, then read and change them. Without it, every
+administrator reads them and nobody changes them
+([global branches](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/auth/authz-linid1.md#global-branches)).
+
 ### Authentication
 
 The default is OpenID Connect, with any provider — LemonLDAP::NG is one. The

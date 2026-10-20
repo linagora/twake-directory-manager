@@ -5,9 +5,12 @@ A password policy sets how long a password lasts, how strong it must be and
 when an account is locked out after failed sign-ins. The directory applies
 them: the console only edits them.
 
-The :guilabel:`Password policies` page of the sidebar shows them to **global
-administrators**. A policy applies across the directory, so local
-administrators do not see the page.
+The :guilabel:`Password policies` page of the sidebar shows them to the
+administrators the server lets manage them: in the usual deployment, those of
+the organization at the top of the tree, or of the one named for this
+(``DM_AUTHZ_GLOBAL_ORGANIZATION``), and of the organizations above it. A
+policy applies across the directory, so other administrators do not see the
+page.
 
 The list
 --------
