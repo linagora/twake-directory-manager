@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- After an upgrade, browsers load the new console without a forced reload:
+  the page names its script and stylesheet with a digest of their content;
+  they kept running the former bundle
+
 ## v0.8.1 (2026-10-21)
 
 Built on ldap-rest 0.22.1.
