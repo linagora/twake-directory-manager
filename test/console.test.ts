@@ -2270,6 +2270,19 @@ describe('Directory console', () => {
       expect(narrowed(null)).to.equal(false);
       expect(narrowed({ ...writing(top), unrestricted: true })).to.equal(false);
     });
+
+    it('should follow the server when it says who links any domain', () => {
+      // A global administrator under a bare top writes no branch covering
+      // it, and was offered no domain at all.
+      const global = writing(`ou=Government of Mongolia,${top}`);
+      expect(narrowed({ ...global, linksAnyDomain: true })).to.equal(false);
+      expect(narrowed({ ...writing(top), linksAnyDomain: false })).to.equal(
+        true
+      );
+      // Absent, from an older server: read from the branches, as before.
+      expect(narrowed(global)).to.equal(true);
+      expect(narrowed(writing(top))).to.equal(false);
+    });
   });
   describe('ConsoleApiClient', () => {
     it('should turn the server configuration into entities', async () => {

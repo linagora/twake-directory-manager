@@ -175,6 +175,13 @@ export interface Scope {
    * `null` when there is none. Absent before ldap-rest 0.11.1
    */
   transit?: string | null;
+  /**
+   * Whether the caller links an organization to any mail domain, not only to
+   * those an organization above it links: the writer of the top organization
+   * and of the global one do. Absent before the ldap-rest that added it,
+   * whose rule the console then reads from the branches
+   */
+  linksAnyDomain?: boolean;
 }
 
 /** Options accepted by the console. */
