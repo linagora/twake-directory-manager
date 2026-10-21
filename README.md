@@ -80,6 +80,23 @@ to `DM_PPOLICY_BASE`: only the administrators of the top organization, or of
 administrator reads them and nobody changes them
 ([global branches](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/auth/authz-linid1.md#global-branches)).
 
+### Mail domains
+
+The mail domains are reference data, outside the organization tree: with
+`authzLinid1`, every administrator reads them and nobody adds or deletes
+one. Set `DM_AUTHZ_GLOBAL_WRITE_BRANCHES` to their branch
+(`ou=domains,ou=nomenclature` under `DM_LDAP_BASE`): the administrators of
+the top organization, or of `DM_AUTHZ_GLOBAL_ORGANIZATION`, then add and
+delete them, and every other administrator still reads them to link an
+organization or complete an address. Unlike `DM_AUTHZ_GLOBAL_BRANCHES`, it
+hides nothing. ldap-rest's James plugin creates each new domain in Twake
+Mail and removes a deleted one, and refuses to delete a domain an
+organization links or an address uses. ldap-rest's API only handles entries
+right under the branch: a domain nested deeper (`dc=example,dc=org,ou=domains,…`)
+shows on the page but can be neither changed nor deleted. See ldap-rest's
+[global branches](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/auth/authz-linid1.md#global-branches)
+and [mail domains](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/integrations/james-mail.md#mail-domains).
+
 ### Team mailboxes
 
 Twake Mail expands every group of its mailing list branch: a team mailbox
