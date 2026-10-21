@@ -1,13 +1,15 @@
 # Changelog
 
-## Unreleased
+## v0.8.1 (2026-10-21)
+
+Built on ldap-rest 0.22.1.
 
 ### Bug Fixes
 
 - The administrators of `DM_AUTHZ_GLOBAL_ORGANIZATION` below the top
   organization are offered every mail domain for an organization, as the
-  server lets them link any; this needs the next ldap-rest, whose scope says
-  who links any domain
+  server lets them link any (linagora/ldap-rest#363); they were offered
+  none (#93)
 
 ## v0.8.0 (2026-10-21)
 
