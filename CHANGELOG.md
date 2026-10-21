@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- The administrators of `DM_AUTHZ_GLOBAL_ORGANIZATION` below the top
+  organization are offered every mail domain for an organization, as the
+  server lets them link any; this needs the next ldap-rest, whose scope says
+  who links any domain
+
 ## v0.8.0 (2026-10-21)
 
 Built on ldap-rest 0.22.0.

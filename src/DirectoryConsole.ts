@@ -932,12 +932,19 @@ export class DirectoryConsole {
    * organization, who hands each organization its domains; a scope that
    * restricts nothing leaves it to the server to say.
    *
+   * The server says so itself in `linksAnyDomain`: the administrators of
+   * `--authz-global-organization`, the functional root right under a bare
+   * top, link any domain too, and read from the branches they were offered
+   * none. Only a server that predates it is read the old way.
+   *
    * @param entity the organizations
    * @returns true when the domains offered are to be narrowed
    */
   private inheritsDomains(entity: EntityDescriptor): boolean {
     if (this.scopeError || !scopeRestricts(this.scope) || !entity.base)
       return false;
+    const any = (this.scope as { linksAnyDomain?: unknown }).linksAnyDomain;
+    if (typeof any === 'boolean') return !any;
     const top = entity.base;
     return !this.scope.branches.some(
       branch => branch.write && withinDn(top, branch.dn)
