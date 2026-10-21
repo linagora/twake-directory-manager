@@ -1,9 +1,15 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 (2026-10-21)
+
+Built on ldap-rest 0.22.0.
 
 ### Features
 
+- Mail domains added and deleted from their page by the administrators the
+  server lets write them, `DM_AUTHZ_GLOBAL_WRITE_BRANCHES` with
+  `authzLinid1`; ldap-rest creates and removes them in Twake Mail (see the
+  README, linagora/ldap-rest#361)
 - An organization's mail domains are picked by typing part of their name;
   below the top organization, only the domains an organization above links
   are offered, the only ones the server accepts
