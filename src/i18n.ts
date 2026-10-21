@@ -113,6 +113,9 @@ const en: Catalogue = {
   'form.otherDomain':
     'A shared mailbox at {domain} only takes accounts of {domain}',
   'form.searching': 'Searching…',
+  'form.filterPointer': 'Type part of a name, or press ↓ to list them all',
+  'form.notLinkedAbove':
+    'Only a domain an organization above this one links can be linked here',
   'form.notSize':
     'Expected a size such as 4 GB, 500 MB or 100 KB, or a number of bytes',
   'form.pastDate': 'Expected a date not earlier than today',
@@ -410,6 +413,10 @@ const fr: Catalogue = {
   'form.otherDomain':
     'Une boîte partagée de {domain} n’accepte que des comptes de {domain}',
   'form.searching': 'Recherche…',
+  'form.filterPointer':
+    'Tapez une partie du nom, ou appuyez sur ↓ pour tout afficher',
+  'form.notLinkedAbove':
+    'Seul un domaine lié par une organisation au-dessus de celle-ci peut être lié ici',
   'form.notSize':
     'Attendu : une taille telle que 4 GB, 500 MB ou 100 KB, ou un nombre d’octets',
   'form.pastDate': 'Attendu : aujourd’hui ou une date ultérieure',
@@ -710,6 +717,10 @@ const mn: Catalogue = {
   'form.otherDomain':
     '{domain} домэйны хамтын шуудангийн хайрцагт зөвхөн {domain} домэйны бүртгэл нэмэх боломжтой',
   'form.searching': 'Хайж байна…',
+  'form.filterPointer':
+    'Нэрийн хэсгийг бичнэ үү, эсвэл бүгдийг харахын тулд ↓ дарна уу',
+  'form.notLinkedAbove':
+    'Энд зөвхөн үүнээс дээд байгууллагын холбосон домэйныг холбох боломжтой',
   'form.notSize':
     '4 GB, 500 MB, 100 KB гэх мэт хэмжээ, эсвэл байтын тоо оруулна уу',
   'form.pastDate': 'Өнөөдөр эсвэл түүнээс хойшх огноо оруулна уу',

@@ -9,7 +9,11 @@
 import { expect } from 'chai';
 import nock from 'nock';
 
-import { ConsoleApiClient, isLarge } from '../src/api/ConsoleApiClient';
+import {
+  ConsoleApiClient,
+  isDomainBranch,
+  isLarge,
+} from '../src/api/ConsoleApiClient';
 import { signInAgain } from '../src/session';
 import {
   DirectoryConsole,
@@ -54,6 +58,7 @@ import type {
   Entry,
   EntryList,
   ExternalMembers,
+  SchemaAttribute,
   Scope,
 } from '../src/types';
 
@@ -2228,6 +2233,44 @@ describe('Directory console', () => {
     });
   });
 
+  describe('the domains an organization may be linked to', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const organizations: EntityDescriptor = {
+      key: 'organizations',
+      pluralName: 'organizations',
+      singularName: 'organization',
+      mainAttribute: 'ou',
+      base: top,
+      schema: { attributes: { ou: { type: 'string', role: 'identifier' } } },
+      endpoint: '/api/v1/ldap/organizations',
+      kind: 'organization',
+    };
+    const writing = (dn: string): Scope => ({
+      user: 'jdoe',
+      unrestricted: false,
+      branches: [{ dn, read: true, write: true }],
+      entities: [],
+    });
+    const narrowed = (scope: Scope | null): boolean => {
+      const app = consoleIn({});
+      Object.assign(app as unknown as object, { scope });
+      return (
+        app as unknown as {
+          inheritsDomains(entity: EntityDescriptor): boolean;
+        }
+      ).inheritsDomains(organizations);
+    };
+
+    it('should be those linked above, unless the caller writes the top', () => {
+      // ldap-rest refuses any other link to an administrator below the top.
+      expect(narrowed(writing(`ou=Sales,${top}`))).to.equal(true);
+      expect(narrowed(writing(top))).to.equal(false);
+      expect(narrowed(writing('dc=example,dc=com'))).to.equal(false);
+      // A scope that restricts nothing leaves it to the server.
+      expect(narrowed(null)).to.equal(false);
+      expect(narrowed({ ...writing(top), unrestricted: true })).to.equal(false);
+    });
+  });
   describe('ConsoleApiClient', () => {
     it('should turn the server configuration into entities', async () => {
       nock(baseUrl)
@@ -3562,6 +3605,146 @@ describe('Directory console', () => {
       expect(
         failed(403, 'Token does not have permission on this branch')
       ).to.equal('You may not see these entries');
+    });
+
+    describe('the mail domains of a form', () => {
+      const top = 'ou=organization,dc=example,dc=com';
+      const sales = `ou=Sales,${top}`;
+      const europe = `ou=Europe,${sales}`;
+      const support = `ou=Support,${top}`;
+      const domainsBase = 'ou=domains,ou=nomenclature,dc=example,dc=com';
+      const domains: EntityDescriptor = {
+        key: 'domains',
+        pluralName: 'domains',
+        singularName: 'domain',
+        mainAttribute: 'dc',
+        base: domainsBase,
+        schema: {
+          attributes: {
+            dc: { type: 'string', required: true, role: 'identifier' },
+            associatedDomain: {
+              type: 'string',
+              required: true,
+              role: ['domainName', 'displayName'],
+            },
+          },
+        },
+        endpoint: '/api/v1/ldap/domains',
+        kind: 'flat',
+      };
+      const organizations: EntityDescriptor = {
+        key: 'organizations',
+        pluralName: 'organizations',
+        singularName: 'organization',
+        mainAttribute: 'ou',
+        base: top,
+        schema: {
+          attributes: {
+            ou: { type: 'string', role: 'identifier' },
+            twakeDomainLink: {
+              type: 'array',
+              role: 'domainLink',
+              items: { type: 'pointer', branch: [domainsBase] },
+            },
+          },
+        },
+        endpoint: '/api/v1/ldap/organizations',
+        kind: 'organization',
+      };
+      const dn = (name: string): string => `dc=${name},${domainsBase}`;
+      const tree = {
+        com: { dn: `dc=com,${domainsBase}`, dc: 'com' },
+        example: {
+          dn: dn('example'),
+          dc: 'example',
+          associatedDomain: 'Example.com',
+        },
+        lists: {
+          dn: dn('lists'),
+          dc: 'lists',
+          associatedDomain: 'lists.example.com',
+        },
+        other: { dn: dn('other'), dc: 'other', associatedDomain: 'other.org' },
+        any: { dn: dn('any'), dc: 'any', associatedDomain: '*' },
+      };
+      const client = (): ConsoleApiClient => {
+        const made = new ConsoleApiClient(baseUrl);
+        Object.assign(made as unknown as object, { topOrganization: top });
+        return made;
+      };
+      const organization = (at: string, links: string[]): nock.Scope =>
+        nock(baseUrl)
+          .get(`/api/v1/ldap/organizations/${encodeURIComponent(at)}`)
+          .reply(200, { dn: at, twakeDomainLink: links });
+
+      it('should know the domains’ branch by the role of their name', () => {
+        const entities = [users, organizations, domains];
+        expect(isDomainBranch(entities, domainsBase)).to.equal(true);
+        expect(isDomainBranch(entities, domainsBase.toUpperCase())).to.equal(
+          true
+        );
+        expect(isDomainBranch(entities, users.base)).to.equal(false);
+        expect(client().mailDomains([users, organizations])).to.equal(
+          undefined
+        );
+      });
+
+      it('should offer what the organization and those above it link, read once', async () => {
+        const lookup = client().mailDomains([organizations, domains])!;
+        nock(baseUrl).get('/api/v1/ldap/domains').reply(200, tree);
+        organization(europe, [dn('lists')]);
+        organization(sales, [dn('example')]);
+        organization(top, []);
+        expect(await lookup.names(europe)).to.deep.equal([
+          'example.com',
+          'lists.example.com',
+        ]);
+        // A sibling department shares the organizations above it: only its
+        // own is read, and the domains are not listed again.
+        organization(`ou=Asia,${sales}`, []);
+        expect(await lookup.names(`ou=Asia,${sales}`)).to.deep.equal([
+          'example.com',
+        ]);
+        expect(await lookup.linked(europe)).to.deep.equal([
+          dn('lists'),
+          dn('example'),
+        ]);
+        expect(nock.isDone()).to.equal(true);
+      });
+
+      it('should offer every domain but "*" where nothing narrows them', async () => {
+        const lookup = client().mailDomains([organizations, domains])!;
+        nock(baseUrl).get('/api/v1/ldap/domains').reply(200, tree);
+        const every = ['example.com', 'lists.example.com', 'other.org'];
+        // Attached to nothing.
+        expect(await lookup.names()).to.deep.equal(every);
+        // Linking nothing, which the server reads as no restriction.
+        organization(support, []);
+        organization(top, []);
+        expect(await lookup.names(support)).to.deep.equal(every);
+        // Linking "*", which allows every domain.
+        organization(sales, [dn('any')]);
+        expect(await lookup.names(sales)).to.deep.equal(every);
+        // An organization above that cannot be read: the server judges.
+        nock(baseUrl)
+          .get(
+            `/api/v1/ldap/organizations/${encodeURIComponent(`ou=Lost,${top}`)}`
+          )
+          .reply(403, { error: 'Forbidden' });
+        expect(await lookup.names(`ou=Lost,${top}`)).to.deep.equal(every);
+      });
+
+      it('should refuse to name any when the domains cannot be read', async () => {
+        const lookup = client().mailDomains([organizations, domains])!;
+        nock(baseUrl)
+          .get('/api/v1/ldap/domains')
+          .reply(403, { error: 'Forbidden' });
+        let failed: unknown;
+        await lookup.names().catch((err: unknown) => {
+          failed = err;
+        });
+        expect((failed as { status?: number }).status).to.equal(403);
+      });
     });
   });
 
@@ -5509,6 +5692,399 @@ describe('Directory console', () => {
         '20240930000000Z'
       );
       expect(EntityForm.toDirectoryDate('')).to.equal('');
+    });
+
+    describe('mail domains', () => {
+      const domainsBase = 'ou=domains,ou=nomenclature,dc=example,dc=com';
+      const example = `dc=example,${domainsBase}`;
+      const lists = `dc=lists,${domainsBase}`;
+      const other = `dc=other,${domainsBase}`;
+      const listed = [
+        { dn: example, label: 'example.com' },
+        { dn: lists, label: 'lists.example.com' },
+        { dn: other, label: 'other.org' },
+      ];
+      const organizations: EntityDescriptor = {
+        key: 'organizations',
+        pluralName: 'organizations',
+        singularName: 'organization',
+        mainAttribute: 'ou',
+        base: 'ou=organization,dc=example,dc=com',
+        schema: {
+          attributes: {
+            ou: { type: 'string', role: 'identifier', required: true },
+            twakeDomainLink: {
+              type: 'array',
+              role: 'domainLink',
+              items: { type: 'pointer', branch: [domainsBase] },
+            },
+          },
+        },
+        endpoint: '/api/v1/ldap/organizations',
+        kind: 'organization',
+      };
+      const enter = { key: 'Enter', preventDefault: () => undefined };
+      const down = { key: 'ArrowDown', preventDefault: () => undefined };
+      const tick = (): Promise<void> =>
+        new Promise(resolve => setTimeout(resolve, 0));
+
+      describe('chosen by typing', () => {
+        /**
+         * An organization form whose domain field is a select inside its
+         * field, the field holding what the picker it turns into looks up.
+         */
+        const domainForm = async (
+          pointerOptions: () => Promise<{ dn: string; label: string }[]>,
+          linkableDomains?: () => Promise<string[] | undefined>
+        ): Promise<{
+          form: EntityForm;
+          field: ReturnType<typeof recorder>;
+          input: ReturnType<typeof recorder>;
+          results: ReturnType<typeof recorder>;
+          select: HTMLSelectElement;
+          note: { textContent: string; hidden: boolean; id: string };
+          asked: () => number;
+        }> => {
+          const input = recorder();
+          const results = recorder();
+          const note = {
+            textContent: '',
+            hidden: true,
+            id: 'dc-note-twakeDomainLink',
+          };
+          const field = recorder(
+            {
+              '[data-picker-input]': input,
+              '.dc-picker-results': results,
+              '.dc-token-list': recorder(),
+              '[data-pointer-note]': note,
+            },
+            { field: 'twakeDomainLink' }
+          );
+          const select = stubSelect(domainsBase, '') as unknown as Record<
+            string,
+            unknown
+          >;
+          select.dataset = { pointer: domainsBase, tokenInput: '' };
+          select.closest = (): unknown => field;
+          const container = stubContainer() as unknown as {
+            querySelector(selector: string): unknown;
+            querySelectorAll(): unknown[];
+          };
+          container.querySelector = selector =>
+            selector === '[data-field="twakeDomainLink"]' ? field : null;
+          container.querySelectorAll = (): unknown[] => [select];
+          let calls = 0;
+          const form = new EntityForm({
+            entity: organizations,
+            entry: {
+              dn: `ou=Sales,${organizations.base}`,
+              ou: 'Sales',
+              twakeDomainLink: [example],
+            },
+            translator: new Translator('en'),
+            typeAhead: branch => branch === domainsBase,
+            linkableDomains,
+            pointerOptions: () => {
+              calls++;
+              return pointerOptions();
+            },
+            onSubmit: () => Promise.resolve(),
+            onCancel: () => undefined,
+          });
+          await form.render(container as unknown as HTMLElement);
+          return {
+            form,
+            field,
+            input,
+            results,
+            select: select as unknown as HTMLSelectElement,
+            note,
+            asked: () => calls,
+          };
+        };
+        const links = (form: EntityForm): string[] =>
+          (form as unknown as { values: Record<string, string[]> }).values
+            .twakeDomainLink;
+
+        it('should filter the domains listed once by their name, from the first letter', async () => {
+          const { form, field, input, results, asked } = await domainForm(() =>
+            Promise.resolve(listed)
+          );
+          // A picker, named by the domain, not by its RDN.
+          expect(field.innerHTML).to.include('data-picker="twakeDomainLink"');
+          expect(field.innerHTML).to.include(
+            'Type part of a name, or press ↓ to list them all'
+          );
+          expect(field.innerHTML).to.include(`title="${example}">example.com<`);
+
+          input.value = 'L';
+          input.fire('input');
+          await tick();
+          expect(results.hidden).to.equal(false);
+          expect(results.innerHTML).to.include('lists.example.com');
+          expect(results.innerHTML).not.to.include('other.org');
+          input.fire('keydown', enter);
+          expect(links(form)).to.deep.equal([example, lists]);
+
+          // What is linked already is not offered again; the arrow lists
+          // the rest of them, the box empty.
+          input.fire('keydown', { key: 'Escape', preventDefault: () => {} });
+          input.value = '';
+          input.fire('keydown', down);
+          await tick();
+          expect(results.innerHTML).to.include('other.org');
+          expect(results.innerHTML).not.to.include('>example.com<');
+          // Every keystroke filtered what one request listed.
+          expect(asked()).to.equal(1);
+        });
+
+        it('should offer only what an organization above links, to a caller below the top', async () => {
+          const { form, input, results } = await domainForm(
+            () => Promise.resolve(listed),
+            () => Promise.resolve([lists])
+          );
+          input.value = 'o';
+          input.fire('input');
+          await tick();
+          expect(results.innerHTML).to.include('lists.example.com');
+          expect(results.innerHTML).not.to.include('other.org');
+
+          input.value = 'other';
+          input.fire('input');
+          await tick();
+          expect(results.innerHTML).to.include(
+            'Only a domain an organization above this one links can be linked here'
+          );
+          input.fire('keydown', enter);
+          expect(links(form)).to.deep.equal([example]);
+        });
+
+        it('should offer every domain when what is linked above cannot be read', async () => {
+          const { input, results } = await domainForm(
+            () => Promise.resolve(listed),
+            () => Promise.reject(new Error('Forbidden'))
+          );
+          input.value = 'o';
+          input.fire('input');
+          await tick();
+          expect(results.innerHTML).to.include('other.org');
+        });
+
+        it('should keep the select, quietly, when the domains cannot be read', async () => {
+          const { field, select, note } = await domainForm(() =>
+            Promise.reject(
+              Object.assign(new Error('Forbidden'), { status: 403 })
+            )
+          );
+          expect(field.innerHTML).to.equal('');
+          expect(select.disabled).to.equal(false);
+          await new Promise(resolve => setTimeout(resolve, 150));
+          expect(note.hidden).to.equal(true);
+          expect(note.textContent).to.equal('');
+        });
+      });
+
+      describe('completing an address', () => {
+        /** An account form whose address fields are wired to recorders. */
+        const addressForm = async (
+          mailDomains?: (organization?: string) => Promise<string[]>,
+          rule: Partial<SchemaAttribute> = { mailDomainScope: 'organization' }
+        ): Promise<{
+          form: EntityForm;
+          container: HTMLElement & { innerHTML: string };
+          mail: ReturnType<typeof recorder>;
+          mailList: ReturnType<typeof recorder>;
+          alias: ReturnType<typeof recorder>;
+          aliasList: ReturnType<typeof recorder>;
+          values: Record<string, string[]>;
+        }> => {
+          const mail = recorder();
+          const mailList = recorder();
+          const alias = recorder();
+          const aliasList = recorder();
+          const fields: Record<string, unknown> = {
+            '[data-field="mail"]': recorder({
+              '.dc-input': mail,
+              '[data-completions]': mailList,
+            }),
+            '[data-field="mailAlternateAddress"]': recorder({
+              '[data-token-input]': alias,
+              '[data-completions]': aliasList,
+              '.dc-token-list': recorder(),
+            }),
+          };
+          const container = stubContainer();
+          (
+            container as unknown as { querySelector(s: string): unknown }
+          ).querySelector = selector => fields[selector] ?? null;
+          // The rule ldap-rest's `ldap/enterpriseRules` checks addresses by.
+          const { mail: address, mailAlternateAddress: aliases } =
+            users.schema.attributes;
+          const form = new EntityForm({
+            entity: {
+              ...users,
+              schema: {
+                attributes: {
+                  ...users.schema.attributes,
+                  mail: { ...address, ...rule },
+                  mailAlternateAddress: { ...aliases, ...rule },
+                },
+              },
+            },
+            entry: {
+              uid: 'jane',
+              mail: 'jane@other.org',
+              twakeDepartmentLink: 'ou=Sales,dc=example,dc=com',
+            },
+            translator: new Translator('en'),
+            pointerOptions: () => Promise.resolve([]),
+            mailDomains,
+            onSubmit: () => Promise.resolve(),
+            onCancel: () => undefined,
+          });
+          await form.render(container);
+          return {
+            form,
+            container,
+            mail,
+            mailList,
+            alias,
+            aliasList,
+            values: (form as unknown as { values: Record<string, string[]> })
+              .values,
+          };
+        };
+        const type = async (
+          box: ReturnType<typeof recorder>,
+          text: string
+        ): Promise<void> => {
+          box.value = text;
+          box.fire('input');
+          await tick();
+        };
+
+        it('should offer the domains of the entry’s organization after an "@"', async () => {
+          const asked: (string | undefined)[] = [];
+          const { container, mail, mailList, values } = await addressForm(
+            organization => {
+              asked.push(organization);
+              return Promise.resolve(['example.com', 'lists.example.com']);
+            }
+          );
+          expect(container.innerHTML).to.match(
+            /<input id="dc-field-mail"[^>]*role="combobox"/
+          );
+          expect(container.innerHTML).to.include('data-completions');
+
+          await type(mail, 'jane');
+          expect(mailList.hidden).to.equal(true);
+          await type(mail, 'jane@');
+          expect(mailList.hidden).to.equal(false);
+          expect(mailList.innerHTML).to.include('>jane@example.com<');
+          expect(mailList.innerHTML).to.include('>jane@lists.example.com<');
+          // Those the typed text begins come first, then those holding it.
+          await type(mail, 'jane@l');
+          expect(mailList.innerHTML.indexOf('>jane@lists.')).to.be.within(
+            0,
+            mailList.innerHTML.indexOf('>jane@example.com<')
+          );
+          await type(mail, 'jane@ex');
+          mail.fire('keydown', down);
+          mail.fire('keydown', enter);
+          expect(mail.value).to.equal('jane@example.com');
+          expect(values.mail).to.deep.equal(['jane@example.com']);
+          expect(mailList.hidden).to.equal(true);
+          // A domain typed whole is offered no more.
+          await type(mail, 'jane@example.com');
+          expect(mailList.hidden).to.equal(true);
+          // Asked once, for the organization the form attaches the entry to.
+          expect(asked).to.deep.equal(['ou=Sales,dc=example,dc=com']);
+        });
+
+        it('should offer the subdomains of those allowed where the rule takes them', async () => {
+          const every = ['example.com', 'lists.example.com', 'other.org'];
+          const { mail, mailList } = await addressForm(
+            organization =>
+              Promise.resolve(organization ? ['example.com'] : every),
+            { mailDomainScope: 'organization', allowSubdomains: true }
+          );
+          await type(mail, 'all@');
+          expect(mailList.innerHTML).to.include('>all@example.com<');
+          expect(mailList.innerHTML).to.include('>all@lists.example.com<');
+          expect(mailList.innerHTML).not.to.include('other.org');
+        });
+
+        it('should offer every domain to an address no rule keeps to some', async () => {
+          const asked: (string | undefined)[] = [];
+          const { mail, mailList } = await addressForm(organization => {
+            asked.push(organization);
+            return Promise.resolve(
+              organization ? ['example.com'] : ['example.com', 'other.org']
+            );
+          }, {});
+          await type(mail, 'jane@');
+          expect(mailList.innerHTML).to.include('>jane@other.org<');
+          expect(asked).to.deep.equal([undefined]);
+        });
+
+        it('should leave Enter adding an alias as typed, until a domain is chosen', async () => {
+          const { alias, aliasList, values } = await addressForm(() =>
+            Promise.resolve(['example.com', 'lists.example.com'])
+          );
+          await type(alias, 'j.doe@exa');
+          expect(aliasList.hidden).to.equal(false);
+          // Nothing chosen in the list: Enter adds the text, as it did.
+          let prevented = false;
+          alias.fire('keydown', {
+            key: 'Enter',
+            preventDefault: () => {
+              prevented = true;
+            },
+          });
+          expect(prevented).to.equal(true);
+          expect(values.mailAlternateAddress).to.deep.equal(['j.doe@exa']);
+          expect(aliasList.hidden).to.equal(true);
+
+          // Chosen with the arrows, Enter completes; the next one adds.
+          await type(alias, 'doe@');
+          alias.fire('keydown', down);
+          alias.fire('keydown', down);
+          alias.fire('keydown', enter);
+          expect(alias.value).to.equal('doe@lists.example.com');
+          expect(values.mailAlternateAddress).to.deep.equal(['j.doe@exa']);
+          alias.fire('keydown', enter);
+          expect(values.mailAlternateAddress).to.deep.equal([
+            'j.doe@exa',
+            'doe@lists.example.com',
+          ]);
+        });
+
+        it('should stay a plain box, quietly, when the domains cannot be read', async () => {
+          let asked = 0;
+          const { mail, mailList, values } = await addressForm(() => {
+            asked++;
+            return Promise.reject(
+              Object.assign(new Error('Forbidden'), { status: 403 })
+            );
+          });
+          await type(mail, 'jane@');
+          await type(mail, 'jane@ex');
+          expect(mailList.hidden).to.equal(true);
+          expect(mailList.innerHTML).to.equal('');
+          // Not asked again on every keystroke.
+          expect(asked).to.equal(1);
+          mail.value = 'jane@example.com';
+          mail.fire('change');
+          expect(values.mail).to.deep.equal(['jane@example.com']);
+        });
+
+        it('should be no combobox when the console offers no domains', async () => {
+          const { container } = await addressForm();
+          expect(container.innerHTML).not.to.include('role="combobox"');
+          expect(container.innerHTML).not.to.include('data-completions');
+        });
+      });
     });
   });
 

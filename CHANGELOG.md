@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- An organization's mail domains are picked by typing part of their name;
+  below the top organization, only the domains an organization above links
+  are offered, the only ones the server accepts
+- Typing "@" in an address or an alias offers the mail domains allowed for
+  the entry's department, or every domain when none restricts them
+
 ## v0.7.3 (2026-10-20)
 
 Built on ldap-rest 0.21.3.

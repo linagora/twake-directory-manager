@@ -14,6 +14,7 @@ import { escapeHtml } from './shared/dom';
 
 import {
   ConsoleApiClient,
+  isDomainBranch,
   isLarge,
   roleAttribute,
 } from './api/ConsoleApiClient';
@@ -33,6 +34,7 @@ import {
   comparableDn,
   entryValue,
   nameAttributes,
+  parentDn as parentOf,
   pointerLabel,
   rdnValue,
   resolveText,
@@ -923,6 +925,25 @@ export class DirectoryConsole {
       .sort((a, b) => a.label.localeCompare(b.label));
   }
 
+  /**
+   * Whether the caller links an organization only to the mail domains one
+   * above it links already. ldap-rest's authorization holds every caller to
+   * that (`authzLinid1`, "Mail domains") but the one who writes the top
+   * organization, who hands each organization its domains; a scope that
+   * restricts nothing leaves it to the server to say.
+   *
+   * @param entity the organizations
+   * @returns true when the domains offered are to be narrowed
+   */
+  private inheritsDomains(entity: EntityDescriptor): boolean {
+    if (this.scopeError || !scopeRestricts(this.scope) || !entity.base)
+      return false;
+    const top = entity.base;
+    return !this.scope.branches.some(
+      branch => branch.write && withinDn(top, branch.dn)
+    );
+  }
+
   /** Whether the caller may write anywhere at all. */
   private canWrite(): boolean {
     if (this.scopeError) return false;
@@ -1684,10 +1705,18 @@ export class DirectoryConsole {
       return this.openOrganizationForm(entity, entry);
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
+    // Read once for the form, however many addresses it completes.
+    const domains = this.api.mailDomains(this.entities);
     const form = new EntityForm({
       entity,
       entry,
       translator: this.translator,
+      typeAhead: (branch: string): boolean =>
+        isDomainBranch(this.entities, branch),
+      mailDomains: domains
+        ? (organization?: string): Promise<string[]> =>
+            domains.names(organization)
+        : undefined,
       pointerOptions: (
         branch: string
       ): Promise<{ dn: string; label: string }[]> =>
@@ -1770,10 +1799,24 @@ export class DirectoryConsole {
       parents.length > 1
         ? (parents.find(item => item.dn === picker?.value) ?? parents[0]).dn
         : parentDn;
+    // Read once for the form, whichever parent is picked meanwhile.
+    const domains = this.inheritsDomains(entity)
+      ? this.api.mailDomains(this.entities)
+      : undefined;
     const form = new EntityForm({
       entity,
       entry,
       translator: this.translator,
+      typeAhead: (branch: string): boolean =>
+        isDomainBranch(this.entities, branch),
+      // The organization the new one goes under, or the one an edited one
+      // hangs from: the server walks up from there.
+      linkableDomains: domains
+        ? (): Promise<string[]> =>
+            domains.linked(
+              (entry?.dn ? parentOf(entry.dn) : parent()) ?? entity.base
+            )
+        : undefined,
       pointerOptions: (
         branch: string
       ): Promise<{ dn: string; label: string }[]> =>

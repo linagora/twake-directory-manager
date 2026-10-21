@@ -66,6 +66,12 @@ The fields of an organization (default Twake schemas):
 they are search boxes. Type at least three characters of the name or
 identifier, then pick from the list.
 
+:guilabel:`Mail domains` lists the domains as you type part of their name;
+press :kbd:`↓` in the empty box to see them all. Unless you administer the
+top organization, it offers only the domains already linked by an
+organization above the one you edit or create: the server refuses any
+other.
+
 Creating an organization
 ------------------------
 

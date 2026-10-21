@@ -19,6 +19,7 @@ import {
   attributeHint,
   attributeLabel,
   beforeToday,
+  comparableDn,
   entryValue,
   escapeDnValue,
   formatByteSize,
@@ -91,6 +92,25 @@ export interface FormOptions {
    * no external member
    */
   teamMailboxesKeepDomain?: boolean;
+  /**
+   * Whether a pointer into a branch small enough to list is chosen by typing
+   * all the same: its entries, listed once, are filtered as the operator
+   * types. A mail domain is known by its name, and a select of every domain
+   * has the operator read them from the top
+   */
+  typeAhead?(branch: string): boolean;
+  /**
+   * DNs of the mail domains the organization being edited may be linked to,
+   * when the caller may link it to those only: the ones linked by the
+   * organizations above it. Undefined, or a failure, when any may be linked
+   */
+  linkableDomains?(): Promise<string[] | undefined>;
+  /**
+   * The mail domains an entry attached to an organization may hold
+   * addresses at, offered once an "@" is typed into an address. A failure
+   * offers none: the field stays the text box it was
+   */
+  mailDomains?(organization?: string): Promise<string[]>;
   /** Called with the attributes to write and those to clear */
   onSubmit(
     values: Record<string, string | string[]>,
@@ -175,6 +195,12 @@ export class EntityForm {
   private readonly external = new Set<string>();
   /** Searched member fields, which a team mailbox keeps to its domain */
   private readonly memberFields = new Set<string>();
+  /** Pointer fields whose entries, listed once, are filtered as typed */
+  private readonly filtered = new Set<string>();
+  /** Address fields completed with a domain after an "@" */
+  private readonly addresses = new Set<string>();
+  /** The domains an address may be completed with, by organization DN */
+  private readonly addressDomains = new Map<string, Promise<string[]>>();
 
   constructor(options: FormOptions) {
     this.options = options;
@@ -209,6 +235,14 @@ export class EntityForm {
         if (path && this.values[name].length === 1)
           this.picked.set(this.values[name][0], path);
       }
+      // An account's address, its aliases, a list's or a shared mailbox's
+      // address: what the schema marks as one, whatever the attribute.
+      if (
+        options.mailDomains &&
+        !pointer &&
+        (hasRole(attr, 'primaryEmail') || hasRole(attr, 'emailAliases'))
+      )
+        this.addresses.add(name);
     }
   }
 
@@ -313,6 +347,90 @@ export class EntityForm {
     } catch {
       return undefined;
     }
+  }
+
+  /** Whether the caller filters a branch as typed, guarded like `searchOf`. */
+  private typeAheadOf(branch: string): boolean {
+    try {
+      return Boolean(this.options.typeAhead?.(branch));
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * The domains an address typed into a field may be completed with, as
+   * ldap-rest's `ldap/enterpriseRules` judges it from the field's schema: a
+   * `mailDomainScope` of `organization` keeps it to the domains allowed to
+   * the organization the form attaches the entry to — read from the form,
+   * so that a department just changed counts — and `allowSubdomains` lets
+   * in the domains of the directory below one of those, as a list's
+   * `lists.example.com` under `example.com`. Any other field is judged on
+   * nothing, and is offered every domain.
+   *
+   * None when they cannot be read: the field then stays the text box it
+   * was, without a word — an address is typed whole as well.
+   *
+   * @param name the field
+   * @returns the domain names, lower-cased
+   */
+  private async domainsOf(name: string): Promise<string[]> {
+    const attr = this.fields.find(([field]) => field === name)?.[1];
+    const link = this.options.entity.organizationLink;
+    const organization =
+      (attr?.mailDomainScope === 'organization' &&
+        link &&
+        (this.values[link] ??
+          toList(entryValue(this.options.entry, link)))[0]) ||
+      '';
+    const allowed = await this.domainNames(organization);
+    if (!organization || !attr?.allowSubdomains) return allowed;
+    return (await this.domainNames('')).filter(domain =>
+      allowed.some(parent => domain === parent || domain.endsWith(`.${parent}`))
+    );
+  }
+
+  /**
+   * The caller's `mailDomains` for an organization, or for none when given
+   * the empty string, asked once per form.
+   */
+  private domainNames(organization: string): Promise<string[]> {
+    let names = this.addressDomains.get(organization);
+    if (!names) {
+      const ask = this.options.mailDomains;
+      names = Promise.resolve()
+        .then(() => (ask ? ask(organization || undefined) : []))
+        .catch(() => []);
+      this.addressDomains.set(organization, names);
+    }
+    return names;
+  }
+
+  /**
+   * The domains a domain link may take, compared as DNs: those the caller's
+   * `linkableDomains` names, plus those the entry already links, which the
+   * server lets it keep. Undefined when any may be linked, or when the field
+   * links no domain.
+   *
+   * @param name the field
+   * @returns the DNs, or undefined
+   */
+  private async linkableOf(name: string): Promise<Set<string> | undefined> {
+    const attr = this.fields.find(([field]) => field === name)?.[1];
+    const linkable = this.options.linkableDomains;
+    if (!linkable || !hasRole(attr, 'domainLink')) return undefined;
+    let allowed: string[] | undefined;
+    try {
+      allowed = await linkable();
+    } catch {
+      return undefined;
+    }
+    if (!allowed) return undefined;
+    return new Set(
+      [...allowed, ...toList(entryValue(this.options.entry, name))].map(
+        comparableDn
+      )
+    );
   }
 
   /**
@@ -437,9 +555,35 @@ export class EntityForm {
         : attr.normalize === 'byteSize'
           ? formatByteSize(value)
           : value;
-    return `<input id="dc-field-${escapeHtml(name)}" name="${escapeHtml(name)}"
+    const input = `<input id="dc-field-${escapeHtml(name)}" name="${escapeHtml(name)}"
       type="${type}" class="dc-input" value="${escapeHtml(shown)}"
-      ${attr.neverReturn ? 'autocomplete="new-password"' : ''} />`;
+      ${attr.neverReturn ? 'autocomplete="new-password"' : this.comboboxAttributes(name)} />`;
+    return this.completionMarkup(name, input);
+  }
+
+  /**
+   * What makes an address box a combobox, once its domains are offered: the
+   * browser's own suggestions, the addresses typed in other forms, would
+   * cover the domains'.
+   */
+  private comboboxAttributes(name: string): string {
+    if (!this.addresses.has(name)) return '';
+    return `role="combobox" aria-autocomplete="list" aria-expanded="false"
+      aria-controls="dc-complete-${escapeHtml(name)}" autocomplete="off"`;
+  }
+
+  /**
+   * An address box with the list its domains are offered in, under it as a
+   * picker's suggestions are; the box alone for any other field.
+   */
+  private completionMarkup(name: string, control: string): string {
+    if (!this.addresses.has(name)) return control;
+    return `
+      <div class="dc-picker-box">
+        ${control}
+        <ul class="dc-picker-results" id="dc-complete-${escapeHtml(name)}"
+          role="listbox" data-completions hidden></ul>
+      </div>`;
   }
 
   private booleanMarkup(name: string): string {
@@ -488,9 +632,13 @@ export class EntityForm {
             aria-autocomplete="list" aria-expanded="false"
             aria-controls="${escapeHtml(listId)}"
             placeholder="${escapeHtml(
-              this.freeform.has(name)
-                ? translator.t('form.searchMember', { count: SEARCH_MINIMUM })
-                : translator.t('form.searchPointer', { count: SEARCH_MINIMUM })
+              this.filtered.has(name)
+                ? translator.t('form.filterPointer')
+                : this.freeform.has(name)
+                  ? translator.t('form.searchMember', { count: SEARCH_MINIMUM })
+                  : translator.t('form.searchPointer', {
+                      count: SEARCH_MINIMUM,
+                    })
             )}" />
           <ul class="dc-picker-results" id="${escapeHtml(listId)}"
             role="listbox" hidden></ul>
@@ -535,8 +683,12 @@ export class EntityForm {
                  ${attr.required ? 'data-required="true" ' : ''}disabled aria-busy="true">
                  <option value="" disabled>${escapeHtml(translator.t('form.choose'))}</option>
                </select>`
-            : `<input id="${escapeHtml(id)}" class="dc-input" data-token-input type="text"
-                 placeholder="${escapeHtml(translator.t('form.addValue'))}" />`
+            : this.completionMarkup(
+                name,
+                `<input id="${escapeHtml(id)}" class="dc-input" data-token-input type="text"
+                 placeholder="${escapeHtml(translator.t('form.addValue'))}"
+                 ${this.comboboxAttributes(name)} />`
+              )
         }
       </div>`;
   }
@@ -591,13 +743,26 @@ export class EntityForm {
       const control = wrapper.querySelector<
         HTMLInputElement | HTMLSelectElement
       >('.dc-input');
-      control?.addEventListener('change', () => {
-        const raw = control.value;
+      const store = (raw: string): void => {
         this.values[name] =
           raw === ''
             ? []
             : [attr.type === 'date' ? EntityForm.toDirectoryDate(raw) : raw];
-      });
+      };
+      control?.addEventListener('change', () => store(control.value));
+      if (control && this.addresses.has(name)) {
+        // A completion writes the box without the `change` a person's
+        // typing ends in: the value is stored as it is written.
+        const completion = this.bindCompletion(
+          name,
+          control as HTMLInputElement,
+          wrapper,
+          store
+        );
+        control.addEventListener('keydown', event => {
+          completion?.key(event as KeyboardEvent);
+        });
+      }
     }
   }
 
@@ -615,6 +780,10 @@ export class EntityForm {
     // single-valued, and choosing a second delegate replaced the first.
     const multiple =
       this.fields.find(([field]) => field === name)?.[1].type === 'array';
+    // Entries listed once and filtered here answer at once, from the first
+    // letter: no request to spare, and nothing to say while waiting.
+    const filtered = this.filtered.has(name);
+    const minimum = filtered ? 1 : SEARCH_MINIMUM;
     let candidates: PointerCandidate[] = [];
     let active = -1;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -689,61 +858,75 @@ export class EntityForm {
       redraw();
     };
 
+    const run = (query: string, ticket: number): void => {
+      if (!filtered) message(translator.t('form.searching'));
+      Promise.all([search(query), this.linkableOf(name)])
+        .then(([found, linkable]) => {
+          if (ticket !== generation) return;
+          // What is already chosen is not offered again.
+          const chosen = (dn: string): boolean =>
+            this.values[name].some(
+              value => value.toLowerCase() === dn.toLowerCase()
+            );
+          // A team mailbox takes the accounts of its domain only, and no
+          // external member: what the server would refuse is not offered.
+          const domain = this.memberFields.has(name)
+            ? this.teamMailboxDomain()
+            : undefined;
+          const atDomain = (candidate: PointerCandidate): boolean =>
+            !domain ||
+            candidate.mail
+              ?.slice(candidate.mail.lastIndexOf('@') + 1)
+              .toLowerCase() === domain;
+          // Nor a domain no organization above links, to a caller below the
+          // top: the server refuses them that link.
+          const linked = (candidate: PointerCandidate): boolean =>
+            !linkable || linkable.has(comparableDn(candidate.dn));
+          candidates = found.filter(
+            candidate =>
+              !chosen(candidate.dn) && atDomain(candidate) && linked(candidate)
+          );
+          if (
+            linkable &&
+            candidates.length === 0 &&
+            found.some(candidate => !chosen(candidate.dn))
+          )
+            return message(translator.t('form.notLinkedAbove'));
+          if (
+            domain &&
+            candidates.length === 0 &&
+            (found.some(candidate => !chosen(candidate.dn)) ||
+              ADDRESS.test(query))
+          )
+            return message(translator.t('form.otherDomain', { domain }));
+          const outside = domain
+            ? undefined
+            : this.externalOffer(name, query, found);
+          if (typeof outside === 'string' && candidates.length === 0)
+            return message(outside);
+          if (typeof outside === 'object' && !chosen(outside.dn))
+            candidates.push(outside);
+          active = candidates.length ? 0 : -1;
+          paint();
+        })
+        .catch((err: unknown) => {
+          if (ticket === generation) message(listFailure(err, translator));
+        });
+    };
+
     input.addEventListener('input', () => {
       if (timer) clearTimeout(timer);
       const query = input.value.trim();
       const ticket = ++generation;
       if (typedDn()) return message(translator.t('form.addDn'));
-      if (query.length < SEARCH_MINIMUM) {
+      if (query.length < minimum) {
         if (query.length === 0) close();
         else
           message(translator.t('list.searchGuard', { count: SEARCH_MINIMUM }));
         return;
       }
-      timer = setTimeout(() => {
-        message(translator.t('form.searching'));
-        search(query)
-          .then(found => {
-            if (ticket !== generation) return;
-            // What is already chosen is not offered again.
-            const chosen = (dn: string): boolean =>
-              this.values[name].some(
-                value => value.toLowerCase() === dn.toLowerCase()
-              );
-            // A team mailbox takes the accounts of its domain only, and no
-            // external member: what the server would refuse is not offered.
-            const domain = this.memberFields.has(name)
-              ? this.teamMailboxDomain()
-              : undefined;
-            const atDomain = (candidate: PointerCandidate): boolean =>
-              !domain ||
-              candidate.mail
-                ?.slice(candidate.mail.lastIndexOf('@') + 1)
-                .toLowerCase() === domain;
-            candidates = found.filter(
-              candidate => !chosen(candidate.dn) && atDomain(candidate)
-            );
-            if (
-              domain &&
-              candidates.length === 0 &&
-              (found.some(candidate => !chosen(candidate.dn)) ||
-                ADDRESS.test(query))
-            )
-              return message(translator.t('form.otherDomain', { domain }));
-            const outside = domain
-              ? undefined
-              : this.externalOffer(name, query, found);
-            if (typeof outside === 'string' && candidates.length === 0)
-              return message(outside);
-            if (typeof outside === 'object' && !chosen(outside.dn))
-              candidates.push(outside);
-            active = candidates.length ? 0 : -1;
-            paint();
-          })
-          .catch((err: unknown) => {
-            if (ticket === generation) message(listFailure(err, translator));
-          });
-      }, SEARCH_DELAY);
+      if (filtered) run(query, ticket);
+      else timer = setTimeout(() => run(query, ticket), SEARCH_DELAY);
     });
 
     input.addEventListener('keydown', event => {
@@ -757,6 +940,13 @@ export class EntityForm {
       if (key === 'Enter' && dn) {
         event.preventDefault();
         addTyped(dn);
+        return;
+      }
+      // The arrow opens a list read whole, as it opens a select: who does
+      // not know the names reads them rather than guess one.
+      if (filtered && key === 'ArrowDown' && results.hidden) {
+        event.preventDefault();
+        run(input.value.trim(), ++generation);
         return;
       }
       if (results.hidden || candidates.length === 0) {
@@ -834,13 +1024,22 @@ export class EntityForm {
       redraw();
     };
 
-    if (input instanceof HTMLSelectElement) {
+    // By its tag rather than `instanceof HTMLSelectElement`, which does not
+    // exist outside a browser: see `selectorValue`.
+    if (input.tagName === 'SELECT') {
       input.addEventListener('change', () => add(input.value));
     } else {
+      const completion = this.addresses.has(name)
+        ? this.bindCompletion(name, input as HTMLInputElement, wrapper)
+        : undefined;
       input.addEventListener('keydown', event => {
+        // A domain offered and chosen with the arrows takes the key first;
+        // with none chosen, Enter adds what is typed, as it always did.
+        if (completion?.key(event as KeyboardEvent)) return;
         if ((event as KeyboardEvent).key !== 'Enter') return;
         event.preventDefault();
         add(input.value);
+        completion?.close();
       });
       // A value typed and left in the box is a value the user meant to add.
       input.addEventListener('blur', () => add(input.value));
@@ -881,6 +1080,12 @@ export class EntityForm {
             numeric: true,
           })
         );
+        if (
+          options.length > 0 &&
+          this.typeAheadOf(branch) &&
+          this.filterInstead(select, options)
+        )
+          return;
         const current = select.value;
         // The empty choice is offered only when taking it means something: on
         // a branch that answered nothing it would drop the value the entry
@@ -930,6 +1135,178 @@ export class EntityForm {
     const name = field?.dataset.tokens;
     const list = field?.querySelector('.dc-token-list');
     if (name && list) list.innerHTML = this.tokenItems(name);
+  }
+
+  /**
+   * Trade a pointer select for a picker that filters what it would have
+   * offered, as the operator types. The candidates are the ones just listed,
+   * so the picker asks nothing more of the server; a branch that could not
+   * be listed, or listed empty, keeps its select, and whatever it said about
+   * it (`pointerFallback`).
+   *
+   * @param select the select of the pointer
+   * @param options what it would have offered, sorted
+   * @returns true when the select was replaced, and is not to be filled
+   */
+  private filterInstead(
+    select: HTMLSelectElement,
+    options: { dn: string; label: string }[]
+  ): boolean {
+    const field = select.closest?.<HTMLElement>('[data-field]');
+    const name = field?.dataset.field;
+    const attr = this.fields.find(([candidate]) => candidate === name)?.[1];
+    if (!field || !name || !attr) return false;
+    // The values held are named the way the list names them, not by RDN.
+    for (const option of options) this.picked.set(option.dn, option.label);
+    this.filtered.add(name);
+    this.searches.set(name, query => {
+      const text = query.trim().toLowerCase();
+      return Promise.resolve(
+        options.filter(option => option.label.toLowerCase().includes(text))
+      );
+    });
+    field.innerHTML = this.fieldContent(name, attr);
+    this.bindPicker(name, field);
+    return true;
+  }
+
+  /**
+   * Offer the domains an address may be at, once an "@" is typed into it:
+   * a list under the box, as a picker's, that completes the address with
+   * the domain chosen in it.
+   *
+   * Nothing is chosen until the operator goes down the list: Enter in a
+   * token box adds what is typed, and in any other box submits the form,
+   * as before — a list that took Enter for its first line would have made
+   * every address typed whole take two. Up and Down move through it,
+   * Escape closes it, and leaving the box closes it too.
+   *
+   * @param name the field
+   * @param input its text box
+   * @param wrapper the field, holding the list
+   * @param written told of an address the list completed
+   * @returns what the box's own keys are first handed to, and how to close
+   *   the list; undefined when the field has no list
+   */
+  private bindCompletion(
+    name: string,
+    input: HTMLInputElement,
+    wrapper: HTMLElement,
+    written?: (value: string) => void
+  ): { key(event: KeyboardEvent): boolean; close(): void } | undefined {
+    const results = wrapper.querySelector<HTMLElement>('[data-completions]');
+    if (!results) return undefined;
+    let suggestions: string[] = [];
+    let active = -1;
+    // Domains answered after a later keystroke are dropped.
+    let generation = 0;
+
+    const close = (): void => {
+      results.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+      input.removeAttribute('aria-activedescendant');
+      suggestions = [];
+      active = -1;
+    };
+    const paint = (): void => {
+      results.innerHTML = suggestions
+        .map(
+          (suggestion, index) => `
+        <li id="dc-complete-${escapeHtml(name)}-${index}" role="option"
+          class="dc-picker-option${index === active ? ' dc-active' : ''}"
+          aria-selected="${index === active ? 'true' : 'false'}"
+          data-suggestion="${index}">${escapeHtml(suggestion)}</li>`
+        )
+        .join('');
+      results.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+      results.scrollIntoView?.({ block: 'nearest' });
+      if (active >= 0)
+        input.setAttribute(
+          'aria-activedescendant',
+          `dc-complete-${name}-${active}`
+        );
+      else input.removeAttribute('aria-activedescendant');
+    };
+    const choose = (index: number): void => {
+      input.value = suggestions[index];
+      close();
+      written?.(input.value);
+    };
+
+    input.addEventListener('input', () => {
+      const value = input.value.trim();
+      const at = value.lastIndexOf('@');
+      const ticket = ++generation;
+      if (at < 0) return close();
+      const local = value.slice(0, at);
+      const typed = value.slice(at + 1).toLowerCase();
+      void this.domainsOf(name).then(domains => {
+        if (ticket !== generation) return;
+        // A domain typed whole needs no offer, nor the longer ones it is
+        // part of; otherwise, those the typed text begins come first, then
+        // those it is part of.
+        const matching = domains.includes(typed)
+          ? []
+          : domains.filter(domain => domain.includes(typed));
+        const starts = matching.filter(domain => domain.startsWith(typed));
+        suggestions = [
+          ...starts,
+          ...matching.filter(domain => !starts.includes(domain)),
+        ].map(domain => `${local}@${domain}`);
+        active = -1;
+        if (suggestions.length === 0) close();
+        else paint();
+      });
+    });
+
+    // `mousedown`, not `click`: the box's blur closes the list first.
+    results.addEventListener('mousedown', event => {
+      const item = (event.target as HTMLElement).closest<HTMLElement>(
+        '[data-suggestion]'
+      );
+      if (!item) return;
+      event.preventDefault();
+      choose(Number(item.dataset.suggestion));
+    });
+    input.addEventListener('blur', () => {
+      generation++;
+      close();
+    });
+
+    return {
+      close: (): void => {
+        generation++;
+        close();
+      },
+      key: (event: KeyboardEvent): boolean => {
+        if (results.hidden || suggestions.length === 0) return false;
+        const { key } = event;
+        if (key === 'Escape') {
+          event.preventDefault();
+          close();
+          return true;
+        }
+        if (key === 'ArrowDown' || key === 'ArrowUp') {
+          event.preventDefault();
+          const count = suggestions.length;
+          active =
+            active < 0
+              ? key === 'ArrowDown'
+                ? 0
+                : count - 1
+              : (active + (key === 'ArrowDown' ? 1 : -1) + count) % count;
+          paint();
+          return true;
+        }
+        if (key === 'Enter' && active >= 0) {
+          event.preventDefault();
+          choose(active);
+          return true;
+        }
+        return false;
+      },
+    };
   }
 
   /**
