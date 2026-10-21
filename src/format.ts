@@ -337,6 +337,18 @@ export function withinDn(dn: string, branch: string): boolean {
 }
 
 /**
+ * The DN an entry hangs from: everything after the first comma its own RDN
+ * does not escape, so `cn=Smith\, John,ou=users` hangs from `ou=users`.
+ *
+ * @param dn DN of the entry
+ * @returns the parent's DN, or undefined for a DN of one RDN
+ */
+export function parentDn(dn: string): string | undefined {
+  const match = /^(?:\\.|[^,\\])*,\s*(.+)$/.exec(dn);
+  return match ? match[1] : undefined;
+}
+
+/**
  * What to call the entry a pointer lands on, when its schema names it.
  *
  * A nomenclature declares a readable name per value in `entity.valueLabels`,

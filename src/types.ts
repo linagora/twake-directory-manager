@@ -53,6 +53,14 @@ export interface SchemaAttribute {
    * other attributes — an address must not already be someone's alias.
    */
   unique?: boolean | { attributes?: string[]; branches?: string[] };
+  /**
+   * Which mail domains an address may be at, as ldap-rest's
+   * `ldap/enterpriseRules` checks it: those of the entry's organization and
+   * of the organizations above it, or those of the whole directory
+   */
+  mailDomainScope?: 'organization' | 'directory';
+  /** Whether a subdomain of an allowed mail domain is allowed too */
+  allowSubdomains?: boolean;
   /** Server-side normalisation, which decides how the value reads back */
   normalize?: 'byteSize';
   /** Whether "search everywhere" includes this attribute; see the schema doc */

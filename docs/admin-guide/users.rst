@@ -102,6 +102,11 @@ The server checks two rules each time an entry is saved:
   (``all@lists.example.org`` under ``example.org``). When no organization
   declares a domain, every domain is accepted.
 
+Once you type ``@`` in an address or an alias, the form lists the domains
+allowed for the entry's department (and, for a group, the directory's
+subdomains of those); :kbd:`↓` then :kbd:`Enter` completes the address.
+Typing the address whole works as before.
+
 A refusal shows with the server’s message; the form stays open for the
 correction.
 

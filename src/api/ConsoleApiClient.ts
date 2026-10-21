@@ -29,9 +29,11 @@ import {
   comparableDn,
   entryValue,
   isDnShaped,
+  parentDn,
   rdnValue,
   searchableAttributes,
   valueLabel,
+  withinDn,
 } from '../format';
 
 interface FlatResource {
@@ -136,6 +138,61 @@ export function isEntryOf(entity: EntityDescriptor, entry: Entry): boolean {
  */
 export function isLarge(entity: EntityDescriptor): boolean {
   return entity.schema.entity?.large ?? !!entity.organizationLink;
+}
+
+/**
+ * The entity of the mail domains: the one whose schema names a domain with
+ * the `domainName` role, as ldap-rest's `twake/nomenclature/twakeDomain.json`
+ * marks `associatedDomain`. Nothing else tells it apart — its branch is the
+ * deployment's to choose.
+ *
+ * @param entities entities the console knows
+ * @returns the entity, or undefined when the directory keeps no domains
+ */
+export function domainEntity(
+  entities: EntityDescriptor[]
+): EntityDescriptor | undefined {
+  return entities.find(
+    entity => entity.base && roleAttribute(entity.schema, 'domainName')
+  );
+}
+
+/**
+ * Whether a pointer lands among the mail domains: a domain is known by its
+ * name, which a select of every domain makes the operator read from the top.
+ *
+ * @param entities entities the console knows
+ * @param branch DN the pointer must land in
+ * @returns true when the branch is the domains' own
+ */
+export function isDomainBranch(
+  entities: EntityDescriptor[],
+  branch: string
+): boolean {
+  const owner = domainEntity(entities);
+  return !!owner && comparableDn(owner.base) === comparableDn(branch);
+}
+
+/**
+ * The mail domains, as one form asks for them: read once, along with the
+ * domains each organization links, however often the operator types.
+ */
+export interface MailDomains {
+  /**
+   * The domains an entry attached to an organization may hold addresses at,
+   * lower-cased and sorted: those it and every organization above it link
+   * (`ldap/enterpriseRules`), or every domain of the directory when they
+   * link none, link `*`, or when the entry is attached to nothing. `*`
+   * itself is no domain to write after an `@`, and is never one of them.
+   * Rejects when the domains cannot be read
+   */
+  names(organization?: string): Promise<string[]>;
+  /**
+   * DNs of the domains an organization and every one above it link, up to
+   * the top of the tree. Rejects when one of them cannot be read: a chain
+   * read in part would say less than the server knows
+   */
+  linked(organization: string): Promise<string[]>;
 }
 
 /** Suggestions a pointer search offers: enough to pick from, few to read. */
@@ -1418,6 +1475,96 @@ export class ConsoleApiClient {
           if (index < list.length && options.length < POINTER_SEARCH_LIMIT)
             options.push(list[index]);
       return options;
+    };
+  }
+
+  /**
+   * The mail domains and the organizations' links to them, for one form:
+   * see `MailDomains`. Each is read when first asked for and kept for as
+   * long as the form is open, so that every "@" the operator types costs no
+   * request after the first.
+   *
+   * The organizations are read one by one from the one asked about up to
+   * the top of the tree, as the server walks them when it judges an address
+   * or a link: every administrator reads the tree, which is reference data.
+   * A directory without a tree, or whose organizations link no domain,
+   * restricts nothing, and nor does the form.
+   *
+   * @param entities entities the console knows
+   * @returns the lookup, or undefined when the directory keeps no domains
+   */
+  mailDomains(entities: EntityDescriptor[]): MailDomains | undefined {
+    const owner = domainEntity(entities);
+    if (!owner) return undefined;
+    const named = roleAttribute(owner.schema, 'domainName') as string;
+    const link = roleAttribute(
+      entities.find(entity => entity.kind === 'organization')?.schema,
+      'domainLink'
+    );
+    const top = this.topOrganization;
+    let listed: Promise<{ dn: string; name: string }[]> | undefined;
+    const list = (): Promise<{ dn: string; name: string }[]> =>
+      (listed ??= this.list(owner).then(entries =>
+        Object.entries(entries)
+          .filter(([, entry]) => isEntryOf(owner, entry))
+          .map(([id, entry]) => ({
+            dn: String(entry.dn || id),
+            name: (toValues(entryValue(entry, named))[0] ?? '')
+              .trim()
+              .toLowerCase(),
+          }))
+          .filter(domain => domain.name)
+      ));
+    // What each organization links itself, by DN: the chains of two
+    // departments of one company share every organization above them.
+    const own = new Map<string, Promise<string[]>>();
+    const linked = async (organization: string): Promise<string[]> => {
+      if (!link || !top || !withinDn(organization, top)) return [];
+      const chain: string[] = [];
+      for (let dn: string | undefined = organization; dn; dn = parentDn(dn)) {
+        chain.push(dn);
+        if (comparableDn(dn) === comparableDn(top)) break;
+      }
+      const links = await Promise.all(
+        chain.map(dn => {
+          const key = comparableDn(dn);
+          let read = own.get(key);
+          if (!read) {
+            read = this.organization(dn).then(entry =>
+              toValues(entryValue(entry, link))
+            );
+            own.set(key, read);
+          }
+          return read;
+        })
+      );
+      return links.flat();
+    };
+    const sorted = (names: string[]): string[] =>
+      [...new Set(names)].filter(name => name !== '*').sort();
+    return {
+      linked,
+      names: async (organization?: string): Promise<string[]> => {
+        const domains = await list();
+        const every = sorted(domains.map(domain => domain.name));
+        if (!organization) return every;
+        let links: string[];
+        try {
+          links = await linked(organization);
+        } catch {
+          // Which domains the tree allows is unknown: the server judges.
+          return every;
+        }
+        const byDn = new Map(
+          domains.map(domain => [comparableDn(domain.dn), domain.name])
+        );
+        const names = links
+          .map(dn => byDn.get(comparableDn(dn)))
+          .filter((name): name is string => !!name);
+        return names.length === 0 || names.includes('*')
+          ? every
+          : sorted(names);
+      },
     };
   }
 
