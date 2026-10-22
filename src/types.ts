@@ -82,6 +82,8 @@ export interface SchemaAttribute {
   neverReturn?: boolean;
   /** Named lifecycle states this attribute can be moved to */
   states?: Record<string, string>;
+  /** What the attribute is, shown on demand next to its label */
+  help?: LocalizedText;
   /** Heading the form groups the field under */
   group?: LocalizedText;
   /** Name to show instead of the attribute name, in one or several languages */

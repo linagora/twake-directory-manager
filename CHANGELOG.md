@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+Built on ldap-rest 0.23.0.
+
+### Features
+
+- The full name is written from the first and last names as they are typed,
+  until it is written otherwise; `DM_CONSOLE_FULL_NAME_FORMAT` sets their
+  order, `{surname} {givenName}` where the family name comes first. The
+  fields are found by their schema roles, `givenName` and `surname`
+- A field the schema gives a `help` explains itself in a tooltip next to its
+  label: the Employee ID does with the Twake schema
+- Email aliases are folded with the optional fields: an account rarely
+  starts with any
+- The Department comes right after the Employee ID
+  (linagora/ldap-rest#364)
+
 ## v0.9.0 (2026-10-22)
 
 Built on ldap-rest 0.22.1.

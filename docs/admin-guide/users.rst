@@ -30,10 +30,18 @@ With the default Twake schemas:
      - Notes
    * - :guilabel:`Employee ID` \*
      - The employee’s number. Unique in the directory, except for the
-       value ``UNIT``, kept for non-personal accounts.
+       value ``UNIT``, kept for non-personal accounts. The :guilabel:`?`
+       next to the field says so in the form.
+   * - :guilabel:`Department` \*
+     - The organization the account is attached to. It decides who
+       administers the account, and the :guilabel:`Department path` that
+       follows from it.
    * - :guilabel:`Last name` \*, :guilabel:`First name` \*,
        :guilabel:`Full name` \*
-     - The full name is the one applications show (lists, mail…).
+     - The full name is the one applications show (lists, mail…). It is
+       written from the first and last names as they are typed, until it is
+       written otherwise; emptied, it follows them again. Whether the first
+       name or the last comes first is the deployment’s choice.
    * - :guilabel:`Common name`
      - Technical name of the entry; optional.
    * - :guilabel:`Title`, :guilabel:`Position`
@@ -54,10 +62,6 @@ With the default Twake schemas:
    * - :guilabel:`Password reset required`
      - :guilabel:`Yes` makes the user change their password at their next
        sign-in.
-   * - :guilabel:`Department` \*
-     - The organization the account is attached to. It decides who
-       administers the account, and the :guilabel:`Department path` that
-       follows from it.
    * - :guilabel:`Deletion date`
      - The date the account is due to be deleted; not earlier than today.
    * - *Mailbox Settings* section: :guilabel:`Mailbox size`,

@@ -93,6 +93,11 @@ export interface FormOptions {
    */
   teamMailboxesKeepDomain?: boolean;
   /**
+   * How a full name is written from its parts: `{givenName}` and `{surname}`
+   * stand for the fields of those roles. `{givenName} {surname}` when unset
+   */
+  fullNameFormat?: string;
+  /**
    * Whether a pointer into a branch small enough to list is chosen by typing
    * all the same: its entries, listed once, are filtered as the operator
    * types. A mail domain is known by its name, and a select of every domain
@@ -151,17 +156,19 @@ export function pointerFallback(
 /** Wait before filling a live region just shown, for it to be announced. */
 const ANNOUNCE_DELAY = 100;
 
+/** A full name, where the deployment does not say how it writes one. */
+const FULL_NAME_FORMAT = '{givenName} {surname}';
+
 /** Above this many fields a modal stops being usable and becomes a panel. */
 const PANEL_THRESHOLD = 8;
 
 /**
  * Roles of the fields a long creation form shows though the schema does not
- * require them: an account's mail and its password, which it is created with
- * as a rule.
+ * require them: an account's mailbox and its password, which it is created
+ * with as a rule. Its aliases are not: an account rarely starts with any.
  */
 const SHOWN_ROLES = [
   'primaryEmail',
-  'emailAliases',
   'emailQuota',
   'emailQuotaSize',
   'password',
@@ -601,8 +608,21 @@ export class EntityForm {
             : this.inputMarkup(name, attr);
 
     const pointer = attr.type === 'pointer' || attr.items?.type === 'pointer';
+    const label = `<label for="${escapeHtml(id)}">${escapeHtml(this.label(name, attr))}${required}</label>`;
+    const help = resolveText(attr.help, this.options.translator.language);
+    // Outside the label, which would hand a click on it to the control, and
+    // shown on hover only: focusable, it took the focus a panel gives its
+    // first field and opened with the form. The control is described by it
+    // instead (see bind), which is how a screen reader hears it.
+    const heading = help
+      ? `<div class="dc-label">
+          ${label}
+          <span class="dc-help" aria-hidden="true">?</span>
+          <span class="dc-tooltip" role="tooltip" id="dc-help-${escapeHtml(name)}">${escapeHtml(help)}</span>
+        </div>`
+      : label;
     return `
-        <label for="${escapeHtml(id)}">${escapeHtml(this.label(name, attr))}${required}</label>
+        ${heading}
         ${control}
         ${hint ? `<p class="dc-hint" data-hint>${escapeHtml(hint)}</p>` : ''}
         <p class="dc-error" data-error hidden></p>
@@ -801,11 +821,17 @@ export class EntityForm {
       void this.submit();
     });
 
+    this.bindFullName(root);
+
     for (const [name, attr] of this.fields) {
       const wrapper = root.querySelector<HTMLElement>(
         `[data-field="${selectorValue(name)}"]`
       );
       if (!wrapper) continue;
+      if (attr.help)
+        wrapper
+          .querySelector(`[id="dc-field-${selectorValue(name)}"]`)
+          ?.setAttribute('aria-describedby', `dc-help-${name}`);
 
       if (this.searches.has(name)) {
         this.bindPicker(name, wrapper);
@@ -839,6 +865,66 @@ export class EntityForm {
         });
       }
     }
+  }
+
+  /**
+   * Write the full name from the given name and the surname, as typed, for
+   * as long as nobody wrote it otherwise: while it is empty, or holds what
+   * the parts last made of it — on an entry as on a new one, so that a
+   * surname changed carries the full name along. The fields are found by
+   * their schema roles; the order is the deployment's (`fullNameFormat`).
+   */
+  private bindFullName(root: HTMLElement): void {
+    const plain = (role: string): string | undefined =>
+      this.fields.find(
+        ([name, attr]) =>
+          hasRole(attr, role) &&
+          attr.type === 'string' &&
+          !this.searches.has(name)
+      )?.[0];
+    const display = plain('displayName');
+    const parts = [plain('givenName'), plain('surname')];
+    if (!display || parts.some(name => !name)) return;
+    const control = (name: string): HTMLInputElement | null =>
+      root.querySelector<HTMLInputElement>(
+        `[data-field="${selectorValue(name)}"] .dc-input`
+      );
+    const target = control(display);
+    const [given, surname] = parts.map(name => control(name!));
+    if (!target || !given || !surname) return;
+    const compose = (givenName: string, surnameValue: string): string =>
+      givenName && surnameValue
+        ? EntityForm.fullName(
+            this.options.fullNameFormat || FULL_NAME_FORMAT,
+            givenName,
+            surnameValue
+          )
+        : '';
+    let written = compose(
+      (this.values[parts[0]!][0] || '').trim(),
+      (this.values[parts[1]!][0] || '').trim()
+    );
+    const follow = (): void => {
+      if (target.value !== '' && target.value !== written) return;
+      written = compose(given.value.trim(), surname.value.trim());
+      target.value = written;
+      this.values[display] = written ? [written] : [];
+    };
+    given.addEventListener('input', follow);
+    surname.addEventListener('input', follow);
+  }
+
+  /**
+   * A full name written from its parts: `{givenName}` and `{surname}` in the
+   * format replaced by them, spaces collapsed.
+   */
+  static fullName(format: string, givenName: string, surname: string): string {
+    return format
+      .replace(/\{(givenName|surname)\}/g, (_match, part: string) =>
+        part === 'givenName' ? givenName : surname
+      )
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   private bindPicker(name: string, wrapper: HTMLElement): void {
