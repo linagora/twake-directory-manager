@@ -59,7 +59,7 @@ Conventions).
 
 - [x] USER-01 (P1) Account card — `users.spec.ts`
 - [x] USER-02 (P1) Create an account through the form — `users.spec.ts`
-- [x] USER-03 (P2) Form validation before sending — `users.spec.ts` (Mailbox size wording: `knownIssue` form-error-repeats-hint-and-mailbox-size-wording)
+- [x] USER-03 (P2) Form validation before sending — `users.spec.ts`
 - [x] USER-04 (P2) Server rules: unique address and allowed domain — `users.spec.ts`
 - [x] USER-05 (P1) Edit an account — `users.spec.ts` (also the address: an address or alias another account holds and a foreign domain refused on edit, a new one saved and searched, the identifier kept)
 - [x] USER-06 (P1) Department field searches the tree — `users.spec.ts`

@@ -4785,7 +4785,9 @@ describe('Directory console', () => {
       await created.submit();
       expect(sent).to.equal(0);
       expect(created.errors).to.deep.equal({
-        mailQuotaSize: 'Expected pattern xGB, xMB, xKB or a number of bytes',
+        // Said with examples, not by repeating the hint shown before.
+        mailQuotaSize:
+          'Expected a size such as 4 GB, 500 MB or 100 KB, or a number of bytes',
         twakeDeletionDate: 'Expected a date not earlier than today',
       });
 

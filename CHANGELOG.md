@@ -15,6 +15,8 @@
 - French creates and imports in plain French: _Créer un utilisateur_,
   _Créer une organisation_, _Importer des utilisateurs_, no longer _Créer :
   utilisateur_ nor _Importer : Utilisateurs_ (#85)
+- A refused mailbox size is explained with examples, _Expected a size such
+  as 4 GB, 500 MB or 100 KB_, rather than by the hint shown before (#84)
 
 ## v0.10.0 (2026-10-22)
 

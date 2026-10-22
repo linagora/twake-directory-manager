@@ -1630,9 +1630,9 @@ export class EntityForm {
       attr.normalize === 'byteSize' &&
       list.some(value => parseByteSize(value) === undefined)
     )
-      return (
-        attributeHint(attr, translator.language) || translator.t('form.notSize')
-      );
+      // The console's words, with examples, rather than the schema's hint:
+      // shown under the field already, it said no more once refused.
+      return translator.t('form.notSize');
     if (hasRole(attr, 'accountExpiry')) {
       const stored = toList(entryValue(entry, name));
       if (list.some(value => !stored.includes(value) && beforeToday(value)))
