@@ -732,6 +732,70 @@ test.describe('USER user accounts', () => {
     expect(await directory.exists(user.dn)).toBe(false);
   });
 
+  test('USER-10 a deleted account leaves the groups it owns and belongs to', async ({
+    page,
+    directory,
+  }) => {
+    const leaver = await directory.createUser({ prefix: 'leaver' });
+    const colleague = await directory.createUser();
+    const group = await directory.createGroup({
+      owners: [leaver, colleague],
+      members: [leaver, colleague],
+    });
+    const app = await new LoginPage(page).loginAs(ADMIN, `users/${leaver.uid}`);
+
+    const message = answerNextConfirm(page, true);
+    await app.entry().action('Delete').click();
+    await message;
+    await app.expectToast('Deleted');
+
+    expect(await directory.values(group.dn, 'owner')).toEqual([colleague.dn]);
+    expect(await directory.values(group.dn, 'member')).toEqual([colleague.dn]);
+    const card = await app.openEntry(`groups/${group.cn}`);
+    await expect(card.relatedItems('Members')).toHaveText([colleague.uid]);
+    await expect(card.detail('Owners')).not.toContainText(leaver.uid);
+  });
+
+  test('USER-10 a deleted account is removed from the organizations and accounts naming it, and grants nothing to its successor', async ({
+    page,
+    directory,
+    loginInNewContext,
+  }) => {
+    knownIssue('account-delete-leaves-local-admin-links');
+    const leaver = await directory.createUser({ prefix: 'leaver' });
+    const colleague = await directory.createUser();
+    const org = await directory.createOrganization({
+      managers: [leaver],
+      localAdmins: [leaver],
+    });
+    await directory.addValues(colleague.dn, 'twakeDelegatedUsers', [leaver.dn]);
+    const app = await new LoginPage(page).loginAs(ADMIN, `users/${leaver.uid}`);
+
+    const message = answerNextConfirm(page, true);
+    await app.entry().action('Delete').click();
+    await message;
+    await app.expectToast('Deleted');
+
+    expect(await directory.values(org.dn, 'twakeLocalAdminLink')).toEqual([]);
+    expect(await directory.values(org.dn, 'twakeManagerLink')).toEqual([]);
+    expect(await directory.values(colleague.dn, 'twakeDelegatedUsers')).toEqual(
+      []
+    );
+
+    const organizations = await app.openOrganizations(org.dn);
+    await expect(organizations.card.detail('Local administrators')).toHaveText(
+      '—'
+    );
+    await expect(organizations.card.detail('Managers')).toHaveText('—');
+    const card = await app.openEntry(`users/${colleague.uid}`);
+    await expect(card.detail('Delegates')).toHaveText('—');
+
+    // the uid comes from the address: a new account given it gets the same DN
+    const successor = await directory.createUser({ uid: leaver.uid });
+    const signedIn = await loginInNewContext(successor);
+    await expect(signedIn.banner).toContainText('You administer no branch');
+  });
+
   test('USER-11 a local administrator moves an account between two organizations of their scope', async ({
     page,
     directory,
