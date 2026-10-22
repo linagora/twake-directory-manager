@@ -83,7 +83,11 @@ Filling in a form
 
 Every form works the same way:
 
-- fields marked with ``*`` are required;
+- fields marked with ``*`` are required. When creating an entry with many
+  fields (an account, for instance), the optional ones are folded under
+  :guilabel:`Optional fields`, below the required ones, the mail settings
+  and the password: click it to fill them. It opens by itself when one of them holds a value in the wrong
+  format;
 - fields are grouped by topic, under a heading;
 - a hint under a field gives the expected format. When saving, the values are
   checked before anything is sent to the server: an empty required field or a

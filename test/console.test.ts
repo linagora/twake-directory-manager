@@ -4694,6 +4694,114 @@ describe('Directory console', () => {
       expect(sent).to.equal(2);
     });
 
+    describe('a long form creating an entry', () => {
+      /** Users with the address fields of a real schema: past a modal's worth. */
+      const located: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            postalAddress: { type: 'string' },
+            postalCode: { type: 'string' },
+            l: { type: 'string', group: { en: 'Address', fr: 'Adresse' } },
+            mailQuotaSize: {
+              type: 'number',
+              role: 'emailQuotaSize',
+              group: { en: 'Mailbox', fr: 'Messagerie' },
+            },
+            twakeDelegatedUsers: {
+              type: 'array',
+              items: { type: 'string' },
+              group: { en: 'Mailbox', fr: 'Messagerie' },
+            },
+          },
+        },
+      };
+      const form = (entity: EntityDescriptor, entry?: Entry): EntityForm =>
+        new EntityForm({
+          entity,
+          entry,
+          translator: new Translator('en'),
+          pointerOptions: () => Promise.resolve([]),
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        });
+
+      it('should fold what the schema does not require below what it does', async () => {
+        const container = stubContainer();
+        await form(located).render(container);
+        const html = container.innerHTML;
+        const fold = html.indexOf('<details');
+        expect(fold).to.be.above(0);
+        expect(html).to.include('Optional fields (4)');
+        // Not required, but an account is created with its mail and its
+        // password; and the quota's group is not split.
+        for (const name of [
+          'cn',
+          'mail',
+          'twakeDepartmentLink',
+          'mailAlternateAddress',
+          'userPassword',
+          'mailQuotaSize',
+          'twakeDelegatedUsers',
+        ])
+          expect(html.indexOf(`data-field="${name}"`)).to.be.within(0, fold);
+        for (const name of [
+          'telephoneNumber',
+          'postalAddress',
+          'postalCode',
+          'l',
+        ])
+          expect(html.indexOf(`data-field="${name}"`)).to.be.above(fold);
+        // The schema's groups are kept inside the fold.
+        expect(html.indexOf('<legend>Address</legend>')).to.be.above(fold);
+      });
+
+      it('should fold nothing when editing, nor in a short form', async () => {
+        const edited = stubContainer();
+        await form(located, { uid: 'va.val', cn: 'Va Val' }).render(edited);
+        expect(edited.innerHTML).not.to.include('<details');
+        const short = stubContainer();
+        await form(users).render(short);
+        expect(short.innerHTML).not.to.include('<details');
+      });
+
+      it('should open the fold on a refusal it hides, and show the first one', async () => {
+        const fold = { open: false };
+        const scrolled: string[] = [];
+        const fields = new Map<string, unknown>();
+        const field = (name: string) => {
+          if (!fields.has(name)) {
+            const error = { textContent: '', hidden: true };
+            fields.set(name, {
+              querySelector: (selector: string) =>
+                selector === '[data-error]' ? error : null,
+              closest: () =>
+                ['cn', 'mail', 'twakeDepartmentLink'].includes(name)
+                  ? null
+                  : fold,
+              scrollIntoView: () => scrolled.push(name),
+            });
+          }
+          return fields.get(name);
+        };
+        const created = form(located) as unknown as {
+          root: unknown;
+          values: Record<string, string[]>;
+          submit(): Promise<void>;
+        };
+        created.root = {
+          querySelector: (selector: string) =>
+            field(/data-field="([^"]+)"/.exec(selector)![1]),
+        };
+        created.values.telephoneNumber = ['12'];
+        await created.submit();
+        expect(fold.open).to.equal(true);
+        // The required fields are shown first, and refused first.
+        expect(scrolled).to.deep.equal(['cn']);
+      });
+    });
+
     it('should offer a search, not a select, for a pointer into a large branch', async () => {
       const delegates = {
         ...users,

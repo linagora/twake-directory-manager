@@ -106,6 +106,14 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
   arrow keys. A pointer into a small branch stays a select.
 - **Long forms open as a side panel**, short ones as a dialog. A form of
   twenty fields inside a modal puts its Save button off screen.
+- **A long form creating an entry folds its optional fields** under
+  _Optional fields_, below the required ones: what must be filled in fits on
+  screen. What goes there follows the schema's `required`, so a field made
+  optional moves into it on its own. The mail and the password stay shown
+  (roles `primaryEmail`, `emailAliases`, `emailQuota`, `emailQuotaSize`,
+  `password`, `passwordReset`), with the whole schema group of any of them:
+  the mailbox settings are not split. The fold opens when it hides a refused
+  value; editing shows every field.
 - **The search covers every field the schema marks `searchable`**, not the
   identifier alone, and the selector still narrows it to one. A schema that
   marks nothing is guessed at, which is why a large branch should mark its
