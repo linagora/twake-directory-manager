@@ -2024,6 +2024,44 @@ describe('Directory console', () => {
       }
     });
 
+    it('should keep an open panel, and what was typed, across a change of language', () => {
+      const typed = { hidden: false, value: 'E9901' };
+      let drawn = false;
+      const replaced: unknown[] = [];
+      const fresh = {
+        hidden: true,
+        replaceWith: (element: unknown) => replaced.push(element),
+      };
+      const app = new DirectoryConsole({
+        containerId: 'console',
+        apiBaseUrl: baseUrl,
+        language: 'en',
+      }) as unknown as {
+        container: unknown;
+        translator: Translator;
+        renderMain(): Promise<void>;
+        changeLanguage(code: string): void;
+      };
+      app.container = {
+        set innerHTML(_html: string) {
+          drawn = true;
+        },
+        querySelector: (selector: string) =>
+          selector === '[data-panel]' ? (drawn ? fresh : typed) : null,
+        querySelectorAll: () => [],
+      };
+      app.renderMain = () => Promise.resolve();
+      app.changeLanguage('fr');
+      expect(app.translator.language).to.equal('fr');
+      expect(replaced).to.deep.equal([typed]);
+
+      // A closed one is drawn afresh, in the new language.
+      typed.hidden = true;
+      drawn = false;
+      app.changeLanguage('en');
+      expect(replaced).to.have.length(1);
+    });
+
     it('should name the transit branch in the scope banner, tooltip included', () => {
       const app = consoleIn({}) as unknown as {
         scope: Scope;

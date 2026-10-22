@@ -28,6 +28,8 @@
 - The organization tree's buttons are named for a screen reader, _Expand
   Sales_, _New organization under Sales_, rather than by their glyphs, and
   the selected organization is marked current (#80)
+- Changing the language keeps an open form, and what was typed into it, in
+  the language it was opened in; it was closed, and the values lost (#79)
 
 ## v0.10.0 (2026-10-22)
 

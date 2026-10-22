@@ -583,6 +583,29 @@ export class DirectoryConsole {
   /* ------------------------------------------------------------------ shell */
 
   /** Draw the permanent frame: sidebar, scope, main area, side panel. */
+  /**
+   * Draw the console again in another language. An open side panel is kept
+   * as it is, in the language it was opened in: drawn again, it was closed,
+   * and what had been typed into it was lost.
+   *
+   * @param code the language chosen
+   */
+  private changeLanguage(code: string): void {
+    try {
+      localStorage.setItem(LANGUAGE_KEY, code);
+      // eslint-disable-next-line no-empty
+    } catch {}
+    const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
+    const kept = panel && !panel.hidden ? panel : null;
+    this.translator = new Translator(code);
+    this.drawShell();
+    if (kept)
+      this.container
+        ?.querySelector<HTMLElement>('[data-panel]')
+        ?.replaceWith(kept);
+    void this.renderMain();
+  }
+
   private drawShell(): void {
     const container = this.container;
     if (!container) return;
@@ -701,14 +724,7 @@ export class DirectoryConsole {
     container
       .querySelector<HTMLSelectElement>('[data-language]')
       ?.addEventListener('change', event => {
-        const code = (event.target as HTMLSelectElement).value;
-        try {
-          localStorage.setItem(LANGUAGE_KEY, code);
-          // eslint-disable-next-line no-empty
-        } catch {}
-        this.translator = new Translator(code);
-        this.drawShell();
-        void this.renderMain();
+        this.changeLanguage((event.target as HTMLSelectElement).value);
       });
 
     container
