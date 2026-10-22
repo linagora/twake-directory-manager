@@ -1737,7 +1737,9 @@ export class DirectoryConsole {
         branch: string,
         failed?: boolean
       ):
-        | ((query: string) => Promise<{ dn: string; label: string }[]>)
+        | ((
+            query: string
+          ) => Promise<{ dn: string; label: string; token?: string }[]>)
         | undefined => this.api.pointerSearch(branch, this.entities, failed),
       memberSearch: (
         role: 'members' | 'owners'
@@ -1838,7 +1840,9 @@ export class DirectoryConsole {
         branch: string,
         failed?: boolean
       ):
-        | ((query: string) => Promise<{ dn: string; label: string }[]>)
+        | ((
+            query: string
+          ) => Promise<{ dn: string; label: string; token?: string }[]>)
         | undefined => this.api.pointerSearch(branch, this.entities, failed),
       onCancel: (): void => this.closePanel(),
       onSubmit: (

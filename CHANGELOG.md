@@ -9,6 +9,9 @@
   `memberRestrictedList` or `Prof` (#109)
 - An organization filter matching none of the opened branches says so; the
   tree was left blank (#108)
+- A member, a manager or a delegate picked from the suggestions reads as the
+  others, by its identifier: _alice_, not _Alice Moreau
+  <alice@example.com>_ until saved (#107)
 
 ## v0.10.0 (2026-10-22)
 

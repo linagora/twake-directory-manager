@@ -3205,9 +3205,15 @@ describe('Directory console', () => {
         {
           dn: 'uid=jane.doe,ou=users,dc=example,dc=com',
           label: 'Jane Doe (jane.doe)',
+          // Once chosen, named by its identifier, as a value loaded is.
+          token: 'jane.doe',
         },
         // No display name: the identifier alone.
-        { dn: 'uid=jdoe,ou=users,dc=example,dc=com', label: 'jdoe' },
+        {
+          dn: 'uid=jdoe,ou=users,dc=example,dc=com',
+          label: 'jdoe',
+          token: 'jdoe',
+        },
       ]);
     });
 
@@ -3251,11 +3257,13 @@ describe('Directory console', () => {
         {
           dn: 'uid=jane,ou=users,dc=example,dc=com',
           label: 'Jane Doe <jane@example.com>',
+          token: 'jane',
           mail: 'jane@example.com',
         },
         {
           dn: 'cn=jane-team,ou=groups,dc=example,dc=com',
           label: 'jane-team <jane-team@example.com>',
+          token: 'jane-team',
           mail: 'jane-team@example.com',
         },
       ]);
@@ -3286,7 +3294,11 @@ describe('Directory console', () => {
         lists,
       ]);
       expect(await search!('jane')).to.deep.equal([
-        { dn: 'uid=jane,ou=users,dc=example,dc=com', label: 'Jane' },
+        {
+          dn: 'uid=jane,ou=users,dc=example,dc=com',
+          label: 'Jane',
+          token: 'jane',
+        },
       ]);
     });
 
