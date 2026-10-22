@@ -5363,6 +5363,12 @@ describe('Directory console', () => {
         (form as unknown as { values: Record<string, string[]> }).values.member;
       const enter = { key: 'Enter', preventDefault: () => undefined };
 
+      it('should name each remove button after the member it removes', async () => {
+        const { container } = await memberForm(() => Promise.resolve([]));
+        expect(container.innerHTML).to.include('aria-label="Remove alice"');
+        expect(container.innerHTML).to.not.include('Remove this value');
+      });
+
       it('should find a member by email address rather than ask for a DN', async () => {
         const asked: string[] = [];
         const { form, input, container } = await memberForm(query => {
@@ -6035,6 +6041,9 @@ describe('Directory console', () => {
       expect(list.innerHTML).to.include(
         `<span title="${example}">example.com</span>`
       );
+      // Its remove button says which value it removes.
+      expect(container.innerHTML).to.include('aria-label="Remove example"');
+      expect(list.innerHTML).to.include('aria-label="Remove example.com"');
     });
 
     it('should not offer the identifier for editing once it exists', async () => {

@@ -17,6 +17,9 @@
   utilisateur_ nor _Importer : Utilisateurs_ (#85)
 - A refused mailbox size is explained with examples, _Expected a size such
   as 4 GB, 500 MB or 100 KB_, rather than by the hint shown before (#84)
+- The × of a member, a delegate, an alias or any other value of a list is
+  named after it for a screen reader, _Remove carol_; all read _Remove this
+  value_ (#83)
 
 ## v0.10.0 (2026-10-22)
 

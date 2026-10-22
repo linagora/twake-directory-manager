@@ -744,16 +744,17 @@ export class EntityForm {
   private pickerItems(name: string): string {
     const { translator } = this.options;
     return this.values[name]
-      .map(
-        (dn, index) => `
+      .map((dn, index) => {
+        const shown = this.picked.get(dn) || rdnValue(dn);
+        return `
       <li class="dc-token">
-        <span title="${escapeHtml(dn)}">${escapeHtml(
-          this.picked.get(dn) || rdnValue(dn)
-        )}</span>
+        <span title="${escapeHtml(dn)}">${escapeHtml(shown)}</span>
         <button type="button" data-remove="${index}"
-          aria-label="${escapeHtml(translator.t('form.removeValue'))}">×</button>
-      </li>`
-      )
+          aria-label="${escapeHtml(
+            translator.t('form.removeValue', { value: shown })
+          )}">×</button>
+      </li>`;
+      })
       .join('');
   }
 
@@ -794,16 +795,21 @@ export class EntityForm {
     // A DN is named the way its select offers it, the DN kept for the title.
     const pointer = attr?.items?.type === 'pointer';
     return this.values[name]
-      .map(
-        (value, index) => `
+      .map((value, index) => {
+        const shown = pointer
+          ? this.picked.get(value) || rdnValue(value)
+          : value;
+        // Named after what it removes: a row of "Remove this value" buttons
+        // cannot be told apart by a screen reader, nor by voice.
+        return `
       <li class="dc-token">
-        <span title="${escapeHtml(value)}">${escapeHtml(
-          pointer ? this.picked.get(value) || rdnValue(value) : value
-        )}</span>
+        <span title="${escapeHtml(value)}">${escapeHtml(shown)}</span>
         <button type="button" data-remove="${index}"
-          aria-label="${escapeHtml(translator.t('form.removeValue'))}">×</button>
-      </li>`
-      )
+          aria-label="${escapeHtml(
+            translator.t('form.removeValue', { value: shown })
+          )}">×</button>
+      </li>`;
+      })
       .join('');
   }
 
