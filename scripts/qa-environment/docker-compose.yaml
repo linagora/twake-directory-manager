@@ -43,6 +43,13 @@ services:
       - DM_LDAP_TOP_ORGANIZATION=ou=organization,dc=example,dc=com
       - DM_LDAP_GROUP_BASE=ou=groups,dc=example,dc=com
       - DM_AUTHZ_TRANSIT_BRANCH=ou=Transit,ou=organization,dc=example,dc=com
+      # As a deployment should: the administrators of the top organization alone read and change
+      # the password policies, and add and delete mail domains (README, Password policies and
+      # Mail domains)
+      - DM_PPOLICY_BASE=ou=policies,dc=example,dc=com
+      - DM_PPOLICY_DEFAULT_DN=cn=default,ou=policies,dc=example,dc=com
+      - DM_AUTHZ_GLOBAL_BRANCHES=ou=policies,dc=example,dc=com
+      - DM_AUTHZ_GLOBAL_WRITE_BRANCHES=ou=domains,ou=nomenclature,dc=example,dc=com
       - DM_OIDC_SERVER=http://sso:${QA_SSO_PORT:?}
       - DM_OIDC_CLIENT_ID=twake-directory-manager
       - DM_OIDC_CLIENT_SECRET=qa-client-secret-qa-client-secret

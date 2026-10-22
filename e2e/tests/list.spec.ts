@@ -1,7 +1,7 @@
 import { csv, LoginPage, readDownload } from '../pages';
 import { ADMIN, ALICE, SEEDED_UIDS, SOPHIE } from '../support/accounts';
 import { answerNextConfirm } from '../support/confirm';
-import { TRANSIT, uniquePart } from '../support/directory';
+import { TEST_DOMAIN, TRANSIT, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
 const USER_COLUMNS = [
@@ -291,7 +291,6 @@ test.describe('LIST lists, search and bulk actions', () => {
       ['accountStatuses', 'Account states'],
       ['listTypes', 'List types'],
       ['mailboxTypes', 'Group types'],
-      ['domains', 'Mail domains'],
     ];
     for (const [hash, name] of lists) {
       await app.open(hash);
@@ -320,9 +319,18 @@ test.describe('LIST lists, search and bulk actions', () => {
     await expect(list.columnHeaders).toHaveText(['Name', 'Description']);
     await expect(list.rows).toHaveCount(4);
 
+    // admin, a global administrator of the stack, adds and imports them (DOMAIN-01)
     await app.open('domains');
+    await expect(list.heading).toHaveText('Mail domains');
+    await expect(list.searchGuard).toHaveCount(0);
+    await expect(list.newButton).toHaveText('New domain');
     await expect(list.columnHeaders).toHaveText(['Identifier', 'Mail domain']);
-    expect(await list.read()).toEqual([
+    await expect(list.row('example')).toBeVisible();
+    expect(
+      (await list.read()).filter(
+        row => !TEST_DOMAIN.test(row['Mail domain'] ?? '')
+      )
+    ).toEqual([
       { Identifier: 'example', 'Mail domain': 'example.com' },
       { Identifier: 'lists', 'Mail domain': 'lists.example.com' },
     ]);
