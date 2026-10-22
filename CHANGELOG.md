@@ -1,41 +1,25 @@
 # Changelog
 
-## Unreleased
+## v0.10.1 (2026-10-22)
+
+Built on ldap-rest 0.23.0.
 
 ### Bug Fixes
 
-- A reference entry's edit panel and its deletion are named as its card
-  names it: _Edit — Members only_, _Delete Prof.?_, no longer by the stored
-  `memberRestrictedList` or `Prof` (#109)
-- An organization filter matching none of the opened branches says so; the
-  tree was left blank (#108)
-- A member, a manager or a delegate picked from the suggestions reads as the
-  others, by its identifier: _alice_, not _Alice Moreau
-  <alice@example.com>_ until saved (#107)
 - French creates and imports in plain French: _Créer un utilisateur_,
-  _Créer une organisation_, _Importer des utilisateurs_, no longer _Créer :
-  utilisateur_ nor _Importer : Utilisateurs_ (#85)
-- A refused mailbox size is explained with examples, _Expected a size such
-  as 4 GB, 500 MB or 100 KB_, rather than by the hint shown before (#84)
-- The × of a member, a delegate, an alias or any other value of a list is
-  named after it for a screen reader, _Remove carol_; all read _Remove this
-  value_ (#83)
-- A screen reader says the toasts, the generated password and the refusals
-  among them; they showed in silence (#82)
+  _Importer des utilisateurs_ (#85)
+- Changing the language keeps an open form and what was typed into it (#79)
 - Deleting a reference entry still in use says so in words, naming the field
-  using it: _Sales Manager is still used by entries (Position)_; the server's
-  message, with the DN and the attribute, showed in English (#81)
-- The organization tree's buttons are named for a screen reader, _Expand
-  Sales_, _New organization under Sales_, rather than by their glyphs, and
-  the selected organization is marked current (#80)
-- Changing the language keeps an open form, and what was typed into it, in
-  the language it was opened in; it was closed, and the values lost (#79)
-- A field a form refuses is marked invalid and described by its message,
-  and takes the focus, for a screen reader to say what is wrong; the
-  refusals were only red on screen (#78)
-- _Export selection_ writes its CSV with a byte-order mark and CRLF line
-  endings, as the import's template: a spreadsheet read accented values as
-  mojibake (#77)
+  using it (#81)
+- A reference entry's edit panel and deletion name it as its card does (#109)
+- An organization filter matching nothing says so (#108)
+- A member picked from the suggestions reads by its identifier (#107)
+- A refused mailbox size is explained with examples (#84)
+- _Export selection_ writes its CSV with a BOM and CRLF, as the import's
+  template (#77)
+- Accessibility: refused fields are marked invalid and focused (#78), the
+  organization tree's buttons are named (#80), toasts are announced (#82),
+  a value's × is named after it (#83)
 
 ## v0.10.0 (2026-10-22)
 
