@@ -58,6 +58,24 @@ export class FormPanel {
     await this.optionalFold.locator('summary').click();
   }
 
+  /** Whether "Optional fields (N)" is open; never opens it */
+  async isUnfolded(): Promise<boolean> {
+    return this.optionalFold.evaluate(d => (d as HTMLDetailsElement).open);
+  }
+
+  /** Opens or closes "Optional fields (N)", as a click on its summary does */
+  async toggleFold(): Promise<void> {
+    await this.optionalFold.locator('summary').click();
+  }
+
+  /**
+   * The control of a field by its label, without opening the fold: for what the form does by
+   * itself (a value it writes, a fold it opens)
+   */
+  control(label: string): Locator {
+    return this.dialog.getByLabel(labelled(label));
+  }
+
   /** The control of a field (textbox, select, picker), by its label */
   async field(label: string): Promise<Locator> {
     await this.unfold();
