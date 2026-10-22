@@ -1,0 +1,421 @@
+import { LoginPage } from '../pages';
+import { ADMIN, ORG } from '../support/accounts';
+import { answerNextConfirm } from '../support/confirm';
+import { uniquePart } from '../support/directory';
+import { expect, test } from '../support/fixtures';
+
+/** What a refusal must never read like */
+const UNREADABLE = /Internal Server Error|check logs|^\s*\{|"error"/;
+
+test.describe('ORG organizations', () => {
+  test('ORG-01 browse the tree and open a card', async ({ page }) => {
+    const app = await new LoginPage(page).loginAs(ADMIN);
+    const organizations = await app.openOrganizations();
+
+    await expect(organizations.toggle('organization')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    const children = organizations.children('organization');
+    for (const name of ['Sales', 'Engineering', 'Human Resources', 'Transit'])
+      await expect(children.filter({ hasText: name }).first()).toBeVisible();
+    await expect(organizations.tag('Transit')).toHaveText('Transit');
+    await expect(organizations.tag('Sales')).toHaveCount(0);
+
+    await expect(organizations.toggle('Sales')).toHaveText('▸');
+    await organizations.toggle('Sales').click();
+    await expect(organizations.toggle('Sales')).toHaveText('▾');
+    await expect(organizations.children('Sales')).toHaveText([
+      'France',
+      'Germany',
+    ]);
+    await organizations.toggle('France').click();
+    await expect(organizations.toggle('France')).toHaveText('·');
+    await organizations.toggle('Sales').click();
+    await expect(organizations.label('France')).toBeHidden();
+    await organizations.toggle('Sales').click();
+
+    await expect(organizations.label('Sales')).toHaveAttribute(
+      'title',
+      'Sales'
+    );
+    const card = await organizations.select('Sales');
+    await expect(card.detail('Name')).toHaveText('Sales');
+    await expect(card.detail('Description')).toHaveText('Sales department');
+    await expect(card.detail('Locality')).toHaveText('Paris');
+    await expect(card.detail('Path')).toHaveText('Sales');
+    await expect(card.detail('Managers')).toHaveText('sophie.martin');
+    await expect(card.detail('Local administrators')).toHaveText(
+      'sophie.martin'
+    );
+    await expect(card.detail('Mail domains')).toBeVisible();
+    await expect(
+      card.relatedItems('Attached entries').filter({ hasText: 'sophie.martin' })
+    ).toBeVisible();
+    await expect(
+      card.relatedItems('Attached entries').filter({ hasText: 'sales-team' })
+    ).toBeVisible();
+
+    await card.action('Edit').click();
+    const form = app.form();
+    await form.expectOpen('Edit — Sales');
+    await expect(organizations.tree).toBeVisible();
+    await form.cancel();
+    await expect(organizations.tree).toBeVisible();
+    await expect(organizations.card.heading).toHaveText('Sales');
+  });
+
+  test('ORG-02 the tree filter types forwards', async ({ page }) => {
+    const app = await new LoginPage(page).loginAs(ADMIN);
+    const organizations = await app.openOrganizations();
+    await organizations.expand('Sales');
+    await organizations.expand('Engineering');
+
+    await organizations.filter.click();
+    await organizations.filter.pressSequentially('Back', { delay: 120 });
+    await expect(organizations.filter).toHaveValue('Back');
+    await expect(organizations.filter).toBeFocused();
+    expect(
+      await organizations.filter.evaluate(
+        input => (input as HTMLInputElement).selectionStart
+      )
+    ).toBe(4);
+    await expect(organizations.names()).toHaveText([
+      'organization',
+      'Engineering',
+      'Backend',
+    ]);
+
+    await organizations.filter.pressSequentially('en', { delay: 120 });
+    await expect(organizations.filter).toHaveValue('Backen');
+    await organizations.filter.press('Backspace');
+    await expect(organizations.filter).toHaveValue('Backe');
+    await organizations.filter.press('ArrowLeft');
+    await organizations.filter.press('ArrowLeft');
+    await organizations.filter.pressSequentially('x');
+    await expect(organizations.filter).toHaveValue('Bacxke');
+    await expect(organizations.filter).toBeFocused();
+
+    await organizations.filter.fill('');
+    await expect(organizations.label('Sales')).toBeVisible();
+    await expect(organizations.label('France')).toBeVisible();
+    await expect(organizations.label('Backend')).toBeVisible();
+    await expect(organizations.label('Human Resources')).toBeVisible();
+  });
+
+  test('ORG-03 create a sub-organization', async ({
+    page,
+    directory,
+    tenant,
+  }) => {
+    const name = `QA Lab ${uniquePart()}`;
+    directory.track(`ou=${name},${tenant.org.dn}`);
+    const app = await new LoginPage(page).loginAs(ADMIN);
+    const organizations = await app.openOrganizations(tenant.org.dn);
+
+    await organizations
+      .node(tenant.org.name)
+      .locator('.dc-tree-row')
+      .first()
+      .hover();
+    await expect(organizations.addButton(tenant.org.name)).toHaveAttribute(
+      'title',
+      'New organization here'
+    );
+    await organizations.addButton(tenant.org.name).click();
+    const form = app.form();
+    await form.expectOpen('New organization');
+
+    await form.fill('Name', '-Lab');
+    await form.submit();
+    await expect(form.error('Name')).toContainText(
+      'starting with a letter or a digit'
+    );
+
+    await form.fill('Name', name);
+    await form.fill('Description', 'Test');
+    await form.addValue('Phone', '+33 1 00 00 00 00');
+    await form.submit();
+    await app.expectToast('Created');
+
+    const card = organizations.card;
+    await expect(card.heading).toHaveText(name);
+    await expect(card.detail('Path')).toHaveText(
+      `${tenant.org.path} / ${name}`
+    );
+    await expect(organizations.children(tenant.org.name)).toContainText([name]);
+    await card.action('Edit').click();
+    await form.expectOpen(`Edit — ${name}`);
+    await expect(form.dialog.getByLabel(/^Name( \*)?$/)).toHaveCount(0);
+    await form.cancel();
+  });
+
+  test('ORG-04 edit an organization: managers, local administrators, mail domains', async ({
+    page,
+    directory,
+    loginInNewContext,
+  }) => {
+    const org = await directory.createOrganization();
+    const person = await directory.createUser({ org });
+    const app = await new LoginPage(page).loginAs(ADMIN);
+    const organizations = await app.openOrganizations(org.dn);
+    const card = organizations.card;
+    await expect(card.heading).toHaveText(org.name);
+
+    await card.action('Edit').click();
+    const form = app.form();
+    await form.expectOpen(`Edit — ${org.name}`);
+    await form.pick('Managers', person.uid, person.uid);
+    await form.pick('Local administrators', person.uid, person.uid);
+    await form.type('Mail domains', 'exa');
+    await expect(
+      form.options('Mail domains').filter({ hasText: 'example.com' }).first()
+    ).toBeVisible();
+    await expect(form.options('Mail domains')).not.toContainText([
+      'dc=example',
+    ]);
+    await form
+      .options('Mail domains')
+      .filter({ hasText: /^example\.com$/ })
+      .click();
+    await expect(form.tokens('Mail domains')).toHaveText(['example.com']);
+    // named, not shown as DNs (the label right after a pick also holds the full name)
+    for (const label of ['Managers', 'Local administrators']) {
+      await expect(form.tokens(label)).toHaveCount(1);
+      await expect(form.tokens(label)).toContainText(person.uid);
+      await expect(form.tokens(label)).not.toContainText('uid=');
+    }
+    await form.submit();
+
+    await app.expectToast('Saved');
+    await expect(card.detail('Managers')).toContainText(person.uid);
+    await expect(card.detail('Managers')).not.toContainText('uid=');
+    await expect(card.detail('Local administrators')).toContainText(person.uid);
+    await expect(card.detail('Mail domains')).toHaveText('example.com');
+
+    const local = await loginInNewContext(person);
+    await expect(local.scopeBranches).toHaveText([
+      new RegExp(`^\\s*${org.name}\\s+read, write, delete\\s*$`),
+    ]);
+
+    await card.action('Edit').click();
+    await form.expectOpen(`Edit — ${org.name}`);
+    await form.removeToken('Local administrators', person.uid);
+    await form.submit();
+    await app.expectToast('Saved');
+    expect(await directory.values(org.dn, 'twakeLocalAdminLink')).toEqual([]);
+  });
+
+  test('ORG-05 delete an organization', async ({ page, directory, tenant }) => {
+    const lab = await directory.createOrganization({
+      parent: tenant.org.dn,
+      name: 'QA Lab',
+    });
+    const germany = await directory.createOrganization({
+      parent: tenant.org.dn,
+      name: 'Germany',
+    });
+    await directory.createUser({ org: germany });
+    const app = await new LoginPage(page).loginAs(ADMIN);
+    const organizations = await app.openOrganizations(lab.dn);
+    await expect(organizations.card.heading).toHaveText(lab.name);
+
+    let message = answerNextConfirm(page, true);
+    await organizations.card.action('Delete').click();
+    expect(await message).toBe(`Delete ${lab.path}? This cannot be undone.`);
+    await app.expectToast('Deleted');
+    await expect(organizations.label(lab.name)).toHaveCount(0);
+    await expect(organizations.card.heading).toHaveText(tenant.org.name);
+    await expect(organizations.selected).toHaveText(tenant.org.name);
+    await expect(organizations.label(germany.name)).toBeVisible();
+    expect(await directory.exists(lab.dn)).toBe(false);
+
+    await organizations.select(germany.name);
+    message = answerNextConfirm(page, true);
+    await organizations.card.action('Delete').click();
+    await message;
+    await app.expectToast(
+      `${germany.path} is not empty: move or delete its entries first`,
+      true
+    );
+    expect(await directory.exists(germany.dn)).toBe(true);
+
+    await app.setLanguage('fr');
+    message = answerNextConfirm(page, true);
+    await organizations.card.actions().filter({ hasText: 'Supprimer' }).click();
+    await message;
+    await app.expectToast(
+      `${germany.path} n’est pas vide : déplacez ou supprimez d’abord ses entrées`,
+      true
+    );
+  });
+
+  test('ORG-06 a local administrator and organizations', async ({
+    page,
+    directory,
+    tenant,
+  }) => {
+    const app = await new LoginPage(page).loginAs(tenant.admin);
+    const organizations = await app.openOrganizations();
+    await expect(organizations.names().first()).toHaveText(tenant.org.name);
+    const spain = `Spain ${uniquePart()}`;
+    directory.track(`ou=${spain},${tenant.org.dn}`);
+
+    await organizations.addButton(tenant.org.name).click();
+    const form = app.form();
+    await form.expectOpen('New organization');
+    await form.fill('Name', spain);
+    await form.submit();
+    await app.expectToast('Created');
+    await expect(organizations.card.heading).toHaveText(spain);
+
+    await organizations.card.action('Edit').click();
+    await form.expectOpen(`Edit — ${spain}`);
+    await form.fill('Description', 'Ventas');
+    await form.submit();
+    await app.expectToast('Saved');
+    await expect(organizations.card.detail('Description')).toHaveText('Ventas');
+
+    const message = answerNextConfirm(page, true);
+    await organizations.card.action('Delete').click();
+    await message;
+    await app.expectToast('Deleted');
+    await expect(organizations.label(spain)).toHaveCount(0);
+
+    await organizations.select(tenant.org.name);
+    if ((await organizations.card.action('Edit').count()) > 0) {
+      await organizations.card.action('Edit').click();
+      await form.expectOpen(`Edit — ${tenant.org.name}`);
+      await form.fill('Description', 'Changed by its administrator');
+      await form.submit();
+      await expect(app.errorToast).toBeVisible();
+      await expect(app.errorToast).not.toHaveText(UNREADABLE);
+    }
+    expect(await directory.values(tenant.org.dn, 'description')).toEqual([]);
+  });
+
+  test('ORG-07 the Department path link of an entry opens the tree', async ({
+    page,
+  }) => {
+    const app = await new LoginPage(page).loginAs(ADMIN, 'users/carol');
+
+    await app
+      .entry()
+      .detail('Department path')
+      .getByRole('link', { name: 'Engineering / Backend' })
+      .click();
+
+    const organizations = app.organizations();
+    await expect(organizations.card.heading).toHaveText('Backend');
+    await expect(organizations.selected).toHaveText('Backend');
+    await expect(organizations.toggle('Engineering')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    await expect(page).toHaveURL(
+      new RegExp(encodeURIComponent(ORG.backend).replace(/[%]/g, '%'))
+    );
+  });
+
+  test('ORG-08 the tree keeps its state after a write, and a typed address opens it down', async ({
+    page,
+    directory,
+    tenant,
+    loginInNewContext,
+  }) => {
+    const france = await directory.createOrganization({
+      parent: tenant.org.dn,
+      name: 'France',
+    });
+    const app = await new LoginPage(page).loginAs(ADMIN);
+    const organizations = await app.openOrganizations();
+    await organizations.expand('Sales');
+    await organizations.expand(tenant.org.name);
+    await organizations.label(france.name).click();
+    await expect(organizations.card.detail('Path')).toHaveText(france.path);
+    await expect(page).toHaveURL(
+      new RegExp(`#/organizations/${encodeURIComponent(`ou=${france.name}`)}`)
+    );
+    const address = page.url();
+
+    await organizations.card.action('Edit').click();
+    const form = app.form();
+    await form.fill('Description', 'Updated');
+    await form.submit();
+    await app.expectToast('Saved');
+    await expect(organizations.card.detail('Description')).toHaveText(
+      'Updated'
+    );
+    await expect(organizations.toggle('Sales')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    await expect(organizations.toggle(tenant.org.name)).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    await expect(organizations.card.detail('Path')).toHaveText(france.path);
+
+    const temporary = `QA Tmp ${uniquePart()}`;
+    directory.track(`ou=${temporary},${tenant.org.dn}`);
+    await organizations.addButton(tenant.org.name).click();
+    await form.fill('Name', temporary);
+    await form.submit();
+    await app.expectToast('Created');
+    await expect(organizations.card.heading).toHaveText(temporary);
+    await expect(organizations.selected).toHaveText(temporary);
+    const message = answerNextConfirm(page, true);
+    await organizations.card.action('Delete').click();
+    await message;
+    await app.expectToast('Deleted');
+    await expect(organizations.selected).toHaveText(tenant.org.name);
+    await expect(organizations.toggle('Sales')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+
+    const other = await loginInNewContext(ADMIN);
+    await other.page.goto(address);
+    const tree = other.organizations();
+    await expect(tree.card.detail('Path')).toHaveText(france.path);
+    await expect(tree.toggle(tenant.org.name)).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+  });
+
+  test('ORG-09 the card counts the attached entries it does not list', async ({
+    page,
+    directory,
+    tenant,
+  }) => {
+    for (let i = 0; i < 55; i++)
+      await directory.createUser({ org: tenant.org });
+    const single = await directory.createOrganization();
+    for (let i = 0; i < 51; i++) await directory.createUser({ org: single });
+    const app = await new LoginPage(page).loginAs(ADMIN);
+
+    const organizations = await app.openOrganizations(tenant.org.dn);
+    const attached = organizations.card.related('Attached entries');
+    await expect(
+      organizations.card.relatedItems('Attached entries')
+    ).toHaveCount(50);
+    await expect(attached.getByRole('status')).toHaveText(
+      'And 6 more entries, not listed here: search the lists to find them.'
+    );
+    await app.setLanguage('fr');
+    await expect(
+      organizations.card.related('Entrées rattachées').getByRole('status')
+    ).toHaveText(
+      'Et 6 autres entrées, non affichées ici : recherchez-les dans les listes.'
+    );
+    await app.setLanguage('en');
+
+    await app.openOrganizations(single.dn);
+    await expect(
+      organizations.card.related('Attached entries').getByRole('status')
+    ).toHaveText(
+      'And 1 more entry, not listed here: search the lists to find it.'
+    );
+  });
+});

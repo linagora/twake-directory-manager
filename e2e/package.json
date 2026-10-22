@@ -1,0 +1,23 @@
+{
+  "name": "@twake-directory-manager/e2e",
+  "private": true,
+  "description": "End to end tests of the Twake Directory Manager console (Playwright). Standalone package, run by the e2e job of CI.",
+  "license": "AGPL-3.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "stack:start": "./scripts/start.sh",
+    "stack:stop": "./scripts/stop.sh",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^24.0.0",
+    "ldapts": "^8.0.0",
+    "typescript": "^5.9.0"
+  }
+}

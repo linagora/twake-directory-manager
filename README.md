@@ -302,6 +302,9 @@ npx ldap-rest --plugin core/static --static-path ./dist --static-name console \
 # http://localhost:8081/console/
 ```
 
+End to end tests (Playwright, against the stack of `scripts/qa-environment/`):
+[`e2e/README.md`](e2e/README.md).
+
 ## License
 
 [AGPL-3.0](LICENSE) — © LINAGORA
