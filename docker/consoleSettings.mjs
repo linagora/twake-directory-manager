@@ -10,6 +10,11 @@
  *   deployment acts on, and an administrator filling one in expects an
  *   effect there is none of.
  *
+ * - `fullNameFormat`, from DM_CONSOLE_FULL_NAME_FORMAT: how a form writes a
+ *   full name from its parts, `{givenName}` and `{surname}` standing for the
+ *   attributes of those schema roles — `{surname} {givenName}` where the
+ *   family name comes first. Empty leaves it to the console's own default.
+ *
  * Read from the environment rather than from ldap-rest's configuration,
  * which only parses the options ldap-rest itself declares.
  *
@@ -31,6 +36,7 @@ export default class ConsoleSettings extends DmPlugin {
         .split(',')
         .map(name => name.trim())
         .filter(Boolean),
+      fullNameFormat: process.env.DM_CONSOLE_FULL_NAME_FORMAT || '',
     };
   }
 }

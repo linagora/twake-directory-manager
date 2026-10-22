@@ -74,6 +74,7 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 | ----------------------- | ------------------------------------------------------------------------- |
 | `label`                 | Column heading, field label, term in the detail card                      |
 | `hint`                  | Shown under the field, in the interface language, and repeated on refusal |
+| `help`                  | Shown on demand, in a tooltip next to the label                           |
 | `test`                  | Checked before the round trip, so the hint answers before the server does |
 | `required`              | Marked with `*`, with the legend that explains it                         |
 | `generated`, `readOnly` | Shown on the detail card, never offered for editing                       |
@@ -109,10 +110,10 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 - **A long form creating an entry folds its optional fields** under
   _Optional fields_, below the required ones: what must be filled in fits on
   screen. What goes there follows the schema's `required`, so a field made
-  optional moves into it on its own. The mail and the password stay shown
-  (roles `primaryEmail`, `emailAliases`, `emailQuota`, `emailQuotaSize`,
-  `password`, `passwordReset`), with the whole schema group of any of them:
-  the mailbox settings are not split. The fold opens when it hides a refused
+  optional moves into it on its own. The mailbox and the password stay shown
+  (roles `primaryEmail`, `emailQuota`, `emailQuotaSize`, `password`,
+  `passwordReset`), with the whole schema group of any of them: the mailbox
+  settings are not split. Aliases are folded. The fold opens when it hides a refused
   value; editing shows every field.
 - **The search covers every field the schema marks `searchable`**, not the
   identifier alone, and the selector still narrows it to one. A schema that

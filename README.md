@@ -195,6 +195,19 @@ schemas mounts them and points these variables at them: the mail domains, the
 national formats and the payroll-number rules of a directory belong there,
 never in the code.
 
+### Full names
+
+A form writes the full name (role `displayName`) from the given name and the
+surname (roles `givenName` and `surname`) as they are typed, until the
+administrator writes it otherwise. Which comes first depends on the country:
+
+| Variable                      | Default                 | What it is                                                     |
+| ----------------------------- | ----------------------- | -------------------------------------------------------------- |
+| `DM_CONSOLE_FULL_NAME_FORMAT` | `{givenName} {surname}` | The full name, `{givenName}` and `{surname}` standing for them |
+
+`{surname} {givenName}` puts the family name first, as in Mongolia, China or
+Japan.
+
 ### ldap-rest version
 
 The image is built on `ghcr.io/linagora/ldap-rest`, whose version is a build

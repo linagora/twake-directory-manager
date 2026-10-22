@@ -68,7 +68,7 @@ interface ConfigResponse {
     };
     openidconnect?: { endpoints?: { logout?: string } };
     /** What the image's own plugin says about the console itself */
-    console?: { hiddenAttributes?: string[] };
+    console?: { hiddenAttributes?: string[]; fullNameFormat?: string };
     externalUsersInGroups?: {
       enabled?: boolean;
       branch?: string;
@@ -309,6 +309,8 @@ export class ConsoleApiClient {
   private teamMailboxDomain = false;
   /** Attributes the deployment hides, lowercased; see describe() */
   private hidden = new Set<string>();
+  /** How the deployment writes a full name; see fullNameFormat */
+  private nameFormat?: string;
   /** Where the password policies are served, when they are */
   private policiesPath?: string;
   /**
@@ -371,6 +373,15 @@ export class ConsoleApiClient {
    */
   get teamMailboxesKeepDomain(): boolean {
     return this.teamMailboxDomain;
+  }
+
+  /**
+   * How a full name is written from its parts, as the deployment says
+   * (`DM_CONSOLE_FULL_NAME_FORMAT`): `{givenName}` and `{surname}` stand for
+   * the attributes of those roles. Undefined when it says nothing.
+   */
+  get fullNameFormat(): string | undefined {
+    return this.nameFormat;
   }
 
   /** Whether the server lets password policies be managed. */
@@ -463,6 +474,7 @@ export class ConsoleApiClient {
       config.features.ldapPasswordPolicy?.endpoints?.listPolicies;
     const james = config.features.james;
     this.teamMailboxDomain = james !== undefined && !james.teamMailboxAnyDomain;
+    this.nameFormat = config.features.console?.fullNameFormat || undefined;
     this.hidden = new Set(
       (config.features.console?.hiddenAttributes || []).map(name =>
         name.toLowerCase()

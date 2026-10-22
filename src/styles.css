@@ -1254,6 +1254,62 @@
   margin-bottom: 0;
 }
 
+/* A label followed by what the attribute is, shown on hover. */
+.dc-label {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.dc-field .dc-label label {
+  margin-bottom: 0;
+}
+
+.dc-help {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--dc-line-strong);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--dc-muted);
+  cursor: help;
+}
+
+.dc-help:hover {
+  border-color: var(--dc-accent);
+  color: var(--dc-accent);
+}
+
+.dc-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 5;
+  max-width: min(360px, 100%);
+  padding: 8px 10px;
+  border-radius: var(--dc-radius-small);
+  background: var(--dc-ink);
+  color: var(--dc-surface);
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: var(--dc-shadow-raised);
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+.dc-help:hover + .dc-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
 .dc-required {
   color: var(--dc-danger);
 }

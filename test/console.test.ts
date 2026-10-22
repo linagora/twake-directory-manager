@@ -2397,6 +2397,23 @@ describe('Directory console', () => {
       expect(await learn({})).to.equal(false);
     });
 
+    it('should learn how the deployment writes a full name', async () => {
+      const learn = async (console?: object): Promise<string | undefined> => {
+        const client = new ConsoleApiClient(baseUrl);
+        nock(baseUrl)
+          .get('/api/v1/config')
+          .reply(200, { apiPrefix: '/api', features: { console } });
+        await client.discover();
+        return client.fullNameFormat;
+      };
+      expect(await learn({ fullNameFormat: '{surname} {givenName}' })).to.equal(
+        '{surname} {givenName}'
+      );
+      // Unset, empty or an image that predates it: the console's default.
+      expect(await learn({ fullNameFormat: '' })).to.equal(undefined);
+      expect(await learn({ hiddenAttributes: [] })).to.equal(undefined);
+    });
+
     it('should leave out the attributes the deployment hides', async () => {
       // Under "Mailbox settings" with no effect in a Twake deployment, they
       // were filled in by administrators expecting one (#62, #63).
@@ -4694,6 +4711,160 @@ describe('Directory console', () => {
       expect(sent).to.equal(2);
     });
 
+    describe('a person’s names', () => {
+      const people: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            // The fixture's cn stands for the full name; here displayName does.
+            cn: { type: 'string', required: true },
+            employeeNumber: {
+              type: 'string',
+              required: true,
+              help: {
+                en: 'The number HR knows the person by',
+                fr: 'Matricule',
+              },
+            },
+            givenName: { type: 'string', role: 'givenName' },
+            sn: { type: 'string', role: 'surname' },
+            displayName: { type: 'string', role: 'displayName' },
+          },
+        },
+      };
+      /** Inputs firing `input` as typed, found by the form's selectors. */
+      const typing = (): {
+        root: HTMLElement;
+        type(name: string, value: string): void;
+        value(name: string): string;
+      } => {
+        const inputs = new Map<
+          string,
+          { value: string; listeners: (() => void)[] }
+        >();
+        const input = (name: string) => {
+          if (!inputs.has(name)) inputs.set(name, { value: '', listeners: [] });
+          return inputs.get(name)!;
+        };
+        return {
+          root: {
+            querySelector: (selector: string) => {
+              const name = /data-field="([^"]+)"\] \.dc-input/.exec(
+                selector
+              )?.[1];
+              if (!name) return null;
+              const held = input(name);
+              return {
+                get value() {
+                  return held.value;
+                },
+                set value(value: string) {
+                  held.value = value;
+                },
+                addEventListener: (_event: string, listener: () => void) =>
+                  held.listeners.push(listener),
+              };
+            },
+          } as unknown as HTMLElement,
+          type(name, value) {
+            input(name).value = value;
+            input(name).listeners.forEach(listener => listener());
+          },
+          value: name => input(name).value,
+        };
+      };
+      /** What the tests reach of a form: its values, and its binding. */
+      interface Named {
+        values: Record<string, string[]>;
+        bindFullName(root: HTMLElement): void;
+        render(container: HTMLElement): Promise<void>;
+      }
+      const form = (entry?: Entry, fullNameFormat?: string): Named =>
+        new EntityForm({
+          entity: people,
+          entry,
+          fullNameFormat,
+          translator: new Translator('en'),
+          pointerOptions: () => Promise.resolve([]),
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        }) as unknown as Named;
+
+      it('should write the full name once both parts are typed', () => {
+        const created = form();
+        const page = typing();
+        created.bindFullName(page.root);
+        page.type('givenName', 'Bat');
+        expect(page.value('displayName')).to.equal('');
+        page.type('sn', 'Dorj ');
+        expect(page.value('displayName')).to.equal('Bat Dorj');
+        expect(created.values.displayName).to.deep.equal(['Bat Dorj']);
+        page.type('givenName', 'Bataa');
+        expect(page.value('displayName')).to.equal('Bataa Dorj');
+      });
+
+      it('should write it in the deployment’s order', () => {
+        const page = typing();
+        form(undefined, '{surname} {givenName}').bindFullName(page.root);
+        page.type('givenName', 'Bat');
+        page.type('sn', 'Dorj');
+        expect(page.value('displayName')).to.equal('Dorj Bat');
+      });
+
+      it('should leave alone a full name someone wrote', () => {
+        const page = typing();
+        form().bindFullName(page.root);
+        page.type('displayName', 'The boss');
+        page.type('givenName', 'Bat');
+        page.type('sn', 'Dorj');
+        expect(page.value('displayName')).to.equal('The boss');
+        // Emptied, it follows again.
+        page.type('displayName', '');
+        page.type('sn', 'Dorjiin');
+        expect(page.value('displayName')).to.equal('Bat Dorjiin');
+      });
+
+      it('should carry along the full name of an entry its parts made', () => {
+        const made = typing();
+        const entry = { uid: 'bat', givenName: 'Bat', sn: 'Dorj' };
+        // Filled from the entry, as the form renders it.
+        for (const [name, value] of Object.entries({
+          ...entry,
+          displayName: 'Bat Dorj',
+        }))
+          made.type(name, value);
+        form({ ...entry, displayName: 'Bat Dorj' }).bindFullName(made.root);
+        made.type('sn', 'Bold');
+        expect(made.value('displayName')).to.equal('Bat Bold');
+
+        const chosen = typing();
+        // Filled from the entry, as the form renders it.
+        for (const [name, value] of Object.entries({
+          ...entry,
+          displayName: 'Dr Bat',
+        }))
+          chosen.type(name, value);
+        form({ ...entry, displayName: 'Dr Bat' }).bindFullName(chosen.root);
+        chosen.type('sn', 'Bold');
+        expect(chosen.value('displayName')).to.equal('Dr Bat');
+      });
+
+      it('should explain a field on demand', async () => {
+        const container = stubContainer();
+        await form().render(container);
+        // Not focusable: a panel focuses its first field, and opened on it.
+        expect(container.innerHTML).to.include(
+          '<span class="dc-help" aria-hidden="true">?</span>'
+        );
+        expect(container.innerHTML).to.match(
+          /<span class="dc-tooltip" role="tooltip" id="dc-help-employeeNumber">The number HR knows the person by<\/span>/
+        );
+        // No help, no button.
+        expect(container.innerHTML).not.to.include('dc-help-sn');
+      });
+    });
+
     describe('a long form creating an entry', () => {
       /** Users with the address fields of a real schema: past a modal's worth. */
       const located: EntityDescriptor = {
@@ -4733,20 +4904,20 @@ describe('Directory console', () => {
         const html = container.innerHTML;
         const fold = html.indexOf('<details');
         expect(fold).to.be.above(0);
-        expect(html).to.include('Optional fields (4)');
-        // Not required, but an account is created with its mail and its
+        expect(html).to.include('Optional fields (5)');
+        // Not required, but an account is created with its mailbox and its
         // password; and the quota's group is not split.
         for (const name of [
           'cn',
           'mail',
           'twakeDepartmentLink',
-          'mailAlternateAddress',
           'userPassword',
           'mailQuotaSize',
           'twakeDelegatedUsers',
         ])
           expect(html.indexOf(`data-field="${name}"`)).to.be.within(0, fold);
         for (const name of [
+          'mailAlternateAddress',
           'telephoneNumber',
           'postalAddress',
           'postalCode',

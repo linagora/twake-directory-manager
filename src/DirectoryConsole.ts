@@ -1745,6 +1745,7 @@ export class DirectoryConsole {
         | undefined => this.api.memberSearch(role, this.entities),
       externalMembers: this.api.externalMembers,
       teamMailboxesKeepDomain: this.api.teamMailboxesKeepDomain,
+      fullNameFormat: this.api.fullNameFormat,
       onCancel: (): void => this.closePanel(),
       onSubmit: async (
         values: Record<string, string | string[]>,
