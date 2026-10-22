@@ -35,6 +35,7 @@ import {
   entryValue,
   nameAttributes,
   parentDn as parentOf,
+  ownValueLabel,
   pointerLabel,
   rdnValue,
   resolveText,
@@ -1776,7 +1777,7 @@ export class DirectoryConsole {
 
     this.openPanel(
       entry
-        ? `${t('app.edit')} — ${String(entryValue(entry, entity.mainAttribute) ?? '')}`
+        ? `${t('app.edit')} — ${this.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
         : t('dashboard.create', { entity: this.singular(entity) }),
       (body: HTMLElement): void => {
         void form.render(body);
@@ -1849,7 +1850,7 @@ export class DirectoryConsole {
 
     this.openPanel(
       entry
-        ? `${t('app.edit')} — ${String(entryValue(entry, entity.mainAttribute) ?? '')}`
+        ? `${t('app.edit')} — ${this.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
         : t('dashboard.create', { entity: this.singular(entity) }),
       (body: HTMLElement): void => {
         if (parents.length < 2) {
@@ -2187,12 +2188,31 @@ export class DirectoryConsole {
     }
   }
 
+  /**
+   * An entry named as its card and its list name it: a nomenclature's by the
+   * label its schema gives it, _Members only_ for `memberRestrictedList`.
+   *
+   * @param entity the entity the entry belongs to
+   * @param id the entry's main attribute value
+   * @returns the name
+   */
+  private entryName(entity: EntityDescriptor, id: string): string {
+    return (
+      ownValueLabel(
+        entity,
+        entity.mainAttribute,
+        id,
+        this.translator.language
+      ) || id
+    );
+  }
+
   private async confirmDelete(
     entity: EntityDescriptor,
     id: string
   ): Promise<void> {
-    if (!window.confirm(this.translator.t('delete.confirm', { name: id })))
-      return;
+    const name = this.entryName(entity, id);
+    if (!window.confirm(this.translator.t('delete.confirm', { name }))) return;
     try {
       await this.api.remove(entity, id);
       this.toast(this.translator.t('delete.done'));
@@ -2255,7 +2275,10 @@ export class DirectoryConsole {
         await this.api.remove(entity, id);
       } catch (err) {
         failures.push(
-          t('delete.failed', { name: id, error: (err as Error).message })
+          t('delete.failed', {
+            name: this.entryName(entity, id),
+            error: (err as Error).message,
+          })
         );
       }
     }

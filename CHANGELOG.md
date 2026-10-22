@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- A reference entry's edit panel and its deletion are named as its card
+  names it: _Edit — Members only_, _Delete Prof.?_, no longer by the stored
+  `memberRestrictedList` or `Prof` (#109)
+
 ## v0.10.0 (2026-10-22)
 
 Built on ldap-rest 0.23.0.

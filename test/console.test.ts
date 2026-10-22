@@ -1797,6 +1797,44 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should name a nomenclature entry as its card does, to edit or delete it', async () => {
+      const app = consoleIn({}, 'fr') as unknown as {
+        openPanel(title: string): void;
+        openForm(entity: EntityDescriptor, entry?: Entry): Promise<void>;
+        confirmDelete(entity: EntityDescriptor, id: string): Promise<void>;
+      };
+      const titles: string[] = [];
+      app.openPanel = (title: string): void => {
+        titles.push(title);
+      };
+      await app.openForm(mailboxTypes, {
+        dn: 'cn=teamMailbox,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com',
+        cn: 'teamMailbox',
+      });
+      expect(titles).to.deep.equal(['Modifier — Boîte partagée']);
+
+      const asked: string[] = [];
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      g.window = {
+        confirm: (message: string) => {
+          asked.push(message);
+          return false;
+        },
+      };
+      try {
+        await app.confirmDelete(mailboxTypes, 'teamMailbox');
+        // A value the schema does not name keeps its own.
+        await app.confirmDelete(mailboxTypes, 'archive');
+      } finally {
+        g.window = original;
+      }
+      expect(asked).to.deep.equal([
+        'Supprimer Boîte partagée ? Cette action est irréversible.',
+        'Supprimer archive ? Cette action est irréversible.',
+      ]);
+    });
+
     it('should explain a refused deletion of a non-empty organization', async () => {
       const toast = toastElement();
       const app = consoleIn({ '[data-toast]': toast }, 'fr');
