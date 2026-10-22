@@ -20,6 +20,8 @@
 - The × of a member, a delegate, an alias or any other value of a list is
   named after it for a screen reader, _Remove carol_; all read _Remove this
   value_ (#83)
+- A screen reader says the toasts, the generated password and the refusals
+  among them; they showed in silence (#82)
 
 ## v0.10.0 (2026-10-22)
 

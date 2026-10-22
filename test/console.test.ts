@@ -1555,6 +1555,36 @@ describe('Directory console', () => {
       expect(element.textContent).to.equal('Generated password: s3cret');
     });
 
+    it('should be said by a screen reader, a refusal at once', () => {
+      const live: string[] = [];
+      const region = {
+        setAttribute: (name: string, value: string) => {
+          if (name === 'aria-live') live.push(value);
+        },
+      };
+      const element = {
+        textContent: '',
+        hidden: true,
+        onclick: null as unknown,
+        classList: { toggle: () => undefined },
+        closest: (selector: string) =>
+          selector === '[data-toast-region]' ? region : null,
+      } as unknown as HTMLElement;
+      const toasts = new ToastController(() => element, 20);
+      toasts.show('Refused', true);
+      toasts.show('Saved');
+      expect(live).to.deep.equal(['assertive', 'polite']);
+      // The region the toast is announced from is drawn with the shell.
+      const app = consoleIn({});
+      (app as unknown as { drawShell(): void }).drawShell();
+      expect(
+        (app as unknown as { container: { innerHTML: string } }).container
+          .innerHTML
+      ).to.match(
+        /<div data-toast-region role="status" aria-live="polite" aria-atomic="true">\s*<div class="dc-toast" data-toast hidden><\/div>/
+      );
+    });
+
     it('should give a new message its whole delay', async () => {
       const { element, toasts } = setup();
       toasts.show('First');

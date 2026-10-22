@@ -365,6 +365,10 @@ export function listLoader(
  * running from an earlier message hid the next one early — including the
  * generated password, which is shown once and sticky precisely because the
  * server cannot hand it back.
+ *
+ * It sits in a live region drawn with the shell, so that a screen reader
+ * says each message as it shows: a region that is hidden, or new, when its
+ * text changes is not announced. A refusal interrupts; the others wait.
  */
 export class ToastController {
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -386,9 +390,13 @@ export class ToastController {
       clearTimeout(this.timer);
       this.timer = undefined;
     }
-    toast.textContent = message;
+    toast
+      .closest?.('[data-toast-region]')
+      ?.setAttribute('aria-live', isError ? 'assertive' : 'polite');
     toast.classList.toggle('dc-toast-error', isError);
+    // Shown before it is written, for the region to announce the text.
     toast.hidden = false;
+    toast.textContent = message;
     if (sticky) {
       toast.onclick = (): void => {
         toast.hidden = true;
@@ -663,7 +671,9 @@ export class DirectoryConsole {
             <div class="dc-panel-body" data-panel-body></div>
           </div>
         </div>
-        <div class="dc-toast" data-toast hidden></div>
+        <div data-toast-region role="status" aria-live="polite" aria-atomic="true">
+          <div class="dc-toast" data-toast hidden></div>
+        </div>
         <a class="dc-powered" href="https://linagora.com" target="_blank"
           rel="noopener noreferrer">
           <img src="${LINAGORA_LOGO}" alt="LINAGORA" width="100" height="21" />
