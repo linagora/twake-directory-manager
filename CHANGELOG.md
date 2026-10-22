@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Features
+
+- A long form creating an entry, an account's for one, folds the fields the
+  schema does not require under _Optional fields_, below the required ones,
+  the mail settings and the password;
+  it opens on a refused value. The address fields, the position or the
+  common name no longer stretch the form past the screen
+
 ### Bug Fixes
 
 - After an upgrade, browsers load the new console without a forced reload:

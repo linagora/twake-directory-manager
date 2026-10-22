@@ -1183,6 +1183,55 @@
   clear: both;
 }
 
+/* What a long creation form does not require, folded under the required
+   fields: opened by whoever wants it, or by a refusal of one of them. */
+.dc-form-optional {
+  border-top: 1px solid var(--dc-line);
+  margin: 0 0 8px;
+  padding: 12px 0 0;
+}
+
+.dc-form-optional > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 6px 0;
+  border-radius: var(--dc-radius-small);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dc-accent);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dc-form-optional > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dc-form-optional > summary::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-right: 1.8px solid currentColor;
+  border-bottom: 1.8px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+
+.dc-form-optional[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.dc-form-optional > summary:focus-visible {
+  outline: none;
+  box-shadow: var(--dc-focus);
+}
+
+.dc-form-optional[open] > summary {
+  margin-bottom: 16px;
+}
+
 .dc-field {
   margin-bottom: 16px;
 }

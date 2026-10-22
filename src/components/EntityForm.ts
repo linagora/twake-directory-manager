@@ -155,6 +155,20 @@ const ANNOUNCE_DELAY = 100;
 const PANEL_THRESHOLD = 8;
 
 /**
+ * Roles of the fields a long creation form shows though the schema does not
+ * require them: an account's mail and its password, which it is created with
+ * as a rule.
+ */
+const SHOWN_ROLES = [
+  'primaryEmail',
+  'emailAliases',
+  'emailQuota',
+  'emailQuotaSize',
+  'password',
+  'passwordReset',
+];
+
+/**
  * Quote an attribute name for use inside an attribute selector.
  *
  * `CSS.escape` would do, but it does not exist outside a browser, and a
@@ -469,25 +483,21 @@ export class EntityForm {
   async render(container: HTMLElement): Promise<void> {
     this.root = container;
     const { translator } = this.options;
-    const groups = new Map<string, [string, SchemaAttribute][]>();
-    for (const field of this.fields) {
-      const group = resolveText(field[1].group, translator.language) || '';
-      if (!groups.has(group)) groups.set(group, []);
-      groups.get(group)!.push(field);
-    }
+    const { shown, folded } = this.layout();
+    const folds = [...folded.values()].flat().length;
 
     container.innerHTML = `
       <form class="dc-form" novalidate>
         <p class="dc-form-required">${escapeHtml(translator.t('form.required'))}</p>
-        ${[...groups.entries()]
-          .map(
-            ([group, fields]) => `
-          <fieldset class="dc-form-group">
-            ${group ? `<legend>${escapeHtml(group)}</legend>` : ''}
-            ${fields.map(([name, attr]) => this.fieldMarkup(name, attr)).join('')}
-          </fieldset>`
-          )
-          .join('')}
+        ${this.groupsMarkup(shown)}
+        ${
+          folds
+            ? `<details class="dc-form-optional" data-optional>
+          <summary>${escapeHtml(translator.t('form.optional', { count: folds }))}</summary>
+          ${this.groupsMarkup(folded)}
+        </details>`
+            : ''
+        }
         <div class="dc-form-actions">
           <button type="button" class="dc-button" data-cancel>${escapeHtml(
             translator.t('app.cancel')
@@ -500,6 +510,71 @@ export class EntityForm {
 
     this.bind();
     await this.fillPointers();
+  }
+
+  /**
+   * Fields by group, in the order the form shows them: those shown, and
+   * those folded under a summary. A long form creating an entry folds what
+   * the schema does not require, so that what must be filled in fits on
+   * screen — but for the mail and the password (`SHOWN_ROLES`), and the
+   * schema groups they belong to, which are not split: the mailbox settings
+   * stay together. Editing shows everything, as an entry may hold any of it.
+   */
+  private layout(): {
+    shown: Map<string, [string, SchemaAttribute][]>;
+    folded: Map<string, [string, SchemaAttribute][]>;
+  } {
+    const group = (attr: SchemaAttribute): string =>
+      resolveText(attr.group, this.options.translator.language) || '';
+    const prominent = (attr: SchemaAttribute): boolean =>
+      Boolean(attr.required) || SHOWN_ROLES.some(role => hasRole(attr, role));
+    const kept = new Set(
+      this.fields
+        .filter(([, attr]) => prominent(attr) && group(attr))
+        .map(([, attr]) => group(attr))
+    );
+    const shown = (attr: SchemaAttribute): boolean =>
+      prominent(attr) || kept.has(group(attr));
+    const fold =
+      !this.options.entry &&
+      this.wantsPanel &&
+      this.fields.some(([, attr]) => attr.required) &&
+      this.fields.some(([, attr]) => !shown(attr));
+    return fold
+      ? {
+          shown: this.grouped(this.fields.filter(([, attr]) => shown(attr))),
+          folded: this.grouped(this.fields.filter(([, attr]) => !shown(attr))),
+        }
+      : { shown: this.grouped(this.fields), folded: new Map() };
+  }
+
+  /** Fields by the group their schema puts them in, in schema order. */
+  private grouped(
+    fields: [string, SchemaAttribute][]
+  ): Map<string, [string, SchemaAttribute][]> {
+    const groups = new Map<string, [string, SchemaAttribute][]>();
+    for (const field of fields) {
+      const group =
+        resolveText(field[1].group, this.options.translator.language) || '';
+      if (!groups.has(group)) groups.set(group, []);
+      groups.get(group)!.push(field);
+    }
+    return groups;
+  }
+
+  /** Markup of groups of fields, one fieldset each. */
+  private groupsMarkup(
+    groups: Map<string, [string, SchemaAttribute][]>
+  ): string {
+    return [...groups.entries()]
+      .map(
+        ([group, fields]) => `
+          <fieldset class="dc-form-group">
+            ${group ? `<legend>${escapeHtml(group)}</legend>` : ''}
+            ${fields.map(([name, attr]) => this.fieldMarkup(name, attr)).join('')}
+          </fieldset>`
+      )
+      .join('');
   }
 
   /** Markup of one field, chosen from its schema type. */
@@ -1427,8 +1502,18 @@ export class EntityForm {
         // twice, once in grey and once in red.
         const hint = field?.querySelector<HTMLElement>('[data-hint]');
         if (hint) hint.hidden = Boolean(message);
+        // A refusal folded out of sight would leave the form refusing to
+        // save without a word.
+        const fold = message
+          ? field?.closest<HTMLDetailsElement>('[data-optional]')
+          : null;
+        if (fold) fold.open = true;
       }
-      const first = Object.keys(this.errors)[0];
+      const { shown, folded } = this.layout();
+      const first = [...shown.values(), ...folded.values()]
+        .flat()
+        .map(([name]) => name)
+        .find(name => this.errors[name]);
       if (first)
         root
           .querySelector<HTMLElement>(`[data-field="${selectorValue(first)}"]`)
