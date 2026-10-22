@@ -204,7 +204,10 @@ test.describe('LIST lists, search and bulk actions', () => {
       page.waitForEvent('download'),
       list.exportButton.click(),
     ]);
-    const lines = (await readDownload(download)).trim().split(/\r?\n/);
+    const csv = await readDownload(download);
+    // A byte-order mark, for a spreadsheet to read it as UTF-8 (#77)
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    const lines = csv.slice(1).trim().split(/\r?\n/);
     expect(lines).toHaveLength(3);
     const headings = lines[0]?.split(',') ?? [];
     expect(headings).toEqual(

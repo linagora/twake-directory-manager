@@ -4275,6 +4275,10 @@ describe('Directory console', () => {
       }
       const csv = await captured?.text();
       expect(csv).to.contain('jsmith@example.com');
+      // Opened in a spreadsheet as UTF-8, as the import's template is.
+      const bytes = new Uint8Array(await captured!.arrayBuffer());
+      expect([...bytes.slice(0, 3)]).to.deep.equal([0xef, 0xbb, 0xbf]);
+      expect(csv).to.match(/\r\n$/);
     });
 
     /** A list of accounts drawn from what `listLoader` answers. */

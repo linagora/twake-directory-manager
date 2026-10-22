@@ -33,6 +33,9 @@
 - A field a form refuses is marked invalid and described by its message,
   and takes the focus, for a screen reader to say what is wrong; the
   refusals were only red on screen (#78)
+- _Export selection_ writes its CSV with a byte-order mark and CRLF line
+  endings, as the import's template: a spreadsheet read accented values as
+  mojibake (#77)
 
 ## v0.10.0 (2026-10-22)
 
