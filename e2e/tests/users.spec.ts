@@ -217,6 +217,105 @@ test.describe('USER user accounts', () => {
     );
   });
 
+  test('USER-15 the creation form writes the full name, completes the domain and folds optional fields', async ({
+    page,
+    directory,
+  }) => {
+    const unique = uniquePart();
+    const uid = `jeanne.${unique}`;
+    const dn = directory.trackUser(uid);
+    const app = await new LoginPage(page).loginAs(ADMIN, 'users');
+    await app.list().newButton.click();
+    const form = app.form();
+    await form.expectOpen('New user');
+
+    // folded at first, Deletion date among them; nothing here goes through field(), which unfolds
+    await expect(form.optionalFold.locator('summary')).toHaveText(
+      /^Optional fields \(\d+\)$/
+    );
+    expect(await form.isUnfolded()).toBe(false);
+    await expect(
+      form.optionalFold.getByLabel(/^Deletion date( \*)?$/)
+    ).toHaveCount(1);
+
+    // Full name follows the names, as typed, until it is typed itself
+    await form.control('First name').pressSequentially('Jeanne');
+    await form.control('Last name').pressSequentially(`Durand${unique}`);
+    await expect(form.control('Full name')).toHaveValue(
+      `Jeanne Durand${unique}`
+    );
+    await form.control('Full name').fill(`Dr Jeanne Durand${unique}`);
+    await form.control('First name').pressSequentially('x');
+    await expect(form.control('Full name')).toHaveValue(
+      `Dr Jeanne Durand${unique}`
+    );
+    await form.control('First name').fill('Jeanne');
+
+    // "@" offers every domain with no department, then those the department allows
+    const email = form.control('Email');
+    await email.pressSequentially(`${uid}@`);
+    await expect(form.options('Email')).toHaveText([
+      `${uid}@example.com`,
+      `${uid}@lists.example.com`,
+    ]);
+    await form.pick('Department', 'Human', 'Human Resources');
+    await email.fill('');
+    await email.pressSequentially(`${uid}@`);
+    await expect(form.options('Email')).toHaveText([`${uid}@example.com`]);
+    await form.options('Email').first().click();
+    await expect(email).toHaveValue(`${uid}@example.com`);
+    await form.control('Employee ID').fill(`J-${unique}`);
+
+    // a refused value inside the closed fold opens it
+    if (!(await form.isUnfolded())) await form.toggleFold();
+    await form.control('Deletion date').fill(isoDate(-1));
+    await form.toggleFold();
+    expect(await form.isUnfolded()).toBe(false);
+    await form.submit();
+    await expect(form.error('Deletion date')).toHaveText(
+      'Expected a date not earlier than today'
+    );
+    expect(await form.isUnfolded()).toBe(true);
+
+    await form.control('Deletion date').fill('');
+    await form.submit();
+    await app.expectToast('Created');
+    expect(await directory.values(dn, 'displayName')).toEqual([
+      `Dr Jeanne Durand${unique}`,
+    ]);
+  });
+
+  test('USER-15 "@" offers the domains the department and the organizations above it link', async ({
+    page,
+    directory,
+  }) => {
+    const lists = await directory.createOrganization({ name: 'Lists' });
+    await directory.addValues(lists.dn, 'twakeDomainLink', [
+      'dc=lists,ou=domains,ou=nomenclature,dc=example,dc=com',
+    ]);
+    const local = `lists.${uniquePart()}`;
+    const app = await new LoginPage(page).loginAs(ADMIN, 'users');
+    await app.list().newButton.click();
+    const form = app.form();
+    await form.expectOpen('New user');
+
+    // Human Resources links nothing: the top organization's example.com only
+    await form.pick('Department', 'Human', 'Human Resources');
+    const email = form.control('Email');
+    await email.pressSequentially(`${local}@`);
+    await expect(form.options('Email')).toHaveText([`${local}@example.com`]);
+
+    // its own lists.example.com, beside example.com, which the top links
+    await form.removeToken('Department', 'Human Resources');
+    await form.pick('Department', 'Lists', lists.path);
+    await email.fill('');
+    await email.pressSequentially(`${local}@`);
+    await expect(form.options('Email')).toHaveText([
+      `${local}@example.com`,
+      `${local}@lists.example.com`,
+    ]);
+  });
+
   test('USER-04 server rules: unique address and allowed domain', async ({
     page,
     directory,

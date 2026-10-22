@@ -71,6 +71,7 @@ Conventions).
 - [x] USER-12 (P2) Local administrator creates an account in their branch only — `users.spec.ts`
 - [x] USER-13 (P3) An entry's DN with a Copy button — `users.spec.ts`
 - [x] USER-14 (P3) A date reads as a date in the interface language — `users.spec.ts` (also from Pacific/Honolulu)
+- [x] USER-15 (P2) The creation form writes the full name, completes the domain after "@" and folds the optional fields, opening them on a refused value — `users.spec.ts` (#105; v0.8.0 to v0.10.0, after the plan's audit; the domains offered are those the department and the organizations above it link)
 
 ## Groups
 
