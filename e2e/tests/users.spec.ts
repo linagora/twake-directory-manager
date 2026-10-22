@@ -514,6 +514,68 @@ test.describe('USER user accounts', () => {
     expect(await directory.values(group.dn, 'member')).not.toContain(user.dn);
   });
 
+  test('USER-08 USER-09 USER-10 a local administrator changes the state, sets the password and deletes an account of their branch', async ({
+    page,
+    directory,
+    tenant,
+    loginInNewContext,
+  }) => {
+    const user = await directory.createUser({ org: tenant.org });
+    const app = await new LoginPage(page).loginAs(
+      tenant.admin,
+      `users/${user.uid}`
+    );
+    const card = app.entry();
+
+    await card.changeStateTo('Disabled');
+    await app.expectToast('State changed to Disabled');
+    await expect(app.errorToast).toHaveCount(0);
+    await expect(card.detail('Status')).toHaveText('Disabled');
+    expect(await directory.values(user.dn, 'twakeAccountStatus')).toEqual([
+      'cn=disabled,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com',
+    ]);
+    await card.changeStateTo('Enabled');
+    await expect(card.detail('Status')).toHaveText('Active');
+    expect(await directory.values(user.dn, 'twakeAccountStatus')).toEqual([
+      'cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com',
+    ]);
+
+    // generated, a change required at next sign-in (the default)
+    const dialog = new ResetPasswordDialog(page);
+    await card.action('Reset password').click();
+    await dialog.expectOpen();
+    await expect(dialog.forceChange).toBeChecked();
+    await dialog.confirmButton.click();
+    await expect(app.toast).toHaveText(
+      /^New password: .+ — copy it now, it will not be shown again$/
+    );
+    await app.toast.click();
+    await expect(app.toast).toBeHidden();
+    expect(await directory.values(user.dn, 'pwdReset')).toEqual(['TRUE']);
+
+    // typed, no change required
+    await card.action('Reset password').click();
+    await dialog.expectOpen();
+    await dialog.passwordInput.fill('L0cal-Admin-Set!');
+    await dialog.forceChange.uncheck();
+    await dialog.confirmButton.click();
+    await app.expectToast('Password changed');
+    // ldap-rest writes FALSE rather than removing the attribute
+    expect(await directory.values(user.dn, 'pwdReset')).not.toContain('TRUE');
+    const owner = await loginInNewContext({
+      ...user,
+      password: 'L0cal-Admin-Set!',
+    });
+    await expect(owner.banner).toContainText('You administer no branch');
+
+    const message = answerNextConfirm(page, true);
+    await card.action('Delete').click();
+    expect(await message).toBe(`Delete ${user.uid}? This cannot be undone.`);
+    await app.expectToast('Deleted');
+    await expect(app.mainHeading).toHaveText('Users');
+    expect(await directory.exists(user.dn)).toBe(false);
+  });
+
   test('USER-11 a local administrator moves an account between two organizations of their scope', async ({
     page,
     directory,

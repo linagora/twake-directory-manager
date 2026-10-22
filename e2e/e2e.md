@@ -64,9 +64,9 @@ Conventions).
 - [x] USER-05 (P1) Edit an account — `users.spec.ts`
 - [x] USER-06 (P1) Department field searches the tree — `users.spec.ts`
 - [x] USER-07 (P2) Account-pointer fields are search boxes (Delegates) — `users.spec.ts`
-- [x] USER-08 (P1) Change an account's state — `users.spec.ts`
-- [x] USER-09 (P1) Reset password: generated and typed — `users.spec.ts`
-- [x] USER-10 (P2) Delete an account — `users.spec.ts`
+- [x] USER-08 (P1) Change an account's state — `users.spec.ts` (also as a local administrator, on an account of their branch)
+- [x] USER-09 (P1) Reset password: generated and typed — `users.spec.ts` (typed, also as a local administrator)
+- [x] USER-10 (P2) Delete an account — `users.spec.ts` (also as a local administrator)
 - [x] USER-11 (P2) Move an account between two organizations of one's scope — `users.spec.ts`
 - [x] USER-12 (P2) Local administrator creates an account in their branch only — `users.spec.ts`
 - [x] USER-13 (P3) An entry's DN with a Copy button — `users.spec.ts`
