@@ -625,7 +625,7 @@ export class EntityForm {
         ${heading}
         ${control}
         ${hint ? `<p class="dc-hint" data-hint>${escapeHtml(hint)}</p>` : ''}
-        <p class="dc-error" data-error hidden></p>
+        <p class="dc-error" id="dc-error-${escapeHtml(name)}" data-error hidden></p>
         ${
           // Why the branch offers nothing, when that is not the truth. Apart
           // from the validation message, which a save rewrites, and styled as
@@ -744,16 +744,17 @@ export class EntityForm {
   private pickerItems(name: string): string {
     const { translator } = this.options;
     return this.values[name]
-      .map(
-        (dn, index) => `
+      .map((dn, index) => {
+        const shown = this.picked.get(dn) || rdnValue(dn);
+        return `
       <li class="dc-token">
-        <span title="${escapeHtml(dn)}">${escapeHtml(
-          this.picked.get(dn) || rdnValue(dn)
-        )}</span>
+        <span title="${escapeHtml(dn)}">${escapeHtml(shown)}</span>
         <button type="button" data-remove="${index}"
-          aria-label="${escapeHtml(translator.t('form.removeValue'))}">×</button>
-      </li>`
-      )
+          aria-label="${escapeHtml(
+            translator.t('form.removeValue', { value: shown })
+          )}">×</button>
+      </li>`;
+      })
       .join('');
   }
 
@@ -794,16 +795,21 @@ export class EntityForm {
     // A DN is named the way its select offers it, the DN kept for the title.
     const pointer = attr?.items?.type === 'pointer';
     return this.values[name]
-      .map(
-        (value, index) => `
+      .map((value, index) => {
+        const shown = pointer
+          ? this.picked.get(value) || rdnValue(value)
+          : value;
+        // Named after what it removes: a row of "Remove this value" buttons
+        // cannot be told apart by a screen reader, nor by voice.
+        return `
       <li class="dc-token">
-        <span title="${escapeHtml(value)}">${escapeHtml(
-          pointer ? this.picked.get(value) || rdnValue(value) : value
-        )}</span>
+        <span title="${escapeHtml(value)}">${escapeHtml(shown)}</span>
         <button type="button" data-remove="${index}"
-          aria-label="${escapeHtml(translator.t('form.removeValue'))}">×</button>
-      </li>`
-      )
+          aria-label="${escapeHtml(
+            translator.t('form.removeValue', { value: shown })
+          )}">×</button>
+      </li>`;
+      })
       .join('');
   }
 
@@ -1588,6 +1594,7 @@ export class EntityForm {
         // twice, once in grey and once in red.
         const hint = field?.querySelector<HTMLElement>('[data-hint]');
         if (hint) hint.hidden = Boolean(message);
+        this.markInvalid(field, name, holder.id, message);
         // A refusal folded out of sight would leave the form refusing to
         // save without a word.
         const fold = message
@@ -1600,12 +1607,53 @@ export class EntityForm {
         .flat()
         .map(([name]) => name)
         .find(name => this.errors[name]);
-      if (first)
-        root
-          .querySelector<HTMLElement>(`[data-field="${selectorValue(first)}"]`)
-          ?.scrollIntoView({ block: 'center' });
+      if (first) {
+        const field = root.querySelector<HTMLElement>(
+          `[data-field="${selectorValue(first)}"]`
+        );
+        field?.scrollIntoView({ block: 'center' });
+        // On it, rather than left on the button: a screen reader then says
+        // the field, that it is invalid, and why.
+        field
+          ?.querySelector<HTMLElement>(
+            `[id="dc-field-${selectorValue(first)}"]`
+          )
+          ?.focus({ preventScroll: true });
+      }
     }
     return Object.keys(this.errors).length === 0;
+  }
+
+  /**
+   * Say a field's refusal to assistive technology as well as on screen: its
+   * control is marked invalid, and described by the message, besides what
+   * already describes it.
+   *
+   * @param field the field's wrapper
+   * @param name attribute name
+   * @param error id of the field's error message
+   * @param message the refusal, or undefined once the field passes
+   */
+  private markInvalid(
+    field: HTMLElement | null | undefined,
+    name: string,
+    error: string,
+    message: string | undefined
+  ): void {
+    const control = field?.querySelector<HTMLElement>(
+      `[id="dc-field-${selectorValue(name)}"]`
+    );
+    if (!control) return;
+    const described = (control.getAttribute('aria-describedby') || '')
+      .split(/\s+/)
+      .filter(id => id && id !== error);
+    if (message) {
+      control.setAttribute('aria-invalid', 'true');
+      described.push(error);
+    } else control.removeAttribute('aria-invalid');
+    if (described.length)
+      control.setAttribute('aria-describedby', described.join(' '));
+    else control.removeAttribute('aria-describedby');
   }
 
   /**
@@ -1630,9 +1678,9 @@ export class EntityForm {
       attr.normalize === 'byteSize' &&
       list.some(value => parseByteSize(value) === undefined)
     )
-      return (
-        attributeHint(attr, translator.language) || translator.t('form.notSize')
-      );
+      // The console's words, with examples, rather than the schema's hint:
+      // shown under the field already, it said no more once refused.
+      return translator.t('form.notSize');
     if (hasRole(attr, 'accountExpiry')) {
       const stored = toList(entryValue(entry, name));
       if (list.some(value => !stored.includes(value) && beforeToday(value)))

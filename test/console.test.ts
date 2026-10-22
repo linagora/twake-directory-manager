@@ -632,6 +632,49 @@ describe('Directory console', () => {
         .to.include('>Lin</button>')
         .and.not.include('>Sales</button>');
     });
+
+    it('should name its buttons after their organization, and expose the selected one', async () => {
+      const container = treeContainer();
+      const tree = new OrganizationTree({
+        translator: new Translator('en'),
+        root: async () => ({ dn: top, name: 'organization' }),
+        children: async () => [{ dn: sales, name: 'Sales' }],
+        onSelect: () => undefined,
+        onCreateChild: () => undefined,
+      });
+      await tree.render(container);
+      tree.select(sales);
+      const html = container.list.innerHTML.replace(/\s+/g, ' ');
+      expect(html)
+        .to.include('aria-expanded="true" aria-label="Collapse organization"')
+        .and.include('aria-expanded="false" aria-label="Expand Sales"')
+        .and.include('aria-label="New organization under Sales"');
+      expect(html).to.match(
+        /data-select="ou=Sales,[^"]*" aria-current="true" title="[^"]*">Sales</
+      );
+      expect(html).to.not.match(
+        /data-select="ou=organization,[^"]*" aria-current/
+      );
+    });
+
+    it('should say when the filter hides every opened organization', async () => {
+      const container = treeContainer();
+      await new OrganizationTree({
+        translator: new Translator('en'),
+        root: async () => ({ dn: top, name: 'organization' }),
+        children: async () => [{ dn: sales, name: 'Sales' }],
+        onSelect: () => undefined,
+      }).render(container);
+      container.filter.value = 'zzz';
+      container.filter.fire();
+      expect(container.list.innerHTML)
+        .to.include('No organization matches “zzz” among the opened branches')
+        .and.not.include('dc-tree-list');
+      // Cleared, the tree is back.
+      container.filter.value = '';
+      container.filter.fire();
+      expect(container.list.innerHTML).to.include('>Sales</button>');
+    });
   });
 
   describe('the organization tree, between views', () => {
@@ -1387,6 +1430,32 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should create and import in natural French, the article agreeing', () => {
+      const app = consoleIn({}, 'fr') as unknown as {
+        createLabel(entity: EntityDescriptor): string;
+      };
+      const organizations = {
+        ...groups,
+        key: 'organizations',
+        singularLabel: { en: 'organization', fr: 'organisation' },
+      };
+      expect(app.createLabel(users)).to.equal('Créer un utilisateur');
+      expect(app.createLabel(organizations)).to.equal('Créer une organisation');
+      // An entity the catalogue does not know keeps the schema's name.
+      expect(
+        app.createLabel({ ...groups, key: 'rooms', singularName: 'salle' })
+      ).to.equal('Créer : salle');
+      expect(
+        (consoleIn({}) as unknown as typeof app).createLabel(organizations)
+      ).to.equal('New organization');
+      expect(
+        new Translator('fr').t('import.title', {
+          entities: 'Utilisateurs',
+          lowerEntities: 'utilisateurs',
+        })
+      ).to.equal('Importer des utilisateurs');
+    });
+
     it('should translate every key of every catalogue', () => {
       // A key present in one catalogue and missing from the other is exactly
       // the mixed-language interface this replaces.
@@ -1508,6 +1577,36 @@ describe('Directory console', () => {
       await wait(40);
       expect(element.hidden).to.be.false;
       expect(element.textContent).to.equal('Generated password: s3cret');
+    });
+
+    it('should be said by a screen reader, a refusal at once', () => {
+      const live: string[] = [];
+      const region = {
+        setAttribute: (name: string, value: string) => {
+          if (name === 'aria-live') live.push(value);
+        },
+      };
+      const element = {
+        textContent: '',
+        hidden: true,
+        onclick: null as unknown,
+        classList: { toggle: () => undefined },
+        closest: (selector: string) =>
+          selector === '[data-toast-region]' ? region : null,
+      } as unknown as HTMLElement;
+      const toasts = new ToastController(() => element, 20);
+      toasts.show('Refused', true);
+      toasts.show('Saved');
+      expect(live).to.deep.equal(['assertive', 'polite']);
+      // The region the toast is announced from is drawn with the shell.
+      const app = consoleIn({});
+      (app as unknown as { drawShell(): void }).drawShell();
+      expect(
+        (app as unknown as { container: { innerHTML: string } }).container
+          .innerHTML
+      ).to.match(
+        /<div data-toast-region role="status" aria-live="polite" aria-atomic="true">\s*<div class="dc-toast" data-toast hidden><\/div>/
+      );
     });
 
     it('should give a new message its whole delay', async () => {
@@ -1797,6 +1896,106 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should name a nomenclature entry as its card does, to edit or delete it', async () => {
+      const app = consoleIn({}, 'fr') as unknown as {
+        openPanel(title: string): void;
+        openForm(entity: EntityDescriptor, entry?: Entry): Promise<void>;
+        confirmDelete(entity: EntityDescriptor, id: string): Promise<void>;
+      };
+      const titles: string[] = [];
+      app.openPanel = (title: string): void => {
+        titles.push(title);
+      };
+      await app.openForm(mailboxTypes, {
+        dn: 'cn=teamMailbox,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com',
+        cn: 'teamMailbox',
+      });
+      expect(titles).to.deep.equal(['Modifier — Boîte partagée']);
+
+      const asked: string[] = [];
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      g.window = {
+        confirm: (message: string) => {
+          asked.push(message);
+          return false;
+        },
+      };
+      try {
+        await app.confirmDelete(mailboxTypes, 'teamMailbox');
+        // A value the schema does not name keeps its own.
+        await app.confirmDelete(mailboxTypes, 'archive');
+      } finally {
+        g.window = original;
+      }
+      expect(asked).to.deep.equal([
+        'Supprimer Boîte partagée ? Cette action est irréversible.',
+        'Supprimer archive ? Cette action est irréversible.',
+      ]);
+    });
+
+    it('should explain a refused deletion of an entry still pointed at', async () => {
+      const positions: EntityDescriptor = {
+        key: 'positions',
+        pluralName: 'positions',
+        singularName: 'position',
+        mainAttribute: 'cn',
+        base: 'ou=positions,dc=example,dc=com',
+        schema: { attributes: { cn: { type: 'string', role: 'identifier' } } },
+        endpoint: '/api/v1/ldap/positions',
+        kind: 'flat',
+      };
+      const staff: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            title: {
+              type: 'pointer',
+              branch: ['ou=positions,dc=example,dc=com'],
+              label: { en: 'Position', fr: 'Poste' },
+            },
+          },
+        },
+      };
+      const toast = toastElement();
+      const app = consoleIn({ '[data-toast]': toast }, 'fr') as unknown as {
+        entities: EntityDescriptor[];
+        confirmDelete(entity: EntityDescriptor, id: string): Promise<void>;
+        deleteMany(entity: EntityDescriptor, ids: string[]): Promise<void>;
+      };
+      app.entities = [staff, positions];
+      const refusal = {
+        error:
+          'Cannot delete cn=Sales Manager,ou=positions,dc=example,dc=com: still referenced by another entry (title)',
+      };
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      g.window = { confirm: () => true };
+      try {
+        nock(baseUrl)
+          .delete('/api/v1/ldap/positions/Sales%20Manager')
+          .reply(409, refusal);
+        await app.confirmDelete(positions, 'Sales Manager');
+        expect(toast.textContent).to.equal(
+          'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord'
+        );
+
+        nock(baseUrl)
+          .delete('/api/v1/ldap/positions/Sales%20Manager')
+          .reply(409, refusal);
+        nock(baseUrl)
+          .delete('/api/v1/ldap/positions/Intern')
+          .reply(403, { error: 'Forbidden' });
+        await app.deleteMany(positions, ['Sales Manager', 'Intern']);
+        expect(toast.textContent).to.equal(
+          'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord · Intern : Forbidden'
+        );
+      } finally {
+        g.window = original;
+      }
+    });
+
     it('should explain a refused deletion of a non-empty organization', async () => {
       const toast = toastElement();
       const app = consoleIn({ '[data-toast]': toast }, 'fr');
@@ -1823,6 +2022,44 @@ describe('Directory console', () => {
       } finally {
         g.window = original;
       }
+    });
+
+    it('should keep an open panel, and what was typed, across a change of language', () => {
+      const typed = { hidden: false, value: 'E9901' };
+      let drawn = false;
+      const replaced: unknown[] = [];
+      const fresh = {
+        hidden: true,
+        replaceWith: (element: unknown) => replaced.push(element),
+      };
+      const app = new DirectoryConsole({
+        containerId: 'console',
+        apiBaseUrl: baseUrl,
+        language: 'en',
+      }) as unknown as {
+        container: unknown;
+        translator: Translator;
+        renderMain(): Promise<void>;
+        changeLanguage(code: string): void;
+      };
+      app.container = {
+        set innerHTML(_html: string) {
+          drawn = true;
+        },
+        querySelector: (selector: string) =>
+          selector === '[data-panel]' ? (drawn ? fresh : typed) : null,
+        querySelectorAll: () => [],
+      };
+      app.renderMain = () => Promise.resolve();
+      app.changeLanguage('fr');
+      expect(app.translator.language).to.equal('fr');
+      expect(replaced).to.deep.equal([typed]);
+
+      // A closed one is drawn afresh, in the new language.
+      typed.hidden = true;
+      drawn = false;
+      app.changeLanguage('en');
+      expect(replaced).to.have.length(1);
     });
 
     it('should name the transit branch in the scope banner, tooltip included', () => {
@@ -3148,9 +3385,15 @@ describe('Directory console', () => {
         {
           dn: 'uid=jane.doe,ou=users,dc=example,dc=com',
           label: 'Jane Doe (jane.doe)',
+          // Once chosen, named by its identifier, as a value loaded is.
+          token: 'jane.doe',
         },
         // No display name: the identifier alone.
-        { dn: 'uid=jdoe,ou=users,dc=example,dc=com', label: 'jdoe' },
+        {
+          dn: 'uid=jdoe,ou=users,dc=example,dc=com',
+          label: 'jdoe',
+          token: 'jdoe',
+        },
       ]);
     });
 
@@ -3194,11 +3437,13 @@ describe('Directory console', () => {
         {
           dn: 'uid=jane,ou=users,dc=example,dc=com',
           label: 'Jane Doe <jane@example.com>',
+          token: 'jane',
           mail: 'jane@example.com',
         },
         {
           dn: 'cn=jane-team,ou=groups,dc=example,dc=com',
           label: 'jane-team <jane-team@example.com>',
+          token: 'jane-team',
           mail: 'jane-team@example.com',
         },
       ]);
@@ -3229,7 +3474,11 @@ describe('Directory console', () => {
         lists,
       ]);
       expect(await search!('jane')).to.deep.equal([
-        { dn: 'uid=jane,ou=users,dc=example,dc=com', label: 'Jane' },
+        {
+          dn: 'uid=jane,ou=users,dc=example,dc=com',
+          label: 'Jane',
+          token: 'jane',
+        },
       ]);
     });
 
@@ -4026,6 +4275,10 @@ describe('Directory console', () => {
       }
       const csv = await captured?.text();
       expect(csv).to.contain('jsmith@example.com');
+      // Opened in a spreadsheet as UTF-8, as the import's template is.
+      const bytes = new Uint8Array(await captured!.arrayBuffer());
+      expect([...bytes.slice(0, 3)]).to.deep.equal([0xef, 0xbb, 0xbf]);
+      expect(csv).to.match(/\r\n$/);
     });
 
     /** A list of accounts drawn from what `listLoader` answers. */
@@ -4690,7 +4943,9 @@ describe('Directory console', () => {
       await created.submit();
       expect(sent).to.equal(0);
       expect(created.errors).to.deep.equal({
-        mailQuotaSize: 'Expected pattern xGB, xMB, xKB or a number of bytes',
+        // Said with examples, not by repeating the hint shown before.
+        mailQuotaSize:
+          'Expected a size such as 4 GB, 500 MB or 100 KB, or a number of bytes',
         twakeDeletionDate: 'Expected a date not earlier than today',
       });
 
@@ -4970,6 +5225,80 @@ describe('Directory console', () => {
         expect(fold.open).to.equal(true);
         // The required fields are shown first, and refused first.
         expect(scrolled).to.deep.equal(['cn']);
+      });
+
+      it('should mark a refused field invalid, described by its message, and focus it', async () => {
+        /** A control that keeps its attributes, and says when it is focused. */
+        const control = (attributes: Record<string, string> = {}) => ({
+          attributes,
+          focused: false,
+          getAttribute: (name: string) => attributes[name] ?? null,
+          setAttribute: (name: string, value: string) => {
+            attributes[name] = value;
+          },
+          removeAttribute: (name: string) => {
+            delete attributes[name];
+          },
+          focus() {
+            this.focused = true;
+          },
+        });
+        const controls = new Map<string, ReturnType<typeof control>>();
+        const fields = new Map<string, unknown>();
+        const field = (name: string) => {
+          if (!fields.has(name)) {
+            const error = {
+              id: `dc-error-${name}`,
+              textContent: '',
+              hidden: true,
+            };
+            // A field a help already describes keeps that description.
+            controls.set(
+              name,
+              control(
+                name === 'mail' ? { 'aria-describedby': 'dc-help-mail' } : {}
+              )
+            );
+            fields.set(name, {
+              querySelector: (selector: string) =>
+                selector === '[data-error]'
+                  ? error
+                  : selector === `[id="dc-field-${name}"]`
+                    ? controls.get(name)
+                    : null,
+              closest: () => null,
+              scrollIntoView: () => undefined,
+            });
+          }
+          return fields.get(name);
+        };
+        const created = form(located) as unknown as {
+          root: unknown;
+          values: Record<string, string[]>;
+          submit(): Promise<void>;
+        };
+        created.root = {
+          querySelector: (selector: string) =>
+            field(/data-field="([^"]+)"/.exec(selector)![1]),
+        };
+        created.values.mail = ['not-an-email'];
+        await created.submit();
+        expect(controls.get('mail')!.attributes).to.deep.equal({
+          'aria-describedby': 'dc-help-mail dc-error-mail',
+          'aria-invalid': 'true',
+        });
+        expect(controls.get('cn')!.attributes['aria-invalid']).to.equal('true');
+        // The first refused field has the focus, not the Create button.
+        expect(controls.get('cn')!.focused).to.equal(true);
+        expect(controls.get('mail')!.focused).to.equal(false);
+
+        // Corrected, a field is no longer invalid, and keeps its help.
+        created.values.mail = ['jane@example.com'];
+        created.values.cn = ['Jane'];
+        await created.submit();
+        expect(controls.get('mail')!.attributes).to.deep.equal({
+          'aria-describedby': 'dc-help-mail',
+        });
       });
     });
 
@@ -5265,6 +5594,12 @@ describe('Directory console', () => {
       const members = (form: EntityForm): string[] =>
         (form as unknown as { values: Record<string, string[]> }).values.member;
       const enter = { key: 'Enter', preventDefault: () => undefined };
+
+      it('should name each remove button after the member it removes', async () => {
+        const { container } = await memberForm(() => Promise.resolve([]));
+        expect(container.innerHTML).to.include('aria-label="Remove alice"');
+        expect(container.innerHTML).to.not.include('Remove this value');
+      });
 
       it('should find a member by email address rather than ask for a DN', async () => {
         const asked: string[] = [];
@@ -5938,6 +6273,9 @@ describe('Directory console', () => {
       expect(list.innerHTML).to.include(
         `<span title="${example}">example.com</span>`
       );
+      // Its remove button says which value it removes.
+      expect(container.innerHTML).to.include('aria-label="Remove example"');
+      expect(list.innerHTML).to.include('aria-label="Remove example.com"');
     });
 
     it('should not offer the identifier for editing once it exists', async () => {

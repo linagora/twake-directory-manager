@@ -98,7 +98,7 @@ const en: Catalogue = {
   'form.required': 'Fields marked with * are required',
   'form.optional': 'Optional fields ({count})',
   'form.addValue': 'Press Enter to add a value',
-  'form.removeValue': 'Remove this value',
+  'form.removeValue': 'Remove {value}',
   'form.none': '—',
   'form.choose': 'Choose…',
   'form.searchPointer.one': 'Type {count} character to search',
@@ -189,6 +189,12 @@ const en: Catalogue = {
   'tree.filter': 'Filter',
   'tree.empty': 'Select an organization',
   'tree.addChild': 'New organization here',
+  'tree.addUnder': 'New organization under {name}',
+  'tree.expand': 'Expand {name}',
+  'tree.collapse': 'Collapse {name}',
+  'tree.leaf': '{name} has no sub-organization',
+  'tree.noMatch':
+    'No organization matches “{filter}” among the opened branches',
   'tree.parent': 'Parent organization',
 
   'status.title': 'Account state',
@@ -208,6 +214,8 @@ const en: Catalogue = {
   'password.set': 'Password changed',
 
   'delete.notEmpty': '{name} is not empty: move or delete its entries first',
+  'delete.inUse':
+    '{name} is still used by entries ({field}): change them first',
   'delete.confirm': 'Delete {name}? This cannot be undone.',
   'delete.confirmMany.one': 'Delete {count} entry? This cannot be undone.',
   'delete.confirmMany.other': 'Delete {count} entries? This cannot be undone.',
@@ -344,6 +352,15 @@ const fr: Catalogue = {
   'dashboard.welcome': 'Connecté en tant que {user}',
   'dashboard.entities': 'Ce que vous pouvez gérer',
   'dashboard.create': 'Créer : {entity}',
+  'dashboard.create.users': 'Créer un utilisateur',
+  'dashboard.create.groups': 'Créer un groupe',
+  'dashboard.create.organizations': 'Créer une organisation',
+  'dashboard.create.positions': 'Créer un poste',
+  'dashboard.create.titles': 'Créer une civilité',
+  'dashboard.create.accountStatuses': 'Créer un état de compte',
+  'dashboard.create.listTypes': 'Créer un type de liste',
+  'dashboard.create.mailboxTypes': 'Créer un type de groupe',
+  'dashboard.create.domains': 'Créer un domaine',
   'dashboard.noCreate': 'Création non autorisée ici',
 
   'list.open': 'Ouvrir',
@@ -399,7 +416,7 @@ const fr: Catalogue = {
   'form.required': 'Les champs marqués d’une * sont obligatoires',
   'form.optional': 'Champs facultatifs ({count})',
   'form.addValue': 'Appuyez sur Entrée pour ajouter une valeur',
-  'form.removeValue': 'Retirer cette valeur',
+  'form.removeValue': 'Retirer {value}',
   'form.none': '—',
   'form.choose': 'Choisir…',
   'form.searchPointer.one': 'Tapez {count} caractère pour chercher',
@@ -425,7 +442,7 @@ const fr: Catalogue = {
   'form.true': 'Oui',
   'form.false': 'Non',
   'import.open': 'Importer un CSV',
-  'import.title': 'Importer : {entities}',
+  'import.title': 'Importer des {lowerEntities}',
   'import.intro':
     'Créez des entrées en masse depuis un fichier CSV, tel qu’un tableur l’enregistre. Rien n’est écrit avant que vous ayez vu ce que ferait chaque ligne.',
   'import.noteHeader':
@@ -500,6 +517,12 @@ const fr: Catalogue = {
   'tree.filter': 'Filtrer',
   'tree.empty': 'Sélectionnez une organisation',
   'tree.addChild': 'Nouvelle organisation ici',
+  'tree.addUnder': 'Nouvelle organisation sous {name}',
+  'tree.expand': 'Développer {name}',
+  'tree.collapse': 'Réduire {name}',
+  'tree.leaf': '{name} n’a pas de sous-organisation',
+  'tree.noMatch':
+    'Aucune organisation ne correspond à « {filter} » parmi les branches ouvertes',
   'tree.parent': 'Organisation parente',
 
   'status.title': 'État du compte',
@@ -520,6 +543,8 @@ const fr: Catalogue = {
 
   'delete.notEmpty':
     '{name} n’est pas vide : déplacez ou supprimez d’abord ses entrées',
+  'delete.inUse':
+    '{name} est encore utilisé par des entrées ({field}) : modifiez-les d’abord',
   'delete.confirm': 'Supprimer {name} ? Cette action est irréversible.',
   'delete.confirmMany.one':
     'Supprimer {count} entrée ? Cette action est irréversible.',
@@ -707,7 +732,7 @@ const mn: Catalogue = {
   'form.required': '* тэмдэгтэй талбарыг заавал бөглөнө',
   'form.optional': 'Заавал бус талбарууд ({count})',
   'form.addValue': 'Утга нэмэхийн тулд Enter дарна уу',
-  'form.removeValue': 'Энэ утгыг хасах',
+  'form.removeValue': '{value} утгыг хасах',
   'form.none': '—',
   'form.choose': 'Сонгох…',
   'form.searchPointer': 'Хайхын тулд {count} тэмдэгт оруулна уу',
@@ -794,6 +819,11 @@ const mn: Catalogue = {
   'tree.filter': 'Шүүх',
   'tree.empty': 'Байгууллага сонгоно уу',
   'tree.addChild': 'Энд шинэ байгууллага',
+  'tree.addUnder': '{name} дор шинэ байгууллага',
+  'tree.expand': '{name}-г дэлгэх',
+  'tree.collapse': '{name}-г хураах',
+  'tree.leaf': '{name} дэд байгууллагагүй',
+  'tree.noMatch': 'Нээсэн салбаруудад «{filter}»-д тохирох байгууллага алга',
   'tree.parent': 'Дээд байгууллага',
 
   'status.title': 'Бүртгэлийн төлөв',
@@ -814,6 +844,8 @@ const mn: Catalogue = {
 
   'delete.notEmpty':
     '{name} хоосон биш: эхлээд доторх бичлэгүүдийг зөөх эсвэл устгана уу',
+  'delete.inUse':
+    '{name} бичлэгүүдэд ашиглагдсаар байна ({field}): эхлээд тэдгээрийг өөрчилнө үү',
   'delete.confirm': '{name}-г устгах уу? Үүнийг буцаах боломжгүй.',
   'delete.confirmMany': '{count} бичлэг устгах уу? Үүнийг буцаах боломжгүй.',
   'delete.done': 'Устгагдлаа',

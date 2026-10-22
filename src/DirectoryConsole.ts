@@ -35,6 +35,7 @@ import {
   entryValue,
   nameAttributes,
   parentDn as parentOf,
+  ownValueLabel,
   pointerLabel,
   rdnValue,
   resolveText,
@@ -364,6 +365,10 @@ export function listLoader(
  * running from an earlier message hid the next one early — including the
  * generated password, which is shown once and sticky precisely because the
  * server cannot hand it back.
+ *
+ * It sits in a live region drawn with the shell, so that a screen reader
+ * says each message as it shows: a region that is hidden, or new, when its
+ * text changes is not announced. A refusal interrupts; the others wait.
  */
 export class ToastController {
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -385,9 +390,13 @@ export class ToastController {
       clearTimeout(this.timer);
       this.timer = undefined;
     }
-    toast.textContent = message;
+    toast
+      .closest?.('[data-toast-region]')
+      ?.setAttribute('aria-live', isError ? 'assertive' : 'polite');
     toast.classList.toggle('dc-toast-error', isError);
+    // Shown before it is written, for the region to announce the text.
     toast.hidden = false;
+    toast.textContent = message;
     if (sticky) {
       toast.onclick = (): void => {
         toast.hidden = true;
@@ -574,6 +583,29 @@ export class DirectoryConsole {
   /* ------------------------------------------------------------------ shell */
 
   /** Draw the permanent frame: sidebar, scope, main area, side panel. */
+  /**
+   * Draw the console again in another language. An open side panel is kept
+   * as it is, in the language it was opened in: drawn again, it was closed,
+   * and what had been typed into it was lost.
+   *
+   * @param code the language chosen
+   */
+  private changeLanguage(code: string): void {
+    try {
+      localStorage.setItem(LANGUAGE_KEY, code);
+      // eslint-disable-next-line no-empty
+    } catch {}
+    const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
+    const kept = panel && !panel.hidden ? panel : null;
+    this.translator = new Translator(code);
+    this.drawShell();
+    if (kept)
+      this.container
+        ?.querySelector<HTMLElement>('[data-panel]')
+        ?.replaceWith(kept);
+    void this.renderMain();
+  }
+
   private drawShell(): void {
     const container = this.container;
     if (!container) return;
@@ -662,7 +694,9 @@ export class DirectoryConsole {
             <div class="dc-panel-body" data-panel-body></div>
           </div>
         </div>
-        <div class="dc-toast" data-toast hidden></div>
+        <div data-toast-region role="status" aria-live="polite" aria-atomic="true">
+          <div class="dc-toast" data-toast hidden></div>
+        </div>
         <a class="dc-powered" href="https://linagora.com" target="_blank"
           rel="noopener noreferrer">
           <img src="${LINAGORA_LOGO}" alt="LINAGORA" width="100" height="21" />
@@ -690,14 +724,7 @@ export class DirectoryConsole {
     container
       .querySelector<HTMLSelectElement>('[data-language]')
       ?.addEventListener('change', event => {
-        const code = (event.target as HTMLSelectElement).value;
-        try {
-          localStorage.setItem(LANGUAGE_KEY, code);
-          // eslint-disable-next-line no-empty
-        } catch {}
-        this.translator = new Translator(code);
-        this.drawShell();
-        void this.renderMain();
+        this.changeLanguage((event.target as HTMLSelectElement).value);
       });
 
     container
@@ -880,6 +907,25 @@ export class DirectoryConsole {
     );
   }
 
+  /**
+   * What the button and the panel creating an entry of an entity read. The
+   * catalogue may name it for an entity it knows: French puts an article that
+   * agrees with the noun, _Créer une organisation_, which a template around
+   * the schema's name cannot.
+   *
+   * @param entity entity an entry is created in
+   * @returns the label
+   */
+  private createLabel(entity: EntityDescriptor): string {
+    const own = `dashboard.create.${entity.key}`;
+    const label = this.translator.t(own);
+    return label !== own
+      ? label
+      : this.translator.t('dashboard.create', {
+          entity: this.singular(entity),
+        });
+  }
+
   /** Whether the caller may create an entry of this entity. */
   private canCreate(entity: EntityDescriptor): boolean {
     if (this.scopeError) return false;
@@ -1060,11 +1106,7 @@ export class DirectoryConsole {
                     allowed
                       ? `<button type="button" class="dc-button dc-button-primary" data-new="${escapeHtml(
                           entity.key
-                        )}">${escapeHtml(
-                          t('dashboard.create', {
-                            entity: this.singular(entity),
-                          })
-                        )}</button>`
+                        )}">${escapeHtml(this.createLabel(entity))}</button>`
                       : `<span class="dc-muted">${escapeHtml(t('dashboard.noCreate'))}</span>`
                   }
                 </div>
@@ -1126,7 +1168,7 @@ export class DirectoryConsole {
                       : ''
                   }
                   <button type="button" class="dc-button dc-button-primary" data-new>${escapeHtml(
-                    t('dashboard.create', { entity: this.singular(entity) })
+                    this.createLabel(entity)
                   )}</button>
                 </div>`
               : ''
@@ -1554,7 +1596,12 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     this.openPanel(
-      t('import.title', { entities: this.plural(entity) }),
+      t('import.title', {
+        entities: this.plural(entity),
+        lowerEntities: this.plural(entity).toLocaleLowerCase(
+          this.translator.language
+        ),
+      }),
       body => {
         new EntityImport({
           entity,
@@ -1736,7 +1783,9 @@ export class DirectoryConsole {
         branch: string,
         failed?: boolean
       ):
-        | ((query: string) => Promise<{ dn: string; label: string }[]>)
+        | ((
+            query: string
+          ) => Promise<{ dn: string; label: string; token?: string }[]>)
         | undefined => this.api.pointerSearch(branch, this.entities, failed),
       memberSearch: (
         role: 'members' | 'owners'
@@ -1776,8 +1825,8 @@ export class DirectoryConsole {
 
     this.openPanel(
       entry
-        ? `${t('app.edit')} — ${String(entryValue(entry, entity.mainAttribute) ?? '')}`
-        : t('dashboard.create', { entity: this.singular(entity) }),
+        ? `${t('app.edit')} — ${this.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
+        : this.createLabel(entity),
       (body: HTMLElement): void => {
         void form.render(body);
       },
@@ -1837,7 +1886,9 @@ export class DirectoryConsole {
         branch: string,
         failed?: boolean
       ):
-        | ((query: string) => Promise<{ dn: string; label: string }[]>)
+        | ((
+            query: string
+          ) => Promise<{ dn: string; label: string; token?: string }[]>)
         | undefined => this.api.pointerSearch(branch, this.entities, failed),
       onCancel: (): void => this.closePanel(),
       onSubmit: (
@@ -1849,8 +1900,8 @@ export class DirectoryConsole {
 
     this.openPanel(
       entry
-        ? `${t('app.edit')} — ${String(entryValue(entry, entity.mainAttribute) ?? '')}`
-        : t('dashboard.create', { entity: this.singular(entity) }),
+        ? `${t('app.edit')} — ${this.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
+        : this.createLabel(entity),
       (body: HTMLElement): void => {
         if (parents.length < 2) {
           void form.render(body);
@@ -2187,19 +2238,82 @@ export class DirectoryConsole {
     }
   }
 
+  /**
+   * An entry named as its card and its list name it: a nomenclature's by the
+   * label its schema gives it, _Members only_ for `memberRestrictedList`.
+   *
+   * @param entity the entity the entry belongs to
+   * @param id the entry's main attribute value
+   * @returns the name
+   */
+  private entryName(entity: EntityDescriptor, id: string): string {
+    return (
+      ownValueLabel(
+        entity,
+        entity.mainAttribute,
+        id,
+        this.translator.language
+      ) || id
+    );
+  }
+
   private async confirmDelete(
     entity: EntityDescriptor,
     id: string
   ): Promise<void> {
-    if (!window.confirm(this.translator.t('delete.confirm', { name: id })))
-      return;
+    const name = this.entryName(entity, id);
+    if (!window.confirm(this.translator.t('delete.confirm', { name }))) return;
     try {
       await this.api.remove(entity, id);
       this.toast(this.translator.t('delete.done'));
       this.go(entity.key);
     } catch (err) {
-      this.toast((err as Error).message, true);
+      this.toast(this.inUse(err, entity, id) ?? (err as Error).message, true);
     }
+  }
+
+  /**
+   * Why an entry still pointed at may not be deleted, in words. The server
+   * refuses with a 409 naming the entry by its DN and the pointer by its
+   * attribute, in English: `Cannot delete cn=Sales Manager,…: still
+   * referenced by another entry (title)`. The pointer is named by the label
+   * of a field landing in the entry's branch, _Position_.
+   *
+   * @param err the refusal
+   * @param entity the entity of the entry
+   * @param id the entry's main attribute value
+   * @returns the message, or undefined for another refusal
+   */
+  private inUse(
+    err: unknown,
+    entity: EntityDescriptor,
+    id: string
+  ): string | undefined {
+    const { status, message } = err as { status?: number; message?: string };
+    const attribute = /still referenced[^(]*\(([^)]+)\)\s*$/i.exec(
+      message ?? ''
+    )?.[1];
+    if (status !== 409 || !attribute) return undefined;
+    const { language } = this.translator;
+    const base = entity.base ? comparableDn(entity.base) : undefined;
+    let field: string | undefined;
+    for (const candidate of this.entities) {
+      const found = Object.entries(candidate.schema.attributes).find(
+        ([name, attr]) =>
+          name.toLowerCase() === attribute.toLowerCase() &&
+          (attr.branch || attr.items?.branch || []).some(
+            branch => comparableDn(branch) === base
+          )
+      );
+      if (found) {
+        field = attributeLabel(found[0], found[1], language);
+        break;
+      }
+    }
+    return this.translator.t('delete.inUse', {
+      name: this.entryName(entity, id),
+      field: field ?? attribute,
+    });
   }
 
   private async confirmDeleteOrganization(
@@ -2255,7 +2369,11 @@ export class DirectoryConsole {
         await this.api.remove(entity, id);
       } catch (err) {
         failures.push(
-          t('delete.failed', { name: id, error: (err as Error).message })
+          this.inUse(err, entity, id) ??
+            t('delete.failed', {
+              name: this.entryName(entity, id),
+              error: (err as Error).message,
+            })
         );
       }
     }

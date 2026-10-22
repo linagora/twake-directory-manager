@@ -24,7 +24,7 @@ import type {
 import type { PointerLookup, PointerOption } from '../importer';
 
 /** A member found by searching, with its address when it has one. */
-type MemberOption = PointerOption & { mail?: string };
+type MemberOption = PointerOption & { token: string; mail?: string };
 import {
   comparableDn,
   entryValue,
@@ -1353,7 +1353,11 @@ export class ConsoleApiClient {
     branch: string,
     entities: EntityDescriptor[],
     failed = false
-  ): ((query: string) => Promise<{ dn: string; label: string }[]>) | undefined {
+  ):
+    | ((
+        query: string
+      ) => Promise<{ dn: string; label: string; token?: string }[]>)
+    | undefined {
     // Before the owner is looked for: the tree's branch is the top of an
     // entity or the DN above it, and the pointer needs a search either way.
     if (this.inOrganizationTree(branch)) {
@@ -1395,6 +1399,8 @@ export class ConsoleApiClient {
           return {
             dn: String(entry.dn || id),
             label: name && name !== id ? `${name} (${id})` : id,
+            // Once chosen, named as the values the entry already holds.
+            token: rdnValue(String(entry.dn || id)),
           };
         });
     };
@@ -1422,7 +1428,9 @@ export class ConsoleApiClient {
   ):
     | ((
         query: string
-      ) => Promise<{ dn: string; label: string; mail?: string }[]>)
+      ) => Promise<
+        { dn: string; label: string; token: string; mail?: string }[]
+      >)
     | undefined {
     const searched = entities.filter(
       entity =>
@@ -1459,6 +1467,8 @@ export class ConsoleApiClient {
               return {
                 dn: String(entry.dn),
                 label: address ? `${name} <${address}>` : name,
+                // Once chosen, named as the members the group already has.
+                token: rdnValue(String(entry.dn)),
                 // What a team mailbox judges a member by.
                 ...(address ? { mail: address } : {}),
               };

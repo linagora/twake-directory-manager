@@ -36,7 +36,7 @@ Conventions).
 
 - [x] SCOPE-01 (P1) Local administrator sees only their branch — `scope.spec.ts`
 - [x] SCOPE-02 (P2) Local administrator of Engineering — `scope.spec.ts`
-- [x] SCOPE-03 (P2) Actions offered follow the scope; the server refuses out-of-scope writes — `scope.spec.ts` (deleting a position in use: `knownIssue` reference-delete-referenced-raw-dn-message)
+- [x] SCOPE-03 (P2) Actions offered follow the scope; the server refuses out-of-scope writes — `scope.spec.ts`
 - [x] SCOPE-04 (P3) Scope API agrees with the banner — `scope.spec.ts`
 - [x] SCOPE-05 (P2) Server holds a local administrator to their branch — `scope.spec.ts` (control on a tenant's group, not sales-team)
 - [x] SCOPE-06 (P1) Server refuses a local administrator any write on an account outside their branch: edit, state, password, move, delete, creation, and pushing an own account out — `scope.spec.ts` (#100; 404 accepted for a move of an entry the caller cannot see)
@@ -59,7 +59,7 @@ Conventions).
 
 - [x] USER-01 (P1) Account card — `users.spec.ts`
 - [x] USER-02 (P1) Create an account through the form — `users.spec.ts`
-- [x] USER-03 (P2) Form validation before sending — `users.spec.ts` (Mailbox size wording: `knownIssue` form-error-repeats-hint-and-mailbox-size-wording)
+- [x] USER-03 (P2) Form validation before sending — `users.spec.ts`
 - [x] USER-04 (P2) Server rules: unique address and allowed domain — `users.spec.ts`
 - [x] USER-05 (P1) Edit an account — `users.spec.ts` (also the address: an address or alias another account holds and a foreign domain refused on edit, a new one saved and searched, the identifier kept)
 - [x] USER-06 (P1) Department field searches the tree — `users.spec.ts`

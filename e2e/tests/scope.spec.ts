@@ -4,7 +4,6 @@ import { callApi } from '../support/api';
 import { answerNextConfirm } from '../support/confirm';
 import { HUMAN_RESOURCES, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
-import { knownIssue } from '../support/knownIssues';
 
 const ACTIVE =
   'cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com';
@@ -135,7 +134,6 @@ test.describe('SCOPE scope banner and authorization', () => {
     page,
     directory,
   }) => {
-    knownIssue('reference-delete-referenced-raw-dn-message');
     const app = await new LoginPage(page).loginAs(
       SOPHIE,
       'positions/Sales%20Manager'

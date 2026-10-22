@@ -13,7 +13,7 @@
  * @module browser/directory-console/components/EntityList
  */
 
-import { csvCell } from '../csv';
+import { csvCell, writeCsv } from '../csv';
 import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
 import { hasRole, tooBroad } from '../api/ConsoleApiClient';
@@ -739,18 +739,18 @@ export class EntityList {
       });
   }
 
-  /** Hand the selection to the browser as a CSV file. */
+  /**
+   * Hand the selection to the browser as a CSV file, written as the import's
+   * template is: with a byte-order mark, without which a spreadsheet reads
+   * an accented name as mojibake.
+   */
   private exportSelection(): void {
-    const rows = this.entries.filter(([id]) => this.selected.has(id));
-    const header = this.columns.join(',');
-    const body = rows
+    const rows = this.entries
+      .filter(([id]) => this.selected.has(id))
       .map(([, entry]) =>
-        this.columns
-          .map(name => csvCell(text(entryValue(entry, name))))
-          .join(',')
-      )
-      .join('\n');
-    const blob = new Blob([`${header}\n${body}\n`], {
+        this.columns.map(name => text(entryValue(entry, name)))
+      );
+    const blob = new Blob([writeCsv([this.columns, ...rows])], {
       type: 'text/csv;charset=utf-8',
     });
     const url = URL.createObjectURL(blob);

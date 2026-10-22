@@ -205,7 +205,6 @@ test.describe('USER user accounts', () => {
   test('USER-03 an invalid Mailbox size reads the console message', async ({
     page,
   }) => {
-    knownIssue('form-error-repeats-hint-and-mailbox-size-wording');
     const app = await new LoginPage(page).loginAs(ADMIN, 'users');
     await app.list().newButton.click();
     const form = app.form();
