@@ -1,7 +1,7 @@
 import { csv, LoginPage, readDownload } from '../pages';
 import { ADMIN, ALICE, SEEDED_UIDS, SOPHIE } from '../support/accounts';
 import { answerNextConfirm } from '../support/confirm';
-import { uniquePart } from '../support/directory';
+import { TRANSIT, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
 const USER_COLUMNS = [
@@ -252,6 +252,34 @@ test.describe('LIST lists, search and bulk actions', () => {
     const alice = await loginInNewContext(ALICE, 'users');
     await expect(alice.nothingToManage).toBeVisible();
     await expect(alice.list().deleteSelectionButton).toHaveCount(0);
+  });
+
+  test('LIST-07 delete the selection: an entry the server refuses is named and kept', async ({
+    page,
+    directory,
+    tenant,
+  }) => {
+    // entries in transit show in every administrator's list, but only admin deletes them
+    const lastName = `Mixed${uniquePart()}`;
+    const own = await directory.createUser({ org: tenant.org, lastName });
+    const inTransit = await directory.createUser({ org: TRANSIT, lastName });
+    const app = await new LoginPage(page).loginAs(tenant.admin, 'users');
+    const list = app.list();
+    await list.search(lastName, 'Last name');
+    await expect(list.rows).toHaveCount(2);
+
+    await list.selectAll.check();
+    const message = answerNextConfirm(page, true);
+    await list.deleteSelectionButton.click();
+    expect(await message).toBe('Delete 2 entries? This cannot be undone.');
+
+    await expect(app.errorToast).toContainText(inTransit.uid);
+    await expect(app.errorToast).not.toHaveText(
+      /Internal Server Error|check logs/
+    );
+    await expect(list.ids()).toHaveText([inTransit.uid]);
+    expect(await directory.exists(inTransit.dn)).toBe(true);
+    expect(await directory.exists(own.dn)).toBe(false);
   });
 
   test('LIST-08 reference data lists', async ({ page, loginInNewContext }) => {

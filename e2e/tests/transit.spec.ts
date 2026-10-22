@@ -1,14 +1,12 @@
 import { ClaimDialog, LoginPage } from '../pages';
 import { ADMIN, ALICE, ORG } from '../support/accounts';
 import { answerNextConfirm } from '../support/confirm';
-import type { Directory, Organization } from '../support/directory';
+import {
+  type Directory,
+  type Organization,
+  TRANSIT,
+} from '../support/directory';
 import { expect, test, type Tenant } from '../support/fixtures';
-
-const TRANSIT: Organization = {
-  dn: ORG.transit,
-  name: 'Transit',
-  path: 'Transit',
-};
 
 /** A second branch of its own, with two sub-organizations, as Engineering has */
 async function otherTenant(

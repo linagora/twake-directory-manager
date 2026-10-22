@@ -87,6 +87,13 @@ export const HUMAN_RESOURCES: Organization = {
   path: 'Human Resources',
 };
 
+/** The seeded Transit, whose entries every administrator sees */
+export const TRANSIT: Organization = {
+  dn: ORG.transit,
+  name: 'Transit',
+  path: 'Transit',
+};
+
 /**
  * Writes the entries a test works on straight into OpenLDAP, as the seed does, and removes
  * them after the test. The seed itself is never changed: a test that edits, moves, hands over or
