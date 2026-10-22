@@ -39,6 +39,7 @@ Conventions).
 - [x] SCOPE-03 (P2) Actions offered follow the scope; the server refuses out-of-scope writes — `scope.spec.ts` (deleting a position in use: `knownIssue` reference-delete-referenced-raw-dn-message)
 - [x] SCOPE-04 (P3) Scope API agrees with the banner — `scope.spec.ts`
 - [x] SCOPE-05 (P2) Server holds a local administrator to their branch — `scope.spec.ts` (control on a tenant's group, not sales-team)
+- [x] SCOPE-06 (P1) Server refuses a local administrator any write on an account outside their branch: edit, state, password, move, delete, creation, and pushing an own account out — `scope.spec.ts` (#100; 404 accepted for a move of an entry the caller cannot see)
 
 ## Lists, search and bulk actions
 
@@ -48,7 +49,7 @@ Conventions).
 - [x] LIST-04 (P3) Paging and remembered page size — `list.spec.ts`
 - [x] LIST-05 (P3) Sorting and path shortening — `list.spec.ts`
 - [x] LIST-06 (P2) Export selection as CSV — `list.spec.ts`
-- [x] LIST-07 (P2) Delete selection — `list.spec.ts`
+- [x] LIST-07 (P2) Delete selection — `list.spec.ts` (also as a local administrator, an entry in transit in the selection: refused, named in the red toast, kept)
 - [x] LIST-08 (P2) Reference data lists — `list.spec.ts`
 - [x] LIST-09 (P3) Header checkbox reflects the selection and clears the page — `list.spec.ts`
 - [x] LIST-10 (P2) Back from a card returns to the list as it was left — `list.spec.ts`

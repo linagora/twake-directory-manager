@@ -2,8 +2,12 @@ import { LoginPage } from '../pages';
 import { ADMIN, ALICE, CAROL, ERIC, ORG, SOPHIE } from '../support/accounts';
 import { callApi } from '../support/api';
 import { answerNextConfirm } from '../support/confirm';
+import { HUMAN_RESOURCES, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 import { knownIssue } from '../support/knownIssues';
+
+const ACTIVE =
+  'cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com';
 
 /** What a refusal must never read like */
 const UNREADABLE = /Internal Server Error|check logs|^\s*\{|"error"/;
@@ -280,5 +284,87 @@ test.describe('SCOPE scope banner and authorization', () => {
       }
     );
     expect(outside.status).toBe(403);
+  });
+
+  test('SCOPE-06 the server refuses a local administrator any write on an account outside their branch', async ({
+    page,
+    directory,
+    tenant,
+  }) => {
+    // Human Resources: nobody but admin administers it
+    const outside = await directory.createUser();
+    const own = await directory.createUser({ org: tenant.org });
+    const elsewhere = HUMAN_RESOURCES.dn;
+    const password = await directory.values(outside.dn, 'userPassword');
+    await new LoginPage(page).loginAs(tenant.admin);
+
+    const writes: [string, string, unknown?][] = [
+      [
+        'PUT',
+        `/api/v1/ldap/users/${outside.uid}`,
+        { replace: { mobile: '+00 0' } },
+      ],
+      [
+        'POST',
+        `/api/v1/ldap/users/${outside.uid}/status`,
+        { state: 'disabled' },
+      ],
+      [
+        'POST',
+        `/api/v1/ldap/users/${outside.uid}/password`,
+        { password: 'Taken-0ver!', forceChange: false },
+      ],
+      [
+        'POST',
+        `/api/v1/ldap/users/${outside.uid}/move`,
+        { targetOrgDn: tenant.org.dn },
+      ],
+      ['DELETE', `/api/v1/ldap/users/${outside.uid}`],
+      // an account of the branch pushed out of it, by an edit or a move
+      [
+        'PUT',
+        `/api/v1/ldap/users/${own.uid}`,
+        { replace: { twakeDepartmentLink: elsewhere } },
+      ],
+      [
+        'POST',
+        `/api/v1/ldap/users/${own.uid}/move`,
+        { targetOrgDn: elsewhere },
+      ],
+    ];
+    for (const [method, path, body] of writes) {
+      const answer = await callApi(page, method, path, body);
+      // 403, or 404 for an entry the caller cannot even see: never a success, never a crash
+      expect([403, 404], `${method} ${path}`).toContain(answer.status);
+    }
+
+    const unique = uniquePart();
+    const uid = `out.${unique}`;
+    directory.trackUser(uid);
+    const create = await callApi(page, 'POST', '/api/v1/ldap/users', {
+      employeeNumber: `O-${unique}`,
+      sn: 'Out',
+      givenName: 'Side',
+      displayName: 'Side Out',
+      mail: `${uid}@example.com`,
+      twakeDepartmentLink: elsewhere,
+    });
+    expect(create.status, 'POST /api/v1/ldap/users').toBe(403);
+
+    expect(await directory.exists(outside.dn)).toBe(true);
+    expect(await directory.values(outside.dn, 'mobile')).toEqual([]);
+    expect(await directory.values(outside.dn, 'twakeAccountStatus')).toEqual([
+      ACTIVE,
+    ]);
+    expect(await directory.values(outside.dn, 'twakeDepartmentLink')).toEqual([
+      elsewhere,
+    ]);
+    expect(await directory.values(outside.dn, 'userPassword')).toEqual(
+      password
+    );
+    expect(await directory.values(own.dn, 'twakeDepartmentLink')).toEqual([
+      tenant.org.dn,
+    ]);
+    expect(await directory.usersStartingWith(uid)).toEqual([]);
   });
 });
