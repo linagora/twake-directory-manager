@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+Built on ldap-rest 0.23.0.
+
 ### Features
 
 - The full name is written from the first and last names as they are typed,
@@ -12,8 +14,8 @@
   label: the Employee ID does with the Twake schema
 - Email aliases are folded with the optional fields: an account rarely
   starts with any
-- With linagora/ldap-rest#364, the Department comes right after the
-  Employee ID
+- The Department comes right after the Employee ID
+  (linagora/ldap-rest#364)
 
 ## v0.9.0 (2026-10-22)
 
