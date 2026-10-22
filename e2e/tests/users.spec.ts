@@ -305,6 +305,63 @@ test.describe('USER user accounts', () => {
     ]);
   });
 
+  test('USER-05 change the address of an account; a taken one is refused', async ({
+    page,
+    directory,
+  }) => {
+    const user = await directory.createUser();
+    const unique = uniquePart();
+    const app = await new LoginPage(page).loginAs(ADMIN, `users/${user.uid}`);
+    const card = app.entry();
+    await card.action('Edit').click();
+    const form = app.form();
+    await form.expectOpen(`Edit — ${user.uid}`);
+
+    // alice's alias, bob's address, a domain the directory does not have
+    for (const taken of [
+      'alice.moreau@example.com',
+      'bob@example.com',
+      `x.${unique}@other.org`,
+    ]) {
+      await form.fill('Email', taken);
+      await form.submit();
+      await expect(app.errorToast, taken).toBeVisible();
+      if (!taken.endsWith('other.org'))
+        await expect(app.errorToast).toContainText(taken);
+      await expect(app.errorToast).not.toHaveText(
+        /Internal Server Error|check logs|^\s*\{/
+      );
+      await expect(form.dialog).toBeVisible();
+      await app.errorToast.evaluate(
+        toast => ((toast as HTMLElement).hidden = true)
+      );
+    }
+    expect(await directory.values(user.dn, 'mail')).toEqual([user.mail]);
+
+    const renamed = `renamed.${unique}@example.com`;
+    const alias = `alias.${unique}@example.com`;
+    await form.fill('Email', renamed);
+    await form.addValue('Email aliases', alias);
+    await form.submit();
+    await app.expectToast('Saved');
+    await form.expectClosed();
+    await expect(card.detail('Email')).toHaveText(renamed);
+    await expect(card.detail('Email aliases')).toHaveText(alias);
+    // the identifier comes from the address at creation only
+    await expect(card.detail('Identifier')).toHaveText(user.uid);
+    expect(await directory.values(user.dn, 'mail')).toEqual([renamed]);
+    expect(await directory.values(user.dn, 'mailAlternateAddress')).toEqual([
+      alias,
+    ]);
+
+    await app.navItem('Users').click();
+    const list = app.list();
+    await list.search(renamed, 'Email');
+    await expect(list.row(user.uid)).toBeVisible();
+    await list.search(user.mail, 'Email');
+    await expect(list.emptyState).toHaveText('No entry matches this search');
+  });
+
   test('USER-06 the Department field searches the tree', async ({
     page,
     directory,
