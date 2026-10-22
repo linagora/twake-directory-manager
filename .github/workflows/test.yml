@@ -47,6 +47,57 @@ jobs:
       - name: Build
         run: npm run build
 
+  # The Playwright suite of e2e/ against the image built from this tree, behind the stack of
+  # scripts/qa-environment/ (OpenLDAP + Dex).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          cache: 'npm'
+          cache-dependency-path: e2e/package-lock.json
+
+      - run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build the image
+        run: ../scripts/qa-environment/build.sh
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the stack
+        run: ./scripts/start.sh
+
+      - name: Test
+        run: npx playwright test
+
+      - name: Logs of the stack
+        if: failure()
+        run: mkdir -p test-results && docker compose -p twake-directory-manager-e2e -f ../scripts/qa-environment/docker-compose.yaml logs --no-color > test-results/stack.log 2>&1 || true
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 14
+
+      - name: Stop the stack
+        if: always()
+        run: ./scripts/stop.sh
+
   helm:
     runs-on: ubuntu-latest
     steps:
