@@ -1,6 +1,7 @@
 # Seed data of the QA environment, loaded by start.sh under dc=example,dc=com: the branches the
-# Twake schemas of ldap-rest name, their nomenclatures, an organization tree with a global and
-# two local administrators, accounts in every organization and a few groups.
+# Twake schemas of ldap-rest name, their nomenclatures, the default password policy, an
+# organization tree with a global and two local administrators, accounts in every organization
+# and a few groups.
 #
 # Every account signs in with the password "secret".
 
@@ -20,6 +21,22 @@ ou: positions
 dn: ou=nomenclature,dc=example,dc=com
 objectClass: organizationalUnit
 ou: nomenclature
+
+# The password policies (DM_PPOLICY_BASE), only the global administrators read and change them
+# (DM_AUTHZ_GLOBAL_BRANCHES). The default one, slapd's olcPPolicyDefault (start.sh) and
+# DM_PPOLICY_DEFAULT_DN, sets nothing but the attribute it guards: every account keeps signing in
+# with "secret", and pwdReset forces no change (no pwdMustChange).
+dn: ou=policies,dc=example,dc=com
+objectClass: organizationalUnit
+ou: policies
+
+dn: cn=default,ou=policies,dc=example,dc=com
+objectClass: top
+objectClass: person
+objectClass: pwdPolicy
+cn: default
+sn: default
+pwdAttribute: userPassword
 
 # --------------------------------------------------------------------------------- nomenclatures
 dn: ou=twakeTitle,ou=nomenclature,dc=example,dc=com

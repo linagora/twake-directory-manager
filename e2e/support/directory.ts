@@ -18,6 +18,17 @@ const USERS = `ou=users,${BASE}`;
 const GROUPS = `ou=groups,${BASE}`;
 const STATUS = `ou=twakeAccountStatus,ou=nomenclature,${BASE}`;
 const MAILBOX_TYPE = `ou=twakeMailboxType,ou=nomenclature,${BASE}`;
+/** DM_PPOLICY_BASE of the stack */
+export const POLICIES = `ou=policies,${BASE}`;
+/** The seeded default policy, slapd's olcPPolicyDefault */
+export const DEFAULT_POLICY = `cn=default,${POLICIES}`;
+/** The mail domains, which DM_AUTHZ_GLOBAL_WRITE_BRANCHES lets admin add and delete */
+export const DOMAINS = `ou=domains,ou=nomenclature,${BASE}`;
+/**
+ * The top-level domain of the mail domains a test adds: reserved (RFC 2606), and how the tests
+ * reading the whole list of domains tell them from the seed's
+ */
+export const TEST_DOMAIN = /\.test$/;
 
 /**
  * Consonants only: a unique part never holds a vowel nor a digit, so it never matches the
@@ -231,6 +242,44 @@ export class Directory {
     await (await this.#ldap()).add(dn, { objectClass: 'twakePosition', cn });
     this.track(dn);
     return { cn, dn };
+  }
+
+  /**
+   * A password policy under the stack's DM_PPOLICY_BASE, as ldap-rest writes one: `attributes`
+   * are its ppolicy attributes (`{ pwdMinLength: '12' }`)
+   */
+  async createPolicy(
+    attributes: Record<string, string | string[]> = {}
+  ): Promise<{ cn: string; dn: string }> {
+    const cn = `qa-${uniquePart()}`;
+    const dn = `cn=${cn},${POLICIES}`;
+    await (
+      await this.#ldap()
+    ).add(dn, {
+      objectClass: ['top', 'person', 'pwdPolicy'],
+      cn,
+      sn: cn,
+      pwdAttribute: 'userPassword',
+      ...attributes,
+    });
+    this.track(dn);
+    return { cn, dn };
+  }
+
+  /** A mail domain `qa<unique>.test`, as the seed's are written */
+  async createDomain(): Promise<{ id: string; name: string; dn: string }> {
+    const id = `qa${uniquePart()}`;
+    const name = `${id}.test`;
+    const dn = `dc=${id},${DOMAINS}`;
+    await (
+      await this.#ldap()
+    ).add(dn, {
+      objectClass: ['top', 'domain', 'domainRelatedObject'],
+      dc: id,
+      associatedDomain: name,
+    });
+    this.track(dn);
+    return { id, name, dn };
   }
 
   /** Values of the attributes of an entry, `null` when it does not exist */

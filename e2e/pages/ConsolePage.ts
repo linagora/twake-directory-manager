@@ -6,6 +6,7 @@ import { FormPanel } from './FormPanel';
 import { ImportPanel } from './ImportPanel';
 import { ListPage } from './ListPage';
 import { OrganizationsPage } from './OrganizationsPage';
+import { PoliciesPage } from './PoliciesPage';
 
 /**
  * The console's frame (sidebar, scope banner, main area, side panel, toast) and its overview.
@@ -138,6 +139,11 @@ export class ConsolePage {
 
   organizations(): OrganizationsPage {
     return new OrganizationsPage(this.page);
+  }
+
+  /** Reference data → Password policies */
+  policies(): PoliciesPage {
+    return new PoliciesPage(this.page);
   }
 
   /** The create / edit form of the side panel */

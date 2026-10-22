@@ -1,7 +1,7 @@
 import { LoginPage, ResetPasswordDialog } from '../pages';
 import { ADMIN, ALICE, ORG, SOPHIE } from '../support/accounts';
 import { answerNextConfirm } from '../support/confirm';
-import { HUMAN_RESOURCES, uniquePart } from '../support/directory';
+import { HUMAN_RESOURCES, TEST_DOMAIN, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 import { knownIssue } from '../support/knownIssues';
 
@@ -254,10 +254,10 @@ test.describe('USER user accounts', () => {
     // "@" offers every domain with no department, then those the department allows
     const email = form.control('Email');
     await email.pressSequentially(`${uid}@`);
-    await expect(form.options('Email')).toHaveText([
-      `${uid}@example.com`,
-      `${uid}@lists.example.com`,
-    ]);
+    // but the domains DOMAIN-01 adds meanwhile
+    await expect(
+      form.options('Email').filter({ hasNotText: TEST_DOMAIN })
+    ).toHaveText([`${uid}@example.com`, `${uid}@lists.example.com`]);
     await form.pick('Department', 'Human', 'Human Resources');
     await email.fill('');
     await email.pressSequentially(`${uid}@`);

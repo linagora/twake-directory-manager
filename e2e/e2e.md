@@ -22,7 +22,7 @@ Conventions).
 
 ## Layout, navigation and language
 
-- [x] NAV-01 (P2) Sidebar, highlighted entry and Reference data section — `navigation.spec.ts`
+- [x] NAV-01 (P2) Sidebar, highlighted entry and Reference data section — `navigation.spec.ts` (Password policies listed for admin, a global administrator of the stack)
 - [x] NAV-02 (P2) Overview cards — `navigation.spec.ts` (step 3 follows d698457: a local administrator's Organizations card offers New organization, created under their branch; the plan still reads "Creation not allowed here")
 - [x] NAV-03 (P1) Switch the whole interface to French and back — `navigation.spec.ts`
 - [x] NAV-04 (P3) French on secondary screens — `navigation.spec.ts`
@@ -50,7 +50,7 @@ Conventions).
 - [x] LIST-05 (P3) Sorting and path shortening — `list.spec.ts`
 - [x] LIST-06 (P2) Export selection as CSV — `list.spec.ts`
 - [x] LIST-07 (P2) Delete selection — `list.spec.ts` (also as a local administrator, an entry in transit in the selection: refused, named in the red toast, kept)
-- [x] LIST-08 (P2) Reference data lists — `list.spec.ts`
+- [x] LIST-08 (P2) Reference data lists — `list.spec.ts` (Mail domains offers New domain to admin since the stack sets `DM_AUTHZ_GLOBAL_WRITE_BRANCHES`; the domains other tests add, `*.test`, ignored)
 - [x] LIST-09 (P3) Header checkbox reflects the selection and clears the page — `list.spec.ts`
 - [x] LIST-10 (P2) Back from a card returns to the list as it was left — `list.spec.ts`
 - [x] LIST-11 (P3) A count of one reads in the singular — `list.spec.ts`
@@ -112,6 +112,20 @@ Conventions).
 - [x] IMPORT-04 (P2) Rows with errors and refused rows — `import.spec.ts` (a repeated address reads "is already on line N", the plan's "repeats line N" predates it)
 - [x] IMPORT-05 (P2) Import respects the scope — `import.spec.ts`
 - [x] IMPORT-06 (P3) Stop an import — `import.spec.ts` (150 rows)
+
+## Global reference data: password policies and mail domains
+
+Not in the plan (audit of 2026-10-18), which predates them (#106). The stack configures them as a
+deployment should: `DM_PPOLICY_BASE` and `DM_PPOLICY_DEFAULT_DN` (the seed's
+`cn=default,ou=policies`, also slapd's `olcPPolicyDefault`), `DM_AUTHZ_GLOBAL_BRANCHES` on the
+policies and `DM_AUTHZ_GLOBAL_WRITE_BRANCHES` on the mail domains: admin manages them, the local
+administrators do not.
+
+- [x] POLICY-01 (P2) Only the global administrators see the password policies; the default one cannot be deleted — `policies.spec.ts` (the policies API answers 403 to a local administrator)
+- [x] POLICY-02 (P1) Create, edit and delete a policy: durations sent in seconds, an emptied field removes its attribute — `policies.spec.ts`
+- [x] POLICY-03 (P2) A policy accounts use is not deleted — `policies.spec.ts` (that it holds their passwords cannot be checked: ldap-rest binds as the rootdn, which ppolicy exempts)
+- [x] DOMAIN-01 (P2) A global administrator adds a mail domain, offered after "@" at once, and deletes it — `domains.spec.ts` (named `*.test`, which LIST-08 and USER-15 ignore)
+- [x] DOMAIN-02 (P2) A local administrator reads the mail domains and changes none — `domains.spec.ts`
 
 ## Messages and error handling
 

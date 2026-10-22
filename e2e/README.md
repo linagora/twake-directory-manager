@@ -55,6 +55,10 @@ with the Twake schemas, the ppolicy and memberof overlays and `ldap/seed.ldif`; 
 console) as compose project **`twake-directory-manager-e2e`**, on ports 18700 (console) and
 18701 (Dex), so that it runs beside a QA environment (`twake-directory-manager-qa`,
 18600/18601). `E2E_PROJECT`, `E2E_APP_PORT` and `E2E_SSO_PORT` change them.
+The console is configured as a deployment should be: admin, who administers the top
+organization, is the only one to read and change the password policies (`DM_AUTHZ_GLOBAL_BRANCHES`
+on the seed's `ou=policies`, whose `cn=default` is slapd's default policy) and to add and delete
+mail domains (`DM_AUTHZ_GLOBAL_WRITE_BRANCHES`).
 
 It writes the IP of each container to `.generated/stack.json`, and:
 
@@ -149,11 +153,11 @@ name: 'France' })` gives `France <unique>`. Nothing is created in Sales nor Engi
 
 ### Fixtures
 
-| Fixture                             | What                                                                                                                                                                                                                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `directory`                         | Entries of the test in OpenLDAP (`createUser`, `createUsers`, `createGroup`, `createOrganization`, `createPosition`, `addValues`), checks (`values`, `read`, `exists`, `usersStartingWith`), and `track*` for what the console creates; all removed after the test |
-| `tenant`                            | `{ org, admin }`: an organization of its own under the root and its local administrator (password `secret`)                                                                                                                                                        |
-| `loginInNewContext(account, hash?)` | Signs another account in, in a browser context of its own; returns its `ConsolePage`                                                                                                                                                                               |
+| Fixture                             | What                                                                                                                                                                                                                                                                                               |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `directory`                         | Entries of the test in OpenLDAP (`createUser`, `createUsers`, `createGroup`, `createOrganization`, `createPosition`, `createPolicy`, `createDomain`, `addValues`), checks (`values`, `read`, `exists`, `usersStartingWith`), and `track*` for what the console creates; all removed after the test |
+| `tenant`                            | `{ org, admin }`: an organization of its own under the root and its local administrator (password `secret`)                                                                                                                                                                                        |
+| `loginInNewContext(account, hash?)` | Signs another account in, in a browser context of its own; returns its `ConsolePage`                                                                                                                                                                                                               |
 
 ### Flakiness
 

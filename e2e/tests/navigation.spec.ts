@@ -12,6 +12,8 @@ const REFERENCE_LISTS = [
   'List types',
   'Group types',
   'Mail domains',
+  // admin's only, a global administrator of the stack (POLICY-01)
+  'Password policies',
 ];
 
 /** A translation key left as is, or an object printed as a string */

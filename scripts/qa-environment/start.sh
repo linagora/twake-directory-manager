@@ -1,9 +1,9 @@
 #!/bin/bash
 #
 # Starts a long lived console + OpenLDAP + Dex stack for manual or agent driven exploratory QA.
-# OpenLDAP gets the Twake schemas (ldap/*-schema.ldif), the ppolicy overlay (pwdReset), the
-# memberof overlay (an account's mailing lists) and the seed data of ldap/seed.ldif; Dex
-# authenticates against it.
+# OpenLDAP gets the Twake schemas (ldap/*-schema.ldif), the ppolicy overlay (pwdReset, the
+# password policies), the memberof overlay (an account's mailing lists) and the seed data of
+# ldap/seed.ldif; Dex authenticates against it.
 #
 #   scripts/qa-environment/build.sh    # once, and whenever the code under test changes
 #   scripts/qa-environment/start.sh
@@ -102,7 +102,8 @@ else
   ldap_exec ldapadd -Q -Y EXTERNAL -H ldapi:/// -f /qa-ldap/mail-schema.ldif >/dev/null
   ldap_exec ldapadd -Q -Y EXTERNAL -H ldapi:/// -f /qa-ldap/twake-schema.ldif >/dev/null
   # pwdReset, which the console sets to force a new password at next login, is an operational
-  # attribute the ppolicy overlay registers
+  # attribute the ppolicy overlay registers. Its default policy is the seed's, which the console
+  # names too (DM_PPOLICY_DEFAULT_DN of docker-compose.yaml)
   ldap_exec ldapmodify -Q -Y EXTERNAL -H ldapi:/// >/dev/null <<'LDIF'
 dn: cn=module{0},cn=config
 changetype: modify
@@ -114,6 +115,7 @@ changetype: add
 objectClass: olcOverlayConfig
 objectClass: olcPPolicyConfig
 olcOverlay: ppolicy
+olcPPolicyDefault: cn=default,ou=policies,dc=example,dc=com
 LDIF
   # memberOf, which an account's card lists its mailing lists from, is kept by the memberof
   # overlay. The image loads it (and refint) for groupOfUniqueNames, the Twake groups are
