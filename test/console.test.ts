@@ -1910,6 +1910,68 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should explain a refused deletion of an entry still pointed at', async () => {
+      const positions: EntityDescriptor = {
+        key: 'positions',
+        pluralName: 'positions',
+        singularName: 'position',
+        mainAttribute: 'cn',
+        base: 'ou=positions,dc=example,dc=com',
+        schema: { attributes: { cn: { type: 'string', role: 'identifier' } } },
+        endpoint: '/api/v1/ldap/positions',
+        kind: 'flat',
+      };
+      const staff: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            title: {
+              type: 'pointer',
+              branch: ['ou=positions,dc=example,dc=com'],
+              label: { en: 'Position', fr: 'Poste' },
+            },
+          },
+        },
+      };
+      const toast = toastElement();
+      const app = consoleIn({ '[data-toast]': toast }, 'fr') as unknown as {
+        entities: EntityDescriptor[];
+        confirmDelete(entity: EntityDescriptor, id: string): Promise<void>;
+        deleteMany(entity: EntityDescriptor, ids: string[]): Promise<void>;
+      };
+      app.entities = [staff, positions];
+      const refusal = {
+        error:
+          'Cannot delete cn=Sales Manager,ou=positions,dc=example,dc=com: still referenced by another entry (title)',
+      };
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      g.window = { confirm: () => true };
+      try {
+        nock(baseUrl)
+          .delete('/api/v1/ldap/positions/Sales%20Manager')
+          .reply(409, refusal);
+        await app.confirmDelete(positions, 'Sales Manager');
+        expect(toast.textContent).to.equal(
+          'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord'
+        );
+
+        nock(baseUrl)
+          .delete('/api/v1/ldap/positions/Sales%20Manager')
+          .reply(409, refusal);
+        nock(baseUrl)
+          .delete('/api/v1/ldap/positions/Intern')
+          .reply(403, { error: 'Forbidden' });
+        await app.deleteMany(positions, ['Sales Manager', 'Intern']);
+        expect(toast.textContent).to.equal(
+          'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord · Intern : Forbidden'
+        );
+      } finally {
+        g.window = original;
+      }
+    });
+
     it('should explain a refused deletion of a non-empty organization', async () => {
       const toast = toastElement();
       const app = consoleIn({ '[data-toast]': toast }, 'fr');

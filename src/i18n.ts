@@ -210,6 +210,8 @@ const en: Catalogue = {
   'password.set': 'Password changed',
 
   'delete.notEmpty': '{name} is not empty: move or delete its entries first',
+  'delete.inUse':
+    '{name} is still used by entries ({field}): change them first',
   'delete.confirm': 'Delete {name}? This cannot be undone.',
   'delete.confirmMany.one': 'Delete {count} entry? This cannot be undone.',
   'delete.confirmMany.other': 'Delete {count} entries? This cannot be undone.',
@@ -533,6 +535,8 @@ const fr: Catalogue = {
 
   'delete.notEmpty':
     '{name} n’est pas vide : déplacez ou supprimez d’abord ses entrées',
+  'delete.inUse':
+    '{name} est encore utilisé par des entrées ({field}) : modifiez-les d’abord',
   'delete.confirm': 'Supprimer {name} ? Cette action est irréversible.',
   'delete.confirmMany.one':
     'Supprimer {count} entrée ? Cette action est irréversible.',
@@ -828,6 +832,8 @@ const mn: Catalogue = {
 
   'delete.notEmpty':
     '{name} хоосон биш: эхлээд доторх бичлэгүүдийг зөөх эсвэл устгана уу',
+  'delete.inUse':
+    '{name} бичлэгүүдэд ашиглагдсаар байна ({field}): эхлээд тэдгээрийг өөрчилнө үү',
   'delete.confirm': '{name}-г устгах уу? Үүнийг буцаах боломжгүй.',
   'delete.confirmMany': '{count} бичлэг устгах уу? Үүнийг буцаах боломжгүй.',
   'delete.done': 'Устгагдлаа',

@@ -22,6 +22,9 @@
   value_ (#83)
 - A screen reader says the toasts, the generated password and the refusals
   among them; they showed in silence (#82)
+- Deleting a reference entry still in use says so in words, naming the field
+  using it: _Sales Manager is still used by entries (Position)_; the server's
+  message, with the DN and the attribute, showed in English (#81)
 
 ## v0.10.0 (2026-10-22)
 

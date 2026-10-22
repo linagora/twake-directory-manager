@@ -36,7 +36,7 @@ Conventions).
 
 - [x] SCOPE-01 (P1) Local administrator sees only their branch — `scope.spec.ts`
 - [x] SCOPE-02 (P2) Local administrator of Engineering — `scope.spec.ts`
-- [x] SCOPE-03 (P2) Actions offered follow the scope; the server refuses out-of-scope writes — `scope.spec.ts` (deleting a position in use: `knownIssue` reference-delete-referenced-raw-dn-message)
+- [x] SCOPE-03 (P2) Actions offered follow the scope; the server refuses out-of-scope writes — `scope.spec.ts`
 - [x] SCOPE-04 (P3) Scope API agrees with the banner — `scope.spec.ts`
 - [x] SCOPE-05 (P2) Server holds a local administrator to their branch — `scope.spec.ts` (control on a tenant's group, not sales-team)
 - [x] SCOPE-06 (P1) Server refuses a local administrator any write on an account outside their branch: edit, state, password, move, delete, creation, and pushing an own account out — `scope.spec.ts` (#100; 404 accepted for a move of an entry the caller cannot see)

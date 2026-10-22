@@ -2252,8 +2252,52 @@ export class DirectoryConsole {
       this.toast(this.translator.t('delete.done'));
       this.go(entity.key);
     } catch (err) {
-      this.toast((err as Error).message, true);
+      this.toast(this.inUse(err, entity, id) ?? (err as Error).message, true);
     }
+  }
+
+  /**
+   * Why an entry still pointed at may not be deleted, in words. The server
+   * refuses with a 409 naming the entry by its DN and the pointer by its
+   * attribute, in English: `Cannot delete cn=Sales Manager,…: still
+   * referenced by another entry (title)`. The pointer is named by the label
+   * of a field landing in the entry's branch, _Position_.
+   *
+   * @param err the refusal
+   * @param entity the entity of the entry
+   * @param id the entry's main attribute value
+   * @returns the message, or undefined for another refusal
+   */
+  private inUse(
+    err: unknown,
+    entity: EntityDescriptor,
+    id: string
+  ): string | undefined {
+    const { status, message } = err as { status?: number; message?: string };
+    const attribute = /still referenced[^(]*\(([^)]+)\)\s*$/i.exec(
+      message ?? ''
+    )?.[1];
+    if (status !== 409 || !attribute) return undefined;
+    const { language } = this.translator;
+    const base = entity.base ? comparableDn(entity.base) : undefined;
+    let field: string | undefined;
+    for (const candidate of this.entities) {
+      const found = Object.entries(candidate.schema.attributes).find(
+        ([name, attr]) =>
+          name.toLowerCase() === attribute.toLowerCase() &&
+          (attr.branch || attr.items?.branch || []).some(
+            branch => comparableDn(branch) === base
+          )
+      );
+      if (found) {
+        field = attributeLabel(found[0], found[1], language);
+        break;
+      }
+    }
+    return this.translator.t('delete.inUse', {
+      name: this.entryName(entity, id),
+      field: field ?? attribute,
+    });
   }
 
   private async confirmDeleteOrganization(
@@ -2309,10 +2353,11 @@ export class DirectoryConsole {
         await this.api.remove(entity, id);
       } catch (err) {
         failures.push(
-          t('delete.failed', {
-            name: this.entryName(entity, id),
-            error: (err as Error).message,
-          })
+          this.inUse(err, entity, id) ??
+            t('delete.failed', {
+              name: this.entryName(entity, id),
+              error: (err as Error).message,
+            })
         );
       }
     }
