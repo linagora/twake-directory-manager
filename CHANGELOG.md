@@ -1,20 +1,22 @@
 # Changelog
 
-## Unreleased
+## v0.9.0 (2026-10-22)
+
+Built on ldap-rest 0.22.1.
 
 ### Features
 
 - A long form creating an entry, an account's for one, folds the fields the
   schema does not require under _Optional fields_, below the required ones,
-  the mail settings and the password;
-  it opens on a refused value. The address fields, the position or the
-  common name no longer stretch the form past the screen
+  what is pushed to Twake Mail and the password; it opens on a refused
+  value. The address fields, the position or the common name no longer
+  stretch the form past the screen (#96)
 
 ### Bug Fixes
 
 - After an upgrade, browsers load the new console without a forced reload:
   the page names its script and stylesheet with a digest of their content;
-  they kept running the former bundle
+  they kept running the former bundle (#95)
 
 ## v0.8.1 (2026-10-21)
 
