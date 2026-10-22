@@ -57,6 +57,8 @@ export interface CreateUserOptions {
   org?: Organization;
   /** Readable start of the uid: `tom` gives `tom.<unique>` */
   prefix?: string;
+  /** The whole uid, for an account taking the place of a deleted one; `prefix` is ignored */
+  uid?: string;
   firstName?: string;
   lastName?: string;
   employeeNumber?: string;
@@ -160,7 +162,7 @@ export class Directory {
     const org = options.org ?? HUMAN_RESOURCES;
     const unique = uniquePart();
     const prefix = options.prefix ?? 'qa';
-    const uid = `${prefix}.${unique}`;
+    const uid = options.uid ?? `${prefix}.${unique}`;
     const firstName = options.firstName ?? capitalize(prefix);
     const lastName = options.lastName ?? capitalize(unique);
     const displayName = `${firstName} ${lastName}`;
