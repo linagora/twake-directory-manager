@@ -30,6 +30,9 @@
   the selected organization is marked current (#80)
 - Changing the language keeps an open form, and what was typed into it, in
   the language it was opened in; it was closed, and the values lost (#79)
+- A field a form refuses is marked invalid and described by its message,
+  and takes the focus, for a screen reader to say what is wrong; the
+  refusals were only red on screen (#78)
 
 ## v0.10.0 (2026-10-22)
 

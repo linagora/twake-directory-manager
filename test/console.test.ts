@@ -5222,6 +5222,80 @@ describe('Directory console', () => {
         // The required fields are shown first, and refused first.
         expect(scrolled).to.deep.equal(['cn']);
       });
+
+      it('should mark a refused field invalid, described by its message, and focus it', async () => {
+        /** A control that keeps its attributes, and says when it is focused. */
+        const control = (attributes: Record<string, string> = {}) => ({
+          attributes,
+          focused: false,
+          getAttribute: (name: string) => attributes[name] ?? null,
+          setAttribute: (name: string, value: string) => {
+            attributes[name] = value;
+          },
+          removeAttribute: (name: string) => {
+            delete attributes[name];
+          },
+          focus() {
+            this.focused = true;
+          },
+        });
+        const controls = new Map<string, ReturnType<typeof control>>();
+        const fields = new Map<string, unknown>();
+        const field = (name: string) => {
+          if (!fields.has(name)) {
+            const error = {
+              id: `dc-error-${name}`,
+              textContent: '',
+              hidden: true,
+            };
+            // A field a help already describes keeps that description.
+            controls.set(
+              name,
+              control(
+                name === 'mail' ? { 'aria-describedby': 'dc-help-mail' } : {}
+              )
+            );
+            fields.set(name, {
+              querySelector: (selector: string) =>
+                selector === '[data-error]'
+                  ? error
+                  : selector === `[id="dc-field-${name}"]`
+                    ? controls.get(name)
+                    : null,
+              closest: () => null,
+              scrollIntoView: () => undefined,
+            });
+          }
+          return fields.get(name);
+        };
+        const created = form(located) as unknown as {
+          root: unknown;
+          values: Record<string, string[]>;
+          submit(): Promise<void>;
+        };
+        created.root = {
+          querySelector: (selector: string) =>
+            field(/data-field="([^"]+)"/.exec(selector)![1]),
+        };
+        created.values.mail = ['not-an-email'];
+        await created.submit();
+        expect(controls.get('mail')!.attributes).to.deep.equal({
+          'aria-describedby': 'dc-help-mail dc-error-mail',
+          'aria-invalid': 'true',
+        });
+        expect(controls.get('cn')!.attributes['aria-invalid']).to.equal('true');
+        // The first refused field has the focus, not the Create button.
+        expect(controls.get('cn')!.focused).to.equal(true);
+        expect(controls.get('mail')!.focused).to.equal(false);
+
+        // Corrected, a field is no longer invalid, and keeps its help.
+        created.values.mail = ['jane@example.com'];
+        created.values.cn = ['Jane'];
+        await created.submit();
+        expect(controls.get('mail')!.attributes).to.deep.equal({
+          'aria-describedby': 'dc-help-mail',
+        });
+      });
     });
 
     it('should offer a search, not a select, for a pointer into a large branch', async () => {

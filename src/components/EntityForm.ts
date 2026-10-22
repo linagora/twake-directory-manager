@@ -625,7 +625,7 @@ export class EntityForm {
         ${heading}
         ${control}
         ${hint ? `<p class="dc-hint" data-hint>${escapeHtml(hint)}</p>` : ''}
-        <p class="dc-error" data-error hidden></p>
+        <p class="dc-error" id="dc-error-${escapeHtml(name)}" data-error hidden></p>
         ${
           // Why the branch offers nothing, when that is not the truth. Apart
           // from the validation message, which a save rewrites, and styled as
@@ -1594,6 +1594,7 @@ export class EntityForm {
         // twice, once in grey and once in red.
         const hint = field?.querySelector<HTMLElement>('[data-hint]');
         if (hint) hint.hidden = Boolean(message);
+        this.markInvalid(field, name, holder.id, message);
         // A refusal folded out of sight would leave the form refusing to
         // save without a word.
         const fold = message
@@ -1606,12 +1607,53 @@ export class EntityForm {
         .flat()
         .map(([name]) => name)
         .find(name => this.errors[name]);
-      if (first)
-        root
-          .querySelector<HTMLElement>(`[data-field="${selectorValue(first)}"]`)
-          ?.scrollIntoView({ block: 'center' });
+      if (first) {
+        const field = root.querySelector<HTMLElement>(
+          `[data-field="${selectorValue(first)}"]`
+        );
+        field?.scrollIntoView({ block: 'center' });
+        // On it, rather than left on the button: a screen reader then says
+        // the field, that it is invalid, and why.
+        field
+          ?.querySelector<HTMLElement>(
+            `[id="dc-field-${selectorValue(first)}"]`
+          )
+          ?.focus({ preventScroll: true });
+      }
     }
     return Object.keys(this.errors).length === 0;
+  }
+
+  /**
+   * Say a field's refusal to assistive technology as well as on screen: its
+   * control is marked invalid, and described by the message, besides what
+   * already describes it.
+   *
+   * @param field the field's wrapper
+   * @param name attribute name
+   * @param error id of the field's error message
+   * @param message the refusal, or undefined once the field passes
+   */
+  private markInvalid(
+    field: HTMLElement | null | undefined,
+    name: string,
+    error: string,
+    message: string | undefined
+  ): void {
+    const control = field?.querySelector<HTMLElement>(
+      `[id="dc-field-${selectorValue(name)}"]`
+    );
+    if (!control) return;
+    const described = (control.getAttribute('aria-describedby') || '')
+      .split(/\s+/)
+      .filter(id => id && id !== error);
+    if (message) {
+      control.setAttribute('aria-invalid', 'true');
+      described.push(error);
+    } else control.removeAttribute('aria-invalid');
+    if (described.length)
+      control.setAttribute('aria-describedby', described.join(' '));
+    else control.removeAttribute('aria-describedby');
   }
 
   /**
