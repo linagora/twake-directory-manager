@@ -346,6 +346,15 @@ const fr: Catalogue = {
   'dashboard.welcome': 'Connecté en tant que {user}',
   'dashboard.entities': 'Ce que vous pouvez gérer',
   'dashboard.create': 'Créer : {entity}',
+  'dashboard.create.users': 'Créer un utilisateur',
+  'dashboard.create.groups': 'Créer un groupe',
+  'dashboard.create.organizations': 'Créer une organisation',
+  'dashboard.create.positions': 'Créer un poste',
+  'dashboard.create.titles': 'Créer une civilité',
+  'dashboard.create.accountStatuses': 'Créer un état de compte',
+  'dashboard.create.listTypes': 'Créer un type de liste',
+  'dashboard.create.mailboxTypes': 'Créer un type de groupe',
+  'dashboard.create.domains': 'Créer un domaine',
   'dashboard.noCreate': 'Création non autorisée ici',
 
   'list.open': 'Ouvrir',
@@ -427,7 +436,7 @@ const fr: Catalogue = {
   'form.true': 'Oui',
   'form.false': 'Non',
   'import.open': 'Importer un CSV',
-  'import.title': 'Importer : {entities}',
+  'import.title': 'Importer des {lowerEntities}',
   'import.intro':
     'Créez des entrées en masse depuis un fichier CSV, tel qu’un tableur l’enregistre. Rien n’est écrit avant que vous ayez vu ce que ferait chaque ligne.',
   'import.noteHeader':

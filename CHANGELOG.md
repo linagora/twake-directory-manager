@@ -12,6 +12,9 @@
 - A member, a manager or a delegate picked from the suggestions reads as the
   others, by its identifier: _alice_, not _Alice Moreau
   <alice@example.com>_ until saved (#107)
+- French creates and imports in plain French: _Créer un utilisateur_,
+  _Créer une organisation_, _Importer des utilisateurs_, no longer _Créer :
+  utilisateur_ nor _Importer : Utilisateurs_ (#85)
 
 ## v0.10.0 (2026-10-22)
 

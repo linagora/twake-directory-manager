@@ -1406,6 +1406,32 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should create and import in natural French, the article agreeing', () => {
+      const app = consoleIn({}, 'fr') as unknown as {
+        createLabel(entity: EntityDescriptor): string;
+      };
+      const organizations = {
+        ...groups,
+        key: 'organizations',
+        singularLabel: { en: 'organization', fr: 'organisation' },
+      };
+      expect(app.createLabel(users)).to.equal('Créer un utilisateur');
+      expect(app.createLabel(organizations)).to.equal('Créer une organisation');
+      // An entity the catalogue does not know keeps the schema's name.
+      expect(
+        app.createLabel({ ...groups, key: 'rooms', singularName: 'salle' })
+      ).to.equal('Créer : salle');
+      expect(
+        (consoleIn({}) as unknown as typeof app).createLabel(organizations)
+      ).to.equal('New organization');
+      expect(
+        new Translator('fr').t('import.title', {
+          entities: 'Utilisateurs',
+          lowerEntities: 'utilisateurs',
+        })
+      ).to.equal('Importer des utilisateurs');
+    });
+
     it('should translate every key of every catalogue', () => {
       // A key present in one catalogue and missing from the other is exactly
       // the mixed-language interface this replaces.

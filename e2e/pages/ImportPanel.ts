@@ -75,7 +75,7 @@ export class ImportPanel {
   async expectOpen(): Promise<void> {
     await expect(this.dialog).toBeVisible();
     await expect(this.title).toHaveText(
-      /^(Import Users|Importer : Utilisateurs)$/
+      /^(Import Users|Importer des utilisateurs)$/
     );
   }
 

@@ -881,6 +881,25 @@ export class DirectoryConsole {
     );
   }
 
+  /**
+   * What the button and the panel creating an entry of an entity read. The
+   * catalogue may name it for an entity it knows: French puts an article that
+   * agrees with the noun, _Créer une organisation_, which a template around
+   * the schema's name cannot.
+   *
+   * @param entity entity an entry is created in
+   * @returns the label
+   */
+  private createLabel(entity: EntityDescriptor): string {
+    const own = `dashboard.create.${entity.key}`;
+    const label = this.translator.t(own);
+    return label !== own
+      ? label
+      : this.translator.t('dashboard.create', {
+          entity: this.singular(entity),
+        });
+  }
+
   /** Whether the caller may create an entry of this entity. */
   private canCreate(entity: EntityDescriptor): boolean {
     if (this.scopeError) return false;
@@ -1061,11 +1080,7 @@ export class DirectoryConsole {
                     allowed
                       ? `<button type="button" class="dc-button dc-button-primary" data-new="${escapeHtml(
                           entity.key
-                        )}">${escapeHtml(
-                          t('dashboard.create', {
-                            entity: this.singular(entity),
-                          })
-                        )}</button>`
+                        )}">${escapeHtml(this.createLabel(entity))}</button>`
                       : `<span class="dc-muted">${escapeHtml(t('dashboard.noCreate'))}</span>`
                   }
                 </div>
@@ -1127,7 +1142,7 @@ export class DirectoryConsole {
                       : ''
                   }
                   <button type="button" class="dc-button dc-button-primary" data-new>${escapeHtml(
-                    t('dashboard.create', { entity: this.singular(entity) })
+                    this.createLabel(entity)
                   )}</button>
                 </div>`
               : ''
@@ -1555,7 +1570,12 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     this.openPanel(
-      t('import.title', { entities: this.plural(entity) }),
+      t('import.title', {
+        entities: this.plural(entity),
+        lowerEntities: this.plural(entity).toLocaleLowerCase(
+          this.translator.language
+        ),
+      }),
       body => {
         new EntityImport({
           entity,
@@ -1780,7 +1800,7 @@ export class DirectoryConsole {
     this.openPanel(
       entry
         ? `${t('app.edit')} — ${this.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
-        : t('dashboard.create', { entity: this.singular(entity) }),
+        : this.createLabel(entity),
       (body: HTMLElement): void => {
         void form.render(body);
       },
@@ -1855,7 +1875,7 @@ export class DirectoryConsole {
     this.openPanel(
       entry
         ? `${t('app.edit')} — ${this.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
-        : t('dashboard.create', { entity: this.singular(entity) }),
+        : this.createLabel(entity),
       (body: HTMLElement): void => {
         if (parents.length < 2) {
           void form.render(body);
