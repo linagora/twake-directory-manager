@@ -189,6 +189,8 @@ const en: Catalogue = {
   'tree.filter': 'Filter',
   'tree.empty': 'Select an organization',
   'tree.addChild': 'New organization here',
+  'tree.noMatch':
+    'No organization matches “{filter}” among the opened branches',
   'tree.parent': 'Parent organization',
 
   'status.title': 'Account state',
@@ -500,6 +502,8 @@ const fr: Catalogue = {
   'tree.filter': 'Filtrer',
   'tree.empty': 'Sélectionnez une organisation',
   'tree.addChild': 'Nouvelle organisation ici',
+  'tree.noMatch':
+    'Aucune organisation ne correspond à « {filter} » parmi les branches ouvertes',
   'tree.parent': 'Organisation parente',
 
   'status.title': 'État du compte',
@@ -794,6 +798,7 @@ const mn: Catalogue = {
   'tree.filter': 'Шүүх',
   'tree.empty': 'Байгууллага сонгоно уу',
   'tree.addChild': 'Энд шинэ байгууллага',
+  'tree.noMatch': 'Нээсэн салбаруудад «{filter}»-д тохирох байгууллага алга',
   'tree.parent': 'Дээд байгууллага',
 
   'status.title': 'Бүртгэлийн төлөв',

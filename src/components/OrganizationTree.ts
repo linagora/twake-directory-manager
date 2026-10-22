@@ -225,11 +225,18 @@ export class OrganizationTree {
     const list = this.container?.querySelector<HTMLElement>('[data-tree-list]');
     if (!list) return;
     const { translator } = this.options;
+    // A filter matching none of the branches opened says so, rather than
+    // leave a blank where the tree was: the others are not searched.
+    const nodes = this.tree ? this.nodeMarkup(this.tree, 0) : '';
     list.innerHTML = this.error
       ? `<p class="dc-empty dc-error-block">${escapeHtml(this.error)}</p>`
-      : this.tree
-        ? `<ul class="dc-tree-list">${this.nodeMarkup(this.tree, 0)}</ul>`
-        : `<p class="dc-empty">${escapeHtml(translator.t('app.loading'))}</p>`;
+      : !this.tree
+        ? `<p class="dc-empty">${escapeHtml(translator.t('app.loading'))}</p>`
+        : nodes
+          ? `<ul class="dc-tree-list">${nodes}</ul>`
+          : `<p class="dc-empty">${escapeHtml(
+              translator.t('tree.noMatch', { filter: this.filter })
+            )}</p>`;
     this.bind(list);
   }
 

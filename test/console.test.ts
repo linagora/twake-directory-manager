@@ -632,6 +632,25 @@ describe('Directory console', () => {
         .to.include('>Lin</button>')
         .and.not.include('>Sales</button>');
     });
+
+    it('should say when the filter hides every opened organization', async () => {
+      const container = treeContainer();
+      await new OrganizationTree({
+        translator: new Translator('en'),
+        root: async () => ({ dn: top, name: 'organization' }),
+        children: async () => [{ dn: sales, name: 'Sales' }],
+        onSelect: () => undefined,
+      }).render(container);
+      container.filter.value = 'zzz';
+      container.filter.fire();
+      expect(container.list.innerHTML)
+        .to.include('No organization matches “zzz” among the opened branches')
+        .and.not.include('dc-tree-list');
+      // Cleared, the tree is back.
+      container.filter.value = '';
+      container.filter.fire();
+      expect(container.list.innerHTML).to.include('>Sales</button>');
+    });
   });
 
   describe('the organization tree, between views', () => {
