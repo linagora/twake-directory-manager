@@ -189,6 +189,10 @@ const en: Catalogue = {
   'tree.filter': 'Filter',
   'tree.empty': 'Select an organization',
   'tree.addChild': 'New organization here',
+  'tree.addUnder': 'New organization under {name}',
+  'tree.expand': 'Expand {name}',
+  'tree.collapse': 'Collapse {name}',
+  'tree.leaf': '{name} has no sub-organization',
   'tree.noMatch':
     'No organization matches “{filter}” among the opened branches',
   'tree.parent': 'Parent organization',
@@ -513,6 +517,10 @@ const fr: Catalogue = {
   'tree.filter': 'Filtrer',
   'tree.empty': 'Sélectionnez une organisation',
   'tree.addChild': 'Nouvelle organisation ici',
+  'tree.addUnder': 'Nouvelle organisation sous {name}',
+  'tree.expand': 'Développer {name}',
+  'tree.collapse': 'Réduire {name}',
+  'tree.leaf': '{name} n’a pas de sous-organisation',
   'tree.noMatch':
     'Aucune organisation ne correspond à « {filter} » parmi les branches ouvertes',
   'tree.parent': 'Organisation parente',
@@ -811,6 +819,10 @@ const mn: Catalogue = {
   'tree.filter': 'Шүүх',
   'tree.empty': 'Байгууллага сонгоно уу',
   'tree.addChild': 'Энд шинэ байгууллага',
+  'tree.addUnder': '{name} дор шинэ байгууллага',
+  'tree.expand': '{name}-г дэлгэх',
+  'tree.collapse': '{name}-г хураах',
+  'tree.leaf': '{name} дэд байгууллагагүй',
   'tree.noMatch': 'Нээсэн салбаруудад «{filter}»-д тохирох байгууллага алга',
   'tree.parent': 'Дээд байгууллага',
 

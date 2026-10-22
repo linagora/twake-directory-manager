@@ -249,20 +249,31 @@ export class OrganizationTree {
     const transit =
       !!this.options.transit &&
       comparableDn(node.dn) === comparableDn(this.options.transit);
+    const { translator } = this.options;
+    const selected = node.dn === this.selectedDn;
+    // Named after what they do and on which organization: their glyphs, and
+    // a row of identical "+", told a screen reader nothing.
+    const toggleName = translator.t(
+      hasChildren ? (open ? 'tree.collapse' : 'tree.expand') : 'tree.leaf',
+      { name: node.name }
+    );
     return `
-      <li class="dc-tree-node${node.dn === this.selectedDn ? ' dc-selected' : ''}"
+      <li class="dc-tree-node${selected ? ' dc-selected' : ''}"
           style="--depth:${depth}">
         <div class="dc-tree-row">
           <button type="button" class="dc-tree-toggle" data-toggle="${escapeHtml(node.dn)}"
-            ${hasChildren ? '' : 'disabled'} aria-expanded="${open ? 'true' : 'false'}">
+            ${hasChildren ? '' : 'disabled'} aria-expanded="${open ? 'true' : 'false'}"
+            aria-label="${escapeHtml(toggleName)}">
             ${hasChildren ? (open ? '▾' : '▸') : '·'}
           </button>
           <button type="button" class="dc-tree-label" data-select="${escapeHtml(node.dn)}"
-            title="${escapeHtml(node.path || node.dn)}">${escapeHtml(node.name)}</button>
+            ${selected ? 'aria-current="true" ' : ''}title="${escapeHtml(
+              node.path || node.dn
+            )}">${escapeHtml(node.name)}</button>
           ${
             transit
               ? `<span class="dc-tag dc-tag-transit">${escapeHtml(
-                  this.options.translator.t('transit.branch')
+                  translator.t('transit.branch')
                 )}</span>`
               : ''
           }
@@ -270,7 +281,10 @@ export class OrganizationTree {
             this.options.onCreateChild &&
             (this.options.canCreateChild?.(node) ?? true)
               ? `<button type="button" class="dc-tree-add" data-add="${escapeHtml(node.dn)}"
-                   title="${escapeHtml(this.options.translator.t('tree.addChild'))}">+</button>`
+                   title="${escapeHtml(translator.t('tree.addChild'))}"
+                   aria-label="${escapeHtml(
+                     translator.t('tree.addUnder', { name: node.name })
+                   )}">+</button>`
               : ''
           }
         </div>

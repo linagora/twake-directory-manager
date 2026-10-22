@@ -633,6 +633,30 @@ describe('Directory console', () => {
         .and.not.include('>Sales</button>');
     });
 
+    it('should name its buttons after their organization, and expose the selected one', async () => {
+      const container = treeContainer();
+      const tree = new OrganizationTree({
+        translator: new Translator('en'),
+        root: async () => ({ dn: top, name: 'organization' }),
+        children: async () => [{ dn: sales, name: 'Sales' }],
+        onSelect: () => undefined,
+        onCreateChild: () => undefined,
+      });
+      await tree.render(container);
+      tree.select(sales);
+      const html = container.list.innerHTML.replace(/\s+/g, ' ');
+      expect(html)
+        .to.include('aria-expanded="true" aria-label="Collapse organization"')
+        .and.include('aria-expanded="false" aria-label="Expand Sales"')
+        .and.include('aria-label="New organization under Sales"');
+      expect(html).to.match(
+        /data-select="ou=Sales,[^"]*" aria-current="true" title="[^"]*">Sales</
+      );
+      expect(html).to.not.match(
+        /data-select="ou=organization,[^"]*" aria-current/
+      );
+    });
+
     it('should say when the filter hides every opened organization', async () => {
       const container = treeContainer();
       await new OrganizationTree({

@@ -25,6 +25,9 @@
 - Deleting a reference entry still in use says so in words, naming the field
   using it: _Sales Manager is still used by entries (Position)_; the server's
   message, with the DN and the attribute, showed in English (#81)
+- The organization tree's buttons are named for a screen reader, _Expand
+  Sales_, _New organization under Sales_, rather than by their glyphs, and
+  the selected organization is marked current (#80)
 
 ## v0.10.0 (2026-10-22)
 
