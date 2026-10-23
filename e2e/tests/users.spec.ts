@@ -1,6 +1,5 @@
-import { LoginPage, ResetPasswordDialog } from '../pages';
+import { ConfirmDialog, LoginPage, ResetPasswordDialog } from '../pages';
 import { ADMIN, ALICE, ORG, SOPHIE } from '../support/accounts';
-import { answerNextConfirm } from '../support/confirm';
 import { HUMAN_RESOURCES, TEST_DOMAIN, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
@@ -621,6 +620,7 @@ test.describe('USER user accounts', () => {
     await dialog.expectOpen();
     await expect(dialog.hint).toHaveText('Leave empty to generate a password');
     await expect(dialog.forceChange).toBeChecked();
+    await expect(dialog.confirmButton).toHaveText('Reset password');
     await dialog.confirmButton.click();
     // in the panel, never in a toast, which one click dismissed for good
     await expect(dialog.title).toHaveText(`New password — ${user.uid}`);
@@ -678,15 +678,38 @@ test.describe('USER user accounts', () => {
     const card = app.entry();
     await expect(card.relatedItems('Mailing lists')).toHaveText([group.cn]);
 
-    let message = answerNextConfirm(page, false);
+    // named as a colleague would tell them apart, with the groups they leave
+    const confirm = new ConfirmDialog(page);
     await card.action('Delete').click();
-    expect(await message).toBe(`Delete ${user.uid}? This cannot be undone.`);
+    await confirm.expectOpen(`Delete ${user.displayName}?`);
+    await expect(confirm.paragraphs).toHaveText([
+      `${user.displayName} · ${user.mail} · ${HUMAN_RESOURCES.path}`,
+      `This cannot be undone. ${user.displayName} will be removed from: ${group.cn}.`,
+    ]);
+    await expect(confirm.cancelButton).toBeFocused();
+    await expect(confirm.confirmButton).toHaveText(
+      `Delete ${user.displayName.split(' ')[0]}`
+    );
+    await page.keyboard.press('Escape');
+    await expect(confirm.dialog).toBeHidden();
     await card.expectName(user.uid);
     expect(await directory.exists(user.dn)).toBe(true);
 
-    message = answerNextConfirm(page, true);
+    // the way out: the state change, Disabled picked, and nothing deleted
     await card.action('Delete').click();
-    await message;
+    await expect(confirm.alternative).toHaveText(
+      'To stop access without deleting, set the state to Disabled instead.'
+    );
+    await confirm.alternative.click();
+    await expect(confirm.dialog).toBeHidden();
+    await expect(card.stateChoice('Disabled')).toBeChecked();
+    await page.keyboard.press('Escape');
+    await expect(card.statePanel).toBeHidden();
+    await expect(card.detail('Status')).toHaveText('Active');
+    expect(await directory.exists(user.dn)).toBe(true);
+
+    await card.action('Delete').click();
+    await confirm.confirm();
     await app.expectToast('Deleted');
     await expect(app.mainHeading).toHaveText('Users');
     expect(await directory.exists(user.dn)).toBe(false);
@@ -747,9 +770,11 @@ test.describe('USER user accounts', () => {
     });
     await expect(owner.banner).toContainText('You administer no branch');
 
-    const message = answerNextConfirm(page, true);
+    const confirm = new ConfirmDialog(page);
     await card.action('Delete').click();
-    expect(await message).toBe(`Delete ${user.uid}? This cannot be undone.`);
+    await confirm.expectOpen(`Delete ${user.displayName}?`);
+    await expect(confirm.alternative).toBeVisible();
+    await confirm.confirm();
     await app.expectToast('Deleted');
     await expect(app.mainHeading).toHaveText('Users');
     expect(await directory.exists(user.dn)).toBe(false);
@@ -767,9 +792,8 @@ test.describe('USER user accounts', () => {
     });
     const app = await new LoginPage(page).loginAs(ADMIN, `users/${leaver.uid}`);
 
-    const message = answerNextConfirm(page, true);
     await app.entry().action('Delete').click();
-    await message;
+    await new ConfirmDialog(page).confirm();
     await app.expectToast('Deleted');
 
     expect(await directory.values(group.dn, 'owner')).toEqual([colleague.dn]);
@@ -793,9 +817,8 @@ test.describe('USER user accounts', () => {
     await directory.addValues(colleague.dn, 'twakeDelegatedUsers', [leaver.dn]);
     const app = await new LoginPage(page).loginAs(ADMIN, `users/${leaver.uid}`);
 
-    const message = answerNextConfirm(page, true);
     await app.entry().action('Delete').click();
-    await message;
+    await new ConfirmDialog(page).confirm();
     await app.expectToast('Deleted');
 
     // the server removes the links once the deletion has landed, after its answer

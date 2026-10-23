@@ -82,3 +82,51 @@ export class ClaimDialog {
     await expect(this.dialog).toBeHidden();
   }
 }
+
+/**
+ * The confirmation of what cannot be taken back (a deletion, a hand-over), a centred alert
+ * dialog: the question as its heading, what goes with it, Cancel and a button naming the action.
+ * Located by the console's `data-*` hooks, whose names do not change with the language.
+ */
+export class ConfirmDialog {
+  readonly dialog: Locator;
+  readonly title: Locator;
+  /** The paragraphs and the list under the question */
+  readonly message: Locator;
+  readonly paragraphs: Locator;
+  /** The entries of a selection, then "and n more" */
+  readonly items: Locator;
+  /** The safer way offered instead: set the state to Disabled */
+  readonly alternative: Locator;
+  readonly confirmButton: Locator;
+  readonly cancelButton: Locator;
+
+  constructor(page: Page) {
+    this.dialog = page.getByRole('alertdialog');
+    this.title = this.dialog.getByRole('heading', { level: 2 });
+    this.message = this.dialog.locator('[data-confirm-body]');
+    this.paragraphs = this.message.locator('p');
+    this.items = this.message.getByRole('listitem');
+    this.alternative = this.dialog.locator('[data-confirm-alternative]');
+    this.confirmButton = this.dialog.locator('[data-confirm]');
+    this.cancelButton = this.dialog.locator('[data-cancel]');
+  }
+
+  /** Open, asking `title` when given */
+  async expectOpen(title?: string): Promise<void> {
+    await expect(this.dialog).toBeVisible();
+    if (title !== undefined) await expect(this.title).toHaveText(title);
+  }
+
+  /** Confirms, and waits for the dialog to go */
+  async confirm(): Promise<void> {
+    await this.confirmButton.click();
+    await expect(this.dialog).toBeHidden();
+  }
+
+  /** Cancels, and waits for the dialog to go */
+  async cancel(): Promise<void> {
+    await this.cancelButton.click();
+    await expect(this.dialog).toBeHidden();
+  }
+}

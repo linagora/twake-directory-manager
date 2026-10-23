@@ -49,7 +49,7 @@ Conventions).
 - [x] LIST-04 (P3) Paging and remembered page size — `list.spec.ts`
 - [x] LIST-05 (P3) Sorting and path shortening — `list.spec.ts`
 - [x] LIST-06 (P2) Export selection as CSV — `list.spec.ts`
-- [x] LIST-07 (P2) Delete selection — `list.spec.ts` (also as a local administrator, an entry in transit in the selection: refused, named in the red toast, kept)
+- [x] LIST-07 (P2) Delete selection — `list.spec.ts` (the confirmation lists the entries and its button says how many, #131; also as a local administrator, an entry in transit in the selection: refused, named in the red toast, kept)
 - [x] LIST-08 (P2) Reference data lists — `list.spec.ts` (Mail domains offers New domain to admin since the stack sets `DM_AUTHZ_GLOBAL_WRITE_BRANCHES`; the domains other tests add, `*.test`, ignored)
 - [x] LIST-09 (P3) Header checkbox reflects the selection and clears the page — `list.spec.ts`
 - [x] LIST-10 (P2) Back from a card returns to the list as it was left — `list.spec.ts`
@@ -66,8 +66,8 @@ Conventions).
 - [x] USER-06 (P1) Department field searches the tree — `users.spec.ts`
 - [x] USER-07 (P2) Account-pointer fields are search boxes (Delegates) — `users.spec.ts`
 - [x] USER-08 (P1) Change an account's state — `users.spec.ts` (also as a local administrator, on an account of their branch)
-- [x] USER-09 (P1) Reset password: generated and typed — `users.spec.ts` (typed, also as a local administrator)
-- [x] USER-10 (P2) Delete an account — `users.spec.ts` (also as a local administrator; the account leaves the groups it owns and belongs to; its organizations' Local administrators and Managers and its accounts' Delegates, #101)
+- [x] USER-09 (P1) Reset password: generated and typed — `users.spec.ts` (typed, also as a local administrator; the button reads Reset password, #131)
+- [x] USER-10 (P2) Delete an account — `users.spec.ts` (the confirmation names the person by full name, email and department and the groups they leave, starts on Cancel, Escape cancels, its tip opens Change state with Disabled picked, #131; also as a local administrator; the account leaves the groups it owns and belongs to; its organizations' Local administrators and Managers and its accounts' Delegates, #101)
 - [x] USER-11 (P2) Move an account between two organizations of one's scope — `users.spec.ts`
 - [x] USER-12 (P2) Local administrator creates an account in their branch only — `users.spec.ts`
 - [x] USER-13 (P3) An entry's DN with a Copy button — `users.spec.ts`
@@ -79,7 +79,7 @@ Conventions).
 - [x] GROUP-01 (P2) Group card and members — `groups.spec.ts`
 - [x] GROUP-02 (P2) Create a group — `groups.spec.ts`
 - [x] GROUP-03 (P2) Add and remove members — `groups.spec.ts`
-- [x] GROUP-04 (P2) Edit and delete a group — `groups.spec.ts`
+- [x] GROUP-04 (P2) Edit and delete a group — `groups.spec.ts` (the confirmation says the members stay, #131)
 - [x] GROUP-05 (P3) Local administrator's groups — `groups.spec.ts`
 - [x] GROUP-06 (P2) Owners: chosen by search, saved, named on the card — `groups.spec.ts`
 - [x] GROUP-07 (P2) Unknown member: refused by name, external address — `groups.spec.ts` (follows `features.externalUsersInGroups` of `/api/v1/config`)
@@ -91,7 +91,7 @@ Conventions).
 - [x] ORG-02 (P1) Tree filter types forwards — `organizations.spec.ts`
 - [x] ORG-03 (P2) Create a sub-organization — `organizations.spec.ts`
 - [x] ORG-04 (P2) Edit an organization: managers, local administrators, mail domains — `organizations.spec.ts` (Mail domains is a typed search since v0.8.0, no longer a select; the new administrator's banner is checked at once, without the 5 min cache wait)
-- [x] ORG-05 (P2) Delete an organization — `organizations.spec.ts`
+- [x] ORG-05 (P2) Delete an organization — `organizations.spec.ts` (confirmed in the console's dialog, in French too, #131)
 - [x] ORG-06 (P2) Local administrator and organizations — `organizations.spec.ts`
 - [x] ORG-07 (P3) Department path link from an entry opens the tree — `organizations.spec.ts`
 - [x] ORG-08 (P2) Tree keeps its state after a write, and a typed address opens it down — `organizations.spec.ts`
@@ -99,8 +99,8 @@ Conventions).
 
 ## Transit: hand over and claim
 
-- [x] TRANSIT-01 (P1) Hand an account over to transit — `transit.spec.ts`
-- [x] TRANSIT-02 (P1) Claim an entry into one's own organization — `transit.spec.ts`
+- [x] TRANSIT-01 (P1) Hand an account over to transit — `transit.spec.ts` (the confirmation names the person and the organization they leave, #131)
+- [x] TRANSIT-02 (P1) Claim an entry into one's own organization — `transit.spec.ts` (the button reads Claim into {organization} and follows the select, #131)
 - [x] TRANSIT-03 (P3) Admin sees full actions on an entry in transit — `transit.spec.ts`
 - [x] TRANSIT-04 (P2) Hand over and claim a group — `transit.spec.ts`
 - [x] TRANSIT-05 (P3) Account with no rights to claim into — `transit.spec.ts`
@@ -123,7 +123,7 @@ policies and `DM_AUTHZ_GLOBAL_WRITE_BRANCHES` on the mail domains: admin manages
 administrators do not.
 
 - [x] POLICY-01 (P2) Only the global administrators see the password policies; the default one cannot be deleted — `policies.spec.ts` (the policies API answers 403 to a local administrator)
-- [x] POLICY-02 (P1) Create, edit and delete a policy: durations sent in seconds, an emptied field removes its attribute, and only the settings the directory defines are offered (no Maximum length on OpenLDAP 2.4, #118) — `policies.spec.ts`
+- [x] POLICY-02 (P1) Create, edit and delete a policy: durations sent in seconds, an emptied field removes its attribute, and only the settings the directory defines are offered (no Maximum length on OpenLDAP 2.4, #118); Cancel on the deletion's confirmation gives the form back — `policies.spec.ts`
 - [x] POLICY-03 (P2) A policy accounts use is not deleted — `policies.spec.ts` (that it holds their passwords cannot be checked: ldap-rest binds as the rootdn, which ppolicy exempts)
 - [x] DOMAIN-01 (P2) A global administrator adds a mail domain, offered after "@" at once, and deletes it — `domains.spec.ts` (named `*.test`, which LIST-08 and USER-15 ignore)
 - [x] DOMAIN-02 (P2) A local administrator reads the mail domains and changes none — `domains.spec.ts`

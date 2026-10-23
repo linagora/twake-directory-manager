@@ -89,5 +89,6 @@ A deleted account is removed from the groups it belonged to.
 Deleting a group
 ----------------
 
-On the group’s card, click :guilabel:`Delete`, then confirm. The member
-accounts are not affected.
+On the group’s card, click :guilabel:`Delete`, then
+:guilabel:`Delete group`. The member accounts are not affected, as the
+confirmation says.

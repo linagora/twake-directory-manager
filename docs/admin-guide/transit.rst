@@ -23,8 +23,9 @@ Handing an entry over
 
 #. Open the card of the account or the group.
 #. Click :guilabel:`Hand over`.
-#. Confirm. The confirmation reminds that every administrator will see the
-   entry and may claim it, and that one will no longer manage it.
+#. Click :guilabel:`Hand over` in the confirmation. It names the entry and
+   the organization it leaves, and reminds that every administrator will see
+   the entry and may claim it, and that one will no longer manage it.
 
 The entry is now in transit. Tell the administrator who is to take it over.
 
@@ -48,7 +49,8 @@ Claiming an entry
 #. Click :guilabel:`Claim…`.
 #. Under :guilabel:`Into the organization`, choose the destination among
    one’s own organizations.
-#. Click :guilabel:`Confirm`.
+#. Click :guilabel:`Claim into <organization>`, which names the destination
+   chosen.
 
 The entry now belongs to the chosen organization, and is managed by its
 administrators.

@@ -187,7 +187,7 @@ Resetting a password
 
 #. Leave :guilabel:`Require a change at next sign-in` checked (recommended)
    unless there is a reason not to.
-#. Click :guilabel:`Confirm`.
+#. Click :guilabel:`Reset password`.
 
 A generated password is shown **only once**, in the same panel, now titled
 :guilabel:`New password — <identifier>`. Click :guilabel:`Copy` beside it,
@@ -201,8 +201,14 @@ without having clicked :guilabel:`Copy` first asks
 Deleting an account
 -------------------
 
-On the card, click :guilabel:`Delete`, then confirm. Several accounts are
-deleted at once from the list (see :doc:`lists`).
+On the card, click :guilabel:`Delete`. The confirmation names the account by
+its full name, email and organization, to tell two homonyms apart, and lists
+the groups it will be removed from. Click :guilabel:`Delete <first name>` to
+delete it. To stop access without deleting, follow
+:guilabel:`set the state to Disabled instead` in the same dialog: it opens
+:guilabel:`Change state…` with :guilabel:`Disabled` picked, and deletes
+nothing. Several accounts are deleted at once from the list (see
+:doc:`lists`).
 
 The account also leaves what named it: the organizations it managed or
 administered, the mailboxes delegated to it, the groups and shared mailboxes

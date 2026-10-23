@@ -22,6 +22,14 @@ Built on ldap-rest 0.25.0.
 - The New user form shows the identifier the address will give, fills the
   common name from the full name, and Enter takes the domain the address
   completion offers; the creation message names the entry (#130)
+- Deleting an entry, a selection, an organization or a password policy, and
+  handing an entry over, are confirmed in a dialog of the console, in its
+  language, instead of the browser's. It names an account by its full name,
+  email and organization, lists the groups it leaves and offers to set the
+  state to _Disabled_ instead; _Cancel_ has the focus, and the button names the
+  action: _Delete Jane_, _Delete group_, _Hand over_. The Reset password and
+  Claim panels' buttons read _Reset password_ and _Claim into Sales_ rather
+  than _Confirm_ (#131)
 
 ## v0.10.2 (2026-10-23)
 

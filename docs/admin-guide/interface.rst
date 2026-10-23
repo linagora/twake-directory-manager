@@ -118,8 +118,11 @@ screen (:guilabel:`Saved`, :guilabel:`Jane Doe created`, :guilabel:`Deleted`…)
 refusal from the server shows the same way, in red, with the reason the
 server gave.
 
-Deletions and hand-overs ask for a confirmation in a browser dialog
-(:guilabel:`OK` / :guilabel:`Cancel`).
+Deletions and hand-overs ask for a confirmation in a dialog of the console,
+in its language. It names the entry and says what goes with it; its button
+names the action (:guilabel:`Delete Jane`, :guilabel:`Delete group`,
+:guilabel:`Hand over`…). :guilabel:`Cancel` has the focus, and
+:kbd:`Escape` cancels.
 
 Appearance
 ----------

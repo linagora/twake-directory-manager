@@ -439,22 +439,15 @@ describe('Password policies', () => {
         classList: { toggle: () => undefined },
       };
       const app = await consoleFor(null, { '[data-toast]': toast });
-      const g = globalThis as Record<string, unknown>;
-      const original = g.window;
-      g.window = { confirm: () => true };
-      try {
-        nock(baseUrl).delete('/api/v1/password-policies/software').reply(409, {
-          error:
-            'cn=software,ou=policies is still applied to at least one entry',
-        });
-        await (
-          app as unknown as {
-            deletePolicy(policy: PasswordPolicy): Promise<void>;
-          }
-        ).deletePolicy({ dn: 'cn=software', cn: 'software', isDefault: false });
-      } finally {
-        g.window = original;
-      }
+      Object.assign(app, { confirmAction: async () => true });
+      nock(baseUrl).delete('/api/v1/password-policies/software').reply(409, {
+        error: 'cn=software,ou=policies is still applied to at least one entry',
+      });
+      await (
+        app as unknown as {
+          deletePolicy(policy: PasswordPolicy): Promise<void>;
+        }
+      ).deletePolicy({ dn: 'cn=software', cn: 'software', isDefault: false });
       expect(toast.textContent).to.equal(
         "software est la politique par défaut, ou des comptes l'utilisent encore"
       );

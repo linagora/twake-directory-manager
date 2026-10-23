@@ -1,4 +1,4 @@
-import { LoginPage } from '../pages';
+import { ConfirmDialog, LoginPage } from '../pages';
 import {
   ADMIN,
   CAROL,
@@ -9,7 +9,6 @@ import {
   ALICE,
 } from '../support/accounts';
 import { callApi } from '../support/api';
-import { answerNextConfirm } from '../support/confirm';
 import { uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
@@ -169,9 +168,15 @@ test.describe('GROUP groups', () => {
     await app.expectToast('Saved');
     await expect(card.detail('Description')).toHaveText('Changed');
 
-    const message = answerNextConfirm(page, true);
+    const confirm = new ConfirmDialog(page);
     await card.action('Delete').click();
-    expect(await message).toBe(`Delete ${group.cn}? This cannot be undone.`);
+    await confirm.expectOpen(`Delete ${group.cn}?`);
+    await expect(confirm.paragraphs).toHaveText([
+      'Its 1 member stays in the directory; only the group goes.',
+      'This cannot be undone.',
+    ]);
+    await expect(confirm.confirmButton).toHaveText('Delete group');
+    await confirm.confirm();
     await app.expectToast('Deleted');
     await expect(app.mainHeading).toHaveText('Groups');
     await app.list().search(group.cn);

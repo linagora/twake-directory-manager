@@ -52,6 +52,7 @@ import {
   nameAttributes,
   parseByteSize,
 } from '../src/format';
+import type { Confirmation } from '../src/DirectoryConsole';
 import type {
   EntityDescriptor,
   EntitySchema,
@@ -739,6 +740,7 @@ describe('Directory console', () => {
       });
       Object.assign(app as unknown as { entities: EntityDescriptor[] }, {
         entities: [organizations],
+        confirmAction: async () => true,
       });
       Object.assign((app as unknown as { api: object }).api, {
         organizationTop: async () => ({ dn: top, name: 'organization' }),
@@ -774,7 +776,6 @@ describe('Directory console', () => {
             location.hash = hash;
           },
         },
-        confirm: () => true,
       };
       return {
         app: app as unknown as {
@@ -2195,37 +2196,38 @@ describe('Directory console', () => {
         organizationPath: 'twakeDepartmentPath',
       };
       const dn = 'ou=QA Lab,ou=Engineering,ou=organization,dc=example,dc=com';
+      const asked: Confirmation[] = [];
       const app = consoleIn({}) as unknown as {
+        confirmAction(question: Confirmation): Promise<boolean>;
         confirmDeleteOrganization(
           entity: EntityDescriptor,
           entry: Entry,
           dn: string
         ): Promise<void>;
       };
-      const asked: string[] = [];
-      const g = globalThis as Record<string, unknown>;
-      const original = g.window;
       // Declined: nothing is deleted, and no request is made.
-      g.window = {
-        confirm: (message: string) => {
-          asked.push(message);
-          return false;
-        },
+      app.confirmAction = async question => {
+        asked.push(question);
+        return false;
       };
-      try {
-        await app.confirmDeleteOrganization(
-          organizations,
-          { dn, ou: 'QA Lab', twakeDepartmentPath: 'Engineering / QA Lab' },
-          dn
-        );
-        // An organization with no path is named by its own name.
-        await app.confirmDeleteOrganization(organizations, { dn }, dn);
-      } finally {
-        g.window = original;
-      }
+      await app.confirmDeleteOrganization(
+        organizations,
+        { dn, ou: 'QA Lab', twakeDepartmentPath: 'Engineering / QA Lab' },
+        dn
+      );
+      // An organization with no path is named by its own name.
+      await app.confirmDeleteOrganization(organizations, { dn }, dn);
       expect(asked).to.deep.equal([
-        'Delete Engineering / QA Lab? This cannot be undone.',
-        'Delete QA Lab? This cannot be undone.',
+        {
+          title: 'Delete Engineering / QA Lab?',
+          lines: ['This cannot be undone.'],
+          action: 'Delete organization',
+        },
+        {
+          title: 'Delete QA Lab?',
+          lines: ['This cannot be undone.'],
+          action: 'Delete organization',
+        },
       ]);
     });
 
@@ -2233,6 +2235,7 @@ describe('Directory console', () => {
       const app = consoleIn({}, 'fr') as unknown as {
         openPanel(title: string): void;
         openForm(entity: EntityDescriptor, entry?: Entry): Promise<void>;
+        confirmAction(question: Confirmation): Promise<boolean>;
         confirmDelete(entity: EntityDescriptor, id: string): Promise<void>;
       };
       const titles: string[] = [];
@@ -2246,24 +2249,181 @@ describe('Directory console', () => {
       expect(titles).to.deep.equal(['Modifier — Boîte partagée']);
 
       const asked: string[] = [];
-      const g = globalThis as Record<string, unknown>;
-      const original = g.window;
-      g.window = {
-        confirm: (message: string) => {
-          asked.push(message);
-          return false;
+      app.confirmAction = async question => {
+        asked.push(`${question.title} ${question.action}`);
+        return false;
+      };
+      await app.confirmDelete(mailboxTypes, 'teamMailbox');
+      // A value the schema does not name keeps its own.
+      await app.confirmDelete(mailboxTypes, 'archive');
+      expect(asked).to.deep.equal([
+        'Supprimer Boîte partagée ? Supprimer Boîte partagée',
+        'Supprimer archive ? Supprimer archive',
+      ]);
+    });
+
+    it('should name the person, the consequences and the way out before deleting an account', async () => {
+      const staff: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            givenName: { type: 'string', role: 'givenName' },
+            memberOf: {
+              type: 'array',
+              role: 'groupMemberships',
+              items: { type: 'string' },
+            },
+          },
         },
       };
-      try {
-        await app.confirmDelete(mailboxTypes, 'teamMailbox');
-        // A value the schema does not name keeps its own.
-        await app.confirmDelete(mailboxTypes, 'archive');
-      } finally {
-        g.window = original;
-      }
+      const entry: Entry = {
+        dn: 'uid=jmartin,ou=users,dc=example,dc=com',
+        uid: 'jmartin',
+        cn: 'Jeanne Martin',
+        givenName: 'Jeanne',
+        mail: 'jmartin@example.com',
+        twakeDepartmentPath: 'Sales / France',
+        twakeAccountStatus: 'cn=active',
+        memberOf: [
+          'cn=all-staff,ou=groups,dc=example,dc=com',
+          'cn=sales-team,ou=groups,dc=example,dc=com',
+        ],
+      };
+      const asked: Confirmation[] = [];
+      const app = consoleIn({}) as unknown as {
+        confirmAction(question: Confirmation): Promise<boolean>;
+        changeState(
+          entity: EntityDescriptor,
+          id: string,
+          entry: Entry,
+          preselect?: string
+        ): Promise<void>;
+        confirmDelete(
+          entity: EntityDescriptor,
+          id: string,
+          entry?: Entry,
+          canChangeState?: boolean
+        ): Promise<void>;
+      };
+      app.confirmAction = async question => {
+        asked.push(question);
+        return false;
+      };
+      const changed: unknown[][] = [];
+      app.changeState = async (...args) => {
+        changed.push(args);
+      };
+
+      await app.confirmDelete(staff, 'jmartin', entry, true);
+      const [question] = asked;
+      expect(question.title).to.equal('Delete Jeanne Martin?');
+      expect(question.lines).to.deep.equal([
+        'Jeanne Martin · jmartin@example.com · Sales / France',
+        'This cannot be undone. Jeanne Martin will be removed from: all-staff, sales-team.',
+      ]);
+      expect(question.action).to.equal('Delete Jeanne');
+      expect(question.reversible).to.equal(undefined);
+      expect(question.alternative?.label).to.equal(
+        'To stop access without deleting, set the state to Disabled instead.'
+      );
+      // The way out opens the state change, Disabled picked, and deletes nothing.
+      question.alternative?.run();
+      expect(changed).to.deep.equal([[staff, 'jmartin', entry, 'disabled']]);
+
+      // Not offered to whom may not change it, nor to an account already disabled.
+      await app.confirmDelete(staff, 'jmartin', entry, false);
+      await app.confirmDelete(
+        staff,
+        'jmartin',
+        { ...entry, twakeAccountStatus: 'cn=disabled', memberOf: [] },
+        true
+      );
+      expect(asked[1].alternative).to.equal(undefined);
+      expect(asked[2].alternative).to.equal(undefined);
+      expect(asked[2].lines[1]).to.equal('This cannot be undone.');
+    });
+
+    it('should say a deleted group leaves its members, and name a selection', async () => {
+      const asked: Confirmation[] = [];
+      const app = consoleIn({}, 'fr') as unknown as {
+        confirmAction(question: Confirmation): Promise<boolean>;
+        confirmDelete(
+          entity: EntityDescriptor,
+          id: string,
+          entry?: Entry
+        ): Promise<void>;
+        deleteMany(entity: EntityDescriptor, ids: string[]): Promise<void>;
+      };
+      app.confirmAction = async question => {
+        asked.push(question);
+        return false;
+      };
+      await app.confirmDelete(groups, 'sales-team', {
+        dn: 'cn=sales-team,ou=groups,dc=example,dc=com',
+        cn: 'sales-team',
+        member: ['uid=a', 'uid=b', 'uid=c'],
+      });
+      await app.deleteMany(users, ['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+      await app.deleteMany(users, ['a']);
       expect(asked).to.deep.equal([
-        'Supprimer Boîte partagée ? Cette action est irréversible.',
-        'Supprimer archive ? Cette action est irréversible.',
+        {
+          title: 'Supprimer sales-team ?',
+          lines: [
+            'Ses 3 membres restent dans l’annuaire ; seul le groupe disparaît.',
+            'Cette action est irréversible.',
+          ],
+          action: 'Supprimer le groupe',
+        },
+        {
+          title: 'Supprimer 7 entrées ?',
+          lines: ['Cette action est irréversible.'],
+          items: ['a', 'b', 'c', 'd', 'e', 'et 2 de plus'],
+          action: 'Supprimer 7 entrées',
+        },
+        {
+          title: 'Supprimer 1 entrée ?',
+          lines: ['Cette action est irréversible.'],
+          items: ['a'],
+          action: 'Supprimer 1 entrée',
+        },
+      ]);
+    });
+
+    it('should name the person and the organization they leave before handing them over', async () => {
+      const asked: Confirmation[] = [];
+      const app = consoleIn({}) as unknown as {
+        scope: Scope;
+        confirmAction(question: Confirmation): Promise<boolean>;
+        handOver(
+          entity: EntityDescriptor,
+          id: string,
+          entry: Entry
+        ): Promise<void>;
+      };
+      app.scope = {
+        transit: 'ou=transit,dc=example,dc=com',
+      } as unknown as Scope;
+      app.confirmAction = async question => {
+        asked.push(question);
+        return false;
+      };
+      await app.handOver(users, 'bob', {
+        dn: 'uid=bob,ou=users,dc=example,dc=com',
+        uid: 'bob',
+        cn: 'Bob Durand',
+        twakeDepartmentPath: 'Sales',
+      });
+      expect(asked).to.deep.equal([
+        {
+          title: 'Hand Bob Durand over?',
+          lines: [
+            'Bob Durand leaves Sales for Transit.',
+            'Every administrator will see this entry and may claim it; you will no longer manage it.',
+          ],
+          action: 'Hand over',
+          reversible: true,
+        },
       ]);
     });
 
@@ -2298,35 +2458,29 @@ describe('Directory console', () => {
         deleteMany(entity: EntityDescriptor, ids: string[]): Promise<void>;
       };
       app.entities = [staff, positions];
+      Object.assign(app, { confirmAction: async () => true });
       const refusal = {
         error:
           'Cannot delete cn=Sales Manager,ou=positions,dc=example,dc=com: still referenced by another entry (title)',
       };
-      const g = globalThis as Record<string, unknown>;
-      const original = g.window;
-      g.window = { confirm: () => true };
-      try {
-        nock(baseUrl)
-          .delete('/api/v1/ldap/positions/Sales%20Manager')
-          .reply(409, refusal);
-        await app.confirmDelete(positions, 'Sales Manager');
-        expect(toast.textContent).to.equal(
-          'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord'
-        );
+      nock(baseUrl)
+        .delete('/api/v1/ldap/positions/Sales%20Manager')
+        .reply(409, refusal);
+      await app.confirmDelete(positions, 'Sales Manager');
+      expect(toast.textContent).to.equal(
+        'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord'
+      );
 
-        nock(baseUrl)
-          .delete('/api/v1/ldap/positions/Sales%20Manager')
-          .reply(409, refusal);
-        nock(baseUrl)
-          .delete('/api/v1/ldap/positions/Intern')
-          .reply(403, { error: 'Forbidden' });
-        await app.deleteMany(positions, ['Sales Manager', 'Intern']);
-        expect(toast.textContent).to.equal(
-          'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord · Intern : Forbidden'
-        );
-      } finally {
-        g.window = original;
-      }
+      nock(baseUrl)
+        .delete('/api/v1/ldap/positions/Sales%20Manager')
+        .reply(409, refusal);
+      nock(baseUrl)
+        .delete('/api/v1/ldap/positions/Intern')
+        .reply(403, { error: 'Forbidden' });
+      await app.deleteMany(positions, ['Sales Manager', 'Intern']);
+      expect(toast.textContent).to.equal(
+        'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord · Intern : Forbidden'
+      );
     });
 
     it('should explain a refused deletion of a non-empty organization', async () => {
@@ -2341,20 +2495,14 @@ describe('Directory console', () => {
           dn: string
         ): Promise<void>;
       };
-      const g = globalThis as Record<string, unknown>;
-      const original = g.window;
-      g.window = { confirm: () => true };
-      try {
-        nock(baseUrl)
-          .delete(`/api/v1/ldap/organizations/${encodeURIComponent(dn)}`)
-          .reply(409, { error: `Entry ${dn} is not empty` });
-        await call.confirmDeleteOrganization(organizations, { dn }, dn);
-        expect(toast.textContent).to.equal(
-          'QA Lab n’est pas vide : déplacez ou supprimez d’abord ses entrées'
-        );
-      } finally {
-        g.window = original;
-      }
+      Object.assign(app, { confirmAction: async () => true });
+      nock(baseUrl)
+        .delete(`/api/v1/ldap/organizations/${encodeURIComponent(dn)}`)
+        .reply(409, { error: `Entry ${dn} is not empty` });
+      await call.confirmDeleteOrganization(organizations, { dn }, dn);
+      expect(toast.textContent).to.equal(
+        'QA Lab n’est pas vide : déplacez ou supprimez d’abord ses entrées'
+      );
     });
 
     it('should keep an open panel, and what was typed, across a change of language', () => {
