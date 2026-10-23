@@ -19,6 +19,11 @@ import {
   roleAttribute,
 } from './api/ConsoleApiClient';
 import { CONSOLE_LOGO, LINAGORA_LOGO } from './assets';
+import {
+  AttachedTables,
+  attachedEntity,
+  type AttachedKind,
+} from './components/AttachedTables';
 import { EntityDetail, stateLabel } from './components/EntityDetail';
 import { EntityForm } from './components/EntityForm';
 import { EntityImport } from './components/EntityImport';
@@ -1629,11 +1634,12 @@ export class DirectoryConsole {
 
     // "Who is in this department?" is the question an organization card is
     // opened to answer, and the tree deliberately does not show accounts.
-    const [members, named] = await Promise.all([
+    const [members, named, attachedNames] = await Promise.all([
       this.api
-        .organizationMembers(node.dn)
+        .organizationMembers(node.dn, this.entities)
         .catch(() => ({ entries: [], truncated: false, more: undefined })),
       this.pointerNames(entity),
+      this.attachedNames(),
     ]);
     if (!this.current(generation)) return;
 
@@ -1644,15 +1650,19 @@ export class DirectoryConsole {
       canWrite: this.canWrite(),
       canDelete: this.canDelete(),
       pointerLabel: named,
-      relations: {
-        title: this.translator.t('detail.members'),
-        items: members.entries.map(member => ({
-          id: member.dn,
-          label: member.label,
-        })),
-        truncated: members.truncated,
-        more: members.more,
-      },
+      attached: new AttachedTables({
+        entities: this.entities,
+        members,
+        translator: this.translator,
+        name:
+          [entryValue(entry, entity.mainAttribute) ?? []].flat()[0] ||
+          rdnValue(node.dn),
+        pointerLabel: attachedNames,
+        onCreate: this.createsHere(entity, entry, node),
+        onOpen: (href: string): void => {
+          window.location.hash = href;
+        },
+      }),
       onOpenRelation: (target: string): void => this.openRelation(target),
       onEdit: (): void => {
         void this.openOrganizationForm(entity, entry);
@@ -1672,6 +1682,64 @@ export class DirectoryConsole {
     });
     card.render(holder);
     this.titlePage(card.heading());
+  }
+
+  /**
+   * Readable names of what the attached entries point at — a position, a
+   * state, a type of group — read for both the accounts and the groups.
+   */
+  private async attachedNames(): Promise<(dn: string) => string | undefined> {
+    const named = await Promise.all(
+      (['people', 'groups'] as const)
+        .map(kind => attachedEntity(this.entities, kind))
+        .filter((entity): entity is EntityDescriptor => !!entity)
+        .map(entity => this.pointerNames(entity))
+    );
+    return (dn: string): string | undefined =>
+      named.map(name => name(dn)).find(Boolean);
+  }
+
+  /**
+   * New user here and New group here, on an organization's card: the New
+   * user form with the department already set to it, as the Overview's card
+   * opens it, and the entry, once created, listed on the card.
+   *
+   * Offered where the Overview offers the creation, and only on an
+   * organization the caller writes: the server judges a new account on the
+   * department it is attached to. Not in the transit branch, which is no
+   * organization of anyone's to grow.
+   *
+   * @param organizations the organizations' entity
+   * @param entry the organization, as read
+   * @param node the organization, as the tree has it
+   * @returns the creations offered, by table
+   */
+  private createsHere(
+    organizations: EntityDescriptor,
+    entry: Entry,
+    node: OrganizationNode
+  ): Partial<Record<AttachedKind, () => void>> {
+    const offered: Partial<Record<AttachedKind, () => void>> = {};
+    if (!this.createsUnder(node.dn)) return offered;
+    // The path names the department in the form's picker, as it does on an
+    // entry being edited: the DN alone would show its last name only.
+    const path = organizations.organizationPath
+      ? [entryValue(entry, organizations.organizationPath) ?? []].flat()[0]
+      : undefined;
+    for (const kind of ['people', 'groups'] as const) {
+      const target = attachedEntity(this.entities, kind);
+      const link = target?.organizationLink;
+      if (!target || !link || !this.canCreate(target)) continue;
+      const preset: Entry = { [link]: node.dn };
+      if (target.organizationPath && path)
+        preset[target.organizationPath] = path;
+      offered[kind] = (): void =>
+        void this.openForm(target, undefined, {
+          preset,
+          created: (): void => void this.showOrganization(node),
+        });
+    }
+    return offered;
   }
 
   /* ------------------------------------------------------------ side panel */
@@ -2069,10 +2137,18 @@ export class DirectoryConsole {
     await this.renderMain();
   }
 
-  /** Create or edit an entry of a flat or group entity. */
+  /**
+   * Create or edit an entry of a flat or group entity.
+   *
+   * @param entity the entity
+   * @param entry the entry to edit; none to create one
+   * @param here where a creation was asked for: what the new entry starts
+   *   with, and what to do once it exists instead of opening its card
+   */
   private async openForm(
     entity: EntityDescriptor,
-    entry?: Entry
+    entry?: Entry,
+    here?: { preset: Entry; created(): void }
   ): Promise<void> {
     // Organizations are written through their own endpoints, whatever offered
     // the form. The dashboard's "New organization" button came through here,
@@ -2088,6 +2164,7 @@ export class DirectoryConsole {
     const form = new EntityForm({
       entity,
       entry,
+      preset: here?.preset,
       translator: this.translator,
       typeAhead: (branch: string): boolean =>
         isDomainBranch(this.entities, branch),
@@ -2139,11 +2216,15 @@ export class DirectoryConsole {
             const createdId = createdEntryId(entity, created, values);
             this.toast(this.createdToast(entity, values, createdId));
             this.closePanel();
-            this.go(
-              createdId
-                ? `${entity.key}/${encodeURIComponent(createdId)}`
-                : entity.key
-            );
+            // Created from an organization's card, the entry joins its table
+            // there: the next one is often created right after it.
+            if (here) here.created();
+            else
+              this.go(
+                createdId
+                  ? `${entity.key}/${encodeURIComponent(createdId)}`
+                  : entity.key
+              );
           }
         } catch (err) {
           this.refuseSave(

@@ -84,7 +84,6 @@ const en: Catalogue = {
 
   'detail.attributes': 'Details',
   'detail.relations': 'Related entries',
-  'detail.members': 'Attached entries',
   'detail.emptyRelations': 'No related entry',
   'detail.more.one':
     'And {count} more entry, not listed here: search the lists to find it.',
@@ -208,6 +207,11 @@ const en: Catalogue = {
   'tree.filter': 'Filter',
   'tree.empty': 'Select an organization',
   'tree.addChild': 'New organization here',
+  'org.people': 'People ({count})',
+  'org.groups': 'Groups ({count})',
+  'org.newUserHere': 'New user here',
+  'org.newGroupHere': 'New group here',
+  'org.nobody': 'No one is attached to {name}.',
   'tree.addUnder': 'New organization under {name}',
   'tree.expand': 'Expand {name}',
   'tree.collapse': 'Collapse {name}',
@@ -465,7 +469,6 @@ const fr: Catalogue = {
 
   'detail.attributes': 'Fiche',
   'detail.relations': 'Entrées liées',
-  'detail.members': 'Entrées rattachées',
   'detail.emptyRelations': 'Aucune entrée liée',
   'detail.more.one':
     'Et {count} autre entrée, non affichée ici : recherchez-la dans les listes.',
@@ -599,6 +602,11 @@ const fr: Catalogue = {
   'tree.filter': 'Filtrer',
   'tree.empty': 'Sélectionnez une organisation',
   'tree.addChild': 'Nouvelle organisation ici',
+  'org.people': 'Personnes ({count})',
+  'org.groups': 'Groupes ({count})',
+  'org.newUserHere': 'Nouvel utilisateur ici',
+  'org.newGroupHere': 'Nouveau groupe ici',
+  'org.nobody': 'Personne n’est rattaché à {name}.',
   'tree.addUnder': 'Nouvelle organisation sous {name}',
   'tree.expand': 'Développer {name}',
   'tree.collapse': 'Réduire {name}',
@@ -843,7 +851,6 @@ const mn: Catalogue = {
 
   'detail.attributes': 'Дэлгэрэнгүй',
   'detail.relations': 'Холбоотой бичлэгүүд',
-  'detail.members': 'Хавсаргасан бичлэгүүд',
   'detail.emptyRelations': 'Холбоотой бичлэг алга',
   'detail.more':
     'Өөр {count} бичлэг энд харагдахгүй байна: тэдгээрийг жагсаалтаас хайж олно уу.',
@@ -961,6 +968,11 @@ const mn: Catalogue = {
   'tree.filter': 'Шүүх',
   'tree.empty': 'Байгууллага сонгоно уу',
   'tree.addChild': 'Энд шинэ байгууллага',
+  'org.people': 'Хүмүүс ({count})',
+  'org.groups': 'Бүлгүүд ({count})',
+  'org.newUserHere': 'Энд шинэ хэрэглэгч',
+  'org.newGroupHere': 'Энд шинэ бүлэг',
+  'org.nobody': '{name}-д хэн ч хавсаргагдаагүй.',
   'tree.addUnder': '{name} дор шинэ байгууллага',
   'tree.expand': '{name}-г дэлгэх',
   'tree.collapse': '{name}-г хураах',

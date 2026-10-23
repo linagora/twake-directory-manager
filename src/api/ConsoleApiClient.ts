@@ -10,6 +10,7 @@
 
 import type {
   AttachedEntries,
+  AttachedEntry,
   EntityDescriptor,
   EntitySchema,
   Entry,
@@ -140,6 +141,71 @@ export function isEntryOf(entity: EntityDescriptor, entry: Entry): boolean {
  */
 export function isLarge(entity: EntityDescriptor): boolean {
   return entity.schema.entity?.large ?? !!entity.organizationLink;
+}
+
+/**
+ * The roles of the attributes an organization card shows of an attached
+ * entry, besides its name: those of an account and those of a group.
+ */
+export const ATTACHED_ROLES = [
+  'displayName',
+  'primaryEmail',
+  'position',
+  'accountStatus',
+  'mailboxType',
+];
+
+/**
+ * The entity an entry belongs to: the one whose branch holds it, the
+ * deepest when branches nest. Organizations are left out, which hold their
+ * own children and nothing attached to them.
+ *
+ * @param entities entities the console knows
+ * @param dn DN of the entry
+ * @returns the entity, or undefined when none holds it
+ */
+export function owningEntity(
+  entities: EntityDescriptor[],
+  dn: string
+): EntityDescriptor | undefined {
+  return entities
+    .filter(
+      entity =>
+        entity.kind !== 'organization' &&
+        entity.base &&
+        comparableDn(entity.base) !== comparableDn(dn) &&
+        withinDn(dn, entity.base)
+    )
+    .sort((a, b) => b.base.length - a.base.length)[0];
+}
+
+/**
+ * An entry attached to an organization, as its card lists it: its name, the
+ * entity holding it, and the first value of each attribute the card shows,
+ * read by the role the entity's schema gives it.
+ *
+ * @param entry the entry as the subnodes endpoint answered it
+ * @param entities entities the console knows
+ * @returns what the card needs of it
+ */
+export function attachedEntry(
+  entry: Entry,
+  entities: EntityDescriptor[]
+): AttachedEntry {
+  const dn = String(entry.dn || '');
+  // `rdnValue` is what the rest of the console reads a DN's own name with:
+  // splitting on the first comma loses `cn=Smith\, John`.
+  const label = rdnValue(dn);
+  const owner = owningEntity(entities, dn);
+  if (!owner) return { dn, label };
+  const values: Record<string, string> = {};
+  for (const role of ATTACHED_ROLES) {
+    const name = roleAttribute(owner.schema, role);
+    const value = name ? toValues(entryValue(entry, name))[0] : undefined;
+    if (value !== undefined && String(value).trim() !== '')
+      values[role] = String(value);
+  }
+  return { dn, label, entity: owner.key, values };
 }
 
 /**
@@ -1079,11 +1145,22 @@ export class ConsoleApiClient {
    * That is kept: a card listing fifty names and stopping there reads as a
    * department of fifty.
    *
+   * The server answers each entry whole, so what the card shows of it — the
+   * full name, the address, the position, the state, the type of a group —
+   * is read from the same answer, by the roles of the schema of the entity
+   * holding it: no request per entry.
+   *
    * @param dn organization to read
-   * @returns DN and readable name of each attached entry, whether the server
-   *          left some out, and how many when it counted them
+   * @param entities entities the console knows, to tell an account from a
+   *          group and read their values by role
+   * @returns DN, readable name, entity and shown values of each attached
+   *          entry, whether the server left some out, and how many when it
+   *          counted them
    */
-  async organizationMembers(dn: string): Promise<AttachedEntries> {
+  async organizationMembers(
+    dn: string,
+    entities: EntityDescriptor[] = []
+  ): Promise<AttachedEntries> {
     const rows = await this.subnodes(dn);
     // The child organizations have an indicator of their own, which says
     // nothing about the entries attached to this one.
@@ -1097,12 +1174,7 @@ export class ConsoleApiClient {
     return {
       entries: rows
         .filter(entry => !isMoreIndicator(entry) && !this.isOrganization(entry))
-        .map(entry => ({
-          dn: String(entry.dn || ''),
-          // `rdnValue` is what the rest of the console reads a DN's own name
-          // with: splitting on the first comma loses `cn=Smith\, John`.
-          label: rdnValue(String(entry.dn || '')),
-        })),
+        .map(entry => attachedEntry(entry, entities)),
       truncated: Boolean(indicator),
       ...(total > displayed ? { more: total - displayed } : {}),
     };

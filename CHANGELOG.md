@@ -60,6 +60,12 @@ Built on ldap-rest 0.25.0.
   _Show empty fields (N)_ and the DN under _Technical details_; a mailbox
   size no unit says exactly reads _1.07 GB_, the bytes in its tooltip. _Edit_
   comes first, and _Hand over_ and _Delete_ moved to a _More_ menu (#133)
+- An organization's card lists its _People_ (full name, email, position,
+  status) and its _Groups_ (name, email, group type) in two tables, each
+  counted and each row opening the entry's card, instead of a row of
+  identifiers. _New user here_ and _New group here_ open the creation form
+  with the department already set, where the administrator may create, and
+  the new entry joins the table (#128)
 
 ## v0.10.2 (2026-10-23)
 

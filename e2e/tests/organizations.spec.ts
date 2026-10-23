@@ -1,5 +1,5 @@
 import { ConfirmDialog, LoginPage } from '../pages';
-import { ADMIN, ORG, SOPHIE } from '../support/accounts';
+import { ADMIN, ALICE, ORG, SOPHIE } from '../support/accounts';
 import { uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
@@ -48,12 +48,19 @@ test.describe('ORG organizations', () => {
       'sophie.martin'
     );
     await expect(card.detail('Mail domains')).toBeVisible();
-    await expect(
-      card.relatedItems('Attached entries').filter({ hasText: 'sophie.martin' })
-    ).toBeVisible();
-    await expect(
-      card.relatedItems('Attached entries').filter({ hasText: 'sales-team' })
-    ).toBeVisible();
+    await expect(card.attachedHeading('People')).toHaveText('People (1)');
+    await expect(card.attachedRows('People').locator('td')).toHaveText([
+      'Sophie Martin',
+      'sophie.martin@example.com',
+      'Sales Manager',
+      'Active',
+    ]);
+    await expect(card.attachedHeading('Groups')).toHaveText('Groups (1)');
+    await expect(card.attachedRows('Groups').locator('td')).toHaveText([
+      'sales-team',
+      'sales@example.com',
+      'Shared mailbox',
+    ]);
 
     await card.action('Edit').click();
     const form = app.form();
@@ -485,16 +492,21 @@ test.describe('ORG organizations', () => {
     const app = await new LoginPage(page).loginAs(ADMIN);
 
     const organizations = await app.openOrganizations(tenant.org.dn);
-    const attached = organizations.card.related('Attached entries');
-    await expect(
-      organizations.card.relatedItems('Attached entries')
-    ).toHaveCount(50);
-    await expect(attached.getByRole('status')).toHaveText(
+    const people = organizations.card.attached('People');
+    await expect(organizations.card.attachedRows('People')).toHaveCount(50);
+    // fifty listed of more is not fifty
+    await expect(organizations.card.attachedHeading('People')).toHaveText(
+      'People (50+)'
+    );
+    await expect(people.getByRole('status')).toHaveText(
       'And 6 more entries, not listed here: search the lists to find them.'
     );
+    await expect(
+      organizations.card.attached('Groups').getByRole('status')
+    ).toHaveCount(0);
     await app.setLanguage('fr');
     await expect(
-      organizations.card.related('Entrées rattachées').getByRole('status')
+      organizations.card.attached('Personnes').getByRole('status')
     ).toHaveText(
       'Et 6 autres entrées, non affichées ici : recherchez-les dans les listes.'
     );
@@ -502,9 +514,93 @@ test.describe('ORG organizations', () => {
 
     await app.openOrganizations(single.dn);
     await expect(
-      organizations.card.related('Attached entries').getByRole('status')
+      organizations.card.attached('People').getByRole('status')
     ).toHaveText(
       'And 1 more entry, not listed here: search the lists to find it.'
     );
+  });
+
+  test('ORG-12 the card lists its people and groups, and creates a user there', async ({
+    page,
+    directory,
+    tenant,
+    loginInNewContext,
+  }) => {
+    const app = await new LoginPage(page).loginAs(ADMIN);
+    const organizations = await app.openOrganizations(ORG.sales);
+    const card = organizations.card;
+
+    // a row opens the card, and Back returns to the organization
+    await card
+      .attachedRow('People', 'Sophie Martin')
+      .locator('td')
+      .nth(1)
+      .click();
+    await app.entry().expectName('Sophie Martin');
+    await page.goBack();
+    await expect(card.heading).toHaveText('Sales');
+    await card
+      .attachedRow('Groups', 'sales-team')
+      .getByRole('link', { name: 'sales-team' })
+      .press('Enter');
+    await app.entry().expectName('sales-team');
+    await page.goBack();
+    await expect(card.heading).toHaveText('Sales');
+
+    // as the Overview does, New user here only where the caller creates
+    const sophie = await loginInNewContext(
+      SOPHIE,
+      `organizations/${encodeURIComponent(ORG.france)}`
+    );
+    const france = sophie.organizations().card;
+    await expect(france.heading).toHaveText('France');
+    await expect(france.attached('People').getByRole('button')).toHaveText(
+      'New user here'
+    );
+    await expect(france.attached('Groups').getByRole('button')).toHaveText(
+      'New group here'
+    );
+    const alice = await loginInNewContext(
+      ALICE,
+      `organizations/${encodeURIComponent(ORG.france)}`
+    );
+    await expect(alice.nothingToManage).toBeVisible();
+    await expect(
+      alice.page.getByRole('button', { name: 'New user here' })
+    ).toHaveCount(0);
+
+    // created there, the account joins the table without a reload
+    const local = await loginInNewContext(
+      tenant.admin,
+      `organizations/${encodeURIComponent(tenant.org.dn)}`
+    );
+    const own = local.organizations().card;
+    await expect(own.attachedHeading('People')).toHaveText('People (1)');
+    await own
+      .attached('People')
+      .getByRole('button', { name: 'New user here' })
+      .click();
+    const form = local.form();
+    await form.expectOpen('New user');
+    await expect(form.tokens('Department')).toHaveText([tenant.org.path]);
+    const unique = uniquePart();
+    const uid = `here.${unique}`;
+    const dn = directory.trackUser(uid);
+    await form.fillAll({
+      'Employee ID': `E-${unique}`,
+      'Last name': 'Here',
+      'First name': 'Hilda',
+      'Full name': 'Hilda Here',
+      Email: `${uid}@example.com`,
+    });
+    await form.submit();
+    await local.expectToast('Hilda Here created');
+    await form.expectClosed();
+    await expect(own.heading).toHaveText(tenant.org.name);
+    await expect(own.attachedHeading('People')).toHaveText('People (2)');
+    await expect(own.attachedRow('People', 'Hilda Here')).toBeVisible();
+    expect(await directory.values(dn, 'twakeDepartmentLink')).toEqual([
+      tenant.org.dn,
+    ]);
   });
 });
