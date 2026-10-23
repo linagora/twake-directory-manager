@@ -25,6 +25,9 @@ Built on ldap-rest 0.25.0.
 - A local administrator's page load no longer asks for the password
   policies only to be refused (403): the scope says who manages them, and
   only an ldap-rest before 0.25.0 is still asked (#138, linagora/ldap-rest#367)
+- An address naming no page, such as a mistyped or outdated link, says
+  _There is no page at this address._ with a link back to the Overview,
+  instead of showing the Overview as if it had worked (#137)
 
 ## v0.10.2 (2026-10-23)
 

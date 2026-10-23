@@ -31,6 +31,7 @@ Conventions).
 - [x] NAV-07 (P3) The bare host opens the console — `navigation.spec.ts`
 - [x] NAV-08 (P2) Side panel is a modal dialog: focus, Tab, Escape — `navigation.spec.ts`
 - [x] NAV-09 (P3) Side panel opens at its top and closes when the page changes — `navigation.spec.ts`
+- [x] NAV-10 (P3) An unknown address says there is no page there, with a link to the Overview — `navigation.spec.ts` (`#/passwordPolicies`, `#/accountStates`; `#/` and the bare console still open the Overview)
 
 ## Scope banner and authorization
 
