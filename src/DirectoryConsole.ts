@@ -362,9 +362,8 @@ export function listLoader(
  * The console's one toast element: a message, then hidden after a while.
  *
  * Every message replaces the previous one, and so must its timer. A timer left
- * running from an earlier message hid the next one early — including the
- * generated password, which is shown once and sticky precisely because the
- * server cannot hand it back.
+ * running from an earlier message hid the next one early. Nothing that cannot
+ * be shown again goes here: a generated password stays in its panel.
  *
  * It sits in a live region drawn with the shell, so that a screen reader
  * says each message as it shows: a region that is hidden, or new, when its
@@ -375,15 +374,15 @@ export class ToastController {
 
   /**
    * @param element finds the toast element, which survives re-renders
-   * @param delay how long a non-sticky message stays, in milliseconds
+   * @param delay how long a message stays, in milliseconds
    */
   constructor(
     private readonly element: () => HTMLElement | null | undefined,
     private readonly delay = 5000
   ) {}
 
-  /** Show a message; a sticky one waits to be dismissed. */
-  show(message: string, isError = false, sticky = false): void {
+  /** Show a message. */
+  show(message: string, isError = false): void {
     const toast = this.element();
     if (!toast) return;
     if (this.timer !== undefined) {
@@ -397,13 +396,6 @@ export class ToastController {
     // Shown before it is written, for the region to announce the text.
     toast.hidden = false;
     toast.textContent = message;
-    if (sticky) {
-      toast.onclick = (): void => {
-        toast.hidden = true;
-      };
-      return;
-    }
-    toast.onclick = null;
     this.timer = setTimeout((): void => {
       this.timer = undefined;
       toast.hidden = true;
@@ -451,6 +443,11 @@ export class DirectoryConsole {
    * a keyboard user is otherwise left at the top of the page.
    */
   private panelOpener: HTMLElement | null = null;
+  /**
+   * Asked before the side panel closes, when it holds what cannot be shown
+   * again: `false` keeps it open. Each panel opens without one.
+   */
+  private panelGuard: (() => boolean) | null = null;
 
   constructor(options: ConsoleOptions) {
     this.options = options;
@@ -1275,8 +1272,8 @@ export class DirectoryConsole {
       onDelete: (): void => {
         void this.confirmDelete(entity, id);
       },
-      onStatus: (state: string): void => {
-        void this.setStatus(entity, id, state);
+      onStatus: (): void => {
+        void this.changeState(entity, id, entry);
       },
       onResetPassword: (): void => {
         void this.resetPassword(entity, id);
@@ -1520,6 +1517,7 @@ export class DirectoryConsole {
     if (panel.hidden && typeof document !== 'undefined')
       this.panelOpener = document.activeElement as HTMLElement | null;
     heading.textContent = title;
+    this.panelGuard = null;
     panel.classList.toggle('dc-panel-modal', modal);
     panel.classList.toggle('dc-panel-wide', wide);
     body.innerHTML = '';
@@ -1535,9 +1533,16 @@ export class DirectoryConsole {
     (this.focusables(body)[0] ?? dialog)?.focus();
   }
 
-  private closePanel(): void {
+  /**
+   * Close the side panel, unless what it holds asks to stay.
+   *
+   * @param force close it whatever it holds
+   */
+  private closePanel(force = false): void {
     const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
     if (!panel || panel.hidden) return;
+    if (!force && this.panelGuard && !this.panelGuard()) return;
+    this.panelGuard = null;
     panel.hidden = true;
     const opener = this.panelOpener;
     this.panelOpener = null;
@@ -2076,17 +2081,177 @@ export class DirectoryConsole {
 
   /* --------------------------------------------------------------- actions */
 
+  /**
+   * Change an account's state, once a state is picked and the button naming
+   * it pressed. The select this replaces wrote the state as soon as its value
+   * changed, and an arrow key on it was enough to lock a colleague out.
+   *
+   * The states are named as the card and the lists name them: by the label
+   * the reference data gives the entry each one points at.
+   */
+  private async changeState(
+    entity: EntityDescriptor,
+    id: string,
+    entry: Entry
+  ): Promise<void> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    /** A key of the catalogue, or nothing when it has none for this state */
+    const known = (key: string): string | undefined => {
+      const shown = t(key);
+      return shown === key ? undefined : shown;
+    };
+    const attribute = entity.accountStatus;
+    const states = attribute
+      ? entity.schema.attributes[attribute]?.states
+      : undefined;
+    if (!attribute || !states) return;
+    const { language } = this.translator;
+    const label = (state: string): string =>
+      pointerLabel(this.entities, states[state], language) ??
+      stateLabel(this.translator, state);
+
+    const stored = [entryValue(entry, attribute) ?? []].flat()[0];
+    const current = Object.keys(states).find(
+      state =>
+        stored !== undefined &&
+        comparableDn(states[state]) === comparableDn(String(stored))
+    );
+    const currentName = current
+      ? label(current)
+      : stored === undefined
+        ? undefined
+        : (pointerLabel(this.entities, String(stored), language) ??
+          rdnValue(String(stored)));
+    const offered = Object.keys(states).filter(state => state !== current);
+    const described = await this.stateDescriptions(states);
+    const help = (state: string): string | undefined =>
+      described[state] ?? known(`status.help.${state}`);
+    const name = this.personName(entity, entry, id);
+
+    this.openPanel(t('status.panelTitle', { name }), body => {
+      body.innerHTML = `
+        <form class="dc-form">
+          ${
+            currentName
+              ? `<p class="dc-hint" data-current-state>${escapeHtml(
+                  t('status.current', { state: currentName })
+                )}</p>`
+              : ''
+          }
+          <fieldset class="dc-form-group">
+            <legend>${escapeHtml(t('status.choose'))}</legend>
+            ${offered
+              .map(state => {
+                const field = `dc-state-${state}`;
+                const line = help(state);
+                return `
+              <div class="dc-field dc-state-choice">
+                <input type="radio" id="${escapeHtml(field)}" name="dc-state"
+                  value="${escapeHtml(state)}"${
+                    line ? ` aria-describedby="${escapeHtml(field)}-help"` : ''
+                  } />
+                <label for="${escapeHtml(field)}">${escapeHtml(label(state))}</label>
+                ${
+                  line
+                    ? `<p id="${escapeHtml(field)}-help" class="dc-hint">${escapeHtml(line)}</p>`
+                    : ''
+                }
+              </div>`;
+              })
+              .join('')}
+          </fieldset>
+          <div class="dc-form-actions">
+            <button type="button" class="dc-button" data-cancel>${escapeHtml(
+              t('app.cancel')
+            )}</button>
+            <button type="submit" class="dc-button dc-button-primary" disabled>${escapeHtml(
+              t('status.apply')
+            )}</button>
+          </div>
+        </form>`;
+
+      const submit = body.querySelector<HTMLButtonElement>(
+        'button[type="submit"]'
+      );
+      const chosen = (): string | undefined =>
+        body.querySelector<HTMLInputElement>('input[name="dc-state"]:checked')
+          ?.value;
+      // Picking a state, by click or arrow key, only names the button: the
+      // button writes.
+      for (const radio of Array.from(
+        body.querySelectorAll<HTMLInputElement>('input[name="dc-state"]')
+      )) {
+        radio.addEventListener('change', () => {
+          const state = chosen();
+          if (!submit || !state) return;
+          submit.disabled = false;
+          submit.textContent =
+            known(`status.action.${state}`) ?? t('status.apply');
+        });
+      }
+      body
+        .querySelector('[data-cancel]')
+        ?.addEventListener('click', () => this.closePanel());
+      body.querySelector('form')?.addEventListener('submit', event => {
+        event.preventDefault();
+        const state = chosen();
+        if (state) void this.setStatus(entity, id, state, name, label(state));
+      });
+    });
+  }
+
+  /**
+   * What each state means, as the reference entry it points at describes it:
+   * the deployment's own words before the catalogue's. A list that cannot be
+   * read leaves the catalogue's.
+   *
+   * @param states the states, as the schema declares them
+   * @returns the descriptions, by state, of the entries that have one
+   */
+  private async stateDescriptions(
+    states: Record<string, string>
+  ): Promise<Record<string, string>> {
+    const described: Record<string, string> = {};
+    const parent = parentOf(Object.values(states)[0] ?? '');
+    const owner = parent
+      ? this.entities.find(
+          candidate =>
+            candidate.base &&
+            comparableDn(candidate.base) === comparableDn(parent)
+        )
+      : undefined;
+    if (!owner) return described;
+    let entries: Record<string, Entry>;
+    try {
+      entries = await this.api.list(owner);
+    } catch {
+      return described;
+    }
+    for (const [state, dn] of Object.entries(states)) {
+      const key = rdnValue(dn).toLowerCase();
+      const found = Object.entries(entries).find(
+        ([id]) => id.toLowerCase() === key
+      )?.[1];
+      const text = [entryValue(found, 'description') ?? []].flat()[0];
+      if (text && String(text).trim()) described[state] = String(text).trim();
+    }
+    return described;
+  }
+
+  /** Write a state chosen in the panel, and say whose it now is. */
   private async setStatus(
     entity: EntityDescriptor,
     id: string,
-    state: string
+    state: string,
+    name: string,
+    label: string
   ): Promise<void> {
     try {
       await this.api.setStatus(entity, id, state);
+      this.closePanel();
       this.toast(
-        this.translator.t('status.changed', {
-          state: stateLabel(this.translator, state),
-        })
+        this.translator.t('status.changedFor', { name, state: label })
       );
       await this.renderMain();
     } catch (err) {
@@ -2095,8 +2260,8 @@ export class DirectoryConsole {
   }
 
   /**
-   * Reset a password. The generated one is shown once, in a message that stays
-   * until it is dismissed — it cannot be read back afterwards.
+   * Reset a password. A generated one is shown once, in the panel that asked
+   * for it: it cannot be read back afterwards.
    */
   private async resetPassword(
     entity: EntityDescriptor,
@@ -2141,18 +2306,128 @@ export class DirectoryConsole {
         void this.api
           .resetPassword(entity, id, password || undefined, force)
           .then(result => {
+            if (result.generated && result.password) {
+              this.showGeneratedPassword(body, id, result.password, force);
+              return;
+            }
             this.closePanel();
-            this.toast(
-              result.generated && result.password
-                ? t('password.generated', { password: result.password })
-                : t('password.set'),
-              false,
-              result.generated
-            );
+            this.toast(t('password.set'));
           })
           .catch((err: Error) => this.toast(err.message, true));
       });
     });
+  }
+
+  /**
+   * The password the server generated, in place of the form that asked for
+   * it. It is the one value the console cannot fetch again: a toast lost it
+   * to the click that began selecting it, and to the next message. So it
+   * stays until the panel is closed on purpose, and closing it uncopied asks
+   * first, in the panel rather than in a native dialog.
+   *
+   * @param body the Reset password panel's body
+   * @param name the account, as the panel names it
+   * @param password the generated password
+   * @param mustChange whether a change is required at the next sign-in
+   */
+  private showGeneratedPassword(
+    body: HTMLElement,
+    name: string,
+    password: string,
+    mustChange: boolean
+  ): void {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    const heading =
+      this.container?.querySelector<HTMLElement>('[data-panel-title]');
+    if (heading) heading.textContent = t('password.generatedTitle', { name });
+    const help = [
+      t('password.generatedHelp', { name }),
+      ...(mustChange ? [t('password.mustChange')] : []),
+    ].join(' ');
+    body.innerHTML = `
+      <div class="dc-form">
+        <div class="dc-field">
+          <div class="dc-generated">
+            <input id="dc-generated-password" class="dc-input dc-generated-password"
+              readonly value="${escapeHtml(password)}"
+              aria-labelledby="dc-panel-title"
+              aria-describedby="dc-generated-password-help" />
+            <button type="button" class="dc-button" data-copy-password>${escapeHtml(
+              t('detail.copy')
+            )}</button>
+          </div>
+          <p id="dc-generated-password-help" class="dc-hint">${escapeHtml(help)}</p>
+        </div>
+        <div class="dc-generated-leave" data-leave hidden>
+          <p>${escapeHtml(t('password.leaveUncopied'))}</p>
+          <button type="button" class="dc-button" data-leave-back>${escapeHtml(
+            t('app.back')
+          )}</button>
+          <button type="button" class="dc-button dc-button-primary" data-leave-close>${escapeHtml(
+            t('app.close')
+          )}</button>
+        </div>
+        <div class="dc-form-actions" data-done-actions>
+          <button type="button" class="dc-button dc-button-primary" data-done>${escapeHtml(
+            t('password.done')
+          )}</button>
+        </div>
+      </div>`;
+
+    const field = body.querySelector<HTMLInputElement>(
+      '#dc-generated-password'
+    );
+    const leave = body.querySelector<HTMLElement>('[data-leave]');
+    const done = body.querySelector<HTMLElement>('[data-done-actions]');
+    let copied = false;
+    // Asked once per attempt to close: a second Escape, or Close, goes.
+    const ask = (shown: boolean): void => {
+      if (leave) leave.hidden = !shown;
+      if (done) done.hidden = shown;
+    };
+    this.panelGuard = (): boolean => {
+      if (copied || (leave && !leave.hidden)) return true;
+      ask(true);
+      body.querySelector<HTMLElement>('[data-leave-close]')?.focus();
+      return false;
+    };
+
+    field?.addEventListener('focus', () => field.select());
+    const copy = body.querySelector<HTMLElement>('[data-copy-password]');
+    copy?.addEventListener('click', () => {
+      // Absent outside a secure context, or refused: the password is
+      // selected for the reader to copy by hand.
+      const said = (key: string): void => {
+        copy.textContent = t(key);
+        setTimeout(() => {
+          copy.textContent = t('detail.copy');
+        }, 2000);
+      };
+      const failed = (): void => {
+        field?.focus();
+        field?.select();
+        said('password.copyFailed');
+      };
+      if (!navigator.clipboard) return failed();
+      navigator.clipboard.writeText(password).then(() => {
+        copied = true;
+        ask(false);
+        said('detail.copied');
+      }, failed);
+    });
+    body
+      .querySelector('[data-done]')
+      ?.addEventListener('click', () => this.closePanel());
+    body.querySelector('[data-leave-back]')?.addEventListener('click', () => {
+      ask(false);
+      field?.focus();
+    });
+    body
+      .querySelector('[data-leave-close]')
+      ?.addEventListener('click', () => this.closePanel(true));
+    // Said by a screen reader with its name and its help, from the field.
+    field?.focus();
   }
 
   /**
@@ -2294,6 +2569,24 @@ export class DirectoryConsole {
       : this.translator.t('create.done');
   }
 
+  /*
+   * A person as a colleague names them: their full name, else the name
+   * {@link entryName} gives.
+   */
+  private personName(
+    entity: EntityDescriptor,
+    entry: Entry,
+    id: string
+  ): string {
+    const display = roleAttribute(entity.schema, 'displayName');
+    const full = display
+      ? [entryValue(entry, display) ?? []].flat()[0]
+      : undefined;
+    return full && String(full).trim()
+      ? String(full).trim()
+      : this.entryName(entity, id);
+  }
+
   private async confirmDelete(
     entity: EntityDescriptor,
     id: string
@@ -2420,8 +2713,8 @@ export class DirectoryConsole {
     );
   }
 
-  /** Show a short message; a sticky one waits to be dismissed. */
-  private toast(message: string, isError = false, sticky = false): void {
-    this.toasts.show(message, isError, sticky);
+  /** Show a short message. */
+  private toast(message: string, isError = false): void {
+    this.toasts.show(message, isError);
   }
 }

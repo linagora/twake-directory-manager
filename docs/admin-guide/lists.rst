@@ -40,7 +40,9 @@ department path, list type and account status.
 A deep department path is shortened to its root and its leaf
 (``Human resources / … / Payroll``); hovering it shows the whole path.
 
-A click on a row opens the entry’s card.
+A click on a row opens the entry’s card. Its first column is a link: with
+the keyboard, :kbd:`Tab` reaches it and :kbd:`Enter` opens the card, and a
+middle click or :kbd:`Ctrl` + click opens the card in a new tab.
 
 Pages
 -----

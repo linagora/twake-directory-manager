@@ -253,15 +253,17 @@ test.describe('NAV layout, navigation and language', () => {
     await app.open('users/grace');
     const grace = app.entry();
     await expect(grace.transitTag).toHaveText(t('fr', 'transit.badge'));
-    await expect(grace.changeState.locator('option')).toHaveText(
-      [
-        'status.change',
-        'state.enabled',
-        'state.disabled',
-        'state.noAccess',
-        'state.toDelete',
-      ].map(key => t('fr', key))
+    await expect(grace.changeState).toHaveText(t('fr', 'status.change'));
+    await grace.changeState.click();
+    await expect(grace.statePanel).toContainText(
+      t('fr', 'status.current', { state: t('fr', 'state.enabled') })
     );
+    await expect(grace.stateChoices()).toHaveCount(3);
+    for (const key of ['state.disabled', 'state.noAccess', 'state.toDelete'])
+      await expect(
+        grace.statePanel.getByRole('radio', { name: t('fr', key), exact: true })
+      ).toBeVisible();
+    await app.panel.getByRole('button', { name: 'Annuler' }).click();
     await grace.action(t('fr', 'password.title')).click();
     await expect(app.panel).toContainText(
       'Laissez vide pour générer un mot de passe'

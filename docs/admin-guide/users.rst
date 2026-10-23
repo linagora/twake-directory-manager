@@ -136,8 +136,9 @@ Open the account’s card, click :guilabel:`Edit`, change the fields, then
 Changing an account’s status
 ----------------------------
 
-On the card, the :guilabel:`Change state` drop-down list offers the possible
-states:
+On the card, :guilabel:`Change state…` opens a panel that shows the
+account's current state and offers the others, each with a line saying what
+it is for:
 
 .. list-table::
    :header-rows: 1
@@ -145,20 +146,27 @@ states:
 
    * - State
      - Use
-   * - :guilabel:`Enabled`
+   * - :guilabel:`Active`
      - The normal state of an account in use.
    * - :guilabel:`Disabled`
      - A suspended account, during a long absence for instance.
    * - :guilabel:`No access`
      - An account kept in the directory but with no access to the services.
-   * - :guilabel:`To be deleted`
+   * - :guilabel:`To delete`
      - An account marked for deletion.
 
-The change is immediate, with no confirmation; a message confirms it. It is
-undone by choosing the former state again.
+When a state's entry in :guilabel:`Account states` has a description, the
+panel shows that description instead.
 
-On the card, the :guilabel:`Status` field shows the names the reference data
-gives the states: ``Active``, ``Disabled``, ``No access``, ``To delete``.
+Nothing is written until the button naming the choice is pressed:
+:guilabel:`Enable`, :guilabel:`Disable`, :guilabel:`Remove access` or
+:guilabel:`Mark for deletion`. :guilabel:`Cancel`, × and :kbd:`Escape` leave
+the account as it was. A message then names the account and its new state,
+for instance "Ada Lovelace is now Disabled". The change is undone by choosing
+the former state again.
+
+The states bear the same names in the panel, on the card's
+:guilabel:`Status` field, in the lists and in :guilabel:`Account states`.
 
 .. note::
 
@@ -181,11 +189,14 @@ Resetting a password
    unless there is a reason not to.
 #. Click :guilabel:`Confirm`.
 
-A generated password is shown **only once**, in a message at the bottom of
-the screen that stays until it is clicked:
-:guilabel:`New password: … — copy it now, it will not be shown again`. Copy
-it and pass it on to the user through a safe channel before doing anything
-else: the next message of the console replaces it.
+A generated password is shown **only once**, in the same panel, now titled
+:guilabel:`New password — <identifier>`. Click :guilabel:`Copy` beside it,
+or select it by hand, and pass it on to the user through a safe channel. It
+stays until :guilabel:`Done`, :guilabel:`×` or :kbd:`Escape`; closing it
+without having clicked :guilabel:`Copy` first asks
+:guilabel:`Close without copying the password?`, answered with
+:guilabel:`Close` or :guilabel:`Back`. A typed password ends with the message
+:guilabel:`Password changed` instead.
 
 Deleting an account
 -------------------
@@ -203,4 +214,4 @@ these rights.
    As far as the console is concerned, deletion is permanent. Depending on the
    deployment, the account may go to a trash branch of the directory, from
    which the operations team can restore it — this is not the default; a
-   restored account has to be given its rights again. When in doubt, prefer the :guilabel:`Disabled` or :guilabel:`To be deleted` state.
+   restored account has to be given its rights again. When in doubt, prefer the :guilabel:`Disabled` or :guilabel:`To delete` state.

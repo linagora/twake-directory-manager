@@ -54,6 +54,7 @@ Conventions).
 - [x] LIST-09 (P3) Header checkbox reflects the selection and clears the page — `list.spec.ts`
 - [x] LIST-10 (P2) Back from a card returns to the list as it was left — `list.spec.ts`
 - [x] LIST-11 (P3) A count of one reads in the singular — `list.spec.ts`
+- [x] LIST-12 (P2) A keyboard user opens an entry from a list: Tab reaches a link in each row, Enter opens the card — `list.spec.ts` (#135; not in the plan)
 
 ## User accounts
 
@@ -122,7 +123,7 @@ policies and `DM_AUTHZ_GLOBAL_WRITE_BRANCHES` on the mail domains: admin manages
 administrators do not.
 
 - [x] POLICY-01 (P2) Only the global administrators see the password policies; the default one cannot be deleted — `policies.spec.ts` (the policies API answers 403 to a local administrator)
-- [x] POLICY-02 (P1) Create, edit and delete a policy: durations sent in seconds, an emptied field removes its attribute — `policies.spec.ts`
+- [x] POLICY-02 (P1) Create, edit and delete a policy: durations sent in seconds, an emptied field removes its attribute, and only the settings the directory defines are offered (no Maximum length on OpenLDAP 2.4, #118) — `policies.spec.ts`
 - [x] POLICY-03 (P2) A policy accounts use is not deleted — `policies.spec.ts` (that it holds their passwords cannot be checked: ldap-rest binds as the rootdn, which ppolicy exempts)
 - [x] DOMAIN-01 (P2) A global administrator adds a mail domain, offered after "@" at once, and deletes it — `domains.spec.ts` (named `*.test`, which LIST-08 and USER-15 ignore)
 - [x] DOMAIN-02 (P2) A local administrator reads the mail domains and changes none — `domains.spec.ts`
