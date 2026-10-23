@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- The import's rules call the department an _organisation_ in French and
+  _байгууллага_ in Mongolian, as its field and the template's column do (#119)
+
 ## v0.10.1 (2026-10-22)
 
 Built on ldap-rest 0.23.0.
