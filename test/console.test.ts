@@ -6196,6 +6196,30 @@ describe('Directory console', () => {
       );
     });
 
+    it('should say an empty required field is required, not repeat the legend', async () => {
+      // The legend explains the *; under each field, its error is read out
+      // by a screen reader once per field.
+      for (const [language, word] of [
+        ['en', 'Required'],
+        ['fr', 'Obligatoire'],
+      ]) {
+        const form = new EntityForm({
+          entity: users,
+          translator: new Translator(language),
+          pointerOptions: () => Promise.resolve([]),
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        }) as unknown as {
+          errors: Record<string, string>;
+          submit(): Promise<void>;
+        };
+        await form.submit();
+        const errors = Object.values(form.errors);
+        expect(errors, language).not.to.be.empty;
+        for (const error of errors) expect(error, language).to.equal(word);
+      }
+    });
+
     it('should ask for a token list on a multi-valued attribute', async () => {
       const container = stubContainer();
       await build().render(container);

@@ -148,7 +148,7 @@ test.describe('USER user accounts', () => {
       'First name',
       'Email',
     ])
-      await expect(form.error(label), label).toBeVisible();
+      await expect(form.error(label), label).toHaveText('Required');
     await expect(form.dialog).toBeVisible();
 
     await form.fill('Email', 'not-an-email');

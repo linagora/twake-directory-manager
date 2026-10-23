@@ -96,6 +96,7 @@ const en: Catalogue = {
 
   'form.badFormat': '{value}: {pattern}',
   'form.required': 'Fields marked with * are required',
+  'form.fieldRequired': 'Required',
   'form.optional': 'Optional fields ({count})',
   'form.addValue': 'Press Enter to add a value',
   'form.removeValue': 'Remove {value}',
@@ -414,6 +415,7 @@ const fr: Catalogue = {
 
   'form.badFormat': '{value} : {pattern}',
   'form.required': 'Les champs marqués d’une * sont obligatoires',
+  'form.fieldRequired': 'Obligatoire',
   'form.optional': 'Champs facultatifs ({count})',
   'form.addValue': 'Appuyez sur Entrée pour ajouter une valeur',
   'form.removeValue': 'Retirer {value}',
@@ -730,6 +732,7 @@ const mn: Catalogue = {
 
   'form.badFormat': '{value}: {pattern}',
   'form.required': '* тэмдэгтэй талбарыг заавал бөглөнө',
+  'form.fieldRequired': 'Заавал бөглөнө',
   'form.optional': 'Заавал бус талбарууд ({count})',
   'form.addValue': 'Утга нэмэхийн тулд Enter дарна уу',
   'form.removeValue': '{value} утгыг хасах',

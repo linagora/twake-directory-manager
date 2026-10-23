@@ -6,6 +6,8 @@
 
 - The import's rules call the department an _organisation_ in French and
   _байгууллага_ in Mongolian, as its field and the template's column do (#119)
+- An empty required field says _Required_ under it, no longer the form's
+  legend _Fields marked with * are required_ once per field (#120)
 
 ## v0.10.1 (2026-10-22)
 
