@@ -271,7 +271,11 @@ test.describe('GROUP groups', () => {
     await form.type('Members', nobody);
     await (await form.field('Members')).press('Enter');
     await form.submit();
-    await app.expectToast(`Member ${nobody} not found`, true);
+    // a refusal the console has no words for keeps the server's (#126)
+    await app.expectToast(
+      `The server refused: Member ${nobody} not found`,
+      true
+    );
     await expect(form.dialog).toBeVisible();
 
     await form.removeToken('Members', 'nobody');

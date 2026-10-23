@@ -47,7 +47,8 @@ test.describe('ORG organizations', () => {
     await expect(card.detail('Local administrators')).toHaveText(
       'sophie.martin'
     );
-    await expect(card.detail('Mail domains')).toBeVisible();
+    // Sales has no mail domain: the field waits with the empty ones (#133)
+    await expect(card.emptyField('Mail domains')).toHaveCount(1);
     await expect(card.attachedHeading('People')).toHaveText('People (1)');
     await expect(card.attachedRows('People').locator('td')).toHaveText([
       'Sophie Martin',
