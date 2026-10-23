@@ -1140,9 +1140,27 @@ export class ConsoleApiClient {
    * and mapped like an entry it would draw a node whose DN answers nothing.
    */
   async organizationChildren(dn: string): Promise<OrganizationNode[]> {
-    return (await this.subnodes(dn, ORGANIZATION_CLASS))
-      .filter(entry => !isMoreIndicator(entry))
-      .map(entry => this.toNode(entry));
+    return (await this.organizationChildrenRead(dn)).nodes;
+  }
+
+  /**
+   * {@link organizationChildren}, saying whether the server cut its answer:
+   * the indicator row is dropped either way, and a walk that goes on as if
+   * it had read every child would take the ones left out for absent.
+   *
+   * @param dn organization to read
+   * @returns its child organizations, and whether some were left out
+   */
+  private async organizationChildrenRead(
+    dn: string
+  ): Promise<{ nodes: OrganizationNode[]; truncated: boolean }> {
+    const entries = await this.subnodes(dn, ORGANIZATION_CLASS);
+    return {
+      nodes: entries
+        .filter(entry => !isMoreIndicator(entry))
+        .map(entry => this.toNode(entry)),
+      truncated: entries.some(isMoreIndicator),
+    };
   }
 
   /**
@@ -1728,6 +1746,9 @@ export class ConsoleApiClient {
     const queue = roots.filter((node): node is OrganizationNode => !!node);
     const seen = new Set<string>();
     let visited = 0;
+    // Whether every branch reached was read whole: one the server cut, or
+    // could not read, may hold organizations the walk never saw.
+    let complete = true;
     while (queue.length > 0 && visited < ORGANIZATION_OPTION_LIMIT) {
       const node = queue.shift() as OrganizationNode;
       const key = comparableDn(node.dn);
@@ -1736,14 +1757,21 @@ export class ConsoleApiClient {
       visited++;
       options.push({ dn: node.dn, label: node.path || node.name });
       try {
-        queue.push(...(await this.organizationChildren(node.dn)));
-      } catch {
-        // A branch the caller may not read is simply not offered.
+        const { nodes, truncated } = await this.organizationChildrenRead(
+          node.dn
+        );
+        queue.push(...nodes);
+        if (truncated) complete = false;
+      } catch (err) {
+        // A branch the caller may not read is simply not offered; one that
+        // failed otherwise is unknown, not empty.
+        if ((err as { status?: number }).status !== 403) complete = false;
       }
     }
     return {
       organizations: options,
-      partial: queue.some(node => !seen.has(comparableDn(node.dn))),
+      partial:
+        !complete || queue.some(node => !seen.has(comparableDn(node.dn))),
     };
   }
 

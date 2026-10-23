@@ -557,6 +557,59 @@ describe('Directory console', () => {
       expect(asked).to.deep.equal([sales, eu]);
     });
 
+    it('should call a walk partial when a branch was cut or could not be read, not when refused', async () => {
+      const walk = async (answer: (dn: string) => [number, unknown]) => {
+        nock.cleanAll();
+        nock(baseUrl)
+          .persist()
+          .get(/\/api\/v1\/ldap\/organizations\/[^/]+\/subnodes/)
+          .query({ objectClass: 'organizationalUnit' })
+          .reply(uri => answer(decodeURIComponent(uri.split('/')[5])));
+        const found = await new ConsoleApiClient(baseUrl).organizationWalk([
+          { dn: sales, name: 'Sales', path: 'Sales' },
+        ]);
+        nock.cleanAll();
+        return found;
+      };
+      const eu = `ou=EU,${sales}`;
+      const whole = (dn: string): [number, unknown] => [
+        200,
+        dn === sales ? [{ dn: eu, ou: ['EU'] }] : [],
+      ];
+      expect((await walk(whole)).partial).to.equal(false);
+      // The server cut the answer: its indicator row is no organization.
+      const cut = await walk(dn => [
+        200,
+        dn === sales
+          ? [
+              { dn: eu, ou: ['EU'] },
+              {
+                dn: `more-${sales}`,
+                objectClass: ['moreIndicator'],
+                _isMoreIndicator: 'true',
+              },
+            ]
+          : [],
+      ]);
+      expect(cut.organizations.map(option => option.dn)).to.deep.equal([
+        sales,
+        eu,
+      ]);
+      expect(cut.partial).to.equal(true);
+      // A failure is unknown, not empty; a refusal is a branch not offered.
+      expect(
+        (await walk(dn => (dn === eu ? [502, 'Bad Gateway'] : whole(dn))))
+          .partial
+      ).to.equal(true);
+      expect(
+        (
+          await walk(dn =>
+            dn === eu ? [403, { error: 'Forbidden' }] : whole(dn)
+          )
+        ).partial
+      ).to.equal(false);
+    });
+
     it('should offer a new organization under one only when it may be created', () => {
       const render = (onCreateChild?: () => void): string => {
         const container = stubContainer();
@@ -881,6 +934,37 @@ describe('Directory console', () => {
           organizations: [{ dn: top, label: 'organization' }],
           partial: true,
         }),
+      });
+      await tree.render(container);
+      await (tree as unknown as Hidden).pick(sales);
+      container.filter.value = 'Fra';
+      container.filter.fire();
+      await settle();
+      expect(container.list.innerHTML).to.include(`data-found="${france}"`);
+      container.filter.value = 'zzz';
+      container.filter.fire();
+      await settle();
+      expect(container.list.innerHTML).to.include(
+        'No organization matches “zzz” among the opened branches'
+      );
+    });
+
+    it('should not deny a match an opened branch holds when the walk could not read that branch', async () => {
+      const client = new ConsoleApiClient(baseUrl);
+      // The walk fails on Sales, which the tree read when it was opened.
+      Object.assign(client, {
+        organizationTop: async () => ({ dn: top, name: 'organization' }),
+        subnodes: async (dn: string) => {
+          if (dn === top) return [{ dn: sales, ou: 'Sales' }];
+          throw Object.assign(new Error('Service Unavailable'), {
+            status: 503,
+          });
+        },
+      });
+      const container = treeContainer();
+      const tree = new OrganizationTree({
+        ...options([]),
+        everywhere: () => client.organizationWalk(),
       });
       await tree.render(container);
       await (tree as unknown as Hidden).pick(sales);
