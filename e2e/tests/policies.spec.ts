@@ -32,12 +32,20 @@ test.describe('POLICY password policies', () => {
 
     for (const account of [SOPHIE, tenant.admin]) {
       const local = await loginInNewContext(account);
+      // the scope says it: a page load asks nothing the server would refuse
+      const asked: string[] = [];
+      local.page.on('request', request => {
+        if (new URL(request.url()).pathname.endsWith('/password-policies'))
+          asked.push(request.url());
+      });
+      await local.reload();
       await local.referenceToggle().click();
       await expect(local.navItem('Positions')).toBeVisible();
       await expect(local.navItem('Password policies')).toHaveCount(0);
       await local.open('password-policies');
       await expect(local.mainHeading).not.toHaveText('Password policies');
       await expect(local.policies().newButton).toHaveCount(0);
+      expect(asked, account.uid).toEqual([]);
       const answer = await callApi(
         local.page,
         'GET',

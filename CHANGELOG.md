@@ -22,6 +22,12 @@ Built on ldap-rest 0.25.0.
 - The New user form shows the identifier the address will give, fills the
   common name from the full name, and Enter takes the domain the address
   completion offers; the creation message names the entry (#130)
+- A local administrator's page load no longer asks for the password
+  policies only to be refused (403): the scope says who manages them, and
+  only an ldap-rest before 0.25.0 is still asked (#138, linagora/ldap-rest#367)
+- An address naming no page, such as a mistyped or outdated link, says
+  _There is no page at this address._ with a link back to the Overview,
+  instead of showing the Overview as if it had worked (#137)
 - The Overview speaks in names: _Signed in as Ada Admin (admin@example.com)_
   rather than a DN, and the _Language_ select offers _English_, _Français_
   and _Монгол_. An account administering nothing finds one message on it,

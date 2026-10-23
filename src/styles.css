@@ -489,6 +489,11 @@
   margin-top: 12px;
 }
 
+/* A link drawn as a button, such as the way back from an unknown address. */
+.dc-empty a.dc-button {
+  text-decoration: none;
+}
+
 .dc-error-block {
   color: var(--dc-danger);
 }
