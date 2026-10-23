@@ -31,13 +31,7 @@ import {
 } from '../importer';
 import { escapeHtml } from '../shared/dom';
 import { EntityList, listFailure } from './EntityList';
-import type { EntityDescriptor, Entry } from '../types';
-
-/** An entry the import created: its identifier, and the entry as stored. */
-export interface CreatedEntry {
-  id: string;
-  entry: Entry;
-}
+import type { EntityDescriptor } from '../types';
 
 export interface ImportOptions {
   entity: EntityDescriptor;
@@ -50,14 +44,13 @@ export interface ImportOptions {
    */
   pointerLookup?(branch: string): PointerLookup | undefined;
   /**
-   * Create one entry; a refusal is thrown with the server's message. What
-   * it resolves to names the entry created, else the row's identifier does
+   * Create one entry; a refusal is thrown with the server's message. It
+   * resolves to the identifier of the entry created, which the server may
+   * have made; without one, the row's identifier names it
    */
-  create(
-    values: Record<string, string | string[]>
-  ): Promise<CreatedEntry | void>;
-  /** Called once the import has run, with the entries created */
-  onDone(created: CreatedEntry[]): void;
+  create(values: Record<string, string | string[]>): Promise<string | void>;
+  /** Called once the import has run, with the identifiers of the entries created */
+  onDone(created: string[]): void;
   onClose(): void;
 }
 
@@ -67,6 +60,9 @@ const CONCURRENCY = 4;
 /** Rows listed on screen; the full list is in the downloadable report. */
 const SHOWN_ERRORS = 100;
 
+/** Entries created listed on screen; the list shows them all once closed. */
+const SHOWN_CREATED = 100;
+
 type Step = 'file' | 'mapping' | 'checking' | 'review' | 'running' | 'done';
 
 interface Failure {
@@ -74,9 +70,10 @@ interface Failure {
   message: string;
 }
 
-/** A row the server took, and the entry it made of it. */
-interface Success extends CreatedEntry {
+/** A row the server took, and the identifier of the entry it made of it. */
+interface Success {
   row: PreparedRow;
+  id: string;
 }
 
 /** Hand a file to the browser to save. */
@@ -492,12 +489,8 @@ export class EntityImport {
       while (!this.stopping && next < queue.length) {
         const row = queue[next++];
         try {
-          const made = await this.options.create(row.values);
-          this.successes.push({
-            row,
-            id: made ? made.id : this.rowId(row),
-            entry: made ? made.entry : (row.values as Entry),
-          });
+          const id = await this.options.create(row.values);
+          this.successes.push({ row, id: id || this.rowId(row) });
           this.created++;
         } catch (err) {
           // In the words a form says it in, for the table and the file
@@ -523,7 +516,7 @@ export class EntityImport {
     this.successes.sort((a, b) => a.row.line - b.row.line);
     this.step = 'done';
     this.paint();
-    this.options.onDone(this.successes.map(({ id, entry }) => ({ id, entry })));
+    this.options.onDone(this.successes.map(({ id }) => id).filter(Boolean));
   }
 
   /** The identifier a row gives its entry, empty when the server makes it. */
@@ -617,17 +610,17 @@ export class EntityImport {
    */
   private createdMarkup(): string {
     const { entity } = this.options;
-    const rest = this.successes.length - SHOWN_ERRORS;
+    const rest = this.successes.length - SHOWN_CREATED;
     return `
       <div class="dc-table-scroll dc-import-created">
         <table class="dc-table">
           <thead><tr>
             <th>${escapeHtml(this.t('import.line'))}</th>
-            <th>${escapeHtml(this.t('import.createdEntry'))}</th>
+            <th>${escapeHtml(this.t('import.createdName'))}</th>
           </tr></thead>
           <tbody>
             ${this.successes
-              .slice(0, SHOWN_ERRORS)
+              .slice(0, SHOWN_CREATED)
               .map(success => {
                 const name = this.rowName(success.row) || success.id;
                 const id =

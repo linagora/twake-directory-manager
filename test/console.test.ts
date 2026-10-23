@@ -1625,18 +1625,20 @@ describe('Directory console', () => {
     });
 
     it('should name and link each entry an import created', async () => {
-      const done: { id: string; entry: Entry }[][] = [];
-      const answers = [
-        // What ldap-rest answers: the entry as stored
-        { id: 'amartin', entry: { uid: 'amartin', cn: 'Alice Martin' } },
-        // An embedder answering nothing: the row's identifier names it
+      const done: string[][] = [];
+      const answers: (Entry | undefined)[] = [
+        // What ldap-rest answers a creation: the DN and the identifier,
+        // here made by the server from the address
+        { dn: 'uid=amartin,ou=users,dc=example,dc=com', uid: 'amartin' },
+        // An answer naming nothing: the row's identifier names it
         undefined,
       ];
       const importer = new EntityImport({
         entity: users,
         translator: new Translator('en'),
         pointerOptions: () => Promise.resolve([]),
-        create: () => Promise.resolve(answers.shift()),
+        create: values =>
+          Promise.resolve(createdEntryId(users, answers.shift(), values)),
         onDone: created => done.push(created),
         onClose: () => undefined,
       });
@@ -1666,12 +1668,7 @@ describe('Directory console', () => {
         .and.contain('(amartin)')
         // Named by its identifier alone, not twice
         .and.contain('href="#&#x2F;users&#x2F;bob">bob</a></td>');
-      expect(done).to.deep.equal([
-        [
-          { id: 'amartin', entry: { uid: 'amartin', cn: 'Alice Martin' } },
-          { id: 'bob', entry: { uid: 'bob' } },
-        ],
-      ]);
+      expect(done).to.deep.equal([['amartin', 'bob']]);
     });
 
     it('should create and import in natural French, the article agreeing', () => {
@@ -5640,15 +5637,18 @@ describe('Directory console', () => {
       // characters, and each new account took a search of its own to check.
       const searched: string[] = [];
       const read: string[] = [];
+      const stored: Record<string, Entry> = {
+        amartin: { uid: 'amartin', cn: 'Alice Martin', mail: 'a@example.com' },
+        bob: { uid: 'bob', cn: 'Bob Brown', mail: 'b@example.com' },
+        carol: { uid: 'carol', cn: 'Carol Chen', mail: 'c@example.com' },
+      };
+      const refusal = (status: number) =>
+        Promise.reject(Object.assign(new Error('no'), { status }));
+      let answer = (id: string): Promise<Entry> => Promise.resolve(stored[id]);
       const view: ListView = {
         search: 'ali',
-        imported: {
-          entries: {
-            bob: { uid: 'bob', cn: 'Bob Brown' },
-            amartin: { uid: 'amartin', cn: 'Alice Martin' },
-          },
-          current: true,
-        },
+        page: 3,
+        imported: { ids: ['bob', 'carol', 'amartin'] },
       };
       const options = {
         entity: users,
@@ -5656,6 +5656,10 @@ describe('Directory console', () => {
         load: (search: string) => {
           searched.push(search);
           return Promise.resolve({});
+        },
+        read: (id: string) => {
+          read.push(id);
+          return answer(id);
         },
         listable: false,
         onOpen: () => undefined,
@@ -5665,39 +5669,48 @@ describe('Directory console', () => {
       };
       const container = stubContainer();
       await new EntityList(options).render(container);
-      // As the server answered them, and nothing asked of it again
+      // Each read whole: the creation answered little more than its name
+      expect(read).to.have.members(['amartin', 'bob', 'carol']);
       expect(searched).to.deep.equal([]);
       expect(container.innerHTML)
-        .to.contain('Just imported (2)')
+        .to.contain('Just imported (3)')
         .and.contain('Back to search')
         .and.contain('href="#&#x2F;users&#x2F;amartin"')
         .and.contain('Bob Brown')
+        .and.contain('c@example.com')
         .and.not.contain('data-search ');
       expect(container.innerHTML.indexOf('amartin')).to.be.below(
         container.innerHTML.indexOf('bob')
       );
+      // The search keeps its page
+      expect(view.page).to.equal(3);
 
-      // Back from a card: read again, and one deleted meanwhile left out.
+      // Back from a card: one deleted, one out of reach since, left out.
+      answer = id =>
+        id === 'bob'
+          ? refusal(404)
+          : id === 'carol'
+            ? refusal(403)
+            : Promise.resolve(stored[id]);
       const again = stubContainer();
-      await new EntityList({
-        ...options,
-        read: (id: string) => {
-          read.push(id);
-          return id === 'bob'
-            ? Promise.reject(Object.assign(new Error('gone'), { status: 404 }))
-            : Promise.resolve({ uid: id, cn: 'Alice Martin-Durand' });
-        },
-      }).render(again);
-      expect(read).to.have.members(['amartin', 'bob']);
+      await new EntityList(options).render(again);
       expect(again.innerHTML)
         .to.contain('Just imported (1)')
-        .and.contain('Alice Martin-Durand')
-        .and.not.contain('Bob Brown');
-      expect(Object.keys(view.imported?.entries ?? {})).to.deep.equal([
-        'amartin',
-      ]);
+        .and.contain('Alice Martin')
+        .and.not.contain('Bob Brown')
+        .and.not.contain('Carol Chen');
+      expect(view.imported?.ids).to.deep.equal(['amartin']);
 
-      // Back to search: the search left typed is run again.
+      // A real failure is said, the count kept
+      answer = () => refusal(500);
+      const failing = stubContainer();
+      await new EntityList(options).render(failing);
+      expect(failing.innerHTML)
+        .to.contain('Just imported (1)')
+        .and.contain('dc-error-block');
+
+      // Back to search: the search left typed is run again, on its page.
+      answer = id => Promise.resolve(stored[id]);
       const list = new EntityList(options);
       await list.render(stubContainer());
       await (

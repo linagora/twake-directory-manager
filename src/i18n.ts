@@ -194,7 +194,7 @@ const en: Catalogue = {
   'import.refused': 'refused by the server',
   'import.notSent': 'not sent, the import was stopped',
   'import.downloadRefused': 'Download the refused rows',
-  'import.createdEntry': 'Created',
+  'import.createdName': 'Name',
   'import.moreCreated':
     'And {count} more: close this panel to see them all in the list.',
   'import.ambiguous': '{field}: “{value}” matches several entries',
@@ -589,9 +589,9 @@ const fr: Catalogue = {
   'import.notSent.one': 'non envoyée, l’import a été arrêté',
   'import.notSent.other': 'non envoyées, l’import a été arrêté',
   'import.downloadRefused': 'Télécharger les lignes refusées',
-  'import.createdEntry': 'Créée',
+  'import.createdName': 'Nom',
   'import.moreCreated':
-    'Et {count} de plus : fermez ce panneau pour les voir toutes dans la liste.',
+    'Et {count} de plus : fermez ce panneau pour retrouver l’ensemble dans la liste.',
   'import.ambiguous': '{field} : « {value} » correspond à plusieurs entrées',
   'import.notFound': '{field} : « {value} » introuvable',
   'import.undecided':
@@ -957,7 +957,7 @@ const mn: Catalogue = {
   'import.refused': 'сервер татгалзсан',
   'import.notSent': 'илгээгээгүй, импортыг зогсоосон',
   'import.downloadRefused': 'Татгалзсан мөрүүдийг татах',
-  'import.createdEntry': 'Үүсгэсэн',
+  'import.createdName': 'Нэр',
   'import.moreCreated':
     'Өөр {count} байна: бүгдийг жагсаалтаас харахын тулд энэ самбарыг хаана уу.',
   'import.ambiguous': '{field}: «{value}» хэд хэдэн бичлэгт тохирч байна',

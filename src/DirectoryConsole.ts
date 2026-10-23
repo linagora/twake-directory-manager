@@ -21,7 +21,7 @@ import {
 import { CONSOLE_LOGO, LINAGORA_LOGO } from './assets';
 import { EntityDetail, stateLabel } from './components/EntityDetail';
 import { EntityForm } from './components/EntityForm';
-import { EntityImport, type CreatedEntry } from './components/EntityImport';
+import { EntityImport } from './components/EntityImport';
 import {
   EntityList,
   LIST_LIMIT,
@@ -1931,32 +1931,24 @@ export class DirectoryConsole {
             ),
           create: async (
             values: Record<string, string | string[]>
-          ): Promise<CreatedEntry> => {
-            const created = await this.api.create(entity, values as Entry);
-            const id = createdEntryId(entity, created, values);
-            // The entry as stored, when the server answered it; else what
-            // was sent, which is what the list has to show of it.
-            const stored =
-              created &&
-              typeof created === 'object' &&
-              entryValue(created, entity.mainAttribute) !== undefined;
-            return { id, entry: stored ? created : (values as Entry) };
-          },
-          onDone: (created: CreatedEntry[]): void => {
-            const named = created.filter(({ id }) => id);
-            if (!named.length) return;
+          ): Promise<string> =>
+            createdEntryId(
+              entity,
+              await this.api.create(entity, values as Entry),
+              values
+            ),
+          onDone: (created: string[]): void => {
             // The list shows what was just created, rather than its search:
-            // checking each new entry took a search of its own.
+            // checking each new entry took a search of its own. An import
+            // that created nothing puts the search back, rather than leave
+            // the last one's entries looking like its own.
             const view = this.listViews.get(entity.key) ?? {};
-            view.imported = {
-              entries: Object.fromEntries(
-                named.map(({ id, entry }) => [id, entry])
-              ),
-              current: true,
-            };
-            view.page = 0;
             this.listViews.set(entity.key, view);
-            if (this.route.entity === entity.key) void this.renderMain();
+            const shown = !!view.imported;
+            if (created.length) view.imported = { ids: created };
+            else delete view.imported;
+            if ((created.length || shown) && this.route.entity === entity.key)
+              void this.renderMain();
           },
           onClose: (): void => this.closePanel(),
         }).render(body);
