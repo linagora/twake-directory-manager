@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- An empty required field says _Required_ under it, no longer the form's
+  legend _Fields marked with * are required_ once per field (#120)
+
 ## v0.10.1 (2026-10-22)
 
 Built on ldap-rest 0.23.0.
