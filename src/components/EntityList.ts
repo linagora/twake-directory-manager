@@ -559,7 +559,7 @@ export class EntityList {
             aria-label="${escapeHtml(translator.t('list.selectRow'))}" />
         </td>
         ${this.columns
-          .map(name => {
+          .map((name, index) => {
             const attr = entity.schema.attributes[name];
             const value = entryValue(entry, name);
             const raw = text(value);
@@ -583,12 +583,32 @@ export class EntityList {
                 )
             );
             const isPath = name === entity.organizationPath;
+            const content = isPath
+              ? EntityList.shortenPath(shown)
+              : escapeHtml(shown);
+            // The first column opens the entry: a link Tab reaches and Enter
+            // follows, which the browser also opens in a new tab. The rest of
+            // the row only stands in for it, for the mouse.
             return `<td${isPath ? ' class="dc-path"' : ''} title="${escapeHtml(raw)}">${
-              isPath ? EntityList.shortenPath(shown) : escapeHtml(shown)
+              index === 0
+                ? `<a class="dc-row-link" href="${escapeHtml(
+                    EntityList.entryHref(entity, id)
+                  )}">${content || escapeHtml(id)}</a>`
+                : content
             }</td>`;
           })
           .join('')}
       </tr>`;
+  }
+
+  /**
+   * The address of an entry's card: the one `onOpen` goes to.
+   *
+   * @param entity the entity listed
+   * @param id the entry's identifier
+   */
+  static entryHref(entity: EntityDescriptor, id: string): string {
+    return `#/${entity.key}/${encodeURIComponent(id)}`;
   }
 
   /**
@@ -716,7 +736,14 @@ export class EntityList {
       root.querySelectorAll<HTMLElement>('tbody tr')
     )) {
       row.addEventListener('click', event => {
-        if ((event.target as HTMLElement).closest('.dc-checkbox-cell')) return;
+        // The link follows itself, into this tab or, with Ctrl, a new one:
+        // opening the card here as well would take this tab with it.
+        if (
+          (event.target as HTMLElement).closest(
+            '.dc-checkbox-cell, .dc-row-link'
+          )
+        )
+          return;
         this.options.onOpen(row.dataset.id as string);
       });
     }

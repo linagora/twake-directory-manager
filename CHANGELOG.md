@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- The keyboard opens an entry from the Users, Groups and reference lists: the
+  first column of each row is a link, which also opens in a new tab (#135)
+
 ## v0.10.2 (2026-10-23)
 
 Built on ldap-rest 0.24.0.
