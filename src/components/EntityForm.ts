@@ -1744,6 +1744,19 @@ export class EntityForm {
   }
 
   /**
+   * The name the form gives an entry one of its pointer fields offered, or
+   * found by a search: an organization by its path, as the field showed it.
+   *
+   * @param dn the entry pointed at
+   * @returns its name, or undefined when the form never showed it
+   */
+  pointerName(dn: string): string | undefined {
+    for (const [candidate, name] of this.picked)
+      if (comparableDn(candidate) === comparableDn(dn)) return name;
+    return undefined;
+  }
+
+  /**
    * Show the server's refusal of a field under it, as a refusal of the form's
    * own is shown: the server checks what the form cannot, a value already
    * used elsewhere, and a toast saying so out of sight of the field left the

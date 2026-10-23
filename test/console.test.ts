@@ -721,11 +721,14 @@ describe('Directory console', () => {
       onSelect: (node: { dn: string }) => {
         selected.push(node.dn);
       },
-      everywhere: async () => [
-        { dn: top, label: 'organization' },
-        { dn: sales, label: 'Sales' },
-        { dn: france, label: 'Sales / France' },
-      ],
+      everywhere: async () => ({
+        organizations: [
+          { dn: top, label: 'organization' },
+          { dn: sales, label: 'Sales' },
+          { dn: france, label: 'Sales / France' },
+        ],
+        partial: false,
+      }),
     });
     type Hidden = {
       choose(dn: string, label: string): Promise<void>;
@@ -774,7 +777,10 @@ describe('Directory console', () => {
         ...options([]),
         everywhere: async () => {
           reads++;
-          return [{ dn: sales, label: 'Sales' }];
+          return {
+            organizations: [{ dn: sales, label: 'Sales' }],
+            partial: false,
+          };
         },
       });
       await tree.render(container);
@@ -818,6 +824,188 @@ describe('Directory console', () => {
       // Selected again, it stays open.
       await (tree as unknown as Hidden).pick(sales);
       expect(container.list.innerHTML).to.include('>France</button>');
+    });
+
+    it('should not say a selected leaf is expanded', async () => {
+      const container = treeContainer();
+      const tree = new OrganizationTree(options([]));
+      await tree.render(container);
+      await (tree as unknown as Hidden).pick(sales);
+      await (tree as unknown as Hidden).pick(france);
+      const html = container.list.innerHTML.replace(/\s+/g, ' ');
+      expect(html).to.match(
+        /data-toggle="ou=France,[^"]*" disabled aria-label="France has no sub-organization"/
+      );
+      expect(html).to.include(
+        'aria-expanded="true" aria-label="Collapse Sales"'
+      );
+    });
+
+    it('should leave a branch whose children could not be read to be opened again', async () => {
+      let refuse = true;
+      const asked: string[] = [];
+      const container = treeContainer();
+      const tree = new OrganizationTree({
+        ...options(asked),
+        children: async (dn: string) => {
+          asked.push(dn);
+          if (dn === top) return [{ dn: sales, name: 'Sales' }];
+          if (refuse) throw new Error('Service Unavailable');
+          return [{ dn: france, name: 'France' }];
+        },
+      });
+      await tree.render(container);
+      await (tree as unknown as Hidden).pick(sales);
+      // Not taken for a leaf: closed, and still offered to open.
+      expect(container.list.innerHTML.replace(/\s+/g, ' ')).to.include(
+        'aria-expanded="false" aria-label="Expand Sales"'
+      );
+      refuse = false;
+      await (tree as unknown as Hidden).pick(sales);
+      expect(asked).to.deep.equal([top, sales, sales]);
+      expect(container.list.innerHTML).to.include('>France</button>');
+    });
+
+    it('should merge the opened branches into a walk cut short, and hedge its "no match"', async () => {
+      const container = treeContainer();
+      const tree = new OrganizationTree({
+        ...options([]),
+        // The walk stopped before France, which an opened branch holds.
+        everywhere: async () => ({
+          organizations: [{ dn: top, label: 'organization' }],
+          partial: true,
+        }),
+      });
+      await tree.render(container);
+      await (tree as unknown as Hidden).pick(sales);
+      container.filter.value = 'Fra';
+      container.filter.fire();
+      await settle();
+      expect(container.list.innerHTML).to.include(`data-found="${france}"`);
+      container.filter.value = 'zzz';
+      container.filter.fire();
+      await settle();
+      expect(container.list.innerHTML).to.include(
+        'No organization matches “zzz” among the opened branches'
+      );
+    });
+
+    it('should read the whole tree again in the next view after a failure, hedging meanwhile', async () => {
+      let reads = 0;
+      const container = treeContainer();
+      const everywhere = async () => {
+        reads++;
+        if (reads === 1) throw new Error('refused');
+        return {
+          organizations: [{ dn: france, label: 'Sales / France' }],
+          partial: false,
+        };
+      };
+      const first = new OrganizationTree({ ...options([]), everywhere });
+      await first.render(container);
+      container.filter.value = 'zzz';
+      container.filter.fire();
+      await settle();
+      expect(container.list.innerHTML).to.include(
+        'No organization matches “zzz” among the opened branches'
+      );
+      const again = treeContainer();
+      const second = new OrganizationTree(
+        { ...options([]), everywhere },
+        first
+      );
+      await second.render(again);
+      await settle();
+      again.filter.value = 'Fra';
+      again.filter.fire();
+      await settle();
+      expect(reads).to.equal(2);
+      expect(again.list.innerHTML).to.include(`data-found="${france}"`);
+    });
+
+    it('should ask the server once the typing pauses, keeping only the answer to the last text', async () => {
+      const pause = (): Promise<void> =>
+        new Promise(resolve => setTimeout(resolve, 300));
+      const searched: [string, string][] = [];
+      const answers = new Map<
+        string,
+        (found: { dn: string; label: string }[]) => void
+      >();
+      let walks = 0;
+      const container = treeContainer();
+      await new OrganizationTree({
+        ...options([]),
+        everywhere: async () => {
+          walks++;
+          return { organizations: [], partial: false };
+        },
+        search: (query: string, root: string) => {
+          searched.push([query, root]);
+          return new Promise(resolve => answers.set(query, resolve));
+        },
+      }).render(container);
+      // Typed in one go: one request.
+      for (const typed of ['Sa', 'Sal']) {
+        container.filter.value = typed;
+        container.filter.fire();
+      }
+      await pause();
+      expect(searched).to.deep.equal([['Sal', top]]);
+      expect(container.list.innerHTML).to.include('Loading');
+      // Typed on while it is under way: its answer, late, is dropped.
+      container.filter.value = 'Fra';
+      container.filter.fire();
+      await pause();
+      answers.get('Fra')?.([{ dn: france, label: 'Sales / France' }]);
+      await settle();
+      answers.get('Sal')?.([{ dn: sales, label: 'Sales' }]);
+      await settle();
+      expect(container.list.innerHTML)
+        .to.include(`data-found="${france}"`)
+        .and.not.include(`data-found="${sales}"`);
+      expect(walks).to.equal(0);
+
+      // Its "no match" is the whole tree's; a failure leaves the opened
+      // branches, hedged.
+      container.filter.value = 'zzz';
+      container.filter.fire();
+      await pause();
+      answers.get('zzz')?.([]);
+      await settle();
+      expect(container.list.innerHTML)
+        .to.include('No organization matches “zzz”')
+        .and.not.include('among the opened branches');
+      container.filter.value = 'yyy';
+      container.filter.fire();
+      await pause();
+      expect(searched.map(([query]) => query)).to.deep.equal([
+        'Sal',
+        'Fra',
+        'zzz',
+        'yyy',
+      ]);
+    });
+
+    it('should show the opened branches, hedged, when the server search fails', async () => {
+      const container = treeContainer();
+      await new OrganizationTree({
+        ...options([]),
+        search: async () => {
+          throw new Error('Service Unavailable');
+        },
+      }).render(container);
+      container.filter.value = 'Sal';
+      container.filter.fire();
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await settle();
+      expect(container.list.innerHTML).to.include('>Sales</button>');
+      container.filter.value = 'zzz';
+      container.filter.fire();
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await settle();
+      expect(container.list.innerHTML).to.include(
+        'No organization matches “zzz” among the opened branches'
+      );
     });
   });
 
@@ -1277,6 +1465,50 @@ describe('Directory console', () => {
       expect(created).to.deep.equal([ministry]);
     });
 
+    it('should name the parent, not the new organization, when creating under it is refused', async () => {
+      const toasts: string[] = [];
+      const app = consoleIn({});
+      Object.assign(app, {
+        entities: [organizations],
+        scope: scope({
+          branches: [
+            writes(ministry, 'Ministry of Health'),
+            writes(government, 'Government of Mongolia'),
+          ],
+        }),
+        toast: (message: string) => toasts.push(message),
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        createOrganization: () =>
+          Promise.reject(
+            Object.assign(
+              new Error('Token does not have permission on this branch'),
+              { status: 403, refusal: { code: 'forbidden' } }
+            )
+          ),
+      });
+      await (
+        app as unknown as {
+          submitOrganization(
+            entity: EntityDescriptor,
+            values: Record<string, string>,
+            cleared: string[],
+            entry?: Entry,
+            parentDn?: string
+          ): Promise<void>;
+        }
+      ).submitOrganization(
+        organizations,
+        { ou: 'QA Lab' },
+        [],
+        undefined,
+        ministry
+      );
+      expect(toasts).to.deep.equal([
+        'You do not administer Ministry of Health: this change is not yours to make.',
+      ]);
+    });
+
     it('should create at the root, without a picker, where the scope allows it', async () => {
       const { dashboard, open, submit, body, created } = setup(
         scope({
@@ -1388,6 +1620,30 @@ describe('Directory console', () => {
     it('should fall back on the RDN when the branch cannot be read', async () => {
       const html = await card(() => Promise.reject(new Error('Forbidden')));
       expect(html).to.include(`title="${sales}">sales<`);
+    });
+
+    it('should not leave the tab named after the organization shown before one that fails to load', async () => {
+      const original = (globalThis as Record<string, unknown>).document;
+      const page = { title: 'Sales — Twake Directory Manager' };
+      (globalThis as Record<string, unknown>).document = page;
+      try {
+        const app = consoleIn({ '[data-org-detail]': stubContainer() });
+        Object.assign(app as unknown as { entities: EntityDescriptor[] }, {
+          entities: [organizations],
+          pageTitle: 'Twake Directory Manager',
+        });
+        Object.assign((app as unknown as { api: object }).api, {
+          organization: () => Promise.reject(new Error('Service Unavailable')),
+        });
+        await (
+          app as unknown as {
+            showOrganization(node: { dn: string; name: string }): Promise<void>;
+          }
+        ).showOrganization({ dn: acme, name: 'Acme' });
+        expect(page.title).to.equal('Twake Directory Manager');
+      } finally {
+        (globalThis as Record<string, unknown>).document = original;
+      }
     });
   });
 
@@ -1591,6 +1847,14 @@ describe('Directory console', () => {
         Object.assign(new Error('Attribute "cn" must not be empty'), {
           status: 400,
         }),
+        Object.assign(new Error('Token does not have permission'), {
+          status: 403,
+          refusal: { code: 'forbidden' },
+        }),
+        Object.assign(new Error('Token does not have permission'), {
+          status: 403,
+          refusal: { code: 'forbidden' },
+        }),
       ];
       const importer = new EntityImport({
         entity: users,
@@ -1608,18 +1872,37 @@ describe('Directory console', () => {
           errors: string[];
         }[];
         failures: { message: string }[];
+        mapping: string[];
         run(): Promise<void>;
       };
+      const sales = 'ou=Sales,ou=organization,dc=example,dc=com';
+      state.mapping = ['cn', 'twakeDepartmentLink'];
       state.rows = [
         { line: 2, cells: [], values: {}, errors: [] },
         { line: 3, cells: [], values: { cn: 'Eva Ernst' }, errors: [] },
         { line: 4, cells: [], values: {}, errors: [] },
+        // A new entry is judged on the organization it goes to: that one is
+        // named, as the file names it, else by its RDN.
+        {
+          line: 5,
+          cells: ['Fay Fox', 'Acme / Sales'],
+          values: { cn: 'Fay Fox', twakeDepartmentLink: sales },
+          errors: [],
+        },
+        {
+          line: 6,
+          cells: ['Gil Gray'],
+          values: { cn: 'Gil Gray', twakeDepartmentLink: sales },
+          errors: [],
+        },
       ];
       await state.run();
       expect(state.failures.map(failure => failure.message)).to.deep.equal([
         'Mail « alice@example.com » : déjà utilisé par une autre entrée.',
         'Vous n’administrez pas Eva Ernst : cette modification ne vous revient pas.',
         'Le serveur a refusé : Attribute "Nom" must not be empty',
+        'Vous n’administrez pas Acme / Sales : cette modification ne vous revient pas.',
+        'Vous n’administrez pas Sales : cette modification ne vous revient pas.',
       ]);
     });
 
@@ -2545,7 +2828,7 @@ describe('Directory console', () => {
           id: string,
           entry?: Entry
         ): Promise<void>;
-        deleteMany(entity: EntityDescriptor, ids: string[]): Promise<void>;
+        deleteMany(entity: EntityDescriptor, ids: string[]): Promise<boolean>;
       };
       app.confirmAction = async question => {
         asked.push(question);
@@ -2556,7 +2839,10 @@ describe('Directory console', () => {
         cn: 'sales-team',
         member: ['uid=a', 'uid=b', 'uid=c'],
       });
-      await app.deleteMany(users, ['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+      // Cancelled, nothing went: the list is not read again.
+      expect(
+        await app.deleteMany(users, ['a', 'b', 'c', 'd', 'e', 'f', 'g'])
+      ).to.equal(false);
       await app.deleteMany(users, ['a']);
       expect(asked).to.deep.equal([
         {
@@ -2647,7 +2933,7 @@ describe('Directory console', () => {
       const app = consoleIn({ '[data-toast]': toast }, 'fr') as unknown as {
         entities: EntityDescriptor[];
         confirmDelete(entity: EntityDescriptor, id: string): Promise<void>;
-        deleteMany(entity: EntityDescriptor, ids: string[]): Promise<void>;
+        deleteMany(entity: EntityDescriptor, ids: string[]): Promise<boolean>;
       };
       app.entities = [staff, positions];
       Object.assign(app, { confirmAction: async () => true });
@@ -2666,12 +2952,27 @@ describe('Directory console', () => {
       nock(baseUrl)
         .delete('/api/v1/ldap/positions/Sales%20Manager')
         .reply(409, refusal);
+      nock(baseUrl).delete('/api/v1/ldap/positions/Intern').reply(403, {
+        error: 'Token does not have permission on this branch',
+        code: 'forbidden',
+      });
       nock(baseUrl)
-        .delete('/api/v1/ldap/positions/Intern')
-        .reply(403, { error: 'Forbidden' });
-      await app.deleteMany(positions, ['Sales Manager', 'Intern']);
+        .delete('/api/v1/ldap/positions/Trainee')
+        .reply(400, { error: 'Not allowed' });
+      nock(baseUrl).delete('/api/v1/ldap/positions/Clerk').reply(200, {});
+      // Each refusal in the console's words, the entry named once.
+      expect(
+        await app.deleteMany(positions, [
+          'Sales Manager',
+          'Intern',
+          'Trainee',
+          'Clerk',
+        ])
+      ).to.equal(true);
       expect(toast.textContent).to.equal(
-        'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord · Intern : Forbidden'
+        'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord · ' +
+          'Vous n’administrez pas Intern : cette modification ne vous revient pas. · ' +
+          'Trainee : Le serveur a refusé : Not allowed'
       );
     });
 
@@ -5066,7 +5367,7 @@ describe('Directory console', () => {
           }),
         listable: true,
         onOpen: () => undefined,
-        onDelete: () => Promise.resolve(),
+        onDelete: () => Promise.resolve(false),
         canDelete: false,
       }).render(container);
       // `escapeHtml` writes a slash as an entity, which the browser reads back
@@ -5097,7 +5398,7 @@ describe('Directory console', () => {
             }),
           listable: true,
           onOpen: () => undefined,
-          onDelete: () => Promise.resolve(),
+          onDelete: () => Promise.resolve(false),
           canDelete: false,
         }).render(container);
         const links = container.innerHTML
@@ -5134,7 +5435,7 @@ describe('Directory console', () => {
         load: () => Promise.resolve({ alice: { uid: 'alice' } }),
         listable: true,
         onOpen: id => opened.push(id),
-        onDelete: () => Promise.resolve(),
+        onDelete: () => Promise.resolve(false),
         canDelete: false,
       }).render(container);
       const inside = (selectors: string[]) => ({
@@ -5173,7 +5474,7 @@ describe('Directory console', () => {
         },
         listable: true,
         onOpen: () => undefined,
-        onDelete: () => Promise.resolve(),
+        onDelete: () => Promise.resolve(false),
         canDelete: false,
       });
       await list.render(stubContainer());
@@ -5203,7 +5504,7 @@ describe('Directory console', () => {
         },
         listable: true,
         onOpen: () => undefined,
-        onDelete: () => Promise.resolve(),
+        onDelete: () => Promise.resolve(false),
         canDelete: false,
       });
       await list.render(stubContainer());
@@ -5223,7 +5524,7 @@ describe('Directory console', () => {
           new Promise<Record<string, Entry>>(resolve => pending.push(resolve)),
         listable: true,
         onOpen: () => undefined,
-        onDelete: () => Promise.resolve(),
+        onDelete: () => Promise.resolve(false),
         canDelete: false,
       });
       const container = stubContainer();
@@ -5260,7 +5561,7 @@ describe('Directory console', () => {
           }),
         listable: true,
         onOpen: () => undefined,
-        onDelete: () => Promise.resolve(),
+        onDelete: () => Promise.resolve(false),
         canDelete: false,
       });
       const container = stubContainer();
@@ -5283,7 +5584,7 @@ describe('Directory console', () => {
           }),
         listable: true,
         onOpen: () => undefined,
-        onDelete: () => Promise.resolve(),
+        onDelete: () => Promise.resolve(false),
         canDelete: false,
       });
       await list.render(stubContainer());
@@ -5334,7 +5635,7 @@ describe('Directory console', () => {
         load: listLoader(new ConsoleApiClient(baseUrl), users),
         listable: true,
         onOpen: () => undefined,
-        onDelete: () => Promise.resolve(),
+        onDelete: () => Promise.resolve(false),
         canDelete: false,
       });
       const container = stubContainer();
@@ -5402,7 +5703,7 @@ describe('Directory console', () => {
         },
         listable: true,
         onOpen: () => undefined,
-        onDelete: () => Promise.resolve(),
+        onDelete: () => Promise.resolve(false),
         canDelete: false,
       });
       const container = stubContainer();
@@ -5436,7 +5737,7 @@ describe('Directory console', () => {
           Promise.resolve({ truncated: { dn: 'uid=truncated', uid: 'x' } }),
         listable: true,
         onOpen: () => undefined,
-        onDelete: () => Promise.resolve(),
+        onDelete: () => Promise.resolve(false),
         canDelete: false,
       });
       const container = stubContainer();
@@ -5542,7 +5843,7 @@ describe('Directory console', () => {
           }),
         listable: true,
         onOpen: () => undefined,
-        onDelete: () => Promise.resolve(),
+        onDelete: () => Promise.resolve(false),
         canDelete: false,
       });
       const repaint = (): void => {
@@ -5860,6 +6161,23 @@ describe('Directory console', () => {
         text: '999 B',
         exact: true,
       });
+      // Rounded up to a thousand, it reads in the unit above.
+      expect(readableByteSize('999999999')).to.deep.equal({
+        text: '1 GB',
+        exact: false,
+      });
+      expect(readableByteSize('999999999999')).to.deep.equal({
+        text: '1 TB',
+        exact: false,
+      });
+      expect(readableByteSize('999499999')).to.deep.equal({
+        text: '999 MB',
+        exact: false,
+      });
+      expect(readableByteSize('1999999999999999')).to.deep.equal({
+        text: '2000 TB',
+        exact: false,
+      });
       expect(readableByteSize('lots')).to.deep.equal({
         text: 'lots',
         exact: true,
@@ -6065,6 +6383,150 @@ describe('Directory console', () => {
             new Translator('en')
           ).message
         ).to.equal('Failed to fetch');
+      });
+
+      it('should say what is no refusal went wrong, not that the server refused', () => {
+        const said = (status: number, message: string, language = 'en') =>
+          explainRefusal(
+            refused(status, message),
+            schema,
+            new Translator(language)
+          ).message;
+        expect(said(404, 'Not found')).to.equal(
+          'The server refused: Not found'
+        );
+        // A server failing, a session ended, an answer nobody could read.
+        expect(said(500, 'Internal Server Error')).to.equal(
+          'Something went wrong'
+        );
+        expect(said(500, 'check logs', 'fr')).to.equal(
+          'Une erreur est survenue (check logs)'
+        );
+        expect(said(502, '502 Bad Gateway')).to.equal(
+          'Something went wrong (502 Bad Gateway)'
+        );
+        expect(said(401, 'Unauthorized')).to.equal(
+          'Something went wrong (Unauthorized)'
+        );
+        expect(said(200, '200 OK')).to.equal('Something went wrong (200 OK)');
+      });
+
+      it('should name the organization a refusal of rights is about, under its field', () => {
+        expect(
+          explainRefusal(
+            forbidden,
+            schema,
+            new Translator('en'),
+            'Acme / Sales',
+            'twakeDepartmentLink'
+          )
+        ).to.deep.equal({
+          message:
+            'You do not administer Acme / Sales: this change is not yours to make.',
+          attribute: 'twakeDepartmentLink',
+        });
+        // The field is for that refusal only.
+        expect(
+          explainRefusal(
+            refused(400, 'Bad'),
+            schema,
+            new Translator('en'),
+            'Acme / Sales',
+            'twakeDepartmentLink'
+          )
+        ).to.deep.equal({ message: 'The server refused: Bad' });
+      });
+
+      it('should blame the organization a new or moved entry goes to, not the entry', () => {
+        const top = 'ou=organization,dc=example,dc=com';
+        const sales = `ou=Sales,${top}`;
+        const engineering = `ou=Engineering,${top}`;
+        const app = consoleIn({}) as unknown as {
+          scope: Scope | null;
+          toast(message: string, isError?: boolean): void;
+          organizationRefused(
+            entity: EntityDescriptor,
+            values: Record<string, string | string[]>,
+            entry?: Entry,
+            form?: { pointerName(dn: string): string | undefined }
+          ): { name: string; attribute: string } | undefined;
+          refuseSave(
+            err: unknown,
+            entity: EntityDescriptor,
+            form: { refuse(attribute: string, message: string): boolean },
+            name: string,
+            field?: string
+          ): void;
+        };
+        const form = {
+          pointerName: (dn: string) =>
+            dn === sales ? 'Acme / Sales' : undefined,
+        };
+        const link = 'twakeDepartmentLink';
+        // Created: the organization it is attached to, as the form named it.
+        expect(
+          app.organizationRefused(
+            users,
+            { cn: 'Va Val', [link]: sales },
+            undefined,
+            form
+          )
+        ).to.deep.equal({ name: 'Acme / Sales', attribute: link });
+        // Edited without a move: the entry itself.
+        const stored: Entry = {
+          dn: `uid=va,${users.base}`,
+          uid: 'va',
+          cn: 'Va Val',
+          [link]: engineering,
+          twakeDepartmentPath: 'Acme / Engineering',
+        };
+        expect(
+          app.organizationRefused(users, { cn: 'Va Vale' }, stored, form)
+        ).to.equal(undefined);
+        // Moved, the scope saying nothing: where it goes.
+        expect(
+          app.organizationRefused(users, { [link]: sales }, stored, form)
+        ).to.deep.equal({ name: 'Acme / Sales', attribute: link });
+        // Moved where the caller writes: where it was, by its path.
+        app.scope = {
+          branches: [{ dn: sales, write: true }],
+          entities: [],
+        } as unknown as Scope;
+        expect(
+          app.organizationRefused(users, { [link]: sales }, stored, form)
+        ).to.deep.equal({ name: 'Acme / Engineering', attribute: link });
+        // Moved where the caller does not write, unnamed by the form.
+        app.scope = {
+          branches: [{ dn: engineering, write: true }],
+          entities: [],
+        } as unknown as Scope;
+        expect(
+          app.organizationRefused(users, { [link]: sales }, stored)
+        ).to.deep.equal({ name: 'Sales', attribute: link });
+
+        // Said under the organization field.
+        const toasts: string[] = [];
+        app.toast = message => toasts.push(message);
+        const shown: [string, string][] = [];
+        app.refuseSave(
+          forbidden,
+          users,
+          {
+            refuse: (attribute, message) => {
+              shown.push([attribute, message]);
+              return true;
+            },
+          },
+          'Acme / Sales',
+          link
+        );
+        expect(shown).to.deep.equal([
+          [
+            link,
+            'You do not administer Acme / Sales: this change is not yours to make.',
+          ],
+        ]);
+        expect(toasts).to.deep.equal(['Not saved: see the highlighted field']);
       });
 
       it('should show a refusal under the field at fault, the toast pointing there', () => {

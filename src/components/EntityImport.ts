@@ -11,7 +11,7 @@
  */
 
 import { parseCsv, writeCsv, type CsvTable } from '../csv';
-import { attributeLabel, explainRefusal } from '../format';
+import { attributeLabel, explainRefusal, rdnValue } from '../format';
 import type { Translator } from '../i18n';
 import { roleAttribute, tooBroad } from '../api/ConsoleApiClient';
 import {
@@ -477,14 +477,16 @@ export class EntityImport {
           await this.options.create(row.values);
           this.created++;
         } catch (err) {
-          // In the words a form says it in, for the table and the file
+          // In the words a form says it in, for the table and the file. A
+          // refusal of rights is about the organization the row goes to,
+          // which is what the server judged, not the entry it would create.
           this.failures.push({
             row,
             message: explainRefusal(
               err,
               this.options.entity.schema,
               this.options.translator,
-              this.rowName(row)
+              this.organizationName(row) ?? this.rowName(row)
             ).message,
           });
         }
@@ -512,6 +514,21 @@ export class EntityImport {
       if (first) return first;
     }
     return undefined;
+  }
+
+  /**
+   * The organization a row attaches its entry to, named as the file names
+   * it: the server judges a new entry's creation on it.
+   *
+   * @returns its name, or undefined for a row attached to none
+   */
+  private organizationName(row: PreparedRow): string | undefined {
+    const link = this.options.entity.organizationLink;
+    const value = link ? row.values[link] : undefined;
+    const dn = (Array.isArray(value) ? value[0] : value)?.trim();
+    if (!link || !dn) return undefined;
+    const column = this.mapping.indexOf(link);
+    return (column >= 0 ? row.cells[column]?.trim() : '') || rdnValue(dn);
   }
 
   /** Repaint the progress in place, rather than the whole step per row. */

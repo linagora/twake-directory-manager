@@ -404,6 +404,14 @@ export class ConsoleApiClient {
     return this.nameFormat;
   }
 
+  /**
+   * Whether the server searches the organization tree in one request, for
+   * {@link organizationSearch}.
+   */
+  get searchesOrganizations(): boolean {
+    return this.organizationSearchable;
+  }
+
   /** Whether the server lets password policies be managed. */
   get servesPasswordPolicies(): boolean {
     return !!this.policiesPath;
@@ -1624,6 +1632,21 @@ export class ConsoleApiClient {
   async organizationOptions(
     from?: OrganizationNode[]
   ): Promise<{ dn: string; label: string }[]> {
+    return (await this.organizationWalk(from)).organizations;
+  }
+
+  /**
+   * {@link organizationOptions}, saying whether the walk stopped at its
+   * bound before the end of the tree: what it did not reach may hold what
+   * is looked for.
+   *
+   * @param from subtrees to walk instead of the whole tree
+   * @returns the organizations found, and whether some were left unread
+   */
+  async organizationWalk(from?: OrganizationNode[]): Promise<{
+    organizations: { dn: string; label: string }[];
+    partial: boolean;
+  }> {
     const roots = from ?? [await this.organizationTop()];
     const options: { dn: string; label: string }[] = [];
     const queue = roots.filter((node): node is OrganizationNode => !!node);
@@ -1642,7 +1665,10 @@ export class ConsoleApiClient {
         // A branch the caller may not read is simply not offered.
       }
     }
-    return options;
+    return {
+      organizations: options,
+      partial: queue.some(node => !seen.has(comparableDn(node.dn))),
+    };
   }
 
   /**
@@ -1656,11 +1682,14 @@ export class ConsoleApiClient {
    *
    * @param query text to look for
    * @param from organization whose subtree is searched; the top by default
+   * @param limit most matches kept: few for a list of suggestions, every
+   *   one the server answered for the tree's filter
    * @returns DN and label of each match, in reading order
    */
   async organizationSearch(
     query: string,
-    from = this.topOrganization
+    from = this.topOrganization,
+    limit = POINTER_SEARCH_LIMIT
   ): Promise<{ dn: string; label: string }[]> {
     if (!from) return [];
     const found = await this.call<Entry[]>(
@@ -1677,7 +1706,7 @@ export class ConsoleApiClient {
           numeric: true,
         })
       )
-      .slice(0, POINTER_SEARCH_LIMIT);
+      .slice(0, limit);
   }
 
   /** Turn an organization entry into a tree node. */

@@ -18,6 +18,7 @@ import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
 import { hasRole, tooBroad } from '../api/ConsoleApiClient';
 import {
+  GENERIC_FAILURE,
   attributeLabel,
   displayValue,
   entryValue,
@@ -52,10 +53,6 @@ export const SEARCH_MINIMUM = 3;
  * than shown as "Internal Server Error".
  */
 export const LIST_LIMIT = 1000;
-
-/** What a server says on a `500` when it says nothing about the cause. */
-const GENERIC_FAILURE =
-  /^(?:\d{3}\s*)?(?:Internal Server Error|An error occurred)?\.?$/i;
 
 /**
  * What to say about a list, or a search, that could not be loaded.
@@ -144,7 +141,8 @@ export interface ListOptions {
   /** Whether the branch is small enough to show without a search */
   listable: boolean;
   onOpen(id: string): void;
-  onDelete(ids: string[]): Promise<void>;
+  /** Delete the selection once asked; resolves to whether any entry went */
+  onDelete(ids: string[]): Promise<boolean>;
   canDelete: boolean;
   /** Readable name of the entry a pointer lands on, when its schema has one */
   pointerLabel?(dn: string): string | undefined;
@@ -760,9 +758,11 @@ export class EntityList {
     root
       .querySelector('[data-delete-selected]')
       ?.addEventListener('click', () => {
+        // Read again only once something went: a Cancel leaves the page,
+        // the selection and the focus, back on this button, as they were.
         void this.options
           .onDelete([...this.selected])
-          .then(() => this.reload());
+          .then(deleted => (deleted ? this.reload() : undefined));
       });
   }
 
