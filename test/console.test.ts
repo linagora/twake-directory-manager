@@ -1456,6 +1456,17 @@ describe('Directory console', () => {
       ).to.equal('Importer des utilisateurs');
     });
 
+    it('should name the department in the import rules as its field does', () => {
+      // The Twake schema labels the field "Organisation" / "Байгууллага",
+      // the template's column with it: the rules must not say "département".
+      expect(new Translator('fr').t('import.noteReference')).to.equal(
+        'Une organisation, un poste ou une civilité s’écrit comme il apparaît dans le formulaire : son nom, ou le chemin complet d’une organisation.'
+      );
+      expect(new Translator('mn').t('import.noteReference')).to.match(
+        /^Байгууллага, .* байгууллагын бүтэн замаар\.$/
+      );
+    });
+
     it('should translate every key of every catalogue', () => {
       // A key present in one catalogue and missing from the other is exactly
       // the mixed-language interface this replaces.
@@ -6183,6 +6194,30 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.include(
         'Fields marked with * are required'
       );
+    });
+
+    it('should say an empty required field is required, not repeat the legend', async () => {
+      // The legend explains the *; under each field, its error is read out
+      // by a screen reader once per field.
+      for (const [language, word] of [
+        ['en', 'Required'],
+        ['fr', 'Obligatoire'],
+      ]) {
+        const form = new EntityForm({
+          entity: users,
+          translator: new Translator(language),
+          pointerOptions: () => Promise.resolve([]),
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        }) as unknown as {
+          errors: Record<string, string>;
+          submit(): Promise<void>;
+        };
+        await form.submit();
+        const errors = Object.values(form.errors);
+        expect(errors, language).not.to.be.empty;
+        for (const error of errors) expect(error, language).to.equal(word);
+      }
     });
 
     it('should ask for a token list on a multi-valued attribute', async () => {

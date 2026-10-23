@@ -293,9 +293,7 @@ test.describe('NAV layout, navigation and language', () => {
     await app.main.getByRole('button', { name: /^Créer/ }).click();
     const form = app.form();
     await form.submit();
-    await expect(form.errors().first()).toHaveText(
-      'Les champs marqués d’une * sont obligatoires'
-    );
+    await expect(form.errors().first()).toHaveText('Obligatoire');
     await expect(form.dialog).not.toContainText(/Fields marked|Expected an/);
   });
 

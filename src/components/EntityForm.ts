@@ -1553,7 +1553,7 @@ export class EntityForm {
     for (const [name, attr] of this.fields) {
       const list = this.values[name];
       if (attr.required && list.length === 0) {
-        this.errors[name] = this.options.translator.t('form.required');
+        this.errors[name] = this.options.translator.t('form.fieldRequired');
         continue;
       }
       const refused = this.ruleProblem(name, attr, list);
