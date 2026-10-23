@@ -149,7 +149,7 @@ test.describe('LIST lists, search and bulk actions', () => {
     await list.setPerPage(50);
     await expect(list.counter).toHaveText('1–27 of 27');
     await app.reload();
-    await app.navItem('Users').click();
+    await app.openList('Users');
     await list.search(lastName, 'Last name');
     await expect(list.perPage).toHaveValue('50');
     await expect(list.counter).toHaveText('1–27 of 27');
@@ -412,7 +412,7 @@ test.describe('LIST lists, search and bulk actions', () => {
     await expect(list.counter).toHaveText('26–27 of 27');
     await expect(list.searchBox).toHaveValue(lastName);
 
-    await app.navItem('Groups').click();
+    await app.openList('Groups');
     await list.search('eng');
     await list.open('engineering');
     await app.entry().expectName('engineering');
@@ -450,7 +450,7 @@ test.describe('LIST lists, search and bulk actions', () => {
     await expect(list.searchBox).toHaveValue('Moreau');
     await expect(list.ids()).toHaveText(['alice']);
 
-    await app.navItem('Groups').click();
+    await app.openList('Groups');
     await list.search('eng');
     await tabTo(list.row('engineering'));
     await page.keyboard.press('Enter');

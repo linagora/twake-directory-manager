@@ -81,7 +81,7 @@ test.describe('GROUP groups', () => {
     await expect(card.detail('Group type')).toHaveText('Distribution list');
     await expect(card.detail('Department path')).toHaveText(tenant.org.path);
 
-    await app.navItem('Groups').click();
+    await app.openList('Groups');
     await app.list().search(cn.slice(0, 11));
     await expect(app.list().row(cn)).toBeVisible();
   });
@@ -208,7 +208,7 @@ test.describe('GROUP groups', () => {
 
     await app.expectToast(`${cn} created`);
     await app.entry().expectName(cn);
-    await app.navItem('Groups').click();
+    await app.openList('Groups');
     await app.list().search(cn);
     await expect(app.list().row(cn)).toBeVisible();
   });

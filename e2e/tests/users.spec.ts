@@ -116,7 +116,7 @@ test.describe('USER user accounts', () => {
       `tom-${unique}@example.com`
     );
 
-    await app.navItem('Users').click();
+    await app.openList('Users');
     await app.list().search(uid);
     await expect(app.list().row(uid)).toBeVisible();
   });
@@ -459,8 +459,7 @@ test.describe('USER user accounts', () => {
       alias,
     ]);
 
-    await app.navItem('Users').click();
-    const list = app.list();
+    const list = await app.openList('Users');
     await list.search(renamed, 'Email');
     await expect(list.row(user.uid)).toBeVisible();
     await list.search(user.mail, 'Email');
@@ -597,7 +596,7 @@ test.describe('USER user accounts', () => {
       );
       await expect(card.detail('Status')).toHaveText(state);
     }
-    await app.navItem('Users').click();
+    await app.openList('Users');
     await app.list().search(user.uid);
     await expect(app.list().cells(user.uid).nth(5)).toHaveText('Active');
 
@@ -853,7 +852,7 @@ test.describe('USER user accounts', () => {
 
     await app.expectToast('Saved');
     await expect(card.detail('Department path')).toHaveText(france.path);
-    await app.navItem('Users').click();
+    await app.openList('Users');
     await app.list().search(user.uid);
     await expect(app.list().row(user.uid)).toBeVisible();
   });
@@ -888,7 +887,7 @@ test.describe('USER user accounts', () => {
     await app.expectToast('Front Dev created');
     await app.entry().expectName(uid);
 
-    await app.navItem('Users').click();
+    await app.openList('Users');
     await app.list().search(uid);
     await expect(app.list().row(uid)).toBeVisible();
 

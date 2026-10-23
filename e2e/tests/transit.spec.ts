@@ -50,7 +50,7 @@ test.describe('TRANSIT hand over and claim', () => {
     ]);
 
     // still listed, as every entry in transit is, but under Transit
-    await app.navItem('Users').click();
+    await app.openList('Users');
     await app.list().search(user.uid);
     await expect(app.list().cells(user.uid).nth(4)).toHaveText('Transit');
 
@@ -112,7 +112,7 @@ test.describe('TRANSIT hand over and claim', () => {
       'Delete',
     ]);
     await expect(card.changeState).toBeVisible();
-    await app.navItem('Users').click();
+    await app.openList('Users');
     await app.list().search(user.uid);
     await expect(app.list().cells(user.uid).nth(4)).toHaveText(
       other.frontend.path
@@ -185,11 +185,11 @@ test.describe('TRANSIT hand over and claim', () => {
     await claimer.entry().action('Claim…').click();
     await new ClaimDialog(claimer.page).claimInto(other.org.path);
     await claimer.expectToast(`${group.cn} moved to ${other.org.path}`);
-    await claimer.navItem('Groups').click();
+    await claimer.openList('Groups');
     await claimer.list().search(group.cn);
     await expect(claimer.list().row(group.cn)).toBeVisible();
 
-    await app.navItem('Groups').click();
+    await app.openList('Groups');
     await app.list().search(group.cn);
     await expect(app.list().emptyState).toHaveText(
       'No entry matches this search'
