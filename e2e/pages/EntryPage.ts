@@ -91,6 +91,11 @@ export class EntryPage {
     return this.statePanel.getByRole('radio');
   }
 
+  /** One state of the Change state panel, by its name */
+  stateChoice(state: string): Locator {
+    return this.statePanel.getByRole('radio', { name: state, exact: true });
+  }
+
   /**
    * Changes the state in the Change state panel (Active, Disabled, No access,
    * To delete): picks it, then presses the button named after the choice.

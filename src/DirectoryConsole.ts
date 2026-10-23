@@ -69,6 +69,25 @@ interface Route {
   id?: string;
 }
 
+/** What the console asks before an action it cannot take back. */
+export interface Confirmation {
+  /** The question, as the dialog's heading: "Delete Alice Martin?" */
+  title: string;
+  /** Paragraphs under it, as text */
+  lines: string[];
+  /** Names listed after the paragraphs: the entries of a selection */
+  items?: string[];
+  /** The button that acts, named after the action: "Delete Alice" */
+  action: string;
+  /** The action deletes nothing: its button is not the red one */
+  reversible?: boolean;
+  /**
+   * A safer way to the same end, offered as a link under the paragraphs:
+   * following it cancels the action and runs `run`
+   */
+  alternative?: { label: string; run: () => void };
+}
+
 const LANGUAGE_KEY = 'ldap-rest.console.language';
 const POLICIES_KEY = 'password-policies';
 const REFERENCE_OPEN_KEY = 'ldap-rest.console.referenceOpen';
@@ -1404,18 +1423,19 @@ export class DirectoryConsole {
     ]);
     if (!this.current(generation)) return;
     const transit = transitState(this.scope, entity, entry);
+    const canWrite = transit.rights?.write ?? this.canWrite();
     const detail = new EntityDetail({
       entity,
       entry,
       translator: this.translator,
-      canWrite: transit.rights?.write ?? this.canWrite(),
+      canWrite,
       canDelete: transit.rights?.delete ?? this.canDelete(),
       inTransit: transit.inTransit,
       onClaim: transit.claim
         ? (): void => void this.claim(entity, id)
         : undefined,
       onHandOver: transit.handOver
-        ? (): void => void this.handOver(entity, id)
+        ? (): void => void this.handOver(entity, id, entry)
         : undefined,
       pointerLabel: named,
       relations,
@@ -1423,7 +1443,7 @@ export class DirectoryConsole {
         void this.openForm(entity, entry);
       },
       onDelete: (): void => {
-        void this.confirmDelete(entity, id);
+        void this.confirmDelete(entity, id, entry, canWrite);
       },
       onStatus: (): void => {
         void this.changeState(entity, id, entry);
@@ -1746,6 +1766,117 @@ export class DirectoryConsole {
   }
 
   /**
+   * Ask before an action that cannot be taken back, in the centred dialog
+   * Claim uses. The browser's own confirm() named an entry by its identifier
+   * alone, said nothing of what went with it, and spoke the browser's
+   * language with buttons in the browser's order.
+   *
+   * The focus starts on Cancel, so an Enter pressed out of habit deletes
+   * nothing, and Escape cancels. Asked over an open panel, a policy's form,
+   * the dialog gives that panel back as it was once answered.
+   *
+   * @param question what to ask
+   * @returns whether the action was confirmed
+   */
+  private confirmAction(question: Confirmation): Promise<boolean> {
+    const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
+    const heading =
+      this.container?.querySelector<HTMLElement>('[data-panel-title]');
+    const body =
+      this.container?.querySelector<HTMLElement>('[data-panel-body]');
+    const dialog = this.container?.querySelector<HTMLElement>(
+      '[data-panel-dialog]'
+    );
+    if (!panel || !heading || !body || !dialog) return Promise.resolve(false);
+    const covered = panel.hidden
+      ? undefined
+      : {
+          title: heading.textContent ?? '',
+          nodes: Array.from(body.childNodes),
+          modal: panel.classList.contains('dc-panel-modal'),
+          wide: panel.classList.contains('dc-panel-wide'),
+          guard: this.panelGuard,
+          focus: document.activeElement as HTMLElement | null,
+        };
+    return new Promise(resolve => {
+      let answered = false;
+      const answer = (confirmed: boolean): void => {
+        if (answered) return;
+        answered = true;
+        this.panelGuard = null;
+        // An alert dialog only while it asks.
+        dialog.setAttribute('role', 'dialog');
+        dialog.removeAttribute('aria-describedby');
+        if (covered) {
+          heading.textContent = covered.title;
+          panel.classList.toggle('dc-panel-modal', covered.modal);
+          panel.classList.toggle('dc-panel-wide', covered.wide);
+          body.replaceChildren(...covered.nodes);
+          this.panelGuard = covered.guard;
+          (covered.focus?.isConnected ? covered.focus : dialog).focus();
+        } else this.closePanel(true);
+        resolve(confirmed);
+      };
+      this.openPanel(
+        question.title,
+        inner => {
+          inner.innerHTML = `
+            <div class="dc-confirm" id="dc-confirm-body" data-confirm-body>
+              ${question.lines
+                .map(line => `<p>${escapeHtml(line)}</p>`)
+                .join('')}
+              ${
+                question.items?.length
+                  ? `<ul class="dc-confirm-items">${question.items
+                      .map(item => `<li>${escapeHtml(item)}</li>`)
+                      .join('')}</ul>`
+                  : ''
+              }
+            </div>
+            ${
+              question.alternative
+                ? `<p class="dc-confirm-alternative"><button type="button" class="dc-link" data-confirm-alternative>${escapeHtml(
+                    question.alternative.label
+                  )}</button></p>`
+                : ''
+            }
+            <div class="dc-form-actions">
+              <button type="button" class="dc-button" data-cancel>${escapeHtml(
+                this.translator.t('app.cancel')
+              )}</button>
+              <button type="button" class="dc-button ${
+                question.reversible
+                  ? 'dc-button-primary'
+                  : 'dc-button-destructive'
+              }" data-confirm>${escapeHtml(question.action)}</button>
+            </div>`;
+          inner
+            .querySelector('[data-cancel]')
+            ?.addEventListener('click', () => answer(false));
+          inner
+            .querySelector('[data-confirm]')
+            ?.addEventListener('click', () => answer(true));
+          inner
+            .querySelector('[data-confirm-alternative]')
+            ?.addEventListener('click', () => {
+              answer(false);
+              question.alternative?.run();
+            });
+        },
+        true
+      );
+      dialog.setAttribute('role', 'alertdialog');
+      dialog.setAttribute('aria-describedby', 'dc-confirm-body');
+      // Escape, the close button and a page left all cancel.
+      this.panelGuard = (): boolean => {
+        answer(false);
+        return false;
+      };
+      body.querySelector<HTMLElement>('[data-cancel]')?.focus();
+    });
+  }
+
+  /**
    * Create entries of a flat entity from a CSV file. Each row goes through
    * the create endpoint the form uses, so the server holds an imported entry
    * to the same rules as one typed in.
@@ -1893,7 +2024,15 @@ export class DirectoryConsole {
   private async deletePolicy(policy: PasswordPolicy): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    if (!window.confirm(t('policy.deleteConfirm', { name: policy.cn }))) return;
+    // Asked over the policy's form, which comes back as it was on Cancel.
+    if (
+      !(await this.confirmAction({
+        title: t('policy.deleteTitle', { name: policy.cn }),
+        lines: [t('delete.irreversible')],
+        action: t('policy.deleteButton'),
+      }))
+    )
+      return;
     try {
       await this.api.deletePasswordPolicy(policy.cn);
     } catch (err) {
@@ -2298,7 +2437,8 @@ export class DirectoryConsole {
   private async changeState(
     entity: EntityDescriptor,
     id: string,
-    entry: Entry
+    entry: Entry,
+    preselect?: string
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
@@ -2405,6 +2545,19 @@ export class DirectoryConsole {
         if (state) void this.setStatus(entity, id, state, name, label(state));
       });
     });
+    // Asked for by name, from the deletion's tip: picked, and focused, but
+    // still written only by the button.
+    if (!preselect) return;
+    const picked = Array.from(
+      this.container?.querySelectorAll<HTMLInputElement>(
+        '[data-panel-body] input[name="dc-state"]'
+      ) ?? []
+    ).find(radio => radio.value === preselect);
+    if (picked) {
+      picked.checked = true;
+      picked.dispatchEvent(new Event('change'));
+      picked.focus();
+    }
   }
 
   /**
@@ -2494,7 +2647,7 @@ export class DirectoryConsole {
               t('app.cancel')
             )}</button>
             <button type="submit" class="dc-button dc-button-primary">${escapeHtml(
-              t('app.confirm')
+              t('password.confirmButton')
             )}</button>
           </div>
         </form>`;
@@ -2684,7 +2837,7 @@ export class DirectoryConsole {
                 t('app.cancel')
               )}</button>
               <button type="submit" class="dc-button dc-button-primary">${escapeHtml(
-                t('app.confirm')
+                t('transit.claimButton', { organization: targets[0].label })
               )}</button>
             </div>
           </form>`;
@@ -2692,6 +2845,21 @@ export class DirectoryConsole {
         body
           .querySelector('[data-cancel]')
           ?.addEventListener('click', () => this.closePanel());
+        // The button says where the entry goes, as the select changes.
+        const submit = body.querySelector<HTMLButtonElement>(
+          'button[type="submit"]'
+        );
+        body
+          .querySelector<HTMLSelectElement>('#dc-claim-target')
+          ?.addEventListener('change', event => {
+            const chosen = targets.find(
+              item => item.dn === (event.target as HTMLSelectElement).value
+            );
+            if (submit && chosen)
+              submit.textContent = t('transit.claimButton', {
+                organization: chosen.label,
+              });
+          });
         body.querySelector('form')?.addEventListener('submit', event => {
           event.preventDefault();
           const select =
@@ -2714,14 +2882,34 @@ export class DirectoryConsole {
     );
   }
 
-  /** Let an entry go into the transit branch, for another administrator. */
-  private async handOver(entity: EntityDescriptor, id: string): Promise<void> {
+  /**
+   * Let an entry go into the transit branch, for another administrator,
+   * once asked: named as a colleague would name it, with the organization
+   * it leaves.
+   */
+  private async handOver(
+    entity: EntityDescriptor,
+    id: string,
+    entry: Entry
+  ): Promise<void> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
     const transit = this.scope?.transit;
     if (!transit) return;
+    const name = this.personName(entity, entry, id);
+    const organization = this.roleValue(entity, entry, 'organizationPath');
     if (
-      !window.confirm(
-        this.translator.t('transit.handOverConfirm', { name: id })
-      )
+      !(await this.confirmAction({
+        title: t('transit.handOverTitle', { name }),
+        lines: [
+          ...(organization
+            ? [t('transit.handOverLeaves', { name, organization })]
+            : []),
+          t('transit.handOverConfirm'),
+        ],
+        action: t('transit.handOver'),
+        reversible: true,
+      }))
     )
       return;
     try {
@@ -2810,12 +2998,152 @@ export class DirectoryConsole {
       : this.entryName(entity, id);
   }
 
+  /**
+   * The first value of the attribute playing a role, trimmed.
+   *
+   * @returns the value, or undefined when the entry has none
+   */
+  private roleValue(
+    entity: EntityDescriptor,
+    entry: Entry,
+    role: string
+  ): string | undefined {
+    const attribute = roleAttribute(entity.schema, role);
+    const value = attribute
+      ? [entryValue(entry, attribute) ?? []].flat()[0]
+      : undefined;
+    return value && String(value).trim() ? String(value).trim() : undefined;
+  }
+
+  /**
+   * The groups an account belongs to, by name: from its `memberOf`, else
+   * searched among the groups, as its card finds them.
+   */
+  private async groupsOf(
+    entity: EntityDescriptor,
+    entry: Entry
+  ): Promise<string[]> {
+    for (const [name, attr] of Object.entries(entity.schema.attributes)) {
+      const roles = Array.isArray(attr.role) ? attr.role : [attr.role];
+      if (!roles.includes('groupMemberships')) continue;
+      let list = [entryValue(entry, name) ?? []].flat();
+      if (!list.length && entry.dn)
+        list = await this.api
+          .memberships(entry.dn, this.entities)
+          .catch(() => []);
+      return list.map(dn => rdnValue(String(dn)));
+    }
+    return [];
+  }
+
+  /**
+   * What to ask before deleting an entry. An account is named by its full
+   * name, email and organization, the way to tell two "jmartin" apart, with
+   * the groups it leaves and the state change offered instead. A group says
+   * its members stay. Anything else, a position or a mail domain, is named
+   * as its card names it.
+   *
+   * @param entry the entry, when its card is open
+   * @param canChangeState offer an account's state change instead
+   */
+  private async deletion(
+    entity: EntityDescriptor,
+    id: string,
+    entry?: Entry,
+    canChangeState = false
+  ): Promise<Confirmation> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    const irreversible = t('delete.irreversible');
+    const name = entry
+      ? this.personName(entity, entry, id)
+      : this.entryName(entity, id);
+    const title = t('delete.title', { name });
+    if (entry && entity.kind === 'group') {
+      const members = roleAttribute(entity.schema, 'members');
+      // groupOfNames needs a member: an empty DN stands for none.
+      const count = members
+        ? [entryValue(entry, members) ?? []]
+            .flat()
+            .filter(member => String(member).trim()).length
+        : 0;
+      return {
+        title,
+        lines: [
+          ...(count ? [t('delete.membersStay', { count })] : []),
+          irreversible,
+        ],
+        action: t('delete.groupButton'),
+      };
+    }
+    if (!entry || !roleAttribute(entity.schema, 'displayName'))
+      return {
+        title,
+        lines: [irreversible],
+        action: t('delete.button', { name }),
+      };
+
+    const groups = await this.groupsOf(entity, entry);
+    const summary = [
+      name,
+      this.roleValue(entity, entry, 'primaryEmail'),
+      this.roleValue(entity, entry, 'organizationPath'),
+    ].filter(Boolean);
+    // Offered only where Disabled is a state the account is not already in.
+    const status = entity.accountStatus;
+    const disabled = status
+      ? entity.schema.attributes[status]?.states?.disabled
+      : undefined;
+    const current = status
+      ? [entryValue(entry, status) ?? []].flat()[0]
+      : undefined;
+    const offer =
+      canChangeState &&
+      !!disabled &&
+      comparableDn(disabled) !== comparableDn(String(current ?? ''));
+    return {
+      title,
+      lines: [
+        summary.join(' · '),
+        groups.length
+          ? `${irreversible} ${t('delete.leavesGroups', {
+              name,
+              groups: groups.join(', '),
+            })}`
+          : irreversible,
+      ],
+      action: t('delete.button', {
+        name: this.roleValue(entity, entry, 'givenName') ?? name,
+      }),
+      alternative: offer
+        ? {
+            label: t('delete.preferDisable'),
+            run: (): void =>
+              void this.changeState(entity, id, entry, 'disabled'),
+          }
+        : undefined,
+    };
+  }
+
+  /**
+   * Delete an entry once asked.
+   *
+   * @param entry the entry, when its card is open
+   * @param canChangeState offer an account's state change instead
+   */
   private async confirmDelete(
     entity: EntityDescriptor,
-    id: string
+    id: string,
+    entry?: Entry,
+    canChangeState = false
   ): Promise<void> {
     const name = this.entryName(entity, id);
-    if (!window.confirm(this.translator.t('delete.confirm', { name }))) return;
+    if (
+      !(await this.confirmAction(
+        await this.deletion(entity, id, entry, canChangeState)
+      ))
+    )
+      return;
     try {
       await this.api.remove(entity, id);
       this.toast(this.translator.t('delete.done'));
@@ -2886,7 +3214,14 @@ export class DirectoryConsole {
       named(entity.organizationPath) ||
       named(entity.mainAttribute) ||
       rdnValue(dn);
-    if (!window.confirm(this.translator.t('delete.confirm', { name }))) return;
+    if (
+      !(await this.confirmAction({
+        title: this.translator.t('delete.title', { name }),
+        lines: [this.translator.t('delete.irreversible')],
+        action: this.translator.t('delete.organizationButton'),
+      }))
+    )
+      return;
     try {
       await this.api.deleteOrganization(dn);
       this.toast(this.translator.t('delete.done'));
@@ -2917,7 +3252,18 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     if (ids.length === 0) return;
-    if (!window.confirm(t('delete.confirmMany', { count: ids.length }))) return;
+    // The first few by name, enough to see the selection is the right one.
+    const named = ids.slice(0, 5).map(id => this.entryName(entity, id));
+    const more = ids.length - named.length;
+    if (
+      !(await this.confirmAction({
+        title: t('delete.manyTitle', { count: ids.length }),
+        lines: [t('delete.irreversible')],
+        items: more ? [...named, t('delete.andMore', { count: more })] : named,
+        action: t('delete.manyButton', { count: ids.length }),
+      }))
+    )
+      return;
 
     const failures: string[] = [];
     for (const id of ids) {

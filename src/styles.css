@@ -1796,6 +1796,36 @@ select.dc-input {
   border-color: var(--dc-danger);
 }
 
+/* The button of a confirmation that deletes: filled, unlike Delete on a card. */
+.dc-button-destructive {
+  background: var(--dc-danger);
+  border-color: var(--dc-danger);
+  color: #fff;
+}
+
+.dc-button-destructive:hover {
+  background: color-mix(in srgb, var(--dc-danger) 85%, #000);
+  border-color: color-mix(in srgb, var(--dc-danger) 85%, #000);
+}
+
+.dc-confirm p {
+  margin: 0 0 12px;
+}
+
+.dc-confirm p:first-child {
+  font-weight: 500;
+}
+
+.dc-confirm-items {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.dc-confirm-alternative {
+  margin: 0;
+  font-size: 13px;
+}
+
 .dc-icon-button {
   display: inline-flex;
   align-items: center;
@@ -2071,6 +2101,7 @@ textarea.dc-policy-text {
   }
 
   .dc-button-primary,
+  .dc-button-destructive,
   .dc-nav-item.dc-active .dc-nav-icon {
     color: #0b1a2e;
   }

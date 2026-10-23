@@ -1,6 +1,5 @@
-import { ClaimDialog, LoginPage } from '../pages';
+import { ClaimDialog, ConfirmDialog, LoginPage } from '../pages';
 import { ADMIN, ALICE, ORG } from '../support/accounts';
-import { answerNextConfirm } from '../support/confirm';
 import {
   type Directory,
   type Organization,
@@ -39,11 +38,16 @@ test.describe('TRANSIT hand over and claim', () => {
     );
     const card = app.entry();
 
-    const message = answerNextConfirm(page, true);
+    const confirm = new ConfirmDialog(page);
     await card.action('Hand over').click();
-    expect(await message).toBe(
-      `Put ${user.uid} in transit? Every administrator will see this entry and may claim it, and you will no longer manage it.`
-    );
+    await confirm.expectOpen(`Hand ${user.displayName} over?`);
+    await expect(confirm.paragraphs).toHaveText([
+      `${user.displayName} leaves ${tenant.org.path} for Transit.`,
+      'Every administrator will see this entry and may claim it; you will no longer manage it.',
+    ]);
+    await expect(confirm.cancelButton).toBeFocused();
+    await expect(confirm.confirmButton).toHaveText('Hand over');
+    await confirm.confirm();
     await app.expectToast(`${user.uid} is in transit`);
     expect(await directory.values(user.dn, 'twakeDepartmentLink')).toEqual([
       ORG.transit,
@@ -99,6 +103,14 @@ test.describe('TRANSIT hand over and claim', () => {
       other.backend.path,
       other.frontend.path,
     ]);
+    // the button names where the entry goes, and follows the select
+    await expect(claim.confirmButton).toHaveText(
+      `Claim into ${other.org.path}`
+    );
+    await claim.target.selectOption({ label: other.backend.path });
+    await expect(claim.confirmButton).toHaveText(
+      `Claim into ${other.backend.path}`
+    );
     await claim.claimInto(other.frontend.path);
 
     await app.expectToast(`${user.uid} moved to ${other.frontend.path}`);
@@ -173,9 +185,8 @@ test.describe('TRANSIT hand over and claim', () => {
       `groups/${group.cn}`
     );
 
-    const message = answerNextConfirm(page, true);
     await app.entry().action('Hand over').click();
-    await message;
+    await new ConfirmDialog(page).confirm();
     await app.expectToast(`${group.cn} is in transit`);
     expect(await directory.values(group.dn, 'twakeDepartmentLink')).toEqual([
       ORG.transit,

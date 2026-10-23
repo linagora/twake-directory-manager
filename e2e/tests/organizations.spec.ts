@@ -1,6 +1,5 @@
-import { LoginPage } from '../pages';
+import { ConfirmDialog, LoginPage } from '../pages';
 import { ADMIN, ORG, SOPHIE } from '../support/accounts';
-import { answerNextConfirm } from '../support/confirm';
 import { uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
@@ -216,9 +215,12 @@ test.describe('ORG organizations', () => {
     const organizations = await app.openOrganizations(lab.dn);
     await expect(organizations.card.heading).toHaveText(lab.name);
 
-    let message = answerNextConfirm(page, true);
+    const confirm = new ConfirmDialog(page);
     await organizations.card.action('Delete').click();
-    expect(await message).toBe(`Delete ${lab.path}? This cannot be undone.`);
+    await confirm.expectOpen(`Delete ${lab.path}?`);
+    await expect(confirm.message).toHaveText('This cannot be undone.');
+    await expect(confirm.confirmButton).toHaveText('Delete organization');
+    await confirm.confirm();
     await app.expectToast('Deleted');
     await expect(organizations.label(lab.name)).toHaveCount(0);
     await expect(organizations.card.heading).toHaveText(tenant.org.name);
@@ -227,9 +229,8 @@ test.describe('ORG organizations', () => {
     expect(await directory.exists(lab.dn)).toBe(false);
 
     await organizations.select(germany.name);
-    message = answerNextConfirm(page, true);
     await organizations.card.action('Delete').click();
-    await message;
+    await confirm.confirm();
     await app.expectToast(
       `${germany.path} is not empty: move or delete its entries first`,
       true
@@ -237,9 +238,11 @@ test.describe('ORG organizations', () => {
     expect(await directory.exists(germany.dn)).toBe(true);
 
     await app.setLanguage('fr');
-    message = answerNextConfirm(page, true);
     await organizations.card.actions().filter({ hasText: 'Supprimer' }).click();
-    await message;
+    await confirm.expectOpen(`Supprimer ${germany.path} ?`);
+    await expect(confirm.cancelButton).toHaveText('Annuler');
+    await expect(confirm.confirmButton).toHaveText('Supprimer l’organisation');
+    await confirm.confirm();
     await app.expectToast(
       `${germany.path} n’est pas vide : déplacez ou supprimez d’abord ses entrées`,
       true
@@ -272,9 +275,8 @@ test.describe('ORG organizations', () => {
     await app.expectToast('Saved');
     await expect(organizations.card.detail('Description')).toHaveText('Ventas');
 
-    const message = answerNextConfirm(page, true);
     await organizations.card.action('Delete').click();
-    await message;
+    await new ConfirmDialog(page).confirm();
     await app.expectToast('Deleted');
     await expect(organizations.label(spain)).toHaveCount(0);
 
@@ -360,9 +362,8 @@ test.describe('ORG organizations', () => {
     await app.expectToast(`${temporary} created`);
     await expect(organizations.card.heading).toHaveText(temporary);
     await expect(organizations.selected).toHaveText(temporary);
-    const message = answerNextConfirm(page, true);
     await organizations.card.action('Delete').click();
-    await message;
+    await new ConfirmDialog(page).confirm();
     await app.expectToast('Deleted');
     await expect(organizations.selected).toHaveText(tenant.org.name);
     await expect(organizations.toggle('Sales')).toHaveAttribute(
