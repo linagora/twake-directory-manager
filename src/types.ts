@@ -168,6 +168,14 @@ export interface AttachedEntries {
   truncated: boolean;
   /** How many it left out, when the directory let it count them */
   more?: number;
+  /**
+   * What it left out of the accounts and of the groups, each asked on its
+   * own: the server caps and counts each answer apart. Absent when both
+   * were asked in one answer, whose cut says nothing of the kind
+   */
+  cut?: Partial<
+    Record<'people' | 'groups', { truncated: boolean; more?: number }>
+  >;
 }
 
 /** Answer of `GET /v1/authz/scope`. */

@@ -52,6 +52,14 @@ export interface AttachedOptions {
   onCreate?: Partial<Record<AttachedKind, () => void>>;
   /** Open a card, given the address `EntityList.entryHref` gives it */
   onOpen(href: string): void;
+  /**
+   * The caller's scope may hide some of what is attached: the server lists
+   * only the entries of the branches they administer. An empty table then
+   * says that none of theirs is there, not that no one is
+   */
+  partial?: boolean;
+  /** Why the entries could not be read, said in place of the tables */
+  failure?: string;
 }
 
 /**
@@ -93,6 +101,37 @@ export function attachedEntity(
   return (
     linked.find(entity => entity.kind === 'group') ?? linked[0] ?? candidates[0]
   );
+}
+
+/**
+ * The object class that tells a table's entries from the other table's: the
+ * first one the schema of the entity it stands for gives its entries, and
+ * the other's does not. The subnodes endpoint asked for it caps and counts
+ * that kind on its own, where both asked at once share one cap and one
+ * count, which says nothing of which kind it cut.
+ *
+ * @param entities entities the console knows
+ * @param kind the table
+ * @returns the class, or undefined when the schemas do not tell them apart
+ */
+export function attachedClass(
+  entities: EntityDescriptor[],
+  kind: AttachedKind
+): string | undefined {
+  const classes = (entity: EntityDescriptor | undefined): string[] => {
+    const name = Object.keys(entity?.schema.attributes ?? {}).find(
+      attribute => attribute.toLowerCase() === 'objectclass'
+    );
+    const fallback = name ? entity?.schema.attributes[name].default : undefined;
+    return (Array.isArray(fallback) ? fallback : [])
+      .map(String)
+      .filter(value => value.toLowerCase() !== 'top');
+  };
+  const own = classes(attachedEntity(entities, kind));
+  const other = classes(
+    attachedEntity(entities, kind === 'people' ? 'groups' : 'people')
+  ).map(value => value.toLowerCase());
+  return own.find(value => !other.includes(value.toLowerCase()));
 }
 
 export class AttachedTables {
@@ -149,16 +188,36 @@ export class AttachedTables {
 
   /** Both tables. */
   markup(): string {
+    const { failure } = this.options;
+    if (failure !== undefined)
+      return `
+      <section class="dc-card dc-attached" data-attached-failure>
+        <p class="dc-empty dc-error-block">${escapeHtml(failure)}</p>
+      </section>`;
     const rows = this.rows();
-    // The server counts what it left out without saying of which kind: the
-    // notice goes under the people, who are what crowds a department, unless
-    // it listed groups alone.
-    const notice: AttachedKind =
-      rows.people.length || !rows.groups.length ? 'people' : 'groups';
     return (['people', 'groups'] as const)
       .filter(kind => rows[kind].length || this.lead(kind))
-      .map(kind => this.tableMarkup(kind, rows[kind], kind === notice))
+      .map(kind => this.tableMarkup(kind, rows[kind], this.cut(kind, rows)))
       .join('');
+  }
+
+  /**
+   * What the server left out of a table. Asked kind by kind, it says so of
+   * each. Asked both at once, it counts what it left out without saying of
+   * which kind: the notice goes under the people, who are what crowds a
+   * department, unless it listed groups alone.
+   */
+  private cut(
+    kind: AttachedKind,
+    rows: Record<AttachedKind, AttachedEntry[]>
+  ): { truncated: boolean; more?: number } {
+    const { members } = this.options;
+    if (members.cut) return members.cut[kind] ?? { truncated: false };
+    const notice: AttachedKind =
+      rows.people.length || !rows.groups.length ? 'people' : 'groups';
+    return kind === notice
+      ? { truncated: members.truncated, more: members.more }
+      : { truncated: false };
   }
 
   /**
@@ -167,20 +226,20 @@ export class AttachedTables {
    *
    * @param kind the table
    * @param rows its entries
-   * @param notice whether the server's truncation is said under it
+   * @param cut what the server left out of it
    */
   private tableMarkup(
     kind: AttachedKind,
     rows: AttachedEntry[],
-    notice: boolean
+    cut: { truncated: boolean; more?: number }
   ): string {
-    const { translator, members, name, onCreate } = this.options;
+    const { translator, name, onCreate, partial } = this.options;
     const lead = this.lead(kind);
     const roles = COLUMNS[kind].filter(
       (role, index) =>
         index === 0 || !lead || this.attribute(lead, role) !== undefined
     );
-    const truncated = notice && members.truncated;
+    const { truncated } = cut;
     // Fifty listed of more is not fifty.
     const count = truncated ? `${rows.length}+` : rows.length;
     const create = onCreate?.[kind];
@@ -205,7 +264,9 @@ export class AttachedTables {
         ${
           rows.length === 0
             ? `<p class="dc-muted">${escapeHtml(
-                translator.t('org.nobody', { name })
+                translator.t(partial ? 'org.noneManaged' : 'org.nobody', {
+                  name,
+                })
               )}</p>`
             : `<div class="dc-table-scroll">
                 <table class="dc-table dc-attached-table">
@@ -223,7 +284,7 @@ export class AttachedTables {
                 </table>
               </div>`
         }
-        ${truncated ? this.moreMarkup() : ''}
+        ${truncated ? this.moreMarkup(cut.more) : ''}
       </section>`;
   }
 
@@ -284,12 +345,12 @@ export class AttachedTables {
    * What the server left out, said where the table stops: a department
    * whose card lists fifty names otherwise reads as a department of fifty.
    */
-  private moreMarkup(): string {
-    const { members, translator } = this.options;
+  private moreMarkup(more: number | undefined): string {
+    const { translator } = this.options;
     return `<p class="dc-muted" role="status">${escapeHtml(
-      members.more === undefined
+      more === undefined
         ? translator.t('detail.moreUncounted')
-        : translator.t('detail.more', { count: members.more })
+        : translator.t('detail.more', { count: more })
     )}</p>`;
   }
 
@@ -306,6 +367,8 @@ export class AttachedTables {
       row.addEventListener('click', event => {
         // The link follows itself, into this tab or, with Ctrl, a new one.
         if ((event.target as HTMLElement).closest('.dc-row-link')) return;
+        // A name or an address selected to be copied is no click.
+        if (window.getSelection?.()?.toString()) return;
         this.options.onOpen(row.dataset.href as string);
       });
     for (const button of Array.from(

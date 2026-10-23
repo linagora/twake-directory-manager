@@ -36,7 +36,10 @@ import {
   rdnValue,
   resolveText,
 } from '../src/format';
-import { AttachedTables } from '../src/components/AttachedTables';
+import {
+  AttachedTables,
+  attachedClass,
+} from '../src/components/AttachedTables';
 import { EntityDetail } from '../src/components/EntityDetail';
 import { EntityForm, pointerFallback } from '../src/components/EntityForm';
 import { EntityImport } from '../src/components/EntityImport';
@@ -1606,13 +1609,22 @@ describe('Directory console', () => {
     });
 
     /** The card of an organization, drawn for a caller of this scope. */
-    const card = async (dn: string, scope: Scope | null): Promise<string> => {
+    const card = async (
+      dn: string,
+      scope: Scope | null,
+      members: (
+        dn: string,
+        entities: EntityDescriptor[],
+        objectClass?: string
+      ) => Promise<unknown> = async () => ({ entries: [], truncated: false }),
+      known: EntityDescriptor[] = entities
+    ): Promise<string> => {
       const holder = stubContainer();
       const app = consoleIn({ '[data-org-detail]': holder });
-      Object.assign(app as unknown as object, { entities, scope });
+      Object.assign(app as unknown as object, { entities: known, scope });
       Object.assign((app as unknown as { api: object }).api, {
         organization: async () => ({ dn, ou: rdnValue(dn) }),
-        organizationMembers: async () => ({ entries: [], truncated: false }),
+        organizationMembers: members,
         pointerOptions: async () => [],
       });
       await (
@@ -1653,6 +1665,94 @@ describe('Directory console', () => {
       expect(await card(france, noAccounts)).to.not.match(
         /New (user|group) here/
       );
+      // The global administrator writes above the transit branch: still no
+      // account is created there.
+      const global: Scope = {
+        ...localAdmin(top),
+        branches: [{ dn: top, read: true, write: true, delete: true }],
+      };
+      expect(await card(france, global)).to.include('New user here');
+      expect(await card(transit, global)).to.not.match(/New (user|group) here/);
+    });
+
+    it('should not say no one is attached where the scope hides the entries, nor when they could not be read', async () => {
+      // The server lists a local administrator only the entries of their own
+      // branches: on another organization, "No one" was not true.
+      expect(await card(france, localAdmin(sales))).to.include(
+        'No one is attached to France.'
+      );
+      const engineering = `ou=Engineering,${top}`;
+      const elsewhere = await card(engineering, localAdmin(sales));
+      expect(elsewhere).to.include(
+        'None you manage is attached to Engineering.'
+      );
+      expect(elsewhere).to.not.include('No one');
+      // What waits in transit is every administrator's to read.
+      expect(await card(transit, localAdmin(sales))).to.include(
+        'No one is attached to Transit.'
+      );
+
+      const failed = await card(france, localAdmin(sales), async () => {
+        throw Object.assign(new Error('Directory unreachable'), {
+          status: 500,
+        });
+      });
+      expect(failed).to.include('dc-error-block');
+      expect(failed).to.include('Directory unreachable');
+      expect(failed).to.not.include('No one');
+    });
+
+    it('should ask the accounts and the groups apart, each table saying what it leaves out', async () => {
+      // Asked at once, they shared one cap of fifty and one count, which did
+      // not say of which kind: "Groups (0)" could hide groups.
+      const withClass = (
+        entity: EntityDescriptor,
+        classes: string[]
+      ): EntityDescriptor => ({
+        ...entity,
+        schema: {
+          ...entity.schema,
+          attributes: {
+            ...entity.schema.attributes,
+            objectClass: {
+              type: 'array',
+              fixed: true,
+              default: ['top', ...classes],
+            },
+          },
+        },
+      });
+      const classed = [
+        organizations,
+        withClass(people, ['twakeAccount', 'twakeWhitePages']),
+        withClass(teams, ['groupOfNames', 'twakeStaticGroup']),
+        mailboxTypes,
+      ];
+      expect(attachedClass(classed, 'people')).to.equal('twakeAccount');
+      expect(attachedClass(classed, 'groups')).to.equal('groupOfNames');
+      expect(attachedClass(entities, 'groups')).to.equal(undefined);
+
+      const asked: (string | undefined)[] = [];
+      const html = await card(
+        france,
+        localAdmin(sales),
+        async (_dn, known, objectClass) => {
+          asked.push(objectClass);
+          return objectClass === 'groupOfNames'
+            ? {
+                entries: [attachedEntry(salesTeam, known)],
+                truncated: true,
+                more: 3,
+              }
+            : { entries: [attachedEntry(sophie, known)], truncated: false };
+        },
+        classed
+      );
+      expect(asked).to.deep.equal(['twakeAccount', 'groupOfNames']);
+      expect(html).to.include('People (1)');
+      expect(html).to.include('Groups (1+)');
+      const notice = html.indexOf('And 3 more entries');
+      expect(notice).to.be.greaterThan(html.indexOf('data-attached="groups"'));
     });
 
     it('should open the New user form with the department already set', () => {
