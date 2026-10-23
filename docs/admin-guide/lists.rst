@@ -97,7 +97,7 @@ The card shows:
   :guilabel:`Technical details`. A value taken from reference data (a
   position, a status) is shown by its name; a mailbox size is shown in GB or
   MB, rounded when needed, the exact number of bytes in its tooltip;
-- for accounts and groups, the **related entries**: the mailing lists of an
+- for accounts and groups, the **related entries**: the groups of an
   account, the members of a group (:guilabel:`No related entry` when there
   are none). A click on one opens its card.
 

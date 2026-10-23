@@ -55,10 +55,21 @@ Managing members
 
 The members of a group are listed on its card, under :guilabel:`Members`; a
 click on a member opens their card. Conversely, the card of an account lists,
-under :guilabel:`Mailing lists`, the groups it belongs to — from its
-``memberOf`` when the directory maintains it (OpenLDAP's ``memberof``
-overlay), otherwise by searching the groups whose ``member`` holds its DN
-(this needs ldap-rest 0.20.1).
+under :guilabel:`Groups`, the groups it belongs to, each with its type
+(*sales-team · Shared mailbox*) — from its ``memberOf`` when the directory
+maintains it (OpenLDAP's ``memberof`` overlay), otherwise by searching the
+groups whose ``member`` holds its DN (this needs ldap-rest 0.20.1).
+
+An account is added to groups from its own card, without opening each group:
+
+#. Click :guilabel:`Add to a group…` beside the :guilabel:`Groups` heading.
+#. Type 3 characters of a group's name, then pick it from the suggestions,
+   which give its type and address, with a click or :kbd:`Enter`. Repeat for
+   each group.
+#. Click :guilabel:`Add`.
+
+Only the groups you administer are offered. The × after a group takes the
+account out of it at once; it is shown on the groups you administer only.
 
 Members are designated by their **directory name** (DN), such as
 ``uid=jdoe,ou=users,dc=example,dc=org``: an account’s identifier preceded by

@@ -70,6 +70,13 @@ Built on ldap-rest 0.25.0.
   identifiers. _New user here_ and _New group here_ open the creation form
   with the department already set, where the administrator may create, and
   the new entry joins the table (#128)
+- An account's groups are managed from its card. The section reads _Groups_
+  rather than _Mailing lists_, and says each group's type: _sales-team ·
+  Shared mailbox_. _Add to a group…_ opens a panel searching the groups the
+  administrator may write, by name, type and address; the groups chosen are
+  joined at once, a refused one staying in the panel with why. A × on each
+  group the administrator may write takes the account out of it in one click
+  (#129)
 
 ## v0.10.2 (2026-10-23)
 
