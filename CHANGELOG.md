@@ -22,6 +22,13 @@ Built on ldap-rest 0.25.0.
 - The New user form shows the identifier the address will give, fills the
   common name from the full name, and Enter takes the domain the address
   completion offers; the creation message names the entry (#130)
+- An address already used, a mail domain the organization may not use and a
+  change outside the branches one administers are said in the interface's
+  language, under the field at fault when the form shows it, the toast
+  reading _Not saved: see the highlighted field_; the import's result and its
+  refused rows file say them the same way. Any other refusal reads _The
+  server refused:_ before the server's own words (#126,
+  linagora/ldap-rest#372)
 
 ## v0.10.2 (2026-10-23)
 

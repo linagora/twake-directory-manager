@@ -308,9 +308,12 @@ test.describe('IMPORT CSV import', () => {
     await expect(panel.stat('created')).toHaveText('3');
     await expect(panel.stat('refused')).toHaveText('1');
     await expect(problems.locator('td:first-child')).toHaveText(['7']);
-    await expect(problems.nth(0)).toContainText('alice@example.com');
+    // in the console's words, not the server's
+    const taken = 'Email “alice@example.com” is already used by another entry.';
+    await expect(problems.nth(0)).toContainText(taken);
+    await expect(problems.nth(0)).not.toContainText('must be unique');
     const refused = await panel.download(panel.downloadRefusedButton);
-    expect(refused.text).toContain('alice@example.com');
+    expect(refused.text).toContain(taken);
   });
 
   test('IMPORT-05 the import respects the scope', async ({

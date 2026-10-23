@@ -235,3 +235,23 @@ export interface PasswordPolicies {
    */
   attributes?: string[];
 }
+
+/**
+ * What ldap-rest (0.25.0 and later) says of a common refusal besides its
+ * sentence, in the fields of its answer: enough to say it in the interface's
+ * language, next to the field at fault, without reading the sentence back.
+ */
+export interface Refusal {
+  /**
+   * `unique` (a value already used), `mailDomain` (an address outside the
+   * authorised domains) or `forbidden` (outside the caller's branches); a
+   * code the console does not know is said as the server worded it
+   */
+  code: string;
+  /** The attribute refused */
+  attribute?: string;
+  /** The value refused */
+  value?: string;
+  /** The authorised mail domains, for `mailDomain` */
+  domains?: string[];
+}

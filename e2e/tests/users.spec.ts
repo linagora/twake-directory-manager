@@ -339,17 +339,30 @@ test.describe('USER user accounts', () => {
     });
     await form.pick('Department', 'Human', 'Human Resources');
 
-    for (const mail of [
-      'alice@example.com',
-      `x.${unique}@other.org`,
-      'alice.moreau@example.com',
-    ]) {
+    // said under Email, in the console's words; the toast only points there
+    for (const [mail, refusal] of [
+      [
+        'alice@example.com',
+        'Email “alice@example.com” is already used by another entry.',
+      ],
+      [
+        `x.${unique}@other.org`,
+        /^Email: other\.org is not a mail domain of this organization\. Allowed: .*example\.com.*\.$/,
+      ],
+      [
+        'alice.moreau@example.com',
+        'Email “alice.moreau@example.com” is already used by another entry.',
+      ],
+    ] as const) {
       await form.fill('Email', mail);
       await form.submit();
-      await expect(app.errorToast, mail).toBeVisible();
-      await expect(app.errorToast).not.toHaveText(
-        /Internal Server Error|check logs|^\s*\{/
+      await app.expectToast('Not saved: see the highlighted field', true);
+      await expect(form.error('Email'), mail).toHaveText(refusal);
+      await expect(form.control('Email')).toHaveAttribute(
+        'aria-invalid',
+        'true'
       );
+      await expect(form.control('Email')).toBeFocused();
       await expect(form.dialog).toBeVisible();
       await app.errorToast.evaluate(
         toast => ((toast as HTMLElement).hidden = true)
@@ -359,6 +372,35 @@ test.describe('USER user accounts', () => {
     expect(await directory.values(ALICE.dn, 'employeeNumber')).toEqual([
       'E0010',
     ]);
+  });
+
+  test('USER-04 an address already used is said in French under its field', async ({
+    page,
+  }) => {
+    const unique = uniquePart();
+    const app = await new LoginPage(page).loginAs(ADMIN, 'users');
+    await app.setLanguage('fr');
+    await app.list().newButton.click();
+    const form = app.form();
+    await form.expectOpen('Créer un utilisateur');
+    await form.fillAll({
+      Matricule: `E-${unique}`,
+      'Nom de famille': 'Doublon',
+      Prénom: 'Adresse',
+      'Nom complet': 'Adresse Doublon',
+    });
+    await form.pick('Organisation', 'Human', 'Human Resources');
+    await form.fill('Adresse électronique', 'alice@example.com');
+    await form.submit();
+
+    await app.expectToast('Non enregistré : voir le champ signalé', true);
+    await expect(form.error('Adresse électronique')).toHaveText(
+      'Adresse électronique « alice@example.com » : déjà utilisé par une autre entrée.'
+    );
+    const email = form.control('Adresse électronique');
+    await expect(email).toHaveAttribute('aria-invalid', 'true');
+    await expect(email).toBeFocused();
+    await expect(form.dialog).toBeVisible();
   });
 
   test('USER-05 edit an account', async ({ page, directory }) => {
@@ -430,11 +472,13 @@ test.describe('USER user accounts', () => {
     ]) {
       await form.fill('Email', taken);
       await form.submit();
-      await expect(app.errorToast, taken).toBeVisible();
-      if (!taken.endsWith('other.org'))
-        await expect(app.errorToast).toContainText(taken);
-      await expect(app.errorToast).not.toHaveText(
-        /Internal Server Error|check logs|^\s*\{/
+      await app.expectToast('Not saved: see the highlighted field', true);
+      await expect(form.error('Email'), taken).toContainText(
+        taken.endsWith('other.org') ? 'other.org' : `“${taken}”`
+      );
+      await expect(form.control('Email')).toHaveAttribute(
+        'aria-invalid',
+        'true'
       );
       await expect(form.dialog).toBeVisible();
       await app.errorToast.evaluate(

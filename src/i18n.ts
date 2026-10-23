@@ -260,6 +260,14 @@ const en: Catalogue = {
   'create.done': 'Created',
   'create.doneNamed': '{name} created',
 
+  'refusal.unique': '{field} “{value}” is already used by another entry.',
+  'refusal.domain':
+    '{field}: {domain} is not a mail domain of this organization. Allowed: {domains}.',
+  'refusal.forbidden':
+    'You do not administer {name}: this change is not yours to make.',
+  'refusal.server': 'The server refused: {message}',
+  'refusal.seeField': 'Not saved: see the highlighted field',
+
   'nav.policies': 'Password policies',
   'policy.new': 'New policy',
   'policy.name': 'Name',
@@ -614,6 +622,14 @@ const fr: Catalogue = {
   'create.done': 'Créé',
   'create.doneNamed': '{name} est maintenant dans l’annuaire',
 
+  'refusal.unique': '{field} « {value} » : déjà utilisé par une autre entrée.',
+  'refusal.domain':
+    '{field} : {domain} n’est pas un domaine de messagerie de cette organisation. Autorisés : {domains}.',
+  'refusal.forbidden':
+    'Vous n’administrez pas {name} : cette modification ne vous revient pas.',
+  'refusal.server': 'Le serveur a refusé : {message}',
+  'refusal.seeField': 'Non enregistré : voir le champ signalé',
+
   'nav.policies': 'Politiques de mot de passe',
   'policy.new': 'Nouvelle politique',
   'policy.name': 'Nom',
@@ -933,6 +949,14 @@ const mn: Catalogue = {
   'save.done': 'Хадгалагдлаа',
   'create.done': 'Үүсгэгдлээ',
   'create.doneNamed': '{name} үүсгэгдлээ',
+
+  'refusal.unique': '{field} «{value}» өөр бичлэгт ашиглагдаж байна.',
+  'refusal.domain':
+    '{field}: {domain} энэ байгууллагын шуудангийн домэйн биш. Зөвшөөрөгдсөн: {domains}.',
+  'refusal.forbidden':
+    'Та {name}-г удирддаггүй тул энэ өөрчлөлтийг хийх боломжгүй.',
+  'refusal.server': 'Сервер татгалзсан: {message}',
+  'refusal.seeField': 'Хадгалагдсангүй: тэмдэглэсэн талбарыг харна уу',
 
   'nav.policies': 'Нууц үгийн бодлого',
   'policy.new': 'Шинэ бодлого',
