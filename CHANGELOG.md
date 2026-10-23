@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Built on ldap-rest 0.25.0.
+
+### Bug Fixes
+
+- On OpenLDAP 2.4, a password policy no longer offers _Maximum length_,
+  _Account unused for_ or the delays after a failure, now that ldap-rest
+  lists the settings the directory defines (#118, linagora/ldap-rest#366)
+
 ## v0.10.2 (2026-10-23)
 
 Built on ldap-rest 0.24.0.
