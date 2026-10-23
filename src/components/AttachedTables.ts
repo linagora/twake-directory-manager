@@ -53,6 +53,22 @@ export interface AttachedOptions {
   /** Open a card, given the address `EntityList.entryHref` gives it */
   onOpen(href: string): void;
   /**
+   * What a row offers besides its card, as a button at its end — Claim… on
+   * what waits in transit — on the entries `offered` accepts
+   */
+  rowAction?: {
+    label: string;
+    /**
+     * Its name for a screen reader, which reads every row's button the
+     * same otherwise: _Claim Bob Schneider_
+     */
+    named(name: string): string;
+    offered(entry: AttachedEntry, entity: EntityDescriptor): boolean;
+    run(entry: AttachedEntry, entity: EntityDescriptor): void;
+  };
+  /** Leave out a table with no row, rather than say that no one is there */
+  hideEmpty?: boolean;
+  /**
    * The caller's scope may hide some of what is attached: the server lists
    * only the entries of the branches they administer. An empty table then
    * says that none of theirs is there, not that no one is
@@ -196,7 +212,10 @@ export class AttachedTables {
       </section>`;
     const rows = this.rows();
     return (['people', 'groups'] as const)
-      .filter(kind => rows[kind].length || this.lead(kind))
+      .filter(
+        kind =>
+          rows[kind].length || (!this.options.hideEmpty && this.lead(kind))
+      )
       .map(kind => this.tableMarkup(kind, rows[kind], this.cut(kind, rows)))
       .join('');
   }
@@ -276,7 +295,13 @@ export class AttachedTables {
                         role =>
                           `<th>${escapeHtml(this.heading(lead, role))}</th>`
                       )
-                      .join('')}</tr>
+                      .join('')}${
+                      this.options.rowAction
+                        ? `<th><span class="dc-visually-hidden">${escapeHtml(
+                            translator.t('detail.actions')
+                          )}</span></th>`
+                        : ''
+                    }</tr>
                   </thead>
                   <tbody>${rows
                     .map(entry => this.rowMarkup(entry, roles))
@@ -307,11 +332,12 @@ export class AttachedTables {
   private rowMarkup(entry: AttachedEntry, roles: string[]): string {
     const entity = this.entityOf(entry);
     const href = entity ? EntityList.entryHref(entity, entry.label) : '';
+    const name =
+      (roles[0] === 'identifier' ? '' : entry.values?.[roles[0]]) ||
+      entry.label;
     const cells = roles.map((role, index) => {
       const shown =
-        index === 0
-          ? (role === 'identifier' ? '' : entry.values?.[role]) || entry.label
-          : this.value(entity, role, entry.values?.[role]);
+        index === 0 ? name : this.value(entity, role, entry.values?.[role]);
       const content =
         index === 0 && href
           ? `<a class="dc-row-link" href="${escapeHtml(href)}">${escapeHtml(
@@ -320,6 +346,19 @@ export class AttachedTables {
           : escapeHtml(shown);
       return `<td title="${escapeHtml(shown)}">${content}</td>`;
     });
+    const action = this.options.rowAction;
+    if (action)
+      cells.push(
+        `<td class="dc-attached-action">${
+          entity && action.offered(entry, entity)
+            ? `<button type="button" class="dc-button" data-row-action="${escapeHtml(
+                entry.dn
+              )}" aria-label="${escapeHtml(action.named(name))}">${escapeHtml(
+                action.label
+              )}</button>`
+            : ''
+        }</td>`
+      );
     return `<tr${href ? ` data-href="${escapeHtml(href)}"` : ''}>${cells.join(
       ''
     )}</tr>`;
@@ -365,8 +404,14 @@ export class AttachedTables {
       container.querySelectorAll<HTMLElement>('[data-attached] tr[data-href]')
     ))
       row.addEventListener('click', event => {
-        // The link follows itself, into this tab or, with Ctrl, a new one.
-        if ((event.target as HTMLElement).closest('.dc-row-link')) return;
+        // The link follows itself, into this tab or, with Ctrl, a new one;
+        // the button at the end of the row does what it says.
+        if (
+          (event.target as HTMLElement).closest(
+            '.dc-row-link, [data-row-action]'
+          )
+        )
+          return;
         // A name or an address selected to be copied is no click.
         if (window.getSelection?.()?.toString()) return;
         this.options.onOpen(row.dataset.href as string);
@@ -379,5 +424,15 @@ export class AttachedTables {
           button.dataset.createAttached as AttachedKind
         ]?.()
       );
+    for (const button of Array.from(
+      container.querySelectorAll<HTMLElement>('[data-row-action]')
+    ))
+      button.addEventListener('click', () => {
+        const entry = this.options.members.entries.find(
+          item => item.dn === button.dataset.rowAction
+        );
+        const entity = entry && this.entityOf(entry);
+        if (entry && entity) this.options.rowAction?.run(entry, entity);
+      });
   }
 }

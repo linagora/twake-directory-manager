@@ -27,33 +27,49 @@ Handing an entry over
    the organization it leaves, and reminds that every administrator will see
    the entry and may claim it, and that one will no longer manage it.
 
-The entry is now in transit. Tell the administrator who is to take it over.
+The entry is now in transit, and the message says where it came from:
+:guilabel:`bob (Sales / Germany) is in transit`. The entry itself no longer
+names that organization: tell the administrator who is to take it over.
 
 Finding the entries in transit
 ------------------------------
 
-Every administrator can see the entries in transit:
+Every administrator is told what waits in transit, and can see it:
 
-- a click on the transit organization’s name, in the scope banner, opens its
-  card, which lists the entries waiting in it in its :guilabel:`People` and
-  :guilabel:`Groups` tables;
+- the overview opens on :guilabel:`Waiting in transit (N)`, which lists each
+  entry waiting there (name, email, position or group type), each with a
+  :guilabel:`Claim…` button. The section is absent when nothing waits;
+- in the scope banner, the transit organization’s link counts the entries
+  waiting there, :guilabel:`Transit (2)`, and reads :guilabel:`Transit`
+  alone when there are none. A click on it opens the transit organization’s
+  card, which lists them in its :guilabel:`People` and :guilabel:`Groups`
+  tables, each with :guilabel:`Claim…` too;
 - the card of an entry in transit is tagged :guilabel:`In transit`.
 
-The banner is the way in for a local administrator, whose organization tree
-starts at their own organization and seldom shows the transit organization.
+The overview and the banner are the way in for a local administrator, whose
+organization tree starts at their own organization and seldom shows the
+transit organization.
+
+Every administrator writes in the transit organization, to hand entries over,
+but that makes it no organization of theirs: its card offers a local
+administrator neither :guilabel:`Edit` nor :guilabel:`Delete`. Only an
+administrator of an organization above it, a global administrator for
+instance, keeps them.
 
 Claiming an entry
 -----------------
 
-#. Open the card of the entry in transit.
-#. Click :guilabel:`Claim…`.
+#. Click :guilabel:`Claim…` on the entry’s row, in the overview or on the
+   transit organization’s card, or open the card of the entry in transit and
+   click :guilabel:`Claim…` there.
 #. Under :guilabel:`Into the organization`, choose the destination among
    one’s own organizations.
 #. Click :guilabel:`Claim into <organization>`, which names the destination
    chosen.
 
 The entry now belongs to the chosen organization, and is managed by its
-administrators.
+administrators. It leaves the overview’s list, and the banner’s count, at
+once.
 
 When one writes in no organization that could take the entry, the dialog says
 so (:guilabel:`You write in no organization that could take it`).

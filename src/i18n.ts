@@ -308,6 +308,10 @@ const en: Catalogue = {
   'transit.handOverConfirm':
     'Every administrator will see this entry and may claim it; you will no longer manage it.',
   'transit.handedOver': '{name} is in transit',
+  'transit.handedOverFrom': '{name} ({from}) is in transit',
+  'transit.waiting': 'Waiting in transit ({count})',
+  'transit.waitingHelp':
+    'Handed over between administrators: claim those that belong to you.',
 
   'save.done': 'Saved',
   'create.done': 'Created',
@@ -722,6 +726,10 @@ const fr: Catalogue = {
   'transit.handOverConfirm':
     'Tous les administrateurs verront cette entrée et pourront la rattacher ; vous ne la gérerez plus.',
   'transit.handedOver': '{name} est en transit',
+  'transit.handedOverFrom': '{name} ({from}) est en transit',
+  'transit.waiting': 'En attente en transit ({count})',
+  'transit.waitingHelp':
+    'Confiés entre administrateurs : rattachez ceux qui vous reviennent.',
 
   'save.done': 'Enregistré',
   'create.done': 'Créé',
@@ -1102,6 +1110,10 @@ const mn: Catalogue = {
   'transit.handOverConfirm':
     'Бүх администратор энэ бичлэгийг харж, авах боломжтой болно; та үүнийг цаашид удирдахгүй.',
   'transit.handedOver': '{name} дамжуулалтад байна',
+  'transit.handedOverFrom': '{name} ({from}) дамжуулалтад байна',
+  'transit.waiting': 'Дамжуулалтад хүлээгдэж буй ({count})',
+  'transit.waitingHelp':
+    'Администраторуудын хооронд шилжүүлсэн: өөрт хамаарахыг нь авна уу.',
 
   'save.done': 'Хадгалагдлаа',
   'create.done': 'Үүсгэгдлээ',

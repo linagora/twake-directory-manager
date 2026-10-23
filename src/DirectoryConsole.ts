@@ -56,6 +56,7 @@ import type { ListView } from './components/EntityList';
 import type { PointerLookup } from './importer';
 import type {
   AttachedEntries,
+  AttachedEntry,
   ConsoleOptions,
   EntityDescriptor,
   Entry,
@@ -497,6 +498,14 @@ export class DirectoryConsole {
   /** The signed-in account, when it could be named rather than shown as a DN */
   private account: SignedIn | null = null;
   /**
+   * What waits in the transit branch, as last read: counted on the banner's
+   * Transit link, listed on the Overview. Null until read, or when there is
+   * no transit branch to read
+   */
+  private transitWaiting: AttachedEntries | null = null;
+  /** How many times it was asked for, so that only the last answer counts */
+  private transitReads = 0;
+  /**
    * Which view is the current one. Opening an entry, then another before the
    * first has answered, raced exactly the way the entity list did: whichever
    * `get` resolved last wrote its card, so entry A could end up on entry B's
@@ -588,6 +597,9 @@ export class DirectoryConsole {
     document.addEventListener('keydown', event => this.panelKey(event));
 
     this.drawShell();
+    // The Overview reads it for its own section; any other first page has
+    // the banner count it.
+    if (this.route.view !== 'dashboard') void this.readTransit();
     await this.renderMain();
   }
 
@@ -872,15 +884,89 @@ export class DirectoryConsole {
       ${
         this.scope.transit
           ? `<span class="dc-scope-label">${escapeHtml(t('transit.branch'))}</span>
-            <a class="dc-scope-transit" href="#/organizations/${encodeURIComponent(
+            <a class="dc-scope-transit" data-transit-link href="#/organizations/${encodeURIComponent(
               this.scope.transit
             )}" title="${escapeHtml(
               // Readable, like the branches' paths: the scope gives the
               // transit branch no path, and its name stands in for one.
               rdnValue(this.scope.transit)
-            )}">${escapeHtml(rdnValue(this.scope.transit))}</a>`
+            )}">${escapeHtml(this.transitLabel())}</a>`
           : ''
       }`;
+  }
+
+  /**
+   * The banner's Transit link: the branch's name, and how many entries wait
+   * there when some do — "Transit (2)" — so that an administrator is told
+   * of a hand-over without thinking of looking.
+   */
+  private transitLabel(): string {
+    const transit = this.scope?.transit;
+    if (!transit) return '';
+    const name = rdnValue(transit);
+    const waiting = this.transitWaiting;
+    if (!waiting?.entries.length) return name;
+    return `${name} (${waiting.entries.length}${waiting.truncated ? '+' : ''})`;
+  }
+
+  /**
+   * Read what waits in transit, and count it on the banner.
+   *
+   * Only for an administrator whose scope names a transit branch: the
+   * console speaks of transit only then (see {@link transitState}). A read
+   * that fails counts nothing rather than an error: the branch is still a
+   * link away.
+   *
+   * @returns what waits there, or null when there is nothing to read
+   */
+  private async readTransit(): Promise<AttachedEntries | null> {
+    const scope = this.scope;
+    if (!scopeRestricts(scope) || !scope.transit || this.administersNothing())
+      return null;
+    // Read again after every hand-over and claim: an answer arriving after
+    // a later one's is older, and must not count over it.
+    const read = ++this.transitReads;
+    let waiting: AttachedEntries | null;
+    try {
+      waiting = await this.readMembers(scope.transit);
+    } catch {
+      waiting = null;
+    }
+    if (read !== this.transitReads) return waiting;
+    this.transitWaiting = waiting;
+    const link = this.container?.querySelector<HTMLElement>(
+      '[data-transit-link]'
+    );
+    if (link) link.textContent = this.transitLabel();
+    return waiting;
+  }
+
+  /**
+   * Whether the caller may claim an entry listed in transit: as its card
+   * would say, from the entity holding it, attached to the transit branch.
+   */
+  private claimable(entry: AttachedEntry, entity: EntityDescriptor): boolean {
+    const transit = this.scope?.transit;
+    if (!transit || !entity.organizationLink) return false;
+    return transitState(this.scope, entity, {
+      dn: entry.dn,
+      [entity.organizationLink]: transit,
+    }).claim;
+  }
+
+  /** Claim…, at the end of each row listing what waits in transit. */
+  private claimAction(): {
+    label: string;
+    named(name: string): string;
+    offered(entry: AttachedEntry, entity: EntityDescriptor): boolean;
+    run(entry: AttachedEntry, entity: EntityDescriptor): void;
+  } {
+    return {
+      label: this.translator.t('transit.claim'),
+      named: name => this.translator.t('transit.claimTitle', { name }),
+      offered: (entry, entity) => this.claimable(entry, entity),
+      run: (entry, entity) => void this.claim(entity, entry.label),
+    };
   }
 
   /* ------------------------------------------------------------------ views */
@@ -1232,9 +1318,16 @@ export class DirectoryConsole {
   private renderDashboard(main: HTMLElement): void {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
+    const generation = this.viewGeneration;
+    // What waits in transit goes first, once read: it is what may need
+    // doing today.
     const sections = this.administersNothing()
       ? [this.noRightsMarkup()]
-      : [this.manageMarkup(), this.referenceMarkup()];
+      : [
+          '<div data-transit-waiting></div>',
+          this.manageMarkup(),
+          this.referenceMarkup(),
+        ];
     main.innerHTML = `
       <section class="dc-dashboard">
         <h1>${escapeHtml(t('app.title'))}</h1>
@@ -1255,6 +1348,52 @@ export class DirectoryConsole {
         const entity = this.entity(button.dataset.new as string);
         if (entity) void this.openForm(entity);
       });
+    void this.showTransitWaiting(main, generation);
+  }
+
+  /**
+   * _Waiting in transit (N)_, on the Overview: what other administrators
+   * handed over, each with Claim…. Nothing told the receiving side of a
+   * hand-over, and an entry nobody noticed stayed in transit, managed by no
+   * one. Absent when nothing waits.
+   *
+   * @param main the Overview
+   * @param generation the view it was drawn for
+   */
+  private async showTransitWaiting(
+    main: HTMLElement,
+    generation: number
+  ): Promise<void> {
+    const waiting = await this.readTransit();
+    if (!this.current(generation) || !waiting?.entries.length) return;
+    const names = await this.attachedNames();
+    const holder = main.querySelector<HTMLElement>('[data-transit-waiting]');
+    if (!this.current(generation) || !holder) return;
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    const tables = new AttachedTables({
+      entities: this.entities,
+      members: waiting,
+      translator: this.translator,
+      name: rdnValue(this.scope?.transit || ''),
+      pointerLabel: names,
+      hideEmpty: true,
+      rowAction: this.claimAction(),
+      onOpen: (href: string): void => {
+        window.location.hash = href;
+      },
+    });
+    holder.innerHTML = `
+      <section class="dc-transit-waiting" data-transit-section>
+        <h2>${escapeHtml(
+          t('transit.waiting', {
+            count: `${waiting.entries.length}${waiting.truncated ? '+' : ''}`,
+          })
+        )}</h2>
+        <p class="dc-muted">${escapeHtml(t('transit.waitingHelp'))}</p>
+        ${tables.markup()}
+      </section>`;
+    tables.bind(holder);
   }
 
   /** Who is signed in: by name and address, else as the scope gives it. */
@@ -1929,12 +2068,14 @@ export class DirectoryConsole {
     ]);
     if (!this.current(generation)) return;
 
+    const rights = this.organizationRights(node.dn);
+    const transit = this.scope?.transit;
     const card = new EntityDetail({
       entity,
       entry,
       translator: this.translator,
-      canWrite: this.canWrite(),
-      canDelete: this.canDelete(),
+      canWrite: rights.write,
+      canDelete: rights.delete,
       pointerLabel: named,
       attached: new AttachedTables({
         entities: this.entities,
@@ -1945,6 +2086,12 @@ export class DirectoryConsole {
           rdnValue(node.dn),
         pointerLabel: attachedNames,
         onCreate: this.createsHere(entity, entry, node),
+        // The transit branch's card is where its link leads: what waits
+        // there is claimed from it as from the Overview.
+        rowAction:
+          transit && comparableDn(transit) === comparableDn(node.dn)
+            ? this.claimAction()
+            : undefined,
         partial: !this.readsWhole(node.dn),
         failure,
         onOpen: (href: string): void => {
@@ -1970,6 +2117,35 @@ export class DirectoryConsole {
     });
     card.render(holder);
     this.titlePage(card.heading());
+  }
+
+  /**
+   * What the caller may do to an organization itself.
+   *
+   * Writing anywhere was enough to be offered Edit and Delete on any card,
+   * the transit branch's included. Every administrator writes the transit
+   * branch, to hand entries over, and that gives them no right to change it:
+   * Save was refused at the end. On it and below it, only a branch written
+   * above it counts — the global administrator's — as the rights on an
+   * entry in transit are read from the scope (see {@link transitState}).
+   *
+   * @param dn the organization
+   * @returns whether Edit and Delete are offered
+   */
+  private organizationRights(dn: string): { write: boolean; delete: boolean } {
+    const scope = this.scope;
+    const transit = scopeRestricts(scope) ? scope.transit : undefined;
+    if (!scopeRestricts(scope) || !transit || !withinDn(dn, transit))
+      return { write: this.canWrite(), delete: this.canDelete() };
+    const above = (right: 'write' | 'delete'): boolean =>
+      !this.scopeError &&
+      scope.branches.some(
+        branch =>
+          branch[right] &&
+          withinDn(dn, branch.dn) &&
+          !withinDn(branch.dn, transit)
+      );
+    return { write: above('write'), delete: above('delete') };
   }
 
   /**
@@ -3343,13 +3519,22 @@ export class DirectoryConsole {
               this.toast(
                 t('transit.claimed', { name: id, organization: target.label })
               );
-              await this.renderMain();
+              await this.afterTransitMove();
             })
             .catch((err: Error) => this.toast(err.message, true));
         });
       },
       true
     );
+  }
+
+  /**
+   * Draw the page again after an entry went into or out of transit, and
+   * count the branch again on the banner. The Overview counts it itself.
+   */
+  private async afterTransitMove(): Promise<void> {
+    await this.renderMain();
+    if (this.route.view !== 'dashboard') await this.readTransit();
   }
 
   /**
@@ -3384,8 +3569,14 @@ export class DirectoryConsole {
       return;
     try {
       await this.api.move(entity, id, transit);
-      this.toast(this.translator.t('transit.handedOver', { name: id }));
-      await this.renderMain();
+      // Where it comes from is said once more, and only here: the entry,
+      // now in transit, no longer names it.
+      this.toast(
+        organization
+          ? t('transit.handedOverFrom', { name: id, from: organization })
+          : t('transit.handedOver', { name: id })
+      );
+      await this.afterTransitMove();
     } catch (err) {
       this.toast((err as Error).message, true);
     }

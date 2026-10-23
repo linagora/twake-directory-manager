@@ -51,8 +51,15 @@ The overview
 ------------
 
 This is the home page. It recalls the account one is signed in with
-(:guilabel:`Signed in as …`) and shows, under
-:guilabel:`What you can manage`, a card for each collection:
+(:guilabel:`Signed in as …`).
+
+When entries wait in the transit organization, it first shows
+:guilabel:`Waiting in transit (N)`: one row per entry, with
+:guilabel:`Claim…` to take it into one’s own organizations (see
+:doc:`transit`). Nothing is shown when nothing waits.
+
+It then shows, under :guilabel:`What you can manage`, a card for each
+collection:
 
 - :guilabel:`Open` shows the list;
 - :guilabel:`New user` (or group, organization) opens the creation form

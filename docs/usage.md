@@ -176,14 +176,22 @@ Helm chart takes it under `extraEnv`):
 The branch is an organization like any other, created in the tree
 beforehand. Once the server names it:
 
-- **The scope banner shows it** after the caller's own branches, and links to
-  its card, which lists the entries waiting in it: every administrator sees
+- **The Overview opens on _Waiting in transit (N)_** when entries wait
+  there: one row per entry (name, email, position or group type), each with
+  _Claim…_. The section is absent when nothing waits.
+- **The scope banner shows it** after the caller's own branches, counting
+  what waits there (_Transit (2)_), and links to its card, which lists the
+  entries waiting in it, with _Claim…_ on each: every administrator sees
   them. The tree marks it where it stands, but a local administrator's tree
-  starts at their own branch and seldom holds it, so the banner is their way
-  in.
+  starts at their own branch and seldom holds it, so the Overview and the
+  banner are their way in.
+- **Its card offers _Edit_ and _Delete_ only to a caller who writes above
+  it**, a global administrator: every administrator writes the transit
+  branch to hand entries over, which gives them no right to change it.
 - **An entry of an organization the caller writes offers _Hand over_**, which
   moves it into the transit branch after a confirmation. The caller no longer
-  manages it.
+  manages it, and the message names the organization it left: _bob (Sales /
+  Germany) is in transit_.
 - **An entry in transit is marked _In transit_ and offers _Claim…_**, which
   moves it into one of the organizations the caller writes, and only those.
   Its other actions (edit, state, password, deletion) are offered only to a

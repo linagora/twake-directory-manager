@@ -1151,6 +1151,16 @@
   margin: 12px 0 0;
 }
 
+/* Claim… at the end of a row of what waits in transit. */
+.dc-attached-table td.dc-attached-action {
+  text-align: right;
+  overflow: visible;
+}
+
+.dc-transit-waiting h2 + .dc-muted {
+  margin: -8px 0 16px;
+}
+
 .dc-link,
 .dc-path-link {
   border: 0;
