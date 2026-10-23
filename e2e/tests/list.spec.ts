@@ -393,14 +393,14 @@ test.describe('LIST lists, search and bulk actions', () => {
 
     await list.search('Moreau', 'Last name');
     await list.open('alice');
-    await app.entry().expectName('alice');
+    await app.entry().expectName('Alice Moreau');
     await app.entry().backButton.click();
     await expect(list.searchBox).toHaveValue('Moreau');
     await expect(list.searchIn).toHaveValue('sn');
     await expect(list.ids()).toHaveText(['alice']);
 
     await list.open('alice');
-    await app.entry().expectName('alice');
+    await app.entry().expectName('Alice Moreau');
     await page.goBack();
     await expect(list.searchBox).toHaveValue('Moreau');
     await expect(list.ids()).toHaveText(['alice']);
@@ -412,7 +412,7 @@ test.describe('LIST lists, search and bulk actions', () => {
     const onPageTwo = (await list.ids().first().textContent())?.trim() ?? '';
     expect(users.map(user => user.uid)).toContain(onPageTwo);
     await list.open(onPageTwo);
-    await app.entry().expectName(onPageTwo);
+    await app.entry().expectIdentifier(onPageTwo);
     await app.entry().backButton.click();
     await expect(list.counter).toHaveText('26–27 of 27');
     await expect(list.searchBox).toHaveValue(lastName);
@@ -450,7 +450,7 @@ test.describe('LIST lists, search and bulk actions', () => {
     );
     await tabTo(list.row('alice'));
     await page.keyboard.press('Enter');
-    await app.entry().expectName('alice');
+    await app.entry().expectName('Alice Moreau');
     await app.entry().backButton.click();
     await expect(list.searchBox).toHaveValue('Moreau');
     await expect(list.ids()).toHaveText(['alice']);

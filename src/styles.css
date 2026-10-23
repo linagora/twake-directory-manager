@@ -874,11 +874,89 @@
   letter-spacing: -0.02em;
 }
 
+.dc-detail-title {
+  min-width: 0;
+}
+
+/* The identifier and the address, under the person's name. */
+.dc-detail-subtitle {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--dc-muted);
+  word-break: break-word;
+}
+
 .dc-detail-actions {
   display: flex;
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+/* More: the rare and the risky actions, out of the everyday row. */
+.dc-menu {
+  position: relative;
+}
+
+.dc-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--dc-surface);
+  border: 1px solid var(--dc-line);
+  border-radius: var(--dc-radius-small);
+  box-shadow: var(--dc-shadow-raised);
+}
+
+.dc-menu-list[hidden] {
+  display: none;
+}
+
+.dc-menu-item {
+  border: 0;
+  background: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--dc-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-menu-item:hover,
+.dc-menu-item:focus-visible {
+  background: var(--dc-hover);
+  outline: none;
+}
+
+.dc-menu-item-danger {
+  color: var(--dc-danger);
+}
+
+.dc-menu-item-danger:hover,
+.dc-menu-item-danger:focus-visible {
+  background: var(--dc-danger-soft);
+}
+
+/* Details, grouped the way the form groups the fields. */
+.dc-detail-group + .dc-detail-group {
+  margin-top: 24px;
+}
+
+.dc-detail-group h4 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dc-card > .dc-detail-fold {
+  margin: 20px 0 0;
 }
 
 /* Change state: each state a radio, with what it means under its name. */
@@ -1253,14 +1331,17 @@
 }
 
 /* What a long creation form does not require, folded under the required
-   fields: opened by whoever wants it, or by a refusal of one of them. */
-.dc-form-optional {
+   fields: opened by whoever wants it, or by a refusal of one of them. The
+   card folds its empty fields and its technical details the same way. */
+.dc-form-optional,
+.dc-detail-fold {
   border-top: 1px solid var(--dc-line);
   margin: 0 0 8px;
   padding: 12px 0 0;
 }
 
-.dc-form-optional > summary {
+.dc-form-optional > summary,
+.dc-detail-fold > summary {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1274,11 +1355,13 @@
   list-style: none;
 }
 
-.dc-form-optional > summary::-webkit-details-marker {
+.dc-form-optional > summary::-webkit-details-marker,
+.dc-detail-fold > summary::-webkit-details-marker {
   display: none;
 }
 
-.dc-form-optional > summary::before {
+.dc-form-optional > summary::before,
+.dc-detail-fold > summary::before {
   content: '';
   width: 6px;
   height: 6px;
@@ -1288,16 +1371,19 @@
   transition: transform 0.15s;
 }
 
-.dc-form-optional[open] > summary::before {
+.dc-form-optional[open] > summary::before,
+.dc-detail-fold[open] > summary::before {
   transform: rotate(45deg);
 }
 
-.dc-form-optional > summary:focus-visible {
+.dc-form-optional > summary:focus-visible,
+.dc-detail-fold > summary:focus-visible {
   outline: none;
   box-shadow: var(--dc-focus);
 }
 
-.dc-form-optional[open] > summary {
+.dc-form-optional[open] > summary,
+.dc-detail-fold[open] > summary {
   margin-bottom: 16px;
 }
 

@@ -54,6 +54,12 @@ Built on ldap-rest 0.25.0.
   action: _Delete Jane_, _Delete group_, _Hand over_. The Reset password and
   Claim panels' buttons read _Reset password_ and _Claim into Sales_ rather
   than _Confirm_ (#131)
+- An account's card is headed by the full name, with the identifier and the
+  address under it, as is the browser tab. Its details are grouped under
+  headings, a value said twice is said once, the empty fields wait under
+  _Show empty fields (N)_ and the DN under _Technical details_; a mailbox
+  size no unit says exactly reads _1.07 GB_, the bytes in its tooltip. _Edit_
+  comes first, and _Hand over_ and _Delete_ moved to a _More_ menu (#133)
 
 ## v0.10.2 (2026-10-23)
 

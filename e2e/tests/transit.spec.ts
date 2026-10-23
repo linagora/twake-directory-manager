@@ -39,7 +39,7 @@ test.describe('TRANSIT hand over and claim', () => {
     const card = app.entry();
 
     const confirm = new ConfirmDialog(page);
-    await card.action('Hand over').click();
+    await card.perform('Hand over');
     await confirm.expectOpen(`Hand ${user.displayName} over?`);
     await expect(confirm.paragraphs).toHaveText([
       `${user.displayName} leaves ${tenant.org.path} for Transit.`,
@@ -121,8 +121,9 @@ test.describe('TRANSIT hand over and claim', () => {
     await expect(card.actions()).toContainText([
       'Edit',
       'Reset password',
-      'Delete',
+      'More',
     ]);
+    await expect(card.moreActions()).toContainText(['Delete']);
     await expect(card.changeState).toBeVisible();
     await app.openList('Users');
     await app.list().search(user.uid);
@@ -141,10 +142,11 @@ test.describe('TRANSIT hand over and claim', () => {
     await expect(card.actions()).toHaveText([
       'Claim…',
       'Edit',
-      'Change state…',
       'Reset password',
-      'Delete',
+      'Change state…',
+      'More',
     ]);
+    await expect(card.moreActions()).toHaveText(['Delete']);
     await expect(card.changeState).toBeVisible();
 
     await card.action('Claim…').click();
@@ -185,7 +187,7 @@ test.describe('TRANSIT hand over and claim', () => {
       `groups/${group.cn}`
     );
 
-    await app.entry().action('Hand over').click();
+    await app.entry().perform('Hand over');
     await new ConfirmDialog(page).confirm();
     await app.expectToast(`${group.cn} is in transit`);
     expect(await directory.values(group.dn, 'twakeDepartmentLink')).toEqual([

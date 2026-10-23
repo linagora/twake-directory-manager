@@ -83,12 +83,20 @@ The card of an entry
 
 The card shows:
 
-- at the top, the :guilabel:`Back` button (to the list), the entry’s name and
-  the **actions** allowed: :guilabel:`Edit`, a status change,
-  :guilabel:`Reset password`, :guilabel:`Delete`, :guilabel:`Hand over`…;
-- the :guilabel:`Details` section, with **every** field of the entry, empty
-  ones included (shown as ``—``). A value taken from reference data (a
-  position, a status) is shown by its name;
+- at the top, the :guilabel:`Back` button (to the list), the entry’s name —
+  an account’s full name, with its identifier and its address under it — and
+  the **actions** allowed: :guilabel:`Edit`, :guilabel:`Reset password`,
+  :guilabel:`Change state…`, then :guilabel:`More`, a menu holding
+  :guilabel:`Hand over` and :guilabel:`Delete`;
+- the :guilabel:`Details` section, with **every** field of the entry, grouped
+  under the headings of the form, or :guilabel:`Identity`,
+  :guilabel:`Organization`, :guilabel:`Contact`, :guilabel:`Mailbox` and
+  :guilabel:`Lifecycle`. The empty fields are folded under
+  :guilabel:`Show empty fields (N)` (shown as ``—`` there), and the entry’s
+  directory name (DN), with a :guilabel:`Copy` button, under
+  :guilabel:`Technical details`. A value taken from reference data (a
+  position, a status) is shown by its name; a mailbox size is shown in GB or
+  MB, rounded when needed, the exact number of bytes in its tooltip;
 - for accounts and groups, the **related entries**: the mailing lists of an
   account, the members of a group (:guilabel:`No related entry` when there
   are none). A click on one opens its card.

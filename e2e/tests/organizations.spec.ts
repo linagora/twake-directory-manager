@@ -216,7 +216,7 @@ test.describe('ORG organizations', () => {
     await expect(organizations.card.heading).toHaveText(lab.name);
 
     const confirm = new ConfirmDialog(page);
-    await organizations.card.action('Delete').click();
+    await organizations.card.perform('Delete');
     await confirm.expectOpen(`Delete ${lab.path}?`);
     await expect(confirm.message).toHaveText('This cannot be undone.');
     await expect(confirm.confirmButton).toHaveText('Delete organization');
@@ -229,7 +229,7 @@ test.describe('ORG organizations', () => {
     expect(await directory.exists(lab.dn)).toBe(false);
 
     await organizations.select(germany.name);
-    await organizations.card.action('Delete').click();
+    await organizations.card.perform('Delete');
     await confirm.confirm();
     await app.expectToast(
       `${germany.path} is not empty: move or delete its entries first`,
@@ -238,7 +238,7 @@ test.describe('ORG organizations', () => {
     expect(await directory.exists(germany.dn)).toBe(true);
 
     await app.setLanguage('fr');
-    await organizations.card.actions().filter({ hasText: 'Supprimer' }).click();
+    await organizations.card.perform('Supprimer');
     await confirm.expectOpen(`Supprimer ${germany.path} ?`);
     await expect(confirm.cancelButton).toHaveText('Annuler');
     await expect(confirm.confirmButton).toHaveText('Supprimer l’organisation');
@@ -275,7 +275,7 @@ test.describe('ORG organizations', () => {
     await app.expectToast('Saved');
     await expect(organizations.card.detail('Description')).toHaveText('Ventas');
 
-    await organizations.card.action('Delete').click();
+    await organizations.card.perform('Delete');
     await new ConfirmDialog(page).confirm();
     await app.expectToast('Deleted');
     await expect(organizations.label(spain)).toHaveCount(0);
@@ -362,7 +362,7 @@ test.describe('ORG organizations', () => {
     await app.expectToast(`${temporary} created`);
     await expect(organizations.card.heading).toHaveText(temporary);
     await expect(organizations.selected).toHaveText(temporary);
-    await organizations.card.action('Delete').click();
+    await organizations.card.perform('Delete');
     await new ConfirmDialog(page).confirm();
     await app.expectToast('Deleted');
     await expect(organizations.selected).toHaveText(tenant.org.name);

@@ -52,6 +52,7 @@ import {
   formatByteSize,
   nameAttributes,
   parseByteSize,
+  readableByteSize,
 } from '../src/format';
 import type { Confirmation } from '../src/DirectoryConsole';
 import type {
@@ -5839,6 +5840,31 @@ describe('Directory console', () => {
         expect(String(server[shown]), shown).to.equal(raw);
       }
     });
+
+    it('should round on the card what no unit says exactly', () => {
+      // The card hands nothing back to the server: a gibibyte reads 1.07 GB
+      // there rather than ten digits, and says so.
+      expect(readableByteSize('1073741824')).to.deep.equal({
+        text: '1.07 GB',
+        exact: false,
+      });
+      expect(readableByteSize('15728640')).to.deep.equal({
+        text: '15.7 MB',
+        exact: false,
+      });
+      expect(readableByteSize('4000000000')).to.deep.equal({
+        text: '4 GB',
+        exact: true,
+      });
+      expect(readableByteSize('999')).to.deep.equal({
+        text: '999 B',
+        exact: true,
+      });
+      expect(readableByteSize('lots')).to.deep.equal({
+        text: 'lots',
+        exact: true,
+      });
+    });
   });
 
   describe('server rules', () => {
@@ -8259,25 +8285,189 @@ describe('Directory console', () => {
       expect(displayValue({ type: 'date' }, 'soon')).to.equal('soon');
     });
 
-    it('should show every attribute, empty ones included', () => {
-      const html = render({ uid: 'jsmith', cn: 'John Smith' });
+    it('should show every attribute, the empty ones folded away', () => {
+      const html = render({ uid: 'jsmith', mail: 'jsmith@example.com' });
       // The defect this replaces: a card showing two fields, the rest only
-      // reachable by opening the edit dialog.
-      expect(html).to.include('Name');
-      expect(html).to.include('Telephone Number');
-      expect(html).to.include('Twake Department Link');
+      // reachable by opening the edit dialog. They are still on the card, but
+      // the empty ones no longer make up most of it.
+      const [shown, folded] = html.split('data-empty>');
+      expect(shown).to.include('jsmith@example.com');
+      expect(shown).not.to.include('Telephone Number');
+      expect(folded).to.include('Show empty fields (7)');
+      expect(folded).to.include('Name');
+      expect(folded).to.include('Telephone Number');
+      expect(folded).to.include('Twake Department Link');
     });
 
-    it('should show the entry’s DN, which no attribute carries', () => {
+    it('should head an account with the person’s name, the identifier under it', () => {
+      const html = render({
+        uid: 'jsmith',
+        cn: 'John Smith',
+        mail: 'jsmith@example.com',
+      });
+      expect(html).to.include('<h2>John Smith</h2>');
+      expect(html).to.include(
+        '<p class="dc-detail-subtitle" data-subtitle>jsmith · jsmith@example.com</p>'
+      );
+      // Said in the heading, not again in Details.
+      expect(html).not.to.include('<dt>Name</dt>');
+      expect(html).not.to.include('<dt>Uid</dt>');
+      // Without a name, the identifier heads the card, as it always did.
+      expect(render({ uid: 'jsmith' })).to.include('<h2>jsmith</h2>');
+      expect(render({ uid: 'jsmith' })).not.to.include('data-subtitle');
+    });
+
+    it('should group the details under headings', () => {
+      const card = (entity: EntityDescriptor, entry: Entry): string => {
+        const container = stubContainer();
+        new EntityDetail({
+          entity,
+          entry,
+          translator: new Translator('en'),
+          canWrite: true,
+          canDelete: true,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          onStatus: () => undefined,
+          onResetPassword: () => undefined,
+        }).render(container);
+        return container.innerHTML;
+      };
+      const html = card(users, {
+        uid: 'jsmith',
+        cn: 'John Smith',
+        mail: 'jsmith@example.com',
+        telephoneNumber: '555 0100',
+        twakeDepartmentLink: 'ou=France,ou=Sales,dc=example,dc=com',
+        twakeDepartmentPath: 'Sales / France',
+      });
+      const headings = [...html.matchAll(/<h4>([^<]*)<\/h4>/g)].map(
+        match => match[1]
+      );
+      expect(headings).to.deep.equal([
+        'Organization',
+        'Contact',
+        // Under Show empty fields
+        'Identity',
+        'Contact',
+      ]);
+      // The path names the department and leads there: its link would say
+      // "France" a second time.
+      expect(html).to.include('Sales &#x2F; France');
+      expect(html).not.to.include('Twake Department Link');
+
+      // A group the schema gives the form is the card's too, after Contact.
+      const quota: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            mailQuotaSize: {
+              type: 'number',
+              normalize: 'byteSize',
+              group: { en: 'Mailbox Settings' },
+            },
+            twakeDeletionDate: { type: 'date', role: 'accountExpiry' },
+          },
+        },
+      };
+      const sized = card(quota, {
+        uid: 'jsmith',
+        mail: 'jsmith@example.com',
+        mailQuotaSize: '1073741824',
+        twakeDeletionDate: '20310115000000Z',
+      });
+      expect(
+        [...sized.matchAll(/<h4>([^<]*)<\/h4>/g)].map(match => match[1])
+      ).to.deep.equal([
+        'Identity',
+        'Contact',
+        'Mailbox Settings',
+        'Lifecycle',
+        // Under Show empty fields
+        'Identity',
+        'Organization',
+        'Contact',
+      ]);
+      // Rounded, the exact count in the tooltip.
+      expect(sized).to.include(
+        '<span class="dc-value" title="1073741824 bytes">1.07 GB</span>'
+      );
+    });
+
+    it('should leave out a common name that repeats the full name', () => {
+      const named: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            cn: { type: 'string', label: { en: 'Common name' } },
+            displayName: {
+              type: 'string',
+              role: 'displayName',
+              label: { en: 'Full name' },
+            },
+          },
+        },
+      };
+      const card = (cn: string): string => {
+        const container = stubContainer();
+        new EntityDetail({
+          entity: named,
+          entry: { uid: 'jsmith', cn, displayName: 'John Smith' },
+          translator: new Translator('en'),
+          canWrite: true,
+          canDelete: true,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          onStatus: () => undefined,
+          onResetPassword: () => undefined,
+        }).render(container);
+        return container.innerHTML;
+      };
+      expect(card('John Smith')).not.to.include('Common name');
+      expect(card('Smith John')).to.include('<dt>Common name</dt>');
+    });
+
+    it('should fold the entry’s DN, which no attribute carries, under Technical details', () => {
       const html = render({
         dn: 'uid=jsmith,ou=users,dc=example,dc=com',
         uid: 'jsmith',
       });
-      expect(html).to.include('Distinguished name (DN)');
-      expect(html).to.include(
+      const [, technical] = html.split('data-technical>');
+      expect(technical).to.include('<summary>Technical details</summary>');
+      expect(technical).to.include('Distinguished name (DN)');
+      expect(technical).to.include(
         '<code class="dc-dn">uid=jsmith,ou=users,dc=example,dc=com</code>'
       );
-      expect(html).to.include('data-copy-dn');
+      expect(technical).to.include('data-copy-dn');
+    });
+
+    it('should put Edit first, and Hand over and Delete in a More menu', () => {
+      const container = stubContainer();
+      new EntityDetail({
+        entity: users,
+        entry: { uid: 'jsmith' },
+        translator: new Translator('en'),
+        canWrite: true,
+        canDelete: true,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        onStatus: () => undefined,
+        onResetPassword: () => undefined,
+        onHandOver: () => undefined,
+      }).render(container);
+      const html = container.innerHTML;
+      const order = ['data-edit', 'data-password', 'data-status', 'data-more'];
+      expect(order.map(data => html.indexOf(data))).to.deep.equal(
+        order.map(data => html.indexOf(data)).sort((a, b) => a - b)
+      );
+      expect(html).to.include('aria-haspopup="menu"');
+      expect(html).to.include('aria-expanded="false"');
+      const [, menu] = html.split('data-more-menu hidden>');
+      expect(menu).to.match(
+        /role="menuitem"[^>]*data-hand-over>Hand over<\/button><button type="button" role="menuitem" class="dc-menu-item dc-menu-item-danger" data-delete>Delete<\/button>/
+      );
     });
 
     it('should never show a write-only attribute', () => {

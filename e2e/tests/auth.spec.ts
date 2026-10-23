@@ -45,7 +45,7 @@ test.describe('AUTH sign-in and session', () => {
     const app = await new LoginPage(page).loginAs(ADMIN);
 
     await page.goto(`${CONSOLE_PATH}#/users/alice`);
-    await app.entry().expectName('alice');
+    await app.entry().expectName('Alice Moreau');
 
     // Without a session: after the sign-in, the card or the overview (documented)
     const other = await loginInNewContext(ADMIN);

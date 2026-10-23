@@ -24,7 +24,7 @@ test.describe('GROUP groups', () => {
     await expect(card.detail('Description')).toHaveText('The sales force');
     await expect(card.detail('Email')).toHaveText('sales@example.com');
     await expect(card.detail('Group type')).toHaveText('Shared mailbox');
-    await expect(card.detail('List type')).toHaveText('—');
+    await expect(card.emptyField('List type')).toHaveCount(1);
     await expect(card.detail('Department path').getByRole('link')).toHaveText(
       'Sales'
     );
@@ -39,7 +39,7 @@ test.describe('GROUP groups', () => {
       .filter({ hasText: 'bob' })
       .getByRole('button')
       .click();
-    await app.entry().expectName('bob');
+    await app.entry().expectName('Bob Schneider');
   });
 
   test('GROUP-02 create a group', async ({ page, directory, tenant }) => {
@@ -147,7 +147,7 @@ test.describe('GROUP groups', () => {
       .filter({ hasText: 'dave' })
       .getByRole('button')
       .click();
-    await app.entry().expectName('dave');
+    await app.entry().expectName('Dave Okafor');
     await expect(
       app.entry().relatedItems('Mailing lists').filter({ hasText: group.cn })
     ).toBeVisible();
@@ -169,7 +169,7 @@ test.describe('GROUP groups', () => {
     await expect(card.detail('Description')).toHaveText('Changed');
 
     const confirm = new ConfirmDialog(page);
-    await card.action('Delete').click();
+    await card.perform('Delete');
     await confirm.expectOpen(`Delete ${group.cn}?`);
     await expect(confirm.paragraphs).toHaveText([
       'Its 1 member stays in the directory; only the group goes.',
@@ -239,7 +239,7 @@ test.describe('GROUP groups', () => {
     await expect(owner).toBeVisible();
     await expect(owner).toHaveAttribute('title', ERIC.dn);
     await owner.click();
-    await app.entry().expectName('eric.dubois');
+    await app.entry().expectName('Eric Dubois');
     await page.goBack();
 
     await card.action('Edit').click();
@@ -248,7 +248,7 @@ test.describe('GROUP groups', () => {
     await form.removeToken('Owners', 'eric.dubois');
     await form.submit();
     await app.expectToast('Saved');
-    await expect(card.detail('Owners')).toHaveText('—');
+    await expect(card.emptyField('Owners')).toHaveCount(1);
     expect(await directory.values(group.dn, 'owner')).toEqual([]);
   });
 

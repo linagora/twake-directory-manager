@@ -203,6 +203,40 @@ export function formatByteSize(value: string): string {
 }
 
 /**
+ * A byte count as a size to read, not to write back.
+ *
+ * `formatByteSize` leaves a size no decimal unit says exactly as digits —
+ * 1073741824, a gibibyte, is 1.073741824 GB — because the form hands it
+ * back to the server. The card hands nothing back: there it reads rounded to
+ * three significant figures, 1.07 GB, and the caller keeps the exact count
+ * at hand for whoever needs it.
+ *
+ * @param value value as stored
+ * @returns the size, and whether it says the stored count exactly
+ */
+export function readableByteSize(value: string): {
+  text: string;
+  exact: boolean;
+} {
+  const exact = formatByteSize(value);
+  const bytes = Number(value.trim());
+  if (
+    exact !== value ||
+    !/^\d+$/.test(value.trim()) ||
+    !Number.isSafeInteger(bytes)
+  )
+    return { text: exact, exact: true };
+  for (const [unit, size] of SIZE_UNITS) {
+    if (bytes < size) continue;
+    return {
+      text: `${Number((bytes / size).toPrecision(3))} ${unit}`,
+      exact: false,
+    };
+  }
+  return { text: exact, exact: true };
+}
+
+/**
  * Read a size the way the server's `parseByteSize` does — `4GB`, `500 MB`,
  * `2048` or `2048B`, in any case — so that the form refuses before sending
  * what the server would refuse after.

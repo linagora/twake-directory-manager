@@ -113,8 +113,8 @@ a multi-valued field, click the :guilabel:`×` after it.
 Deleting an organization
 ------------------------
 
-Select the organization, click :guilabel:`Delete`, then
-:guilabel:`Delete organization`.
+Select the organization, open :guilabel:`More`, click :guilabel:`Delete`,
+then :guilabel:`Delete organization`.
 
 The server refuses to delete an organization that is not empty: first delete
 or move its sub-organizations, and attach its accounts and groups elsewhere

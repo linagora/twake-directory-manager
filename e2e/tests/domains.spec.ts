@@ -41,7 +41,7 @@ test.describe('DOMAIN mail domains', () => {
     await form.cancel();
 
     const card = await app.openEntry(`domains/${id}`);
-    await card.action('Delete').click();
+    await card.perform('Delete');
     await new ConfirmDialog(page).confirm();
     await app.expectToast('Deleted');
     expect(await directory.exists(dn)).toBe(false);
@@ -66,7 +66,7 @@ test.describe('DOMAIN mail domains', () => {
     // the card may offer Delete (documented, as for the other reference data): the server refuses
     const card = await app.openEntry(`domains/${domain.id}`);
     if ((await card.action('Delete').count()) > 0) {
-      await card.action('Delete').click();
+      await card.perform('Delete');
       await new ConfirmDialog(page).confirm();
       await expect(app.errorToast).toBeVisible();
       await expect(app.errorToast).not.toHaveText(UNREADABLE);

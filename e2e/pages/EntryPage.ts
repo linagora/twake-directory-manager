@@ -11,9 +11,11 @@ export function exactly(text: string): RegExp {
 
 /**
  * The card of one entry: an account, a group, an organization (beside the tree) or a reference
- * entry. Its header holds the name, the "In transit" tag and the actions; **Details** lists the
- * fields as a description list; a related section (Mailing lists, Members, Attached entries)
- * lists links to other cards.
+ * entry. Its header holds the name (an account's full name), the "In transit" tag, the identifier
+ * and the address under the name, and the actions — Hand over and Delete in a **More** menu;
+ * **Details** lists the fields as description lists under headings, the empty ones folded under
+ * "Show empty fields (N)" and the DN under "Technical details"; a related section (Mailing lists,
+ * Members, Attached entries) lists links to other cards.
  */
 export class EntryPage {
   readonly page: Page;
@@ -21,12 +23,21 @@ export class EntryPage {
   /** The name of the entry, with "In transit" after it when it is */
   readonly heading: Locator;
   readonly transitTag: Locator;
+  /** Under the name: "alice · alice@example.com" */
+  readonly subtitle: Locator;
   /** Back to the list, above the card */
   readonly backButton: Locator;
   /** Change state…, which opens the panel offering the states */
   readonly changeState: Locator;
   /** The panel Change state… opens */
   readonly statePanel: Locator;
+  /** More, the menu holding Hand over and Delete */
+  readonly moreButton: Locator;
+  readonly moreMenu: Locator;
+  /** Show empty fields (N), folding the fields that hold nothing */
+  readonly emptyFields: Locator;
+  /** Technical details, folding the DN */
+  readonly technical: Locator;
   readonly dn: Locator;
   readonly copyButton: Locator;
   /** The plain message standing for a card that cannot be shown */
@@ -37,24 +48,74 @@ export class EntryPage {
     this.article = scope.getByRole('article');
     this.heading = this.article.getByRole('heading', { level: 2 });
     this.transitTag = this.heading.locator('.dc-tag-transit');
+    this.subtitle = this.article.locator('[data-subtitle]');
     this.backButton = scope.getByRole('button', { name: 'Back', exact: true });
     this.changeState = this.article.locator('[data-status]');
     this.statePanel = page.getByRole('dialog');
-    this.dn = this.article.locator('code').first();
+    this.moreButton = this.article.locator('[data-more]');
+    this.moreMenu = this.article.locator('[data-more-menu]');
+    this.emptyFields = this.article.locator('details[data-empty]');
+    this.technical = this.article.locator('details[data-technical]');
+    this.dn = this.technical.locator('code');
     this.copyButton = this.dn.locator('xpath=following-sibling::button[1]');
     this.notice = scope.locator('p.dc-empty');
   }
 
-  /** An action of the header: Edit, Delete, Hand over, Claim…, Reset password */
+  /**
+   * An action of the header — Edit, Claim…, Reset password, Change state… — or of its More
+   * menu — Hand over, Delete —, found whether the menu is open or not. Click it with `perform()`.
+   */
   action(name: string): Locator {
-    return this.article
-      .locator('.dc-detail-actions')
-      .getByRole('button', { name, exact: true });
+    const actions = this.article.locator('.dc-detail-actions');
+    return actions.getByRole('button', { name, exact: true }).or(
+      actions.getByRole('menuitem', {
+        name,
+        exact: true,
+        includeHidden: true,
+      })
+    );
   }
 
-  /** The buttons of the header, in order */
+  /** Clicks an action, opening the More menu first when it sits there */
+  async perform(name: string): Promise<void> {
+    const action = this.action(name);
+    await action.waitFor({ state: 'attached' });
+    if (
+      (await action.getAttribute('role')) === 'menuitem' &&
+      !(await action.isVisible())
+    )
+      await this.openMore();
+    await action.click();
+  }
+
+  /** Opens the More menu */
+  async openMore(): Promise<void> {
+    if ((await this.moreButton.getAttribute('aria-expanded')) !== 'true')
+      await this.moreButton.click();
+    await expect(this.moreMenu).toBeVisible();
+  }
+
+  /** The buttons of the header, in order, More included and its items left out */
   actions(): Locator {
     return this.article.locator('.dc-detail-actions').getByRole('button');
+  }
+
+  /** The items of the More menu, in order, whether it is open or not */
+  moreActions(): Locator {
+    return this.moreMenu.getByRole('menuitem', { includeHidden: true });
+  }
+
+  /** Opens "Show empty fields (N)", so that the empty fields can be read */
+  async showEmptyFields(): Promise<void> {
+    if ((await this.emptyFields.getAttribute('open')) === null)
+      await this.emptyFields.locator('summary').click();
+  }
+
+  /** Opens "Technical details", where the DN and its Copy button are */
+  async showTechnicalDetails(): Promise<void> {
+    if ((await this.technical.getAttribute('open')) === null)
+      await this.technical.locator('summary').click();
+    await expect(this.dn).toBeVisible();
   }
 
   /** The value of a field of Details, by its label */
@@ -65,9 +126,31 @@ export class EntryPage {
       .locator('xpath=following-sibling::dd[1]');
   }
 
-  /** The labels of Details, in order */
+  /**
+   * The label of a field folded under "Show empty fields", whether the fold is open or not: a
+   * field holding nothing is found there, and only there
+   */
+  emptyField(label: string): Locator {
+    return this.emptyFields.locator('dt').filter({ hasText: exactly(label) });
+  }
+
+  /** The labels of Details, in order, those folded away left out */
   detailLabels(): Locator {
     return this.article.getByRole('term');
+  }
+
+  /** The headings Details groups its fields under, in order, those folded away left out */
+  detailGroups(): Locator {
+    return this.article
+      .locator('.dc-detail-group h4')
+      .filter({ visible: true });
+  }
+
+  /** The card of the entry with this identifier, whatever its name */
+  async expectIdentifier(id: string): Promise<void> {
+    await expect(this.subtitle).toHaveText(
+      new RegExp(`^\\s*${escapeRegExp(id)}(\\s+·|\\s*$)`)
+    );
   }
 
   /** A related section (Mailing lists, Members, Attached entries), by its heading */
