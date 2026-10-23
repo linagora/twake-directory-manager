@@ -1094,6 +1094,11 @@
   background: color-mix(in srgb, var(--dc-accent) 18%, transparent);
 }
 
+.dc-relation-remove[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 0.5;
+}
+
 .dc-relation-remove:focus-visible {
   outline: none;
   box-shadow: var(--dc-focus);

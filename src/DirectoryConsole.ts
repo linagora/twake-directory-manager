@@ -319,11 +319,19 @@ export function transitState(
 }
 
 /**
- * Whether the caller may change one entry, as the server judges it: by the
- * organization the entry is attached to — what a local administrator
- * manages is the accounts and groups whose link names their branch,
- * wherever they are stored — or by its parent when it is attached to
- * nothing, as {@link transitState} judges an entry in transit.
+ * Whether the caller may change one entry, as the server judges it.
+ *
+ * ldap-rest judges a change on the organization the entry is attached to
+ * only when it filters entries by attachment — always under `authzLinid1`,
+ * under the other plugins only with `--authz-filter-attached-entries`, off
+ * by default — and on the entry's parent otherwise: `ou=groups` for every
+ * group. The scope does not say which, but a transit branch is named only
+ * where entries are judged by attachment. Without one, either is taken, so
+ * that nothing the server allows is hidden: what it refuses after all is
+ * said in the console's words.
+ *
+ * An entry in transit is judged as {@link transitState} judges it: a local
+ * administrator changes nothing in it before claiming it.
  *
  * @param scope what `GET /v1/authz/scope` answered
  * @param entity entity the entry belongs to
@@ -336,15 +344,18 @@ export function writesEntry(
   entry: Entry
 ): boolean {
   if (!scopeRestricts(scope)) return true;
+  const transit = transitState(scope, entity, entry);
+  if (transit.rights) return transit.rights.write;
+  const writes = (dn: string | undefined): boolean =>
+    !!dn &&
+    scope.branches.some(branch => branch.write && withinDn(dn, branch.dn));
   const raw = entity.organizationLink
     ? entryValue(entry, entity.organizationLink)
     : undefined;
   const link = String((Array.isArray(raw) ? raw[0] : raw) ?? '').trim();
-  const judged = link || parentOf(String(entry.dn ?? ''));
-  return (
-    !!judged &&
-    scope.branches.some(branch => branch.write && withinDn(judged, branch.dn))
-  );
+  const parent = parentOf(String(entry.dn ?? ''));
+  if (scope.transit) return writes(link || parent);
+  return writes(link) || writes(parent);
 }
 
 /**
@@ -1502,8 +1513,8 @@ export class DirectoryConsole {
               )
           : undefined,
       onLeaveGroup: groups
-        ? (dn: string): void =>
-            void this.leaveGroup(entry, detail.heading(), dn)
+        ? (dn: string): Promise<void> =>
+            this.leaveGroup(entry, detail.heading(), dn)
         : undefined,
     });
     detail.render(
@@ -1684,42 +1695,41 @@ export class DirectoryConsole {
    * @param held DN of the groups it is in already, not offered again
    */
   private addToGroups(entry: Entry, name: string, held: string[]): void {
-    const search = this.api.groupSearch(this.entities);
+    const holds = new Set(held.map(dn => comparableDn(dn)));
+    const search = this.api.groupSearch(
+      this.entities,
+      found =>
+        !holds.has(comparableDn(found.dn)) &&
+        this.writes(found.entity, found.entry)
+    );
     if (!search || !entry.dn) return;
     const member = String(entry.dn);
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    const holds = new Set(held.map(dn => comparableDn(dn)));
     const owners = new Map<string, EntityDescriptor>();
     const picker = new GroupPicker({
       translator: this.translator,
       search: async (query: string): Promise<GroupChoice[]> =>
-        (await search(query))
-          .filter(
-            found =>
-              !holds.has(comparableDn(found.dn)) &&
-              this.writes(found.entity, found.entry)
-          )
-          .map(found => {
-            owners.set(comparableDn(found.dn), found.entity);
-            const group = rdnValue(found.dn);
-            const mail = roleAttribute(found.entity.schema, 'primaryEmail');
-            const address = mail
-              ? [entryValue(found.entry, mail) ?? []].flat()[0]
-              : undefined;
-            return {
-              dn: found.dn,
-              name: group,
-              // sales-team — Shared mailbox — sales@example.com
-              label: [
-                group,
-                this.groupType(found.entity, found.entry),
-                address ? String(address) : '',
-              ]
-                .filter(Boolean)
-                .join(' — '),
-            };
-          }),
+        (await search(query)).map(found => {
+          owners.set(comparableDn(found.dn), found.entity);
+          const group = rdnValue(found.dn);
+          const mail = roleAttribute(found.entity.schema, 'primaryEmail');
+          const address = mail
+            ? [entryValue(found.entry, mail) ?? []].flat()[0]
+            : undefined;
+          return {
+            dn: found.dn,
+            name: group,
+            // sales-team — Shared mailbox — sales@example.com
+            label: [
+              group,
+              this.groupType(found.entity, found.entry),
+              address ? String(address) : '',
+            ]
+              .filter(Boolean)
+              .join(' — '),
+          };
+        }),
       onAdd: async (
         chosen: GroupChoice[]
       ): Promise<{ left: GroupChoice[]; error?: string }> => {
@@ -1732,6 +1742,8 @@ export class DirectoryConsole {
           try {
             await this.api.addMembers(owner, group.name, [member]);
             joined.push(group.name);
+            // Joined: no longer offered, as the server would refuse it twice.
+            holds.add(comparableDn(group.dn));
           } catch (err) {
             left.push(group);
             refused.push(this.refusal(err, owner, group.name).message);
@@ -1742,8 +1754,21 @@ export class DirectoryConsole {
         if (left.length === 0) {
           this.closePanel(true);
           await this.refreshCard('[data-add-groups]');
-        } else if (joined.length) await this.renderMain();
-        return { left, error: refused.join(' ') || undefined };
+        } else if (joined.length) {
+          await this.renderMain();
+          // The button the panel gives the focus back to was redrawn.
+          this.panelOpener =
+            this.main()?.querySelector<HTMLElement>('[data-add-groups]') ??
+            null;
+        }
+        // Several refused: each said with the group it is about.
+        const error =
+          refused.length > 1
+            ? refused
+                .map((message, index) => `${left[index].name}: ${message}`)
+                .join(' ')
+            : refused[0];
+        return { left, error };
       },
       onCancel: (): void => this.closePanel(),
     });

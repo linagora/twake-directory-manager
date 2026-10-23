@@ -129,11 +129,14 @@ export class GroupPicker {
       input.removeAttribute('aria-activedescendant');
       active = -1;
     };
+    // A note is no option: nothing in the list is active while it shows.
     const message = (text: string): void => {
       candidates = [];
-      results.innerHTML = `<li class="dc-picker-note">${escapeHtml(text)}</li>`;
+      active = -1;
+      results.innerHTML = `<li class="dc-picker-note" role="presentation">${escapeHtml(text)}</li>`;
       results.hidden = false;
       input.setAttribute('aria-expanded', 'true');
+      input.removeAttribute('aria-activedescendant');
     };
     const paint = (): void => {
       if (candidates.length === 0) return message(translator.t('list.noMatch'));
@@ -158,7 +161,16 @@ export class GroupPicker {
     };
     const held = (dn: string): boolean =>
       this.chosen.some(group => group.dn.toLowerCase() === dn.toLowerCase());
+    // A search waiting for its delay, or for its answer, is dropped: it would
+    // open the list again once a group is picked or the box left, and the
+    // next Enter would pick a group rather than add the chosen ones.
+    const drop = (): void => {
+      if (timer) clearTimeout(timer);
+      timer = undefined;
+      generation++;
+    };
     const choose = (candidate: GroupChoice): void => {
+      drop();
       if (!held(candidate.dn)) this.chosen.push(candidate);
       input.value = '';
       close();
@@ -199,7 +211,20 @@ export class GroupPicker {
       if (key === 'Escape') {
         // The suggestions close, not the panel.
         if (!results.hidden) event.preventDefault();
+        drop();
         close();
+        return;
+      }
+      // The arrow opens again the list Escape closed, as it opens a select.
+      const query = input.value.trim();
+      if (
+        key === 'ArrowDown' &&
+        results.hidden &&
+        query.length >= SEARCH_MINIMUM
+      ) {
+        event.preventDefault();
+        drop();
+        run(query, generation);
         return;
       }
       if (results.hidden || candidates.length === 0) {
@@ -228,7 +253,10 @@ export class GroupPicker {
       event.preventDefault();
       choose(candidates[Number(item.dataset.candidate)]);
     });
-    input.addEventListener('blur', close);
+    input.addEventListener('blur', () => {
+      drop();
+      close();
+    });
 
     tokens.addEventListener('click', event => {
       const button = (event.target as HTMLElement).closest<HTMLElement>(

@@ -27,6 +27,13 @@ import type { PointerLookup, PointerOption } from '../importer';
 
 /** A member found by searching, with its address when it has one. */
 type MemberOption = PointerOption & { token: string; mail?: string };
+
+/** A group found by searching, as read, with the entity it belongs to. */
+export interface GroupMatch {
+  entity: EntityDescriptor;
+  dn: string;
+  entry: Entry;
+}
 import {
   comparableDn,
   entryValue,
@@ -1528,17 +1535,20 @@ export class ConsoleApiClient {
    * card says each group's type and address and keeps the groups the
    * caller may not write out of the offer.
    *
+   * The groups not to offer are left out before the answer is cut to its
+   * length, not after: cut first, a search whose first answers were all
+   * groups the caller may not write offered nothing, however many others
+   * it matched. The server is asked for more than are offered for that.
+   *
    * @param entities entities the console knows: the groups among them are
    *   searched
+   * @param keep whether a group found may be offered
    * @returns a search, or undefined when the console knows no group
    */
   groupSearch(
-    entities: EntityDescriptor[]
-  ):
-    | ((
-        query: string
-      ) => Promise<{ entity: EntityDescriptor; dn: string; entry: Entry }[]>)
-    | undefined {
+    entities: EntityDescriptor[],
+    keep: (found: GroupMatch) => boolean = () => true
+  ): ((query: string) => Promise<GroupMatch[]>) | undefined {
     const searched = entities.filter(
       entity =>
         entity.kind === 'group' && roleAttribute(entity.schema, 'members')
@@ -1554,22 +1564,20 @@ export class ConsoleApiClient {
             entity,
             query,
             scope,
-            POINTER_SEARCH_LIMIT
+            POINTER_LOOKUP_LIMIT
           );
           // A group answered without its DN cannot be told apart from the
           // account's own groups, nor written to by name.
           return Object.values(entries)
             .filter(entry => entry.dn)
-            .slice(0, POINTER_SEARCH_LIMIT)
-            .map(entry => ({ entity, dn: String(entry.dn), entry }));
+            .map(entry => ({ entity, dn: String(entry.dn), entry }))
+            .filter(keep)
+            .slice(0, POINTER_SEARCH_LIMIT);
         })
       );
       const answered = found.filter(
-        (
-          result
-        ): result is PromiseFulfilledResult<
-          { entity: EntityDescriptor; dn: string; entry: Entry }[]
-        > => result.status === 'fulfilled'
+        (result): result is PromiseFulfilledResult<GroupMatch[]> =>
+          result.status === 'fulfilled'
       );
       if (answered.length === 0)
         throw (found[0] as PromiseRejectedResult).reason;

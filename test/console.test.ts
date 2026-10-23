@@ -514,6 +514,49 @@ describe('Directory console', () => {
         .true;
     });
 
+    it('should judge an entry in transit as transitState does', () => {
+      // A group attached to the transit branch is nobody's until claimed.
+      const inTransit: Entry = {
+        dn: 'cn=team,ou=groups,dc=example,dc=com',
+        twakeDepartmentLink: transit,
+      };
+      expect(writesEntry(scope(), linkedGroups, inTransit)).to.be.false;
+      const keeper = scope({ branches: [{ dn: top, write: true }] });
+      expect(writesEntry(keeper, linkedGroups, inTransit)).to.be.true;
+    });
+
+    it('should take the organization or the parent when the server names no transit branch', () => {
+      // ldap-rest then may judge by the parent, `ou=groups` for every group:
+      // either is enough not to hide what the server allows.
+      const noTransit = (branch: string): Scope =>
+        scope({ transit: null, branches: [{ dn: branch, write: true }] });
+      const team: Entry = {
+        dn: 'cn=team,ou=groups,dc=example,dc=com',
+        twakeDepartmentLink: sales,
+      };
+      expect(writesEntry(noTransit(sales), linkedGroups, team)).to.be.true;
+      expect(
+        writesEntry(
+          noTransit('ou=groups,dc=example,dc=com'),
+          linkedGroups,
+          team
+        )
+      ).to.be.true;
+      expect(
+        writesEntry(noTransit(`ou=Engineering,${top}`), linkedGroups, team)
+      ).to.be.false;
+      // With one, the organization alone decides.
+      expect(
+        writesEntry(
+          scope({
+            branches: [{ dn: 'ou=groups,dc=example,dc=com', write: true }],
+          }),
+          linkedGroups,
+          team
+        )
+      ).to.be.false;
+    });
+
     it('should say nothing of transit when the server names no transit branch', () => {
       // `transit: null` is also what a server not judging by attachment
       // answers, where nobody may claim an entry attached to nothing.
@@ -3494,10 +3537,17 @@ describe('Directory console', () => {
           .get('/api/v1/ldap/groups')
           .query(true)
           .reply(200, {
+            // More groups Sophie may not write than are offered, answered
+            // first: left out before the answer is cut, not after.
+            ...Object.fromEntries(
+              Array.from({ length: 25 }, (_, index) => [
+                `eng-${index}`,
+                group(`eng-${index}`, engineering),
+              ])
+            ),
             'sales-team': salesTeam,
             'sales-fr': other,
             engineering: engineers,
-            'eng-guild': group('eng-guild', engineering),
           });
         let picker: { options: { search(query: string): Promise<unknown> } } =
           undefined as never;
@@ -3558,6 +3608,7 @@ describe('Directory console', () => {
         });
         const fr = group('sales-fr', `ou=France,${sales}`);
         const de = group('sales-de', `ou=Germany,${sales}`);
+        const uk = group('sales-uk', `ou=UK,${sales}`);
         try {
           (
             app as unknown as {
@@ -3570,7 +3621,7 @@ describe('Directory console', () => {
         nock(baseUrl)
           .get('/api/v1/ldap/groups')
           .query(true)
-          .reply(200, { 'sales-fr': fr, 'sales-de': de });
+          .reply(200, { 'sales-fr': fr, 'sales-de': de, 'sales-uk': uk });
         const offered = (await picker.options.search('sales')) as {
           dn: string;
           name: string;
@@ -3579,17 +3630,33 @@ describe('Directory console', () => {
         const added = nock(baseUrl)
           .post('/api/v1/ldap/groups/sales-fr/members', { member: [john] })
           .reply(200, {});
-        nock(baseUrl).post('/api/v1/ldap/groups/sales-de/members').reply(403, {
-          error: 'Token does not have permission on this branch',
-          code: 'forbidden',
-        });
+        for (const refused of ['sales-de', 'sales-uk'])
+          nock(baseUrl)
+            .post(`/api/v1/ldap/groups/${refused}/members`)
+            .reply(403, {
+              error: 'Token does not have permission on this branch',
+              code: 'forbidden',
+            });
         const result = await picker.options.onAdd(offered);
         expect(added.isDone()).to.equal(true);
         expect(toast.textContent).to.equal('John Doe added to sales-fr');
-        expect(result.left).to.deep.equal([offered[1]]);
+        expect(result.left).to.deep.equal([offered[1], offered[2]]);
+        // Each refusal said with its group, when there are several.
         expect(result.error).to.equal(
-          'You do not administer sales-de: this change is not yours to make.'
+          'sales-de: You do not administer sales-de: this change is not yours to make. ' +
+            'sales-uk: You do not administer sales-uk: this change is not yours to make.'
         );
+
+        // A group joined is not offered again: the server would refuse it.
+        nock(baseUrl)
+          .get('/api/v1/ldap/groups')
+          .query(true)
+          .reply(200, { 'sales-fr': fr, 'sales-de': de, 'sales-uk': uk });
+        expect(
+          ((await picker.options.search('sales')) as { name: string }[]).map(
+            found => found.name
+          )
+        ).to.deep.equal(['sales-de', 'sales-uk']);
       });
 
       it('should take the account out of a group in one click, and say so', async () => {

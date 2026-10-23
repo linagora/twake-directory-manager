@@ -124,8 +124,11 @@ export interface DetailOptions {
   onOpenRelation?(id: string): void;
   /** Add the account to groups, when the caller may write it */
   onAddToGroups?(): void;
-  /** Take the account out of one of its groups, offered where `removable` */
-  onLeaveGroup?(id: string): void;
+  /**
+   * Take the account out of one of its groups, offered where `removable`;
+   * settled once the server has answered
+   */
+  onLeaveGroup?(id: string): Promise<void> | void;
 }
 
 /** Read an entry value as a list of display strings. */
@@ -631,8 +634,15 @@ export class EntityDetail {
     for (const button of Array.from(
       container.querySelectorAll<HTMLElement>('[data-leave]')
     )) {
+      // Inert while the server answers: a second click asked it again, and
+      // was refused for a member already gone. `aria-disabled` rather than
+      // `disabled`, which would throw the keyboard's focus off the button.
       button.addEventListener('click', () => {
-        this.options.onLeaveGroup?.(button.dataset.leave as string);
+        if (button.getAttribute('aria-disabled') === 'true') return;
+        button.setAttribute('aria-disabled', 'true');
+        void Promise.resolve(
+          this.options.onLeaveGroup?.(button.dataset.leave as string)
+        ).finally(() => button.removeAttribute('aria-disabled'));
       });
     }
   }
