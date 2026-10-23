@@ -1239,6 +1239,14 @@
   padding: 8px;
 }
 
+/* Below a filter's matches, when the server kept only the first ones. */
+.dc-tree-cut {
+  margin: 0;
+  padding: 8px 16px 16px;
+  font-size: 12px;
+  color: var(--dc-muted);
+}
+
 .dc-tree-row {
   display: flex;
   align-items: center;

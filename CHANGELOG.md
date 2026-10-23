@@ -43,9 +43,10 @@ Built on ldap-rest 0.25.1.
 - The Organizations _Filter_ searches the whole tree, not only the branches
   opened, and lists what it finds by path (_Sales / France_); choosing one
   opens the tree down to it and shows its card. A server that searches the
-  tree is asked once per filter; otherwise, where the tree is too wide to be
-  read whole, or could not be read, the filter says it found nothing _among
-  the opened branches_. Selecting an organization also opens its branch, its
+  tree is asked once per filter, and when it keeps only the first matches the
+  list ends with _First 50 matches — type more to narrow_; otherwise, where
+  the tree is too wide to be read whole, or could not be read, the filter
+  says it found nothing _among the opened branches_. Selecting an organization also opens its branch, its
   card offers _New organization here_ beside _Edit_, and the selected row
   keeps its "+" in view. An organization with no sub-organization is not
   announced as expanded, and a branch whose sub-organizations could not be

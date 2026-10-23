@@ -41,14 +41,12 @@ export interface TreeOptions {
   everywhere?(): Promise<OrganizationIndex>;
   /**
    * The organizations under the root of the tree whose name or path holds a
-   * text, as the server searches them in one request. Asked instead of
+   * text, as the server searches them in one request, and whether it kept
+   * only the first of a broad match. Asked instead of
    * {@link everywhere} when given: walking a wide tree costs a request per
    * organization, and stops before the end of it
    */
-  search?(
-    query: string,
-    root: string
-  ): Promise<{ dn: string; label: string }[]>;
+  search?(query: string, root: string): Promise<OrganizationMatches>;
 }
 
 /** The organizations a walk of the tree found, labelled by their path. */
@@ -58,11 +56,20 @@ export interface OrganizationIndex {
   partial: boolean;
 }
 
+/** The organizations a search of the tree found, labelled by their path. */
+export interface OrganizationMatches {
+  organizations: { dn: string; label: string }[];
+  /** Whether only the first matches were kept, the others left out */
+  truncated: boolean;
+}
+
 /** What the whole tree answers a filter: what matches, and how sure it is. */
 interface WholeTreeMatches {
   found: { dn: string; label: string }[];
   /** Whether organizations were left unread, a match among them unknown */
   partial: boolean;
+  /** Whether more matched than are listed */
+  truncated: boolean;
 }
 
 /**
@@ -99,8 +106,7 @@ export class OrganizationTree {
    * when it failed, the filter then searching the opened branches
    */
   private searched:
-    | { query: string; found: { dn: string; label: string }[] | null }
-    | undefined;
+    { query: string; found: OrganizationMatches | null } | undefined;
   /** The text a search is waiting for, or under way for */
   private searching: string | null = null;
   private searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -331,7 +337,14 @@ export class OrganizationTree {
       // be saying it of the branches opened only.
       list.innerHTML = loading;
     } else if (whole) {
-      const { found } = whole;
+      const { found, truncated } = whole;
+      // The matches kept are the first the server found, not the first in
+      // reading order: sorted, they would pass for every one there is.
+      const cut = truncated
+        ? `<p class="dc-tree-cut">${escapeHtml(
+            translator.t('tree.firstMatches', { count: found.length })
+          )}</p>`
+        : '';
       list.innerHTML = found.length
         ? `<ul class="dc-tree-list dc-tree-found">${found
             .map(
@@ -346,7 +359,7 @@ export class OrganizationTree {
               </div>
             </li>`
             )
-            .join('')}</ul>`
+            .join('')}</ul>${cut}`
         : // Organizations left unread may hold one: absence is not proven.
           none(whole.partial ? 'tree.noMatchOpened' : 'tree.noMatch');
     } else {
@@ -385,7 +398,13 @@ export class OrganizationTree {
         return undefined;
       }
       const { found } = this.searched;
-      return found ? { found: this.sorted(found), partial: false } : null;
+      return found
+        ? {
+            found: this.sorted(found.organizations),
+            partial: false,
+            truncated: found.truncated,
+          }
+        : null;
     }
     if (this.index === undefined) {
       void this.loadIndex();
@@ -393,7 +412,12 @@ export class OrganizationTree {
     }
     if (this.index === null) return null;
     const { organizations, partial } = this.index;
-    if (!partial) return { found: this.matching(organizations), partial };
+    if (!partial)
+      return {
+        found: this.matching(organizations),
+        partial,
+        truncated: false,
+      };
     const known = new Map(
       organizations.map(option => [comparableDn(option.dn), option])
     );
@@ -404,7 +428,11 @@ export class OrganizationTree {
       for (const child of node.children || []) opened(child);
     };
     if (this.tree) opened(this.tree);
-    return { found: this.matching([...known.values()]), partial };
+    return {
+      found: this.matching([...known.values()]),
+      partial,
+      truncated: false,
+    };
   }
 
   /**
@@ -429,9 +457,12 @@ export class OrganizationTree {
     root: string,
     ticket: number
   ): Promise<void> {
-    let found: { dn: string; label: string }[] | null;
+    let found: OrganizationMatches | null;
     try {
-      found = (await this.options.search?.(query, root)) ?? [];
+      found = (await this.options.search?.(query, root)) ?? {
+        organizations: [],
+        truncated: false,
+      };
     } catch {
       found = null;
     }
