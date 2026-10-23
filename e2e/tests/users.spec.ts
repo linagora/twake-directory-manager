@@ -1143,6 +1143,26 @@ test.describe('USER user accounts', () => {
     await expect(dialog.option(shared.cn)).toHaveText(
       `${shared.cn} — Shared mailbox — ${prefix}@example.com`
     );
+    // the arrows walk the suggestions, round, the active one in view
+    await expect(dialog.options).toHaveCount(2);
+    const [first, second] = [dialog.options.nth(0), dialog.options.nth(1)];
+    await expect(first).toHaveAttribute('aria-selected', 'true');
+    await dialog.search.press('ArrowDown');
+    await expect(second).toHaveAttribute('aria-selected', 'true');
+    await expect(first).toHaveAttribute('aria-selected', 'false');
+    await expect(dialog.search).toHaveAttribute(
+      'aria-activedescendant',
+      (await second.getAttribute('id')) as string
+    );
+    await expect(second).toBeInViewport();
+    await dialog.search.press('ArrowDown');
+    await expect(first).toHaveAttribute('aria-selected', 'true');
+    await dialog.search.press('ArrowUp');
+    await expect(second).toHaveAttribute('aria-selected', 'true');
+    await expect(dialog.search).toHaveAttribute(
+      'aria-activedescendant',
+      (await second.getAttribute('id')) as string
+    );
     await dialog.option(shared.cn).click();
     await expect(dialog.chosen).toHaveCount(1);
     await expect(dialog.chosen).toContainText(shared.cn);

@@ -153,11 +153,13 @@ export class GroupPicker {
         .join('');
       results.hidden = false;
       input.setAttribute('aria-expanded', 'true');
-      if (active >= 0)
-        input.setAttribute(
-          'aria-activedescendant',
-          `dc-group-option-${active}`
-        );
+      if (active < 0) return;
+      input.setAttribute('aria-activedescendant', `dc-group-option-${active}`);
+      // The arrows walk past what the list shows: the option they reach is
+      // brought into it.
+      results
+        .querySelector<HTMLElement>(`#dc-group-option-${active}`)
+        ?.scrollIntoView?.({ block: 'nearest' });
     };
     const held = (dn: string): boolean =>
       this.chosen.some(group => group.dn.toLowerCase() === dn.toLowerCase());
@@ -203,6 +205,10 @@ export class GroupPicker {
           message(translator.t('list.searchGuard', { count: SEARCH_MINIMUM }));
         return;
       }
+      // The suggestions of the text typed before go at once: until the new
+      // search answers, Enter or a click would pick a group the box no
+      // longer names.
+      message(translator.t('form.searching'));
       timer = setTimeout(() => run(query, ticket), SEARCH_DELAY);
     });
 
