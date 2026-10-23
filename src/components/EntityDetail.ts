@@ -108,13 +108,24 @@ export interface DetailOptions {
     title: string;
     /** Attribute the list came from, so the card does not repeat it */
     attribute?: string;
-    items: { id: string; label: string }[];
+    items: {
+      id: string;
+      label: string;
+      /** Said after the name, muted: a group's type */
+      note?: string;
+      /** The caller may take the entry out of it: a group they write */
+      removable?: boolean;
+    }[];
     /** The server listed only some of them */
     truncated?: boolean;
     /** How many it left out, when it counted them */
     more?: number;
   };
   onOpenRelation?(id: string): void;
+  /** Add the account to groups, when the caller may write it */
+  onAddToGroups?(): void;
+  /** Take the account out of one of its groups, offered where `removable` */
+  onLeaveGroup?(id: string): void;
 }
 
 /** Read an entry value as a list of display strings. */
@@ -487,26 +498,63 @@ export class EntityDetail {
     )}</button>`;
   }
 
+  /**
+   * The related entries. An account's groups are managed from here too: Add
+   * to a group… beside the heading, and a × on each group the caller may
+   * take the account out of, where it took a trip to each group's form.
+   */
   private relationsMarkup(): string {
-    const { relations, translator } = this.options;
+    const { relations, translator, onAddToGroups } = this.options;
     if (!relations) return '';
     return `
       <section class="dc-card">
-        <h3>${escapeHtml(relations.title)}</h3>
+        <div class="dc-card-heading">
+          <h3>${escapeHtml(relations.title)}</h3>
+          ${
+            onAddToGroups
+              ? `<button type="button" class="dc-button" data-add-groups>${escapeHtml(
+                  translator.t('groups.add')
+                )}</button>`
+              : ''
+          }
+        </div>
         ${
           relations.items.length === 0
             ? `<p class="dc-muted">${escapeHtml(translator.t('detail.emptyRelations'))}</p>`
             : `<ul class="dc-relations">${relations.items
-                .map(
-                  item =>
-                    `<li><button type="button" class="dc-link" data-relation="${escapeHtml(
-                      item.id
-                    )}">${escapeHtml(item.label)}</button></li>`
-                )
+                .map(item => this.relationMarkup(item))
                 .join('')}</ul>`
         }
         ${this.moreMarkup()}
       </section>`;
+  }
+
+  /** One related entry: a link to it, its type, and its × when it has one. */
+  private relationMarkup(item: {
+    id: string;
+    label: string;
+    note?: string;
+    removable?: boolean;
+  }): string {
+    const { translator, onLeaveGroup } = this.options;
+    const link = `<button type="button" class="dc-link" data-relation="${escapeHtml(
+      item.id
+    )}">${escapeHtml(item.label)}</button>`;
+    const removable = item.removable && onLeaveGroup;
+    if (!item.note && !removable) return `<li>${link}</li>`;
+    return `<li class="dc-relation">${link}${
+      item.note
+        ? `<span class="dc-relation-note">· ${escapeHtml(item.note)}</span>`
+        : ''
+    }${
+      removable
+        ? `<button type="button" class="dc-relation-remove" data-leave="${escapeHtml(
+            item.id
+          )}" aria-label="${escapeHtml(
+            translator.t('groups.remove', { group: item.label })
+          )}">×</button>`
+        : ''
+    }</li>`;
   }
 
   /**
@@ -575,6 +623,16 @@ export class EntityDetail {
     )) {
       button.addEventListener('click', () => {
         this.options.onOpenRelation?.(button.dataset.relation as string);
+      });
+    }
+    container
+      .querySelector('[data-add-groups]')
+      ?.addEventListener('click', () => this.options.onAddToGroups?.());
+    for (const button of Array.from(
+      container.querySelectorAll<HTMLElement>('[data-leave]')
+    )) {
+      button.addEventListener('click', () => {
+        this.options.onLeaveGroup?.(button.dataset.leave as string);
       });
     }
   }

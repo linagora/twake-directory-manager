@@ -1522,6 +1522,62 @@ export class ConsoleApiClient {
   }
 
   /**
+   * A search for the groups an account may be added to, for its card to
+   * offer as the operator types: the pointer search of the groups' branch,
+   * answering the entries themselves rather than their names, since the
+   * card says each group's type and address and keeps the groups the
+   * caller may not write out of the offer.
+   *
+   * @param entities entities the console knows: the groups among them are
+   *   searched
+   * @returns a search, or undefined when the console knows no group
+   */
+  groupSearch(
+    entities: EntityDescriptor[]
+  ):
+    | ((
+        query: string
+      ) => Promise<{ entity: EntityDescriptor; dn: string; entry: Entry }[]>)
+    | undefined {
+    const searched = entities.filter(
+      entity =>
+        entity.kind === 'group' && roleAttribute(entity.schema, 'members')
+    );
+    if (searched.length === 0) return undefined;
+    return async query => {
+      const found = await Promise.allSettled(
+        searched.map(async entity => {
+          const scope = searchableAttributes(entity)
+            .map(([name]) => name)
+            .join(',');
+          const entries = await this.list(
+            entity,
+            query,
+            scope,
+            POINTER_SEARCH_LIMIT
+          );
+          // A group answered without its DN cannot be told apart from the
+          // account's own groups, nor written to by name.
+          return Object.values(entries)
+            .filter(entry => entry.dn)
+            .slice(0, POINTER_SEARCH_LIMIT)
+            .map(entry => ({ entity, dn: String(entry.dn), entry }));
+        })
+      );
+      const answered = found.filter(
+        (
+          result
+        ): result is PromiseFulfilledResult<
+          { entity: EntityDescriptor; dn: string; entry: Entry }[]
+        > => result.status === 'fulfilled'
+      );
+      if (answered.length === 0)
+        throw (found[0] as PromiseRejectedResult).reason;
+      return answered.flatMap(result => result.value);
+    };
+  }
+
+  /**
    * The mail domains and the organizations' links to them, for one form:
    * see `MailDomains`. Each is read when first asked for and kept for as
    * long as the form is open, so that every "@" the operator types costs no

@@ -81,10 +81,12 @@ Filled automatically, and shown on the card only:
   the :guilabel:`Email` field as soon as the address is complete;
 - the :guilabel:`Department path`;
 - the :guilabel:`Status`, ``Active`` on creation;
-- the :guilabel:`Mailing lists` the account belongs to: read from
-  ``memberOf`` when the directory maintains it (OpenLDAP's ``memberof``
+- the :guilabel:`Groups` the account belongs to, each with its type: read
+  from ``memberOf`` when the directory maintains it (OpenLDAP's ``memberof``
   overlay), otherwise searched among the groups whose ``member`` holds the
-  account's DN (this needs ldap-rest 0.20.1).
+  account's DN (this needs ldap-rest 0.20.1). :guilabel:`Add to a group…` and
+  the × after each group change them from the card (see
+  :doc:`groups`).
 
 .. note::
 

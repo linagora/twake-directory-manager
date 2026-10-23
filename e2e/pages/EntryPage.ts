@@ -14,8 +14,9 @@ export function exactly(text: string): RegExp {
  * entry. Its header holds the name (an account's full name), the "In transit" tag, the identifier
  * and the address under the name, and the actions — Hand over and Delete in a **More** menu;
  * **Details** lists the fields as description lists under headings, the empty ones folded under
- * "Show empty fields (N)" and the DN under "Technical details"; a related section (Mailing lists,
- * Members, Attached entries) lists links to other cards.
+ * "Show empty fields (N)" and the DN under "Technical details"; a related section (Groups, Members,
+ * Attached entries) lists links to other cards. An account's Groups says each group's type, and
+ * offers Add to a group… and a × on each group the administrator writes.
  */
 export class EntryPage {
   readonly page: Page;
@@ -153,16 +154,39 @@ export class EntryPage {
     );
   }
 
-  /** A related section (Mailing lists, Members, Attached entries), by its heading */
+  /** A related section (Groups, Members, Attached entries), by its heading */
   related(heading: string): Locator {
     return this.article.locator('section').filter({
       has: this.page.getByRole('heading', { name: heading, exact: true }),
     });
   }
 
-  /** The links of a related section */
+  /** The entries of a related section, a group with its type and its × */
   relatedItems(heading: string): Locator {
     return this.related(heading).getByRole('listitem');
+  }
+
+  /** The names of a related section's entries, each a link to its card */
+  relatedLinks(heading: string): Locator {
+    return this.related(heading).locator('[data-relation]');
+  }
+
+  /** The type said after each group of an account's Groups: "· Shared mailbox" */
+  groupTypes(heading = 'Groups'): Locator {
+    return this.related(heading).locator('.dc-relation-note');
+  }
+
+  /** Add to a group…, beside the heading of an account's Groups */
+  addToGroup(): Locator {
+    return this.article.locator('[data-add-groups]');
+  }
+
+  /** The × taking the account out of a group, named "Remove from {group}" */
+  leaveGroup(group: string): Locator {
+    return this.article.getByRole('button', {
+      name: `Remove from ${group}`,
+      exact: true,
+    });
   }
 
   async expectName(name: string): Promise<void> {

@@ -60,6 +60,13 @@ Built on ldap-rest 0.25.0.
   _Show empty fields (N)_ and the DN under _Technical details_; a mailbox
   size no unit says exactly reads _1.07 GB_, the bytes in its tooltip. _Edit_
   comes first, and _Hand over_ and _Delete_ moved to a _More_ menu (#133)
+- An account's groups are managed from its card. The section reads _Groups_
+  rather than _Mailing lists_, and says each group's type: _sales-team ·
+  Shared mailbox_. _Add to a group…_ opens a panel searching the groups the
+  administrator may write, by name, type and address; the groups chosen are
+  joined at once, a refused one staying in the panel with why. A × on each
+  group the administrator may write takes the account out of it in one click
+  (#129)
 
 ## v0.10.2 (2026-10-23)
 

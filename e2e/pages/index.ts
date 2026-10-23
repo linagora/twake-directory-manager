@@ -1,5 +1,10 @@
 export { ConsolePage } from './ConsolePage';
-export { ClaimDialog, ConfirmDialog, ResetPasswordDialog } from './dialogs';
+export {
+  AddToGroupsDialog,
+  ClaimDialog,
+  ConfirmDialog,
+  ResetPasswordDialog,
+} from './dialogs';
 export { EntryPage, exactly } from './EntryPage';
 export { FormPanel } from './FormPanel';
 export { csv, ImportPanel, readDownload } from './ImportPanel';

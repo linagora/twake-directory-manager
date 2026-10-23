@@ -25,6 +25,7 @@ import {
   scopeRestricts,
   splitEntities,
   transitState,
+  writesEntry,
 } from '../src/DirectoryConsole';
 import {
   attributeLabel,
@@ -38,6 +39,7 @@ import {
 import { EntityDetail } from '../src/components/EntityDetail';
 import { EntityForm, pointerFallback } from '../src/components/EntityForm';
 import { EntityImport } from '../src/components/EntityImport';
+import { GroupPicker } from '../src/components/GroupPicker';
 import {
   EntityList,
   LIST_LIMIT,
@@ -487,6 +489,29 @@ describe('Directory console', () => {
         write: true,
         delete: true,
       });
+    });
+
+    it('should judge whether the caller writes an entry by its organization, else by its parent', () => {
+      // sales-team is Sophie's, engineering is not: only the first is offered
+      // on an account's card, and has a × there.
+      const group = (link?: string): Entry => ({
+        dn: 'cn=team,ou=groups,dc=example,dc=com',
+        cn: 'team',
+        ...(link ? { twakeDepartmentLink: link } : {}),
+      });
+      expect(writesEntry(scope(), linkedGroups, group(`ou=EU,${sales}`))).to.be
+        .true;
+      expect(writesEntry(scope(), linkedGroups, group(`ou=Engineering,${top}`)))
+        .to.be.false;
+      expect(writesEntry(scope(), linkedGroups, group())).to.be.false;
+      const groupsAdmin = scope({
+        branches: [{ dn: 'ou=groups,dc=example,dc=com', write: true }],
+      });
+      expect(writesEntry(groupsAdmin, groups, group(sales))).to.be.true;
+      const reader = scope({ branches: [{ dn: sales, read: true }] });
+      expect(writesEntry(reader, linkedGroups, group(sales))).to.be.false;
+      expect(writesEntry(scope({ unrestricted: true }), users, account())).to.be
+        .true;
     });
 
     it('should say nothing of transit when the server names no transit branch', () => {
@@ -3259,7 +3284,7 @@ describe('Directory console', () => {
     });
   });
 
-  describe('an account’s mailing lists', () => {
+  describe('an account’s groups', () => {
     const john = 'uid=john.doe,ou=users,dc=example,dc=com';
     const accounts: EntityDescriptor = {
       ...users,
@@ -3324,7 +3349,7 @@ describe('Directory console', () => {
         });
         await render();
         expect(asked.isDone()).to.equal(true);
-        expect(detail.innerHTML).to.include('Mailing lists');
+        expect(detail.innerHTML).to.include('<h3>Groups</h3>');
         expect(detail.innerHTML).to.include(
           `data-relation="${staff.dn}">staff<`
         );
@@ -3343,12 +3368,12 @@ describe('Directory console', () => {
       expect(detail.innerHTML).to.include(`data-relation="${staff.dn}">staff<`);
     });
 
-    it('should show the card, with no mailing list, when the search is refused', async () => {
+    it('should show the card, with no group, when the search is refused', async () => {
       // ldap-rest before 0.20.1 refuses a dot in the filter.
       search().reply(400, { error: 'Invalid match query' });
       const { detail, render } = setup({ dn: john, uid: 'john.doe' });
       await render();
-      expect(detail.innerHTML).to.include('Mailing lists');
+      expect(detail.innerHTML).to.include('<h3>Groups</h3>');
       expect(detail.innerHTML).to.include('No related entry');
     });
 
@@ -3367,6 +3392,224 @@ describe('Directory console', () => {
       answer([staff.dn as string]);
       await drawn;
       expect(detail.innerHTML).to.equal('');
+    });
+
+    describe('managed from the card', () => {
+      const top = 'ou=organization,dc=example,dc=com';
+      const sales = `ou=Sales,${top}`;
+      const engineering = `ou=Engineering,${top}`;
+      const typedGroups: EntityDescriptor = {
+        ...twakeGroups,
+        schema: {
+          attributes: {
+            ...twakeGroups.schema.attributes,
+            mail: { type: 'string', role: 'primaryEmail' },
+            twakeMailboxType: {
+              type: 'pointer',
+              role: 'mailboxType',
+              branch: [mailboxTypes.base as string],
+            },
+          },
+        },
+      };
+      const group = (cn: string, link: string, type = 'group'): Entry => ({
+        dn: `cn=${cn},ou=groups,dc=example,dc=com`,
+        cn,
+        mail: `${cn}@example.com`,
+        twakeMailboxType: `cn=${type},${mailboxTypes.base}`,
+        twakeDepartmentLink: link,
+      });
+      const salesTeam = group('sales-team', sales, 'teamMailbox');
+      const engineers = group('engineering', engineering);
+      /** Sophie, local administrator of Sales. */
+      const sophie: Scope = {
+        user: 'uid=sophie.martin,ou=users,dc=example,dc=com',
+        unrestricted: false,
+        described: true,
+        branches: [{ dn: sales, read: true, write: true, delete: true }],
+        entities: [],
+      };
+      const card = (scope: Scope | null, link = sales) => {
+        const { app, detail, render } = setup({
+          dn: john,
+          uid: 'john.doe',
+          twakeDepartmentLink: link,
+          memberOf: [salesTeam.dn as string, engineers.dn as string],
+        });
+        Object.assign(app as unknown as object, {
+          scope,
+          entities: [accounts, typedGroups, mailboxTypes],
+        });
+        const account = (
+          app as unknown as {
+            api: { get(entity: EntityDescriptor, id: string): unknown };
+          }
+        ).api;
+        const read = account.get;
+        account.get = async (entity: EntityDescriptor, id: string) =>
+          entity === typedGroups
+            ? [salesTeam, engineers].find(item => item.cn === id)
+            : read(entity, id);
+        return { app, detail, render };
+      };
+
+      it('should say each group’s type, and offer Add to a group… and a × on each', async () => {
+        const { detail, render } = card(null);
+        await render();
+        expect(detail.innerHTML)
+          .to.include('<h3>Groups</h3>')
+          .and.include('data-add-groups>Add to a group…</button>')
+          .and.include(
+            `data-relation="${salesTeam.dn}">sales-team</button><span class="dc-relation-note">· Shared mailbox</span>`
+          )
+          .and.include('aria-label="Remove from sales-team"')
+          .and.include('aria-label="Remove from engineering"');
+        // memberOf is the section, not a field of Details as well.
+        expect(detail.innerHTML).to.not.include('<dt>Mailing lists</dt>');
+      });
+
+      it('should offer a × only on the groups a local administrator writes', async () => {
+        const { detail, render } = card(sophie);
+        await render();
+        expect(detail.innerHTML)
+          .to.include('data-add-groups')
+          .and.include('aria-label="Remove from sales-team"')
+          .and.not.include('aria-label="Remove from engineering"');
+        // Still listed, with its type: only the × goes.
+        expect(detail.innerHTML).to.include(
+          `data-relation="${engineers.dn}">engineering</button><span class="dc-relation-note">· Group</span></li>`
+        );
+      });
+
+      it('should not offer Add to a group… on an account the caller does not write', async () => {
+        const { detail, render } = card(sophie, engineering);
+        await render();
+        expect(detail.innerHTML).to.not.include('data-add-groups');
+      });
+
+      it('should offer only the groups the caller writes and the account is not in', async () => {
+        const { app } = card(sophie);
+        const other = group('sales-fr', `ou=France,${sales}`);
+        nock(baseUrl)
+          .get('/api/v1/ldap/groups')
+          .query(true)
+          .reply(200, {
+            'sales-team': salesTeam,
+            'sales-fr': other,
+            engineering: engineers,
+            'eng-guild': group('eng-guild', engineering),
+          });
+        let picker: { options: { search(query: string): Promise<unknown> } } =
+          undefined as never;
+        Object.assign(app as unknown as object, {
+          openPanel: (_title: string, build: (body: unknown) => void) => {
+            const body = stubContainer();
+            build(body);
+          },
+        });
+        const original = GroupPicker.prototype.render;
+        GroupPicker.prototype.render = function (this: GroupPicker) {
+          picker = this as unknown as typeof picker;
+        };
+        try {
+          (
+            app as unknown as {
+              addToGroups(entry: Entry, name: string, held: string[]): void;
+            }
+          ).addToGroups({ dn: john }, 'John Doe', [salesTeam.dn as string]);
+        } finally {
+          GroupPicker.prototype.render = original;
+        }
+        expect(await picker.options.search('sal')).to.deep.equal([
+          {
+            dn: other.dn,
+            name: 'sales-fr',
+            label: 'sales-fr — Group — sales-fr@example.com',
+          },
+        ]);
+      });
+
+      it('should add the account to each group chosen, and keep a refused one with why', async () => {
+        const toast = toastElement();
+        const { app } = card(sophie);
+        Object.assign(app as unknown as object, {
+          container: {
+            querySelector: (selector: string) =>
+              selector === '[data-toast]' ? toast : null,
+            querySelectorAll: () => [],
+          },
+          renderMain: async () => undefined,
+        });
+        let picker: {
+          options: {
+            search(query: string): Promise<unknown>;
+            onAdd(
+              groups: { dn: string; name: string; label: string }[]
+            ): Promise<{ left: unknown[]; error?: string }>;
+          };
+        } = undefined as never;
+        const original = GroupPicker.prototype.render;
+        GroupPicker.prototype.render = function (this: GroupPicker) {
+          picker = this as unknown as typeof picker;
+        };
+        Object.assign(app as unknown as object, {
+          openPanel: (_title: string, build: (body: unknown) => void) =>
+            build(stubContainer()),
+        });
+        const fr = group('sales-fr', `ou=France,${sales}`);
+        const de = group('sales-de', `ou=Germany,${sales}`);
+        try {
+          (
+            app as unknown as {
+              addToGroups(entry: Entry, name: string, held: string[]): void;
+            }
+          ).addToGroups({ dn: john }, 'John Doe', []);
+        } finally {
+          GroupPicker.prototype.render = original;
+        }
+        nock(baseUrl)
+          .get('/api/v1/ldap/groups')
+          .query(true)
+          .reply(200, { 'sales-fr': fr, 'sales-de': de });
+        const offered = (await picker.options.search('sales')) as {
+          dn: string;
+          name: string;
+          label: string;
+        }[];
+        const added = nock(baseUrl)
+          .post('/api/v1/ldap/groups/sales-fr/members', { member: [john] })
+          .reply(200, {});
+        nock(baseUrl).post('/api/v1/ldap/groups/sales-de/members').reply(403, {
+          error: 'Token does not have permission on this branch',
+          code: 'forbidden',
+        });
+        const result = await picker.options.onAdd(offered);
+        expect(added.isDone()).to.equal(true);
+        expect(toast.textContent).to.equal('John Doe added to sales-fr');
+        expect(result.left).to.deep.equal([offered[1]]);
+        expect(result.error).to.equal(
+          'You do not administer sales-de: this change is not yours to make.'
+        );
+      });
+
+      it('should take the account out of a group in one click, and say so', async () => {
+        const toast = toastElement();
+        const app = consoleIn({ '[data-toast]': toast }) as unknown as {
+          entities: EntityDescriptor[];
+          renderMain(): Promise<void>;
+          leaveGroup(entry: Entry, name: string, dn: string): Promise<void>;
+        };
+        app.entities = [accounts, typedGroups];
+        app.renderMain = async () => undefined;
+        const removed = nock(baseUrl)
+          .delete(
+            `/api/v1/ldap/groups/sales-team/members/${encodeURIComponent(john)}`
+          )
+          .reply(200, {});
+        await app.leaveGroup({ dn: john }, 'John Doe', salesTeam.dn as string);
+        expect(removed.isDone()).to.equal(true);
+        expect(toast.textContent).to.equal('John Doe removed from sales-team');
+      });
     });
   });
 
