@@ -113,7 +113,7 @@ Conventions).
 
 - [x] IMPORT-01 (P2) Import panel and empty template — `import.spec.ts`
 - [x] IMPORT-02 (P2) Column matching — `import.spec.ts`
-- [x] IMPORT-03 (P1) Check and import valid rows — `import.spec.ts`
+- [x] IMPORT-03 (P1) Check and import valid rows — `import.spec.ts` (the result names each created account, linked to its card; once closed, the list shows them as "Just imported (2)" until Back to search)
 - [x] IMPORT-04 (P2) Rows with errors and refused rows — `import.spec.ts` (a repeated address reads "is already on line N", the plan's "repeats line N" predates it; the address the server refuses is said in the console's words, on screen and in the refused rows file)
 - [x] IMPORT-05 (P2) Import respects the scope — `import.spec.ts`
 - [x] IMPORT-06 (P3) Stop an import — `import.spec.ts` (150 rows)

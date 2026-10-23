@@ -1382,6 +1382,7 @@ export class DirectoryConsole {
       load: listLoader(this.api, entity),
       canDelete: this.canDelete(),
       pointerLabel: named,
+      read: (id: string): Promise<Entry> => this.api.get(entity, id),
       onOpen: (id: string): void =>
         this.go(`${entity.key}/${encodeURIComponent(id)}`),
       onDelete: (ids: string[]): Promise<void> => this.deleteMany(entity, ids),
@@ -2076,11 +2077,23 @@ export class DirectoryConsole {
             ),
           create: async (
             values: Record<string, string | string[]>
-          ): Promise<void> => {
-            await this.api.create(entity, values as Entry);
-          },
-          onDone: (created: number): void => {
-            if (created > 0 && this.route.entity === entity.key)
+          ): Promise<string> =>
+            createdEntryId(
+              entity,
+              await this.api.create(entity, values as Entry),
+              values
+            ),
+          onDone: (created: string[]): void => {
+            // The list shows what was just created, rather than its search:
+            // checking each new entry took a search of its own. An import
+            // that created nothing puts the search back, rather than leave
+            // the last one's entries looking like its own.
+            const view = this.listViews.get(entity.key) ?? {};
+            this.listViews.set(entity.key, view);
+            const shown = !!view.imported;
+            if (created.length) view.imported = { ids: created };
+            else delete view.imported;
+            if ((created.length || shown) && this.route.entity === entity.key)
               void this.renderMain();
           },
           onClose: (): void => this.closePanel(),

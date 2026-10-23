@@ -119,6 +119,21 @@ const PAGE_SIZES = [25, 50, 100, 200];
 const PAGE_SIZE_KEY = 'ldap-rest.console.pageSize';
 
 /**
+ * The entries an import has just created, shown in the list in place of a
+ * search until the reader goes back to it.
+ */
+export interface ImportedView {
+  /**
+   * Their identifiers, less those found gone since. Only the pages shown
+   * are read, so the count may include an entry of another page deleted
+   * meanwhile
+   */
+  ids: string[];
+  /** The page of them the reader is on; the search keeps its own */
+  page?: number;
+}
+
+/**
  * Where the reader left a list: what they searched, in which field, whether
  * they asked for the whole branch, and the page they were on.
  */
@@ -127,6 +142,8 @@ export interface ListView {
   searchAttribute?: string;
   listEverything?: boolean;
   page?: number;
+  /** The entries of the last import, when the list shows them */
+  imported?: ImportedView;
 }
 
 export interface ListOptions {
@@ -149,12 +166,21 @@ export interface ListOptions {
   /** Readable name of the entry a pointer lands on, when its schema has one */
   pointerLabel?(dn: string): string | undefined;
   /**
+   * Read one entry, for the entries of an import: the create endpoint
+   * answers little more than the identifier. Without it, the identifier is
+   * all their rows show
+   */
+  read?(id: string): Promise<Entry>;
+  /**
    * Where the reader left this list last time. The list starts from it and
    * keeps it up to date as they search and page, so a list drawn again —
    * Back from a card — opens where it was left rather than empty
    */
   view?: ListView;
 }
+
+/** Entries of an import read at once. */
+const READ_CONCURRENCY = 4;
 
 /** Controls a repaint must not steal the caret from. */
 const FOCUSABLE = ['[data-search]', '[data-search-attribute]'];
@@ -198,6 +224,12 @@ export class EntityList {
   private truncated = false;
   /** Set when the reader asked for the whole branch despite the guard */
   private listEverything = false;
+  /** The entries of the last import, shown in place of a search */
+  private imported: ImportedView | undefined;
+  /** The page the search was on, while the import's entries are shown */
+  private searchPage = 0;
+  /** The entries of the import read since this list was drawn */
+  private readonly importedRead = new Map<string, Entry>();
   /**
    * Which load is the current one. A search is debounced, not serialised, so
    * two requests are in flight whenever the operator keeps typing — and the
@@ -222,6 +254,11 @@ export class EntityList {
     this.search = options.view?.search ?? '';
     this.listEverything = options.view?.listEverything ?? false;
     this.page = options.view?.page ?? 0;
+    this.imported = options.view?.imported;
+    if (this.imported) {
+      this.searchPage = this.page;
+      this.page = this.imported.page ?? 0;
+    }
   }
 
   /**
@@ -301,7 +338,9 @@ export class EntityList {
     this.draw();
     // A search left typed is run again, and the page it was left on kept.
     if (
-      (this.listable() || this.query.length >= SEARCH_MINIMUM) &&
+      (this.imported ||
+        this.listable() ||
+        this.query.length >= SEARCH_MINIMUM) &&
       !this.loaded
     )
       await this.reload(true);
@@ -320,6 +359,7 @@ export class EntityList {
    */
   private async reload(keepPage = false): Promise<void> {
     const generation = ++this.generation;
+    if (this.imported) return this.reloadImported(generation, keepPage);
     if (!this.listable() && this.query.length < SEARCH_MINIMUM) {
       this.entries = [];
       this.truncated = false;
@@ -359,6 +399,131 @@ export class EntityList {
     }
   }
 
+  /**
+   * Show the entries of the last import, from their identifiers: what the
+   * create endpoint answered holds little more. They are sorted and paged by
+   * identifier, and read afresh — once per list drawn, so a change made on a
+   * card shows — page by page: an import of thousands of rows is not read
+   * whole to show its first 25.
+   */
+  private async reloadImported(
+    generation: number,
+    keepPage: boolean
+  ): Promise<void> {
+    const imported = this.imported as ImportedView;
+    imported.ids = [...new Set(imported.ids)].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' })
+    );
+    this.importedRead.clear();
+    this.selected.clear();
+    if (!keepPage) this.page = 0;
+    await this.showImported(generation);
+  }
+
+  /**
+   * Read the entries of the page shown that are not read yet, and draw it.
+   * One gone since, or out of the reader's reach, is left out, and the page
+   * filled from the next; with none left, the list goes back to its search.
+   *
+   * @param generation the load this is part of; a new one when paging
+   */
+  private async showImported(generation = ++this.generation): Promise<void> {
+    const imported = this.imported as ImportedView;
+    const { read } = this.options;
+    const { mainAttribute } = this.options.entity;
+    this.error = null;
+    this.truncated = false;
+    for (;;) {
+      const last = Math.max(
+        0,
+        Math.ceil(imported.ids.length / this.pageSize) - 1
+      );
+      this.page = Math.min(this.page, last);
+      const from = this.page * this.pageSize;
+      const queue = imported.ids
+        .slice(from, from + this.pageSize)
+        .filter(id => !this.importedRead.has(id));
+      if (!queue.length) break;
+      this.loading = true;
+      this.draw();
+      const gone = new Set<string>();
+      let failed = false;
+      try {
+        await Promise.all(
+          Array.from(
+            { length: Math.min(READ_CONCURRENCY, queue.length) },
+            async () => {
+              // A failure ends the reading: the others stop taking entries
+              // rather than send requests nobody will read the answer to.
+              for (
+                let id = queue.shift();
+                id !== undefined && !failed;
+                id = queue.shift()
+              ) {
+                try {
+                  this.importedRead.set(
+                    id,
+                    read ? await read(id) : { [mainAttribute]: id }
+                  );
+                } catch (err) {
+                  // Gone, or refused as a card is: left out, not a failure
+                  const status = (err as { status?: number } | null)?.status;
+                  if (status === 404 || status === 403) {
+                    gone.add(id);
+                    continue;
+                  }
+                  failed = true;
+                  throw err;
+                }
+              }
+            }
+          )
+        );
+      } catch (err) {
+        if (generation !== this.generation) return;
+        this.error = listFailure(err, this.options.translator);
+        this.loading = false;
+        this.draw();
+        return;
+      }
+      if (generation !== this.generation) return;
+      if (gone.size) imported.ids = imported.ids.filter(id => !gone.has(id));
+      if (imported.ids.length === 0) {
+        this.loading = false;
+        return this.leaveImported();
+      }
+    }
+    // Every identifier has its row, read or not: the page shown is read,
+    // and a selection made on another page was read when it was shown.
+    this.entries = imported.ids.map(id => [
+      id,
+      this.importedRead.get(id) ?? { [mainAttribute]: id },
+    ]);
+    this.loading = false;
+    this.loaded = true;
+    this.draw();
+  }
+
+  /** Draw the page now shown, reading it first for an import's entries. */
+  private turnPage(): void {
+    if (this.imported) void this.showImported();
+    else this.draw();
+  }
+
+  /** Back from the entries of the last import to the list's search. */
+  private async leaveImported(): Promise<void> {
+    this.imported = undefined;
+    if (this.options.view) delete this.options.view.imported;
+    this.entries = [];
+    this.loaded = false;
+    this.page = this.searchPage;
+    const reloading = this.reload(true);
+    // The button pressed is gone with the view: the keyboard goes on from
+    // the search box that took its place.
+    this.root?.querySelector<HTMLInputElement>('[data-search]')?.focus();
+    await reloading;
+  }
+
   /** Repaint the whole table. */
   private draw(): void {
     const root = this.root;
@@ -379,33 +544,20 @@ export class EntityList {
     root.innerHTML = `
       <div class="dc-list">
         <div class="dc-list-toolbar">
-          <div class="dc-search">
-            <input type="search" class="dc-input" data-search
-              value="${escapeHtml(this.search)}"
-              placeholder="${escapeHtml(translator.t('list.search'))}" />
-            <label class="dc-search-scope">
-              <span>${escapeHtml(translator.t('list.searchIn'))}</span>
-              <select class="dc-input" data-search-attribute>
-                <option value="${SEARCH_ANYWHERE}"${
-                  this.searchAttribute === SEARCH_ANYWHERE ? ' selected' : ''
-                }>${escapeHtml(translator.t('list.searchAnywhere'))}</option>
-                ${this.searchableAttributes()
-                  .map(
-                    ([name, attr]) =>
-                      `<option value="${escapeHtml(name)}"${
-                        name === this.searchAttribute ? ' selected' : ''
-                      }>${escapeHtml(
-                        attributeLabel(
-                          name,
-                          attr,
-                          this.options.translator.language
-                        )
-                      )}</option>`
-                  )
-                  .join('')}
-              </select>
-            </label>
-          </div>
+          ${
+            this.imported
+              ? `<div class="dc-list-imported" data-imported>
+                  <strong>${escapeHtml(
+                    translator.t('list.imported', {
+                      count: this.imported.ids.length,
+                    })
+                  )}</strong>
+                  <button type="button" class="dc-button" data-leave-imported>${escapeHtml(
+                    translator.t('list.backToSearch')
+                  )}</button>
+                </div>`
+              : this.searchMarkup()
+          }
           <div class="dc-bulk" ${this.selected.size ? '' : 'hidden'}>
             <span>${escapeHtml(
               translator.t('list.selected', { count: this.selected.size })
@@ -436,6 +588,35 @@ export class EntityList {
     }
   }
 
+  /** The search box and the field it searches in. */
+  private searchMarkup(): string {
+    const { translator } = this.options;
+    return `
+      <div class="dc-search">
+        <input type="search" class="dc-input" data-search
+          value="${escapeHtml(this.search)}"
+          placeholder="${escapeHtml(translator.t('list.search'))}" />
+        <label class="dc-search-scope">
+          <span>${escapeHtml(translator.t('list.searchIn'))}</span>
+          <select class="dc-input" data-search-attribute>
+            <option value="${SEARCH_ANYWHERE}"${
+              this.searchAttribute === SEARCH_ANYWHERE ? ' selected' : ''
+            }>${escapeHtml(translator.t('list.searchAnywhere'))}</option>
+            ${this.searchableAttributes()
+              .map(
+                ([name, attr]) =>
+                  `<option value="${escapeHtml(name)}"${
+                    name === this.searchAttribute ? ' selected' : ''
+                  }>${escapeHtml(
+                    attributeLabel(name, attr, this.options.translator.language)
+                  )}</option>`
+              )
+              .join('')}
+          </select>
+        </label>
+      </div>`;
+  }
+
   /** Keep where the reader is, for the list drawn in this one's place. */
   private remember(): void {
     if (!this.options.view) return;
@@ -443,8 +624,9 @@ export class EntityList {
       search: this.search,
       searchAttribute: this.searchAttribute,
       listEverything: this.listEverything,
-      page: this.page,
+      page: this.imported ? this.searchPage : this.page,
     });
+    if (this.imported) this.imported.page = this.page;
   }
 
   /**
@@ -494,7 +676,11 @@ export class EntityList {
       return `<p class="dc-empty">${escapeHtml(translator.t('app.loading'))}</p>`;
     if (this.error)
       return `<p class="dc-empty dc-error-block">${escapeHtml(this.error)}</p>`;
-    if (!this.listable() && this.query.length < SEARCH_MINIMUM)
+    if (
+      !this.imported &&
+      !this.listable() &&
+      this.query.length < SEARCH_MINIMUM
+    )
       return `<p class="dc-empty">${escapeHtml(
         translator.t('list.searchGuard', { count: SEARCH_MINIMUM })
       )}<br /><button type="button" class="dc-button" data-list-all>${escapeHtml(
@@ -695,7 +881,7 @@ export class EntityList {
           localStorage.setItem(PAGE_SIZE_KEY, String(this.pageSize));
           // eslint-disable-next-line no-empty
         } catch {}
-        this.draw();
+        this.turnPage();
       });
 
     for (const button of Array.from(
@@ -703,7 +889,7 @@ export class EntityList {
     )) {
       button.addEventListener('click', () => {
         this.page += Number(button.dataset.page);
-        this.draw();
+        this.turnPage();
       });
     }
 
@@ -747,6 +933,10 @@ export class EntityList {
         this.options.onOpen(row.dataset.id as string);
       });
     }
+
+    root
+      .querySelector('[data-leave-imported]')
+      ?.addEventListener('click', () => void this.leaveImported());
 
     root.querySelector('[data-list-all]')?.addEventListener('click', () => {
       this.listEverything = true;

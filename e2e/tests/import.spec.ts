@@ -211,6 +211,29 @@ test.describe('IMPORT CSV import', () => {
     await expect(panel.closeButton).toBeVisible({ timeout: 60_000 });
     await expect(panel.stat('created')).toHaveText('2');
 
+    // Each created account named, and linked to its card
+    await expect(panel.created.locator('td:first-child')).toHaveText([
+      '2',
+      '3',
+    ]);
+    await expect(panel.created.nth(0)).toContainText(`Imp One (imp.${one})`);
+    await expect(panel.created.nth(1)).toContainText(`Imp Two (imp.${two})`);
+    await expect(
+      panel.created.nth(0).getByRole('link', { name: 'Imp One' })
+    ).toHaveAttribute('href', `#/users/imp.${one}`);
+
+    // Closed, the list shows them without a search, until Back to search
+    await panel.closeButton.click();
+    const list = app.list();
+    await expect(list.importedView).toHaveText('Just imported (2)');
+    await expect(list.ids()).toHaveText(
+      [`imp.${one}`, `imp.${two}`].sort((a, b) => a.localeCompare(b))
+    );
+    await expect(list.searchBox).toBeHidden();
+    await list.backToSearchButton.click();
+    await expect(list.searchGuard).toBeVisible();
+    await expect(list.searchBox).toBeFocused();
+
     expect(await directory.values(first, 'twakeDepartmentLink')).toEqual([
       france.dn,
     ]);

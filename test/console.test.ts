@@ -48,6 +48,7 @@ import {
   LIST_LIMIT,
   csvCell,
   listFailure,
+  type ListView,
 } from '../src/components/EntityList';
 import { OrganizationTree } from '../src/components/OrganizationTree';
 import { availableLanguages, languageName, Translator } from '../src/i18n';
@@ -2006,6 +2007,53 @@ describe('Directory console', () => {
         'Vous n’administrez pas Eva Ernst : cette modification ne vous revient pas.',
         'Le serveur a refusé : Attribute "Nom" must not be empty',
       ]);
+    });
+
+    it('should name and link each entry an import created', async () => {
+      const done: string[][] = [];
+      const answers: (Entry | undefined)[] = [
+        // What ldap-rest answers a creation: the DN and the identifier,
+        // here made by the server from the address
+        { dn: 'uid=amartin,ou=users,dc=example,dc=com', uid: 'amartin' },
+        // An answer naming nothing: the row's identifier names it
+        undefined,
+      ];
+      const importer = new EntityImport({
+        entity: users,
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        create: values =>
+          Promise.resolve(createdEntryId(users, answers.shift(), values)),
+        onDone: created => done.push(created),
+        onClose: () => undefined,
+      });
+      const state = importer as unknown as {
+        rows: {
+          line: number;
+          cells: string[];
+          values: object;
+          errors: string[];
+        }[];
+        run(): Promise<void>;
+        doneMarkup(): string;
+      };
+      state.rows = [
+        {
+          line: 2,
+          cells: [],
+          values: { mail: 'alice@example.com', cn: 'Alice Martin' },
+          errors: [],
+        },
+        { line: 3, cells: [], values: { uid: 'bob' }, errors: [] },
+      ];
+      await state.run();
+      const markup = state.doneMarkup();
+      expect(markup)
+        .to.contain('href="#&#x2F;users&#x2F;amartin">Alice Martin</a>')
+        .and.contain('(amartin)')
+        // Named by its identifier alone, not twice
+        .and.contain('href="#&#x2F;users&#x2F;bob">bob</a></td>');
+      expect(done).to.deep.equal([['amartin', 'bob']]);
     });
 
     it('should create and import in natural French, the article agreeing', () => {
@@ -5967,6 +6015,147 @@ describe('Directory console', () => {
       expect(selected.size).to.equal(0);
       expect(headerTag()).to.not.contain('checked');
       expect(header.indeterminate).to.be.false;
+    });
+
+    it('should show the entries just imported without a search', async () => {
+      // Closing the import's result left a large branch asking for three
+      // characters, and each new account took a search of its own to check.
+      const searched: string[] = [];
+      const read: string[] = [];
+      const stored: Record<string, Entry> = {
+        amartin: { uid: 'amartin', cn: 'Alice Martin', mail: 'a@example.com' },
+        bob: { uid: 'bob', cn: 'Bob Brown', mail: 'b@example.com' },
+        carol: { uid: 'carol', cn: 'Carol Chen', mail: 'c@example.com' },
+      };
+      const refusal = (status: number) =>
+        Promise.reject(Object.assign(new Error('no'), { status }));
+      let answer = (id: string): Promise<Entry> => Promise.resolve(stored[id]);
+      const view: ListView = {
+        search: 'ali',
+        page: 3,
+        imported: { ids: ['bob', 'carol', 'amartin'] },
+      };
+      const options = {
+        entity: users,
+        translator: new Translator('en'),
+        load: (search: string) => {
+          searched.push(search);
+          return Promise.resolve({});
+        },
+        read: (id: string) => {
+          read.push(id);
+          return answer(id);
+        },
+        listable: false,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+        view,
+      };
+      const container = stubContainer();
+      await new EntityList(options).render(container);
+      // Each read whole: the creation answered little more than its name
+      expect(read).to.have.members(['amartin', 'bob', 'carol']);
+      expect(searched).to.deep.equal([]);
+      expect(container.innerHTML)
+        .to.contain('Just imported (3)')
+        .and.contain('Back to search')
+        .and.contain('href="#&#x2F;users&#x2F;amartin"')
+        .and.contain('Bob Brown')
+        .and.contain('c@example.com')
+        .and.not.contain('data-search ');
+      expect(container.innerHTML.indexOf('amartin')).to.be.below(
+        container.innerHTML.indexOf('bob')
+      );
+      // The search keeps its page
+      expect(view.page).to.equal(3);
+
+      // Back from a card: one deleted, one out of reach since, left out.
+      answer = id =>
+        id === 'bob'
+          ? refusal(404)
+          : id === 'carol'
+            ? refusal(403)
+            : Promise.resolve(stored[id]);
+      const again = stubContainer();
+      await new EntityList(options).render(again);
+      expect(again.innerHTML)
+        .to.contain('Just imported (1)')
+        .and.contain('Alice Martin')
+        .and.not.contain('Bob Brown')
+        .and.not.contain('Carol Chen');
+      expect(view.imported?.ids).to.deep.equal(['amartin']);
+
+      // A real failure is said, the count kept
+      answer = () => refusal(500);
+      const failing = stubContainer();
+      await new EntityList(options).render(failing);
+      expect(failing.innerHTML)
+        .to.contain('Just imported (1)')
+        .and.contain('dc-error-block');
+
+      // Back to search: the search left typed is run again, on its page.
+      answer = id => Promise.resolve(stored[id]);
+      const list = new EntityList(options);
+      await list.render(stubContainer());
+      await (
+        list as unknown as { leaveImported(): Promise<void> }
+      ).leaveImported();
+      expect(view.imported).to.equal(undefined);
+      expect(searched).to.deep.equal(['ali']);
+    });
+
+    it('should read only the page shown of a large import', async () => {
+      // Two thousand rows read whole on every draw, to show 25 of them
+      const ids = Array.from(
+        { length: 60 },
+        (_, i) => `u${String(i).padStart(2, '0')}`
+      );
+      const read: string[] = [];
+      const gone = new Set(['u03', 'u30']);
+      const view: ListView = { imported: { ids: [...ids].reverse() } };
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () => Promise.resolve({}),
+        read: (id: string) => {
+          read.push(id);
+          return gone.has(id)
+            ? Promise.reject(Object.assign(new Error('gone'), { status: 404 }))
+            : Promise.resolve({ uid: id, cn: `Name ${id}` });
+        },
+        listable: false,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+        view,
+      });
+      const container = stubContainer();
+      await list.render(container);
+      // The first page, by identifier, refilled past the one found gone
+      expect(read).to.have.length(26);
+      expect(read).to.include.members(['u00', 'u03', 'u25']);
+      expect(container.innerHTML)
+        .to.contain('Name u25')
+        // Counted from the identifiers: the pages not shown are not checked
+        .and.contain('Just imported (59)')
+        .and.contain('1–25 of 59')
+        .and.not.contain('Name u03')
+        .and.not.contain('Name u26');
+
+      // The next page reads its own entries, and only those
+      read.length = 0;
+      const state = list as unknown as { page: number; turnPage(): void };
+      state.page = 1;
+      state.turnPage();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(read).to.have.length(26);
+      expect(read).to.include.members(['u26', 'u30', 'u51']);
+      expect(container.innerHTML)
+        .to.contain('Name u51')
+        .and.contain('26–50 of 58')
+        .and.not.contain('Name u25');
+      expect(view.imported?.ids).to.have.length(58);
     });
   });
 
