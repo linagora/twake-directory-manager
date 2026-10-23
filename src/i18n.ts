@@ -452,7 +452,7 @@ const fr: Catalogue = {
   'import.noteMulti':
     'Un champ à plusieurs valeurs les reçoit dans une seule cellule, séparées par |.',
   'import.noteReference':
-    'Un département, un poste ou une civilité s’écrit comme il apparaît dans le formulaire : son nom, ou le chemin complet d’un département.',
+    'Une organisation, un poste ou une civilité s’écrit comme il apparaît dans le formulaire : son nom, ou le chemin complet d’une organisation.',
   'import.choose': 'Choisir un fichier CSV',
   'import.chooseHint':
     'Séparé par des virgules, des points-virgules ou des tabulations',
@@ -766,7 +766,7 @@ const mn: Catalogue = {
   'import.noteMulti':
     'Олон утга авдаг талбарын утгуудыг нэг нүдэнд | тэмдэгтээр тусгаарлан бичнэ.',
   'import.noteReference':
-    'Хэлтэс, албан тушаал, цолыг маягт дээр харагддагаар нь бичнэ: нэрээр нь, эсвэл хэлтсийн бүтэн замаар.',
+    'Байгууллага, албан тушаал, цолыг маягт дээр харагддагаар нь бичнэ: нэрээр нь, эсвэл байгууллагын бүтэн замаар.',
   'import.choose': 'CSV файл сонгох',
   'import.chooseHint': 'Таслал, цэг таслал эсвэл табаар тусгаарласан',
   'import.template': 'Хоосон файл татах',
