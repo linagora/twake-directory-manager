@@ -1456,6 +1456,17 @@ describe('Directory console', () => {
       ).to.equal('Importer des utilisateurs');
     });
 
+    it('should name the department in the import rules as its field does', () => {
+      // The Twake schema labels the field "Organisation" / "Байгууллага",
+      // the template's column with it: the rules must not say "département".
+      expect(new Translator('fr').t('import.noteReference')).to.equal(
+        'Une organisation, un poste ou une civilité s’écrit comme il apparaît dans le formulaire : son nom, ou le chemin complet d’une organisation.'
+      );
+      expect(new Translator('mn').t('import.noteReference')).to.match(
+        /^Байгууллага, .* байгууллагын бүтэн замаар\.$/
+      );
+    });
+
     it('should translate every key of every catalogue', () => {
       // A key present in one catalogue and missing from the other is exactly
       // the mixed-language interface this replaces.
