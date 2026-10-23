@@ -295,7 +295,7 @@ const en: Catalogue = {
   'transit.handedOverFrom': '{name} ({from}) is in transit',
   'transit.waiting': 'Waiting in transit ({count})',
   'transit.waitingHelp':
-    'Handed over by another administrator: claim those that belong to you.',
+    'Handed over between administrators: claim those that belong to you.',
 
   'save.done': 'Saved',
   'create.done': 'Created',
@@ -697,7 +697,7 @@ const fr: Catalogue = {
   'transit.handedOverFrom': '{name} ({from}) est en transit',
   'transit.waiting': 'En attente en transit ({count})',
   'transit.waitingHelp':
-    'Confiés par un autre administrateur : rattachez ceux qui vous reviennent.',
+    'Confiés entre administrateurs : rattachez ceux qui vous reviennent.',
 
   'save.done': 'Enregistré',
   'create.done': 'Créé',
@@ -1066,7 +1066,7 @@ const mn: Catalogue = {
   'transit.handedOverFrom': '{name} ({from}) дамжуулалтад байна',
   'transit.waiting': 'Дамжуулалтад хүлээгдэж буй ({count})',
   'transit.waitingHelp':
-    'Өөр администратор шилжүүлсэн: өөрт хамаарахыг нь авна уу.',
+    'Администраторуудын хооронд шилжүүлсэн: өөрт хамаарахыг нь авна уу.',
 
   'save.done': 'Хадгалагдлаа',
   'create.done': 'Үүсгэгдлээ',

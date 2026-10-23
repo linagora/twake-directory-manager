@@ -58,6 +58,11 @@ export interface AttachedOptions {
    */
   rowAction?: {
     label: string;
+    /**
+     * Its name for a screen reader, which reads every row's button the
+     * same otherwise: _Claim Bob Schneider_
+     */
+    named(name: string): string;
     offered(entry: AttachedEntry, entity: EntityDescriptor): boolean;
     run(entry: AttachedEntry, entity: EntityDescriptor): void;
   };
@@ -290,9 +295,13 @@ export class AttachedTables {
                         role =>
                           `<th>${escapeHtml(this.heading(lead, role))}</th>`
                       )
-                      .join(
-                        ''
-                      )}${this.options.rowAction ? '<th></th>' : ''}</tr>
+                      .join('')}${
+                      this.options.rowAction
+                        ? `<th><span class="dc-visually-hidden">${escapeHtml(
+                            translator.t('detail.actions')
+                          )}</span></th>`
+                        : ''
+                    }</tr>
                   </thead>
                   <tbody>${rows
                     .map(entry => this.rowMarkup(entry, roles))
@@ -323,11 +332,12 @@ export class AttachedTables {
   private rowMarkup(entry: AttachedEntry, roles: string[]): string {
     const entity = this.entityOf(entry);
     const href = entity ? EntityList.entryHref(entity, entry.label) : '';
+    const name =
+      (roles[0] === 'identifier' ? '' : entry.values?.[roles[0]]) ||
+      entry.label;
     const cells = roles.map((role, index) => {
       const shown =
-        index === 0
-          ? (role === 'identifier' ? '' : entry.values?.[role]) || entry.label
-          : this.value(entity, role, entry.values?.[role]);
+        index === 0 ? name : this.value(entity, role, entry.values?.[role]);
       const content =
         index === 0 && href
           ? `<a class="dc-row-link" href="${escapeHtml(href)}">${escapeHtml(
@@ -343,7 +353,9 @@ export class AttachedTables {
           entity && action.offered(entry, entity)
             ? `<button type="button" class="dc-button" data-row-action="${escapeHtml(
                 entry.dn
-              )}">${escapeHtml(action.label)}</button>`
+              )}" aria-label="${escapeHtml(action.named(name))}">${escapeHtml(
+                action.label
+              )}</button>`
             : ''
         }</td>`
       );

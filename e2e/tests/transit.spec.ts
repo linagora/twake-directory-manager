@@ -257,36 +257,39 @@ test.describe('TRANSIT hand over and claim', () => {
       app.main.getByRole('heading', { level: 2 }).first()
     ).toHaveText(/^Waiting in transit/);
     await expect(waiting).toContainText(
-      'Handed over by another administrator: claim those that belong to you.'
+      'Handed over between administrators: claim those that belong to you.'
     );
     for (const name of [user.displayName, 'Grace Kim'])
       await expect(
         waiting
           .locator('tbody tr')
           .filter({ hasText: name })
-          .getByRole('button', { name: 'Claim…' })
-      ).toBeVisible();
+          .getByRole('button', { name: `Claim ${name}`, exact: true })
+      ).toHaveText('Claim…');
     await expect(app.transitLink).toHaveText(/^Transit \(\d+\+?\)$/);
 
     // claimed from there, it leaves the list without a reload
     await page.evaluate(() => {
       (window as unknown as { kept: boolean }).kept = true;
     });
+    // the section drawn before the claim, to tell it from the one drawn after
+    await waiting.evaluate(section => section.setAttribute('data-before', ''));
     await waiting
       .locator('tbody tr')
       .filter({ hasText: user.displayName })
-      .getByRole('button', { name: 'Claim…' })
+      .getByRole('button', { name: `Claim ${user.displayName}`, exact: true })
       .click();
     const claim = new ClaimDialog(page);
     await expect(claim.title).toHaveText(`Claim ${user.uid}`);
     await claim.claimInto(other.backend.path);
     await app.expectToast(`${user.uid} moved to ${other.backend.path}`);
+    const redrawn = page.locator('[data-transit-section]:not([data-before])');
     await expect(
-      waiting.locator('tbody tr').filter({ hasText: user.displayName })
-    ).toHaveCount(0);
-    await expect(
-      waiting.locator('tbody tr').filter({ hasText: 'Grace Kim' })
+      redrawn.locator('tbody tr').filter({ hasText: 'Grace Kim' })
     ).toBeVisible();
+    await expect(
+      redrawn.locator('tbody tr').filter({ hasText: user.displayName })
+    ).toHaveCount(0);
     expect(
       await page.evaluate(() => (window as unknown as { kept?: boolean }).kept)
     ).toBe(true);

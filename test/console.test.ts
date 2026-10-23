@@ -1837,13 +1837,44 @@ describe('Directory console', () => {
         expect(link.textContent).to.equal('Transit (2)');
         expect(holder.innerHTML).to.include('Waiting in transit (2)');
         expect(holder.innerHTML).to.include(
-          'Handed over by another administrator: claim those that belong to you.'
+          'Handed over between administrators: claim those that belong to you.'
         );
         expect(holder.innerHTML).to.include('>Bob Schneider<');
         expect(holder.innerHTML).to.include('>Grace Kim<');
         expect(holder.innerHTML.match(/>Claim…</g)).to.have.length(2);
+        // Each button named after its row for a screen reader, and the
+        // column holding them named too.
+        expect(holder.innerHTML).to.include('aria-label="Claim Bob Schneider"');
+        expect(holder.innerHTML).to.include('aria-label="Claim Grace Kim"');
+        expect(holder.innerHTML).to.include(
+          '<th><span class="dc-visually-hidden">Actions</span></th>'
+        );
         // No group waits: no Groups table saying so.
         expect(holder.innerHTML).to.not.include('data-attached="groups"');
+      });
+
+      it('should not let an older answer count over a newer one', async () => {
+        // Read again after every hand-over and claim: the answers may come
+        // back in any order.
+        const { app, link } = setup(eric(), []);
+        const answers: ((value: unknown) => void)[] = [];
+        Object.assign((app as unknown as { api: object }).api, {
+          organizationMembers: () =>
+            new Promise(resolve => answers.push(resolve)),
+        });
+        const first = app.readTransit();
+        const second = app.readTransit();
+        answers[1]({
+          entries: [attachedEntry(grace, entities)],
+          truncated: false,
+        });
+        await second;
+        answers[0]({
+          entries: [bob, grace].map(entry => attachedEntry(entry, entities)),
+          truncated: false,
+        });
+        await first;
+        expect(link.textContent).to.equal('Transit (1)');
       });
 
       it('should say nothing when nothing waits', async () => {

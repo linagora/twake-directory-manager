@@ -461,6 +461,8 @@ export class DirectoryConsole {
    * no transit branch to read
    */
   private transitWaiting: AttachedEntries | null = null;
+  /** How many times it was asked for, so that only the last answer counts */
+  private transitReads = 0;
   /**
    * Which view is the current one. Opening an entry, then another before the
    * first has answered, raced exactly the way the entity list did: whichever
@@ -879,19 +881,22 @@ export class DirectoryConsole {
     const scope = this.scope;
     if (!scopeRestricts(scope) || !scope.transit || this.administersNothing())
       return null;
+    // Read again after every hand-over and claim: an answer arriving after
+    // a later one's is older, and must not count over it.
+    const read = ++this.transitReads;
+    let waiting: AttachedEntries | null;
     try {
-      this.transitWaiting = await this.api.organizationMembers(
-        scope.transit,
-        this.entities
-      );
+      waiting = await this.readMembers(scope.transit);
     } catch {
-      this.transitWaiting = null;
+      waiting = null;
     }
+    if (read !== this.transitReads) return waiting;
+    this.transitWaiting = waiting;
     const link = this.container?.querySelector<HTMLElement>(
       '[data-transit-link]'
     );
     if (link) link.textContent = this.transitLabel();
-    return this.transitWaiting;
+    return waiting;
   }
 
   /**
@@ -910,11 +915,13 @@ export class DirectoryConsole {
   /** Claim…, at the end of each row listing what waits in transit. */
   private claimAction(): {
     label: string;
+    named(name: string): string;
     offered(entry: AttachedEntry, entity: EntityDescriptor): boolean;
     run(entry: AttachedEntry, entity: EntityDescriptor): void;
   } {
     return {
       label: this.translator.t('transit.claim'),
+      named: name => this.translator.t('transit.claimTitle', { name }),
       offered: (entry, entity) => this.claimable(entry, entity),
       run: (entry, entity) => void this.claim(entity, entry.label),
     };
