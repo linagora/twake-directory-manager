@@ -23,6 +23,7 @@ test.describe('USER user accounts', () => {
     await expect(card.actions()).toHaveText([
       'Hand over',
       'Edit',
+      'Change state…',
       'Reset password',
       'Delete',
     ]);
@@ -561,28 +562,33 @@ test.describe('USER user accounts', () => {
     const app = await new LoginPage(page).loginAs(ADMIN, `users/${user.uid}`);
     const card = app.entry();
 
-    await expect(
-      card.changeState.locator('option').filter({ hasNotText: 'Change state' })
-    ).toHaveText(['Enabled', 'Disabled', 'No access', 'To be deleted']);
-    for (const [state, status] of [
-      ['Disabled', 'Disabled'],
-      ['No access', 'No access'],
-      ['To be deleted', 'To delete'],
-      ['Enabled', 'Active'],
-    ] as const) {
+    // The panel shows the current state and offers the others; nothing is
+    // written until its button, named after the choice, is pressed.
+    await card.changeState.click();
+    await expect(card.statePanel).toContainText('Current state: Active');
+    await expect(card.stateChoices()).toHaveCount(3);
+    for (const state of ['Disabled', 'No access', 'To delete'])
+      await expect(
+        card.statePanel.getByRole('radio', { name: state, exact: true })
+      ).toBeVisible();
+    await card.statePanel
+      .getByRole('radio', { name: 'Disabled', exact: true })
+      .press('ArrowDown');
+    await expect(card.statePanel.locator('button[type=submit]')).toHaveText(
+      'Remove access'
+    );
+    await card.statePanel.getByRole('button', { name: 'Cancel' }).click();
+    await expect(card.statePanel).toBeHidden();
+    await expect(card.detail('Status')).toHaveText('Active');
+
+    for (const state of ['Disabled', 'No access', 'To delete', 'Active']) {
       await card.changeStateTo(state);
       await expect(app.toast).toBeVisible();
-      await expect(app.toast).toContainText(
-        status === 'Active'
-          ? /Enabled|Active/
-          : status === 'To delete'
-            ? /To be deleted|To delete/
-            : state
-      );
+      await expect(app.toast).toContainText(`is now ${state}`);
       await expect(app.toast).not.toContainText(
         /cn=|twakeAccountStatus|noaccess|todelete/
       );
-      await expect(card.detail('Status')).toHaveText(status);
+      await expect(card.detail('Status')).toHaveText(state);
     }
     await app.navItem('Users').click();
     await app.list().search(user.uid);
@@ -590,7 +596,7 @@ test.describe('USER user accounts', () => {
 
     await app.open(`users/${disabled.uid}`);
     await expect(card.detail('Status')).toHaveText('Disabled');
-    await card.changeStateTo('Enabled');
+    await card.changeStateTo('Active');
     await expect(card.detail('Status')).toHaveText('Active');
   });
 
@@ -682,13 +688,13 @@ test.describe('USER user accounts', () => {
     const card = app.entry();
 
     await card.changeStateTo('Disabled');
-    await app.expectToast('State changed to Disabled');
+    await expect(app.toast).toContainText('is now Disabled');
     await expect(app.errorToast).toHaveCount(0);
     await expect(card.detail('Status')).toHaveText('Disabled');
     expect(await directory.values(user.dn, 'twakeAccountStatus')).toEqual([
       'cn=disabled,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com',
     ]);
-    await card.changeStateTo('Enabled');
+    await card.changeStateTo('Active');
     await expect(card.detail('Status')).toHaveText('Active');
     expect(await directory.values(user.dn, 'twakeAccountStatus')).toEqual([
       'cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com',

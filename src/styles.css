@@ -826,10 +826,21 @@
   flex-wrap: wrap;
 }
 
-.dc-status .dc-input {
-  width: auto;
-  border-radius: 999px;
-  font-weight: 500;
+/* Change state: each state a radio, with what it means under its name. */
+.dc-state-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  align-items: baseline;
+}
+
+.dc-state-choice label {
+  margin-bottom: 0;
+}
+
+.dc-state-choice .dc-hint {
+  grid-column: 2;
+  margin-top: 2px;
 }
 
 .dc-attributes {

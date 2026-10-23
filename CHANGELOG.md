@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- _Change state…_ opens a panel showing the current state and what each other
+  one is for, and writes nothing until the button naming the choice is
+  pressed: an arrow key on the former select changed the state at once. The
+  states read _Active_ and _To delete_ everywhere in English, and the message
+  names the account: _Ada Lovelace is now Disabled_ (#125)
+
 ## v0.10.2 (2026-10-23)
 
 Built on ldap-rest 0.24.0.

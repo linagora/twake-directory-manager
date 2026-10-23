@@ -30,7 +30,8 @@ export interface DetailOptions {
   canDelete: boolean;
   onEdit(): void;
   onDelete(): void;
-  onStatus(state: string): void;
+  /** Open the change of state, which asks before writing anything */
+  onStatus(): void;
   onResetPassword(): void;
   /** The entry waits in the transit branch, or is attached to nothing */
   inTransit?: boolean;
@@ -251,27 +252,19 @@ export class EntityDetail {
     return `<span class="dc-value" title="${escapeHtml(value)}">${escapeHtml(shown)}</span>`;
   }
 
-  /** The states this account can be moved to, straight from the schema. */
+  /**
+   * Change state…, for an account its schema gives states. A button, not a
+   * select: a select wrote the state as soon as its value changed, and an
+   * arrow key on it was enough to lock a colleague out.
+   */
   private statusMarkup(): string {
     const { entity, translator, canWrite } = this.options;
     if (!canWrite || !entity.accountStatus) return '';
     const states = entity.schema.attributes[entity.accountStatus]?.states;
     if (!states || Object.keys(states).length === 0) return '';
-    return `
-      <label class="dc-status">
-        <span class="dc-visually-hidden">${escapeHtml(translator.t('status.change'))}</span>
-        <select class="dc-input" data-status>
-          <option value="">${escapeHtml(translator.t('status.change'))}</option>
-          ${Object.keys(states)
-            .map(
-              state =>
-                `<option value="${escapeHtml(state)}">${escapeHtml(
-                  stateLabel(translator, state)
-                )}</option>`
-            )
-            .join('')}
-        </select>
-      </label>`;
+    return `<button type="button" class="dc-button" data-status>${escapeHtml(
+      translator.t('status.change')
+    )}</button>`;
   }
 
   private relationsMarkup(): string {
@@ -345,13 +338,9 @@ export class EntityDetail {
       );
     });
 
-    const status = container.querySelector<HTMLSelectElement>('[data-status]');
-    status?.addEventListener('change', () => {
-      if (!status.value) return;
-      const state = status.value;
-      status.value = '';
-      this.options.onStatus(state);
-    });
+    container
+      .querySelector('[data-status]')
+      ?.addEventListener('click', () => this.options.onStatus());
 
     for (const button of Array.from(
       container.querySelectorAll<HTMLElement>('[data-relation]')
