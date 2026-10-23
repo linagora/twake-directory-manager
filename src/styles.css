@@ -398,6 +398,11 @@
   background: var(--dc-danger);
 }
 
+/* No branch at all is not "all is well": a neutral dot, in either theme. */
+.dc-header > .dc-scope-empty.dc-scope-none::before {
+  background: var(--dc-muted);
+}
+
 .dc-scope-transit {
   padding: 3px 12px;
   border: 1px dashed var(--dc-line-strong);
@@ -611,6 +616,36 @@
 .dc-reference-link:focus-visible {
   outline: none;
   box-shadow: var(--dc-focus);
+}
+
+/* The overview of an account administering nothing: one message, not cards. */
+.dc-no-rights {
+  max-width: 640px;
+  margin-top: 32px;
+  padding: 24px;
+  background: var(--dc-surface);
+  border: 1px solid var(--dc-line);
+  border-radius: var(--dc-radius);
+  box-shadow: var(--dc-shadow);
+}
+
+.dc-dashboard .dc-no-rights h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 650;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--dc-ink);
+}
+
+.dc-no-rights p {
+  margin: 0 0 20px;
+  line-height: 1.5;
+  color: var(--dc-muted);
+}
+
+.dc-no-rights .dc-button {
+  text-decoration: none;
 }
 
 .dc-card-actions {

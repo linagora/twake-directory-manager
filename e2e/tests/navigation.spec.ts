@@ -116,6 +116,12 @@ test.describe('NAV layout, navigation and language', () => {
     // where the plan (audited before it) still reads "Creation not allowed here"
     const sophie = await loginInNewContext(SOPHIE);
     await expect(
+      sophie.main.getByText(
+        'Signed in as Sophie Martin (sophie.martin@example.com)',
+        { exact: true }
+      )
+    ).toBeVisible();
+    await expect(
       sophie.card('Users').getByRole('button', { name: 'New user' })
     ).toBeVisible();
     await expect(
@@ -155,7 +161,18 @@ test.describe('NAV layout, navigation and language', () => {
     await list.open('alice');
     await app.entry().expectName('alice');
 
+    // each language by its own name, whatever the interface's
+    await expect(app.languageSelect.locator('option')).toHaveText([
+      'English',
+      'Français',
+      'Монгол',
+    ]);
     await app.setLanguage('fr');
+    await expect(app.languageSelect.locator('option')).toHaveText([
+      'English',
+      'Français',
+      'Монгол',
+    ]);
 
     await expect(app.navLabels).toHaveText([
       'Vue d’ensemble',

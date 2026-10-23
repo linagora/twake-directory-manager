@@ -26,6 +26,7 @@ const en: Catalogue = {
   'app.confirm': 'Confirm',
   'app.back': 'Back',
   'app.language': 'Language',
+  'language.name': 'English',
   'app.logout': 'Sign out',
 
   'nav.dashboard': 'Overview',
@@ -45,6 +46,10 @@ const en: Catalogue = {
   'scope.delete': 'delete',
 
   'dashboard.welcome': 'Signed in as {user}',
+  'dashboard.welcomeNamed': 'Signed in as {name} ({email})',
+  'dashboard.noRightsTitle': 'There is nothing for you to manage here',
+  'dashboard.noRightsBody':
+    'Your account ({name}) does not administer any part of the directory. If you need to manage users or groups, ask your directory administrator to make you a local administrator of your department.',
   'dashboard.entities': 'What you can manage',
   'dashboard.create': 'New {entity}',
   'dashboard.noCreate': 'Creation not allowed here',
@@ -354,6 +359,7 @@ const fr: Catalogue = {
   'app.confirm': 'Confirmer',
   'app.back': 'Retour',
   'app.language': 'Langue',
+  'language.name': 'Français',
   'app.logout': 'Se déconnecter',
 
   'nav.dashboard': 'Vue d’ensemble',
@@ -373,6 +379,10 @@ const fr: Catalogue = {
   'scope.delete': 'suppression',
 
   'dashboard.welcome': 'Connecté en tant que {user}',
+  'dashboard.welcomeNamed': 'Connecté en tant que {name} ({email})',
+  'dashboard.noRightsTitle': 'Il n’y a rien à gérer ici pour vous',
+  'dashboard.noRightsBody':
+    'Votre compte ({name}) n’administre aucune partie de l’annuaire. Pour gérer des utilisateurs ou des groupes, demandez à l’administrateur de l’annuaire de vous nommer administrateur local de votre organisation.',
   'dashboard.entities': 'Ce que vous pouvez gérer',
   'dashboard.create': 'Créer : {entity}',
   'dashboard.create.users': 'Créer un utilisateur',
@@ -710,6 +720,7 @@ const mn: Catalogue = {
   'app.confirm': 'Батлах',
   'app.back': 'Буцах',
   'app.language': 'Хэл',
+  'language.name': 'Монгол',
   'app.logout': 'Гарах',
 
   'nav.dashboard': 'Тойм',
@@ -728,6 +739,10 @@ const mn: Catalogue = {
   'scope.delete': 'устгах',
 
   'dashboard.welcome': '{user} нэвтэрсэн',
+  'dashboard.welcomeNamed': '{name} ({email}) нэвтэрсэн',
+  'dashboard.noRightsTitle': 'Энд таны удирдах зүйл алга',
+  'dashboard.noRightsBody':
+    'Таны бүртгэл ({name}) лавлахын аль ч хэсгийг удирддаггүй. Хэрэглэгч эсвэл бүлэг удирдах шаардлагатай бол лавлахын администратортаа хандаж өөрийн байгууллагын орон нутгийн администратор болгохыг хүснэ үү.',
   'dashboard.entities': 'Таны удирдах боломжтой зүйлс',
   'dashboard.create': 'Шинэ {entity}',
   'dashboard.noCreate': 'Энд үүсгэх эрхгүй',
@@ -1015,6 +1030,18 @@ const catalogues: Record<string, Catalogue> = { en, fr, mn };
 
 /** Languages the console ships with. */
 export const availableLanguages = Object.keys(catalogues);
+
+/**
+ * What a language is called in itself, the way a reader looks for theirs:
+ * "Монгол" says something to whoever reads it, "mn" to almost nobody. Each
+ * catalogue names its own language, so a new one brings its name with it.
+ *
+ * @param code a language the console ships with
+ * @returns its name, or the code itself when its catalogue gives none
+ */
+export function languageName(code: string): string {
+  return catalogues[code]?.['language.name'] || code;
+}
 
 export class Translator {
   private catalogue: Catalogue;

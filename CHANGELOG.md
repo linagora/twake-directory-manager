@@ -22,6 +22,12 @@ Built on ldap-rest 0.25.0.
 - The New user form shows the identifier the address will give, fills the
   common name from the full name, and Enter takes the domain the address
   completion offers; the creation message names the entry (#130)
+- The Overview speaks in names: _Signed in as Ada Admin (admin@example.com)_
+  rather than a DN, and the _Language_ select offers _English_, _Français_
+  and _Монгол_. An account administering nothing finds one message on it,
+  _There is nothing for you to manage here_, with a _Sign out_ button,
+  instead of three cards leading nowhere; its sidebar offers only the
+  Overview, and its banner's dot is grey, not green (#134)
 
 ## v0.10.2 (2026-10-23)
 

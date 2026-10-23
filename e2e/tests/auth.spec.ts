@@ -12,10 +12,11 @@ test.describe('AUTH sign-in and session', () => {
     await expect(page).toHaveURL(new RegExp(`${CONSOLE_PATH}(#/)?$`));
     await expect(app.mainHeading).toHaveText('Twake Directory Manager');
     await expect(
-      app.main.getByText('Signed in as uid=admin,ou=users,dc=example,dc=com', {
+      app.main.getByText('Signed in as Ada Admin (admin@example.com)', {
         exact: true,
       })
     ).toBeVisible();
+    await expect(app.main).not.toContainText('uid=admin');
     await expect(
       app.main.getByRole('heading', { name: 'What you can manage' })
     ).toBeVisible();
@@ -86,12 +87,7 @@ test.describe('AUTH sign-in and session', () => {
       const app = await new LoginPage(page).loginAs(account);
 
       await expect(app.banner).toContainText('You administer no branch');
-      for (const card of ['Users', 'Groups', 'Organizations']) {
-        await expect(app.card(card)).toContainText('Creation not allowed here');
-        await expect(
-          app.card(card).getByRole('button', { name: /^New / })
-        ).toHaveCount(0);
-      }
+      await app.expectNoRights(account.uid);
 
       for (const hash of ['users', 'groups', 'organizations', 'users/bob']) {
         await app.open(hash);
@@ -135,8 +131,7 @@ test.describe('AUTH sign-in and session', () => {
     await expect(refused.or(app.banner)).toBeVisible();
     if (await refused.isVisible()) return;
     await expect(app.banner).toContainText('You administer no branch');
-    for (const card of ['Users', 'Groups', 'Organizations'])
-      await expect(app.card(card)).toContainText('Creation not allowed here');
+    await app.expectNoRights(FRANK.uid);
     await app.open('users');
     await expect(app.nothingToManage).toBeVisible();
   });

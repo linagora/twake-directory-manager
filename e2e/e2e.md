@@ -14,17 +14,17 @@ Conventions).
 
 ## Sign-in and session
 
-- [x] AUTH-01 (P1) Sign in through Dex lands on the overview — `auth.spec.ts`
+- [x] AUTH-01 (P1) Sign in through Dex lands on the overview — `auth.spec.ts` (greeted by name and address, no DN, #134)
 - [x] AUTH-02 (P2) Sign out ends the session at the provider — `auth.spec.ts`
 - [x] AUTH-03 (P3) Deep link to an entry — `auth.spec.ts`
-- [x] AUTH-04 (P2) Non-administrator account signs in and may do nothing — `auth.spec.ts` (alice, grace, erin)
-- [x] AUTH-05 (P3) Disabled account — `auth.spec.ts`
+- [x] AUTH-04 (P2) Non-administrator account signs in and may do nothing — `auth.spec.ts` (alice, grace, erin; the overview says it once with a Sign out button, the sidebar offers only the Overview and the banner's dot is not green, #134)
+- [x] AUTH-05 (P3) Disabled account — `auth.spec.ts` (the overview of an account administering nothing, #134)
 
 ## Layout, navigation and language
 
 - [x] NAV-01 (P2) Sidebar, highlighted entry and Reference data section — `navigation.spec.ts` (Password policies listed for admin, a global administrator of the stack)
-- [x] NAV-02 (P2) Overview cards — `navigation.spec.ts` (step 3 follows d698457: a local administrator's Organizations card offers New organization, created under their branch; the plan still reads "Creation not allowed here")
-- [x] NAV-03 (P1) Switch the whole interface to French and back — `navigation.spec.ts`
+- [x] NAV-02 (P2) Overview cards — `navigation.spec.ts` (step 3 follows d698457: a local administrator's Organizations card offers New organization, created under their branch; the plan still reads "Creation not allowed here"; sophie.martin is greeted by name and address, #134)
+- [x] NAV-03 (P1) Switch the whole interface to French and back — `navigation.spec.ts` (the Language select names each language in itself, #134)
 - [x] NAV-04 (P3) French on secondary screens — `navigation.spec.ts`
 - [x] NAV-05 (P3) Narrow screen and dark mode — `navigation.spec.ts` (dark mode: background and contrast of the headings; focus visibility not judged)
 - [x] NAV-06 (P3) Mongolian interface — `navigation.spec.ts`
