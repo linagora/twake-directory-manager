@@ -693,6 +693,13 @@
   background-position: 14px center;
 }
 
+.dc-list-imported {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .dc-search-scope {
   display: flex;
   align-items: center;
@@ -1032,6 +1039,46 @@
   border-radius: 999px;
   background: var(--dc-accent-soft);
   font-weight: 500;
+}
+
+/* The people and the groups of an organization: the lists' table, without
+   its checkbox column, under a heading carrying New … here. */
+.dc-attached-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+
+.dc-attached-header h3 {
+  margin: 0;
+}
+
+.dc-attached .dc-table-scroll {
+  box-shadow: none;
+}
+
+.dc-attached-table td:nth-child(2) {
+  font-weight: inherit;
+}
+
+.dc-attached-table td:first-child {
+  font-weight: 550;
+}
+
+/* An entry no entity holds has no card to open. */
+.dc-attached-table tbody tr:not([data-href]) {
+  cursor: default;
+}
+
+.dc-attached-table tbody tr:not([data-href]):hover {
+  background: none;
+}
+
+.dc-attached .dc-table-scroll + .dc-muted {
+  margin: 12px 0 0;
 }
 
 .dc-link,
@@ -1784,16 +1831,19 @@ select.dc-input {
   color: var(--dc-danger);
 }
 
-.dc-import-problems {
+.dc-import-problems,
+.dc-import-created {
   max-height: 320px;
   overflow: auto;
 }
 
-.dc-import-problems tbody tr {
+.dc-import-problems tbody tr,
+.dc-import-created tbody tr {
   cursor: default;
 }
 
-.dc-import-problems td:first-child {
+.dc-import-problems td:first-child,
+.dc-import-created td:first-child {
   width: 64px;
   color: var(--dc-muted);
   font-variant-numeric: tabular-nums;

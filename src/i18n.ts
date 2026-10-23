@@ -57,6 +57,8 @@ const en: Catalogue = {
 
   'list.open': 'Open',
   'list.listEverything': 'List without searching',
+  'list.imported': 'Just imported ({count})',
+  'list.backToSearch': 'Back to search',
   'list.search': 'Search',
   'list.searchIn': 'in',
   'list.searchAnywhere': 'Every field',
@@ -84,7 +86,6 @@ const en: Catalogue = {
 
   'detail.attributes': 'Details',
   'detail.relations': 'Related entries',
-  'detail.members': 'Attached entries',
   'detail.emptyRelations': 'No related entry',
   'detail.more.one':
     'And {count} more entry, not listed here: search the lists to find it.',
@@ -192,6 +193,9 @@ const en: Catalogue = {
   'import.refused': 'refused by the server',
   'import.notSent': 'not sent, the import was stopped',
   'import.downloadRefused': 'Download the refused rows',
+  'import.createdName': 'Name',
+  'import.moreCreated':
+    'And {count} more: close this panel to see them all in the list.',
   'import.ambiguous': '{field}: “{value}” matches several entries',
   'import.notFound': '{field}: “{value}” not found',
   'import.undecided':
@@ -208,6 +212,12 @@ const en: Catalogue = {
   'tree.filter': 'Filter',
   'tree.empty': 'Select an organization',
   'tree.addChild': 'New organization here',
+  'org.people': 'People ({count})',
+  'org.groups': 'Groups ({count})',
+  'org.newUserHere': 'New user here',
+  'org.newGroupHere': 'New group here',
+  'org.nobody': 'No one is attached to {name}.',
+  'org.noneManaged': 'None you manage is attached to {name}.',
   'tree.addUnder': 'New organization under {name}',
   'tree.expand': 'Expand {name}',
   'tree.collapse': 'Collapse {name}',
@@ -436,6 +446,8 @@ const fr: Catalogue = {
 
   'list.open': 'Ouvrir',
   'list.listEverything': 'Lister sans rechercher',
+  'list.imported': 'Dernier import ({count})',
+  'list.backToSearch': 'Revenir à la recherche',
   'list.search': 'Rechercher',
   'list.searchIn': 'dans',
   'list.searchAnywhere': 'Tous les champs',
@@ -467,7 +479,6 @@ const fr: Catalogue = {
 
   'detail.attributes': 'Fiche',
   'detail.relations': 'Entrées liées',
-  'detail.members': 'Entrées rattachées',
   'detail.emptyRelations': 'Aucune entrée liée',
   'detail.more.one':
     'Et {count} autre entrée, non affichée ici : recherchez-la dans les listes.',
@@ -584,6 +595,9 @@ const fr: Catalogue = {
   'import.notSent.one': 'non envoyée, l’import a été arrêté',
   'import.notSent.other': 'non envoyées, l’import a été arrêté',
   'import.downloadRefused': 'Télécharger les lignes refusées',
+  'import.createdName': 'Nom',
+  'import.moreCreated':
+    'Et {count} de plus : fermez ce panneau pour retrouver l’ensemble dans la liste.',
   'import.ambiguous': '{field} : « {value} » correspond à plusieurs entrées',
   'import.notFound': '{field} : « {value} » introuvable',
   'import.undecided':
@@ -601,6 +615,13 @@ const fr: Catalogue = {
   'tree.filter': 'Filtrer',
   'tree.empty': 'Sélectionnez une organisation',
   'tree.addChild': 'Nouvelle organisation ici',
+  'org.people': 'Personnes ({count})',
+  'org.groups': 'Groupes ({count})',
+  'org.newUserHere': 'Nouvel utilisateur ici',
+  'org.newGroupHere': 'Nouveau groupe ici',
+  'org.nobody': 'Personne n’est rattaché à {name}.',
+  'org.noneManaged':
+    'Aucune des entrées que vous gérez n’est rattachée à {name}.',
   'tree.addUnder': 'Nouvelle organisation sous {name}',
   'tree.expand': 'Développer {name}',
   'tree.collapse': 'Réduire {name}',
@@ -822,6 +843,8 @@ const mn: Catalogue = {
 
   'list.open': 'Нээх',
   'list.listEverything': 'Хайлтгүйгээр жагсаах',
+  'list.imported': 'Саяхан импортолсон ({count})',
+  'list.backToSearch': 'Хайлт руу буцах',
   'list.search': 'Хайх',
   'list.searchIn': 'Хайх талбар:',
   'list.searchAnywhere': 'Бүх талбар',
@@ -847,7 +870,6 @@ const mn: Catalogue = {
 
   'detail.attributes': 'Дэлгэрэнгүй',
   'detail.relations': 'Холбоотой бичлэгүүд',
-  'detail.members': 'Хавсаргасан бичлэгүүд',
   'detail.emptyRelations': 'Холбоотой бичлэг алга',
   'detail.more':
     'Өөр {count} бичлэг энд харагдахгүй байна: тэдгээрийг жагсаалтаас хайж олно уу.',
@@ -949,6 +971,9 @@ const mn: Catalogue = {
   'import.refused': 'сервер татгалзсан',
   'import.notSent': 'илгээгээгүй, импортыг зогсоосон',
   'import.downloadRefused': 'Татгалзсан мөрүүдийг татах',
+  'import.createdName': 'Нэр',
+  'import.moreCreated':
+    'Өөр {count} байна: бүгдийг жагсаалтаас харахын тулд энэ самбарыг хаана уу.',
   'import.ambiguous': '{field}: «{value}» хэд хэдэн бичлэгт тохирч байна',
   'import.notFound': '{field}: «{value}» олдсонгүй',
   'import.undecided':
@@ -965,6 +990,13 @@ const mn: Catalogue = {
   'tree.filter': 'Шүүх',
   'tree.empty': 'Байгууллага сонгоно уу',
   'tree.addChild': 'Энд шинэ байгууллага',
+  'org.people': 'Хүмүүс ({count})',
+  'org.groups': 'Бүлгүүд ({count})',
+  'org.newUserHere': 'Энд шинэ хэрэглэгч',
+  'org.newGroupHere': 'Энд шинэ бүлэг',
+  'org.nobody': '{name}-д хэн ч хавсаргагдаагүй.',
+  'org.noneManaged':
+    'Таны удирддаг бичлэгүүдээс {name}-д хавсаргагдсан нь алга.',
   'tree.addUnder': '{name} дор шинэ байгууллага',
   'tree.expand': '{name}-г дэлгэх',
   'tree.collapse': '{name}-г хураах',

@@ -33,14 +33,31 @@ several separate ones).
 The card of an organization
 ---------------------------
 
-It shows the organization’s fields and, under :guilabel:`Attached entries`,
-the accounts and groups attached to it; a click on one opens its card.
+It shows the organization’s fields, then the entries attached to it in two
+tables:
+
+- :guilabel:`People (N)`: the accounts, by full name, email, position and
+  status;
+- :guilabel:`Groups (N)`: the groups, by name, email and group type.
+
+A click on a row, or :kbd:`Enter` on its name, opens the entry’s card.
+
+:guilabel:`New user here` and :guilabel:`New group here`, in the tables’
+headings, open the creation form with the department already set to this
+organization; the new entry then joins the table. They are offered where
+the administrator may create such an entry and writes the organization, and
+not on the transit organization.
 
 .. note::
 
-   The list of attached entries is capped (at 50 by default) and the card does
-   not say so: for a larger organization it is incomplete. A given account is
-   then found by searching the :guilabel:`Users` list.
+   Each table lists at most 50 entries by default (the server’s
+   ``ldap_organization_max_subnodes``). Past that, its heading reads
+   :guilabel:`People (50+)` and a line under it says how many it leaves out;
+   a given account is then found by searching the :guilabel:`Users` list.
+
+   A local administrator is listed only the entries of the organizations
+   they administer: on another organization’s card, an empty table reads
+   :guilabel:`None you manage is attached to …`.
 
 The fields of an organization (default Twake schemas):
 

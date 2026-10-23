@@ -30,7 +30,7 @@ import {
   type PreparedRow,
 } from '../importer';
 import { escapeHtml } from '../shared/dom';
-import { listFailure } from './EntityList';
+import { EntityList, listFailure } from './EntityList';
 import type { EntityDescriptor } from '../types';
 
 export interface ImportOptions {
@@ -43,10 +43,14 @@ export interface ImportOptions {
    * failed as too broad; undefined for a branch that cannot be read so
    */
   pointerLookup?(branch: string): PointerLookup | undefined;
-  /** Create one entry; a refusal is thrown with the server's message */
-  create(values: Record<string, string | string[]>): Promise<void>;
-  /** Called once the import has run, with the number of entries created */
-  onDone(created: number): void;
+  /**
+   * Create one entry; a refusal is thrown with the server's message. It
+   * resolves to the identifier of the entry created, which the server may
+   * have made; without one, the row's identifier names it
+   */
+  create(values: Record<string, string | string[]>): Promise<string | void>;
+  /** Called once the import has run, with the identifiers of the entries created */
+  onDone(created: string[]): void;
   onClose(): void;
 }
 
@@ -56,11 +60,20 @@ const CONCURRENCY = 4;
 /** Rows listed on screen; the full list is in the downloadable report. */
 const SHOWN_ERRORS = 100;
 
+/** Entries created listed on screen; the list shows them all once closed. */
+const SHOWN_CREATED = 100;
+
 type Step = 'file' | 'mapping' | 'checking' | 'review' | 'running' | 'done';
 
 interface Failure {
   row: PreparedRow;
   message: string;
+}
+
+/** A row the server took, and the identifier of the entry it made of it. */
+interface Success {
+  row: PreparedRow;
+  id: string;
 }
 
 /** Hand a file to the browser to save. */
@@ -84,6 +97,7 @@ export class EntityImport {
   private mapping: string[] = [];
   private rows: PreparedRow[] = [];
   private failures: Failure[] = [];
+  private successes: Success[] = [];
   private created = 0;
   private processed = 0;
   private total = 0;
@@ -465,6 +479,7 @@ export class EntityImport {
     this.processed = 0;
     this.created = 0;
     this.failures = [];
+    this.successes = [];
     this.stopping = false;
     this.step = 'running';
     this.paint();
@@ -474,7 +489,8 @@ export class EntityImport {
       while (!this.stopping && next < queue.length) {
         const row = queue[next++];
         try {
-          await this.options.create(row.values);
+          const id = await this.options.create(row.values);
+          this.successes.push({ row, id: id || this.rowId(row) });
           this.created++;
         } catch (err) {
           // In the words a form says it in, for the table and the file. A
@@ -499,9 +515,16 @@ export class EntityImport {
     );
 
     this.failures.sort((a, b) => a.row.line - b.row.line);
+    this.successes.sort((a, b) => a.row.line - b.row.line);
     this.step = 'done';
     this.paint();
-    this.options.onDone(this.created);
+    this.options.onDone(this.successes.map(({ id }) => id).filter(Boolean));
+  }
+
+  /** The identifier a row gives its entry, empty when the server makes it. */
+  private rowId(row: PreparedRow): string {
+    const value = row.values[this.options.entity.mainAttribute];
+    return ((Array.isArray(value) ? value[0] : value) ?? '').trim();
   }
 
   /** The entry a row creates, named by its full name, else its identifier. */
@@ -581,6 +604,7 @@ export class EntityImport {
             : ''
         }
       </div>
+      ${this.successes.length ? this.createdMarkup() : ''}
       ${this.failures.length ? this.problemsMarkup(this.failures) : ''}
       <div class="dc-form-actions">
         ${
@@ -594,6 +618,54 @@ export class EntityImport {
           this.t('app.close')
         )}</button>
       </div>`;
+  }
+
+  /**
+   * The entries created, each by its full name and identifier and linked to
+   * its card, as the list links its rows. A count alone left the operator
+   * searching for each one to check it.
+   */
+  private createdMarkup(): string {
+    const { entity } = this.options;
+    const rest = this.successes.length - SHOWN_CREATED;
+    return `
+      <div class="dc-table-scroll dc-import-created">
+        <table class="dc-table">
+          <thead><tr>
+            <th>${escapeHtml(this.t('import.line'))}</th>
+            <th>${escapeHtml(this.t('import.createdName'))}</th>
+          </tr></thead>
+          <tbody>
+            ${this.successes
+              .slice(0, SHOWN_CREATED)
+              .map(success => {
+                const name = this.rowName(success.row) || success.id;
+                const id =
+                  success.id && success.id !== name
+                    ? ` <span class="dc-muted">(${escapeHtml(success.id)})</span>`
+                    : '';
+                return `<tr>
+                  <td>${success.row.line}</td>
+                  <td class="dc-import-message">${
+                    success.id
+                      ? `<a class="dc-row-link" href="${escapeHtml(
+                          EntityList.entryHref(entity, success.id)
+                        )}">${escapeHtml(name)}</a>`
+                      : escapeHtml(name)
+                  }${id}</td>
+                </tr>`;
+              })
+              .join('')}
+          </tbody>
+        </table>
+      </div>
+      ${
+        rest > 0
+          ? `<p class="dc-muted">${escapeHtml(
+              this.t('import.moreCreated', { count: rest })
+            )}</p>`
+          : ''
+      }`;
   }
 
   /* ------------------------------------------------------------------ bind */

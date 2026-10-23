@@ -73,6 +73,16 @@ Built on ldap-rest 0.25.0.
   _1 GB_ rather than _1000 MB_ just below it. _Edit_ comes first, and _Hand
   over_ and _Delete_ moved to a _More_ menu. The tab no longer keeps the name
   of the organization shown before one whose card fails to load (#133)
+- A CSV import's result lists each entry it created, by full name and
+  identifier, linked to its card; once the result is closed, the list shows
+  them as _Just imported (2)_ until _Back to search_, rather than asking for
+  a search to find each one (#136)
+- An organization's card lists its _People_ (full name, email, position,
+  status) and its _Groups_ (name, email, group type) in two tables, each
+  counted and each row opening the entry's card, instead of a row of
+  identifiers. _New user here_ and _New group here_ open the creation form
+  with the department already set, where the administrator may create, and
+  the new entry joins the table (#128)
 
 ## v0.10.2 (2026-10-23)
 

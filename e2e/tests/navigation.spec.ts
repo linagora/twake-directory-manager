@@ -257,7 +257,12 @@ test.describe('NAV layout, navigation and language', () => {
     await expect(organizations.card.detail('Description')).toHaveText(
       'Sales department'
     );
-    await expect(organizations.detail).toContainText('Entrées rattachées');
+    await expect(organizations.card.attachedHeading('Personnes')).toHaveText(
+      'Personnes (1)'
+    );
+    await expect(organizations.card.attachedHeading('Groupes')).toHaveText(
+      'Groupes (1)'
+    );
 
     await app.navItem('Référentiels').click();
     await app
