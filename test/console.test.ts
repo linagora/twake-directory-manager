@@ -11,6 +11,7 @@ import nock from 'nock';
 
 import {
   ConsoleApiClient,
+  attachedEntry,
   isDomainBranch,
   isLarge,
 } from '../src/api/ConsoleApiClient';
@@ -35,6 +36,10 @@ import {
   rdnValue,
   resolveText,
 } from '../src/format';
+import {
+  AttachedTables,
+  attachedClass,
+} from '../src/components/AttachedTables';
 import { EntityDetail } from '../src/components/EntityDetail';
 import { EntityForm, pointerFallback } from '../src/components/EntityForm';
 import { EntityImport } from '../src/components/EntityImport';
@@ -1388,6 +1393,386 @@ describe('Directory console', () => {
     it('should fall back on the RDN when the branch cannot be read', async () => {
       const html = await card(() => Promise.reject(new Error('Forbidden')));
       expect(html).to.include(`title="${sales}">sales<`);
+    });
+  });
+
+  describe('the people and the groups of an organization', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const sales = `ou=Sales,${top}`;
+    const france = `ou=France,${sales}`;
+    const transit = `ou=Transit,${top}`;
+    const positions = 'ou=positions,dc=example,dc=com';
+    const mailboxBase = mailboxTypes.base;
+    const organizations: EntityDescriptor = {
+      key: 'organizations',
+      pluralName: 'organizations',
+      singularName: 'organization',
+      mainAttribute: 'ou',
+      base: top,
+      schema: {
+        attributes: {
+          ou: { type: 'string', role: 'identifier' },
+          twakeDepartmentPath: { type: 'string', role: 'organizationPath' },
+        },
+      },
+      endpoint: '/api/v1/ldap/organizations',
+      kind: 'organization',
+      organizationPath: 'twakeDepartmentPath',
+    };
+    const people: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          ...usersSchema.attributes,
+          cn: { type: 'string' },
+          displayName: {
+            type: 'string',
+            role: 'displayName',
+            label: { en: 'Full name' },
+          },
+          mail: { type: 'string', role: 'primaryEmail', label: 'Email' },
+          title: {
+            type: 'pointer',
+            role: 'position',
+            branch: [positions],
+            label: { en: 'Position' },
+          },
+          twakeAccountStatus: {
+            ...usersSchema.attributes.twakeAccountStatus,
+            label: { en: 'Status' },
+          },
+        },
+      },
+    };
+    const teams: EntityDescriptor = {
+      ...twakeGroups,
+      schema: {
+        attributes: {
+          ...twakeGroups.schema.attributes,
+          cn: { type: 'string', role: 'identifier', label: { en: 'Name' } },
+          mail: { type: 'string', role: 'primaryEmail', label: 'Email' },
+          twakeMailboxType: {
+            type: 'pointer',
+            role: 'mailboxType',
+            branch: [mailboxBase],
+            label: { en: 'Group type' },
+          },
+        },
+      },
+    };
+    const entities = [organizations, people, teams, mailboxTypes];
+    const sophie: Entry = {
+      dn: 'uid=sophie.martin,ou=users,dc=example,dc=com',
+      objectClass: ['inetOrgPerson'],
+      uid: 'sophie.martin',
+      displayName: 'Sophie Martin',
+      mail: 'sophie.martin@example.com',
+      title: `cn=Sales Manager,${positions}`,
+      twakeAccountStatus: 'cn=active,ou=twakeAccountStatus,dc=example,dc=com',
+    };
+    const salesTeam: Entry = {
+      dn: 'cn=sales-team,ou=groups,dc=example,dc=com',
+      objectClass: ['groupOfNames'],
+      cn: 'sales-team',
+      mail: 'sales@example.com',
+      twakeMailboxType: `cn=teamMailbox,${mailboxBase}`,
+    };
+
+    it('should read what the card shows of each entry by its role', async () => {
+      // The card had only each entry's RDN to show: "sophie.martin" and
+      // "sales-team", in the same chips, with no name, address or kind.
+      nock(baseUrl)
+        .get(`/api/v1/ldap/organizations/${encodeURIComponent(sales)}/subnodes`)
+        .reply(200, [
+          { dn: france, ou: ['France'], objectClass: ['organizationalUnit'] },
+          sophie,
+          salesTeam,
+          { dn: 'cn=printer,ou=devices,dc=example,dc=com', cn: 'printer' },
+        ]);
+
+      const members = await new ConsoleApiClient(baseUrl).organizationMembers(
+        sales,
+        entities
+      );
+      expect(members.entries).to.deep.equal([
+        {
+          dn: sophie.dn,
+          label: 'sophie.martin',
+          entity: 'users',
+          values: {
+            displayName: 'Sophie Martin',
+            primaryEmail: 'sophie.martin@example.com',
+            position: `cn=Sales Manager,${positions}`,
+            accountStatus: 'cn=active,ou=twakeAccountStatus,dc=example,dc=com',
+          },
+        },
+        {
+          dn: salesTeam.dn,
+          label: 'sales-team',
+          entity: 'groups',
+          values: {
+            primaryEmail: 'sales@example.com',
+            mailboxType: `cn=teamMailbox,${mailboxBase}`,
+          },
+        },
+        // No entity holds it: named, and listed with nothing more.
+        { dn: 'cn=printer,ou=devices,dc=example,dc=com', label: 'printer' },
+      ]);
+    });
+
+    /** The tables of an organization holding these entries. */
+    const tables = (
+      entries: Entry[],
+      more: { truncated?: boolean; more?: number } = {},
+      onCreate?: Record<string, () => void>,
+      language = 'en'
+    ): string =>
+      new AttachedTables({
+        entities,
+        members: {
+          entries: entries.map(entry => attachedEntry(entry, entities)),
+          truncated: false,
+          ...more,
+        },
+        translator: new Translator(language),
+        name: 'Sales',
+        pointerLabel: (dn: string) =>
+          dn.startsWith('cn=active,')
+            ? 'Active'
+            : pointerLabel(entities, dn, language),
+        onCreate,
+        onOpen: () => undefined,
+      }).markup();
+
+    it('should list the people and the groups apart, each row leading to its card', () => {
+      const html = tables([sophie, salesTeam]);
+      const people = html.slice(0, html.indexOf('data-attached="groups"'));
+      const groupsTable = html.slice(html.indexOf('data-attached="groups"'));
+
+      expect(people).to.include('People (1)');
+      for (const text of [
+        'Full name',
+        'Email',
+        'Position',
+        'Status',
+        'Sophie Martin',
+        'sophie.martin@example.com',
+        'Sales Manager',
+        'Active',
+      ])
+        expect(people).to.include(`>${text}<`);
+      expect(people).to.include('href="#&#x2F;users&#x2F;sophie.martin"');
+      expect(people).to.not.include('sales-team');
+
+      expect(groupsTable).to.include('Groups (1)');
+      for (const text of [
+        'Name',
+        'Email',
+        'Group type',
+        'sales-team',
+        'sales@example.com',
+        'Shared mailbox',
+      ])
+        expect(groupsTable).to.include(`>${text}<`);
+      expect(groupsTable).to.include('href="#&#x2F;groups&#x2F;sales-team"');
+      // Neither search nor selection: a card is no list.
+      expect(html).to.not.include('type="checkbox"');
+    });
+
+    it('should say who is not there, and what the server left out', () => {
+      const empty = tables([]);
+      expect(empty).to.include('People (0)');
+      expect(empty).to.include('No one is attached to Sales.');
+      expect(tables([], {}, undefined, 'fr')).to.include(
+        'Personne n’est rattaché à Sales.'
+      );
+
+      // Under the table it concerns, and the count says it is not all.
+      const cut = tables([sophie, salesTeam], { truncated: true, more: 48 });
+      const notice = cut.indexOf('And 48 more entries, not listed here');
+      expect(notice).to.be.greaterThan(-1);
+      expect(cut.indexOf('data-attached="groups"')).to.be.greaterThan(notice);
+      expect(cut).to.include('People (1+)');
+      expect(cut).to.include('Groups (1)');
+      // Groups alone listed: the notice goes under them.
+      const groupsOnly = tables([salesTeam], { truncated: true });
+      expect(groupsOnly.indexOf('And more entries')).to.be.greaterThan(
+        groupsOnly.indexOf('data-attached="groups"')
+      );
+    });
+
+    it('should carry New user here and New group here when offered', () => {
+      const offered = tables([sophie], {}, { people: () => undefined });
+      expect(offered).to.include('>New user here<');
+      expect(offered).to.not.include('New group here');
+      expect(tables([sophie])).to.not.match(/New (user|group) here/);
+    });
+
+    /** The card of an organization, drawn for a caller of this scope. */
+    const card = async (
+      dn: string,
+      scope: Scope | null,
+      members: (
+        dn: string,
+        entities: EntityDescriptor[],
+        objectClass?: string
+      ) => Promise<unknown> = async () => ({ entries: [], truncated: false }),
+      known: EntityDescriptor[] = entities
+    ): Promise<string> => {
+      const holder = stubContainer();
+      const app = consoleIn({ '[data-org-detail]': holder });
+      Object.assign(app as unknown as object, { entities: known, scope });
+      Object.assign((app as unknown as { api: object }).api, {
+        organization: async () => ({ dn, ou: rdnValue(dn) }),
+        organizationMembers: members,
+        pointerOptions: async () => [],
+      });
+      await (
+        app as unknown as {
+          showOrganization(node: { dn: string; name: string }): Promise<void>;
+        }
+      ).showOrganization({ dn, name: rdnValue(dn) });
+      return holder.innerHTML;
+    };
+    const localAdmin = (branch: string): Scope => ({
+      user: 'uid=sophie.martin,ou=users,dc=example,dc=com',
+      unrestricted: false,
+      described: true,
+      branches: [
+        { dn: branch, read: true, write: true, delete: true },
+        { dn: transit, read: true, write: true },
+      ],
+      entities: [
+        { name: 'users', base: users.base, create: true },
+        { name: 'groups', base: groups.base, create: true },
+      ],
+      transit,
+    });
+
+    it('should offer New user here where the caller creates, as the Overview does', async () => {
+      expect(await card(france, localAdmin(sales))).to.include('New user here');
+      expect(await card(france, null)).to.include('New group here');
+      // Not on another administrator's organization, nor in transit.
+      expect(await card(sales, localAdmin(france))).to.not.include(
+        'New user here'
+      );
+      expect(await card(transit, localAdmin(sales))).to.not.include(
+        'New user here'
+      );
+      // Nor where the scope lets the caller create no account.
+      const noAccounts = localAdmin(sales);
+      noAccounts.entities = [];
+      expect(await card(france, noAccounts)).to.not.match(
+        /New (user|group) here/
+      );
+      // The global administrator writes above the transit branch: still no
+      // account is created there.
+      const global: Scope = {
+        ...localAdmin(top),
+        branches: [{ dn: top, read: true, write: true, delete: true }],
+      };
+      expect(await card(france, global)).to.include('New user here');
+      expect(await card(transit, global)).to.not.match(/New (user|group) here/);
+    });
+
+    it('should not say no one is attached where the scope hides the entries, nor when they could not be read', async () => {
+      // The server lists a local administrator only the entries of their own
+      // branches: on another organization, "No one" was not true.
+      expect(await card(france, localAdmin(sales))).to.include(
+        'No one is attached to France.'
+      );
+      const engineering = `ou=Engineering,${top}`;
+      const elsewhere = await card(engineering, localAdmin(sales));
+      expect(elsewhere).to.include(
+        'None you manage is attached to Engineering.'
+      );
+      expect(elsewhere).to.not.include('No one');
+      // What waits in transit is every administrator's to read.
+      expect(await card(transit, localAdmin(sales))).to.include(
+        'No one is attached to Transit.'
+      );
+
+      const failed = await card(france, localAdmin(sales), async () => {
+        throw Object.assign(new Error('Directory unreachable'), {
+          status: 500,
+        });
+      });
+      expect(failed).to.include('dc-error-block');
+      expect(failed).to.include('Directory unreachable');
+      expect(failed).to.not.include('No one');
+    });
+
+    it('should ask the accounts and the groups apart, each table saying what it leaves out', async () => {
+      // Asked at once, they shared one cap of fifty and one count, which did
+      // not say of which kind: "Groups (0)" could hide groups.
+      const withClass = (
+        entity: EntityDescriptor,
+        classes: string[]
+      ): EntityDescriptor => ({
+        ...entity,
+        schema: {
+          ...entity.schema,
+          attributes: {
+            ...entity.schema.attributes,
+            objectClass: {
+              type: 'array',
+              fixed: true,
+              default: ['top', ...classes],
+            },
+          },
+        },
+      });
+      const classed = [
+        organizations,
+        withClass(people, ['twakeAccount', 'twakeWhitePages']),
+        withClass(teams, ['groupOfNames', 'twakeStaticGroup']),
+        mailboxTypes,
+      ];
+      expect(attachedClass(classed, 'people')).to.equal('twakeAccount');
+      expect(attachedClass(classed, 'groups')).to.equal('groupOfNames');
+      expect(attachedClass(entities, 'groups')).to.equal(undefined);
+
+      const asked: (string | undefined)[] = [];
+      const html = await card(
+        france,
+        localAdmin(sales),
+        async (_dn, known, objectClass) => {
+          asked.push(objectClass);
+          return objectClass === 'groupOfNames'
+            ? {
+                entries: [attachedEntry(salesTeam, known)],
+                truncated: true,
+                more: 3,
+              }
+            : { entries: [attachedEntry(sophie, known)], truncated: false };
+        },
+        classed
+      );
+      expect(asked).to.deep.equal(['twakeAccount', 'groupOfNames']);
+      expect(html).to.include('People (1)');
+      expect(html).to.include('Groups (1+)');
+      const notice = html.indexOf('And 3 more entries');
+      expect(notice).to.be.greaterThan(html.indexOf('data-attached="groups"'));
+    });
+
+    it('should open the New user form with the department already set', () => {
+      const form = new EntityForm({
+        entity: users,
+        preset: {
+          twakeDepartmentLink: france,
+          twakeDepartmentPath: 'Sales / France',
+        },
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        pointerSearch: () => async () => [],
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+      }) as unknown as {
+        values: Record<string, string[]>;
+        picked: Map<string, string>;
+      };
+      expect(form.values.twakeDepartmentLink).to.deep.equal([france]);
+      expect(form.picked.get(france)).to.equal('Sales / France');
     });
   });
 

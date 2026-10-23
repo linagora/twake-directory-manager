@@ -15,7 +15,7 @@ export function exactly(text: string): RegExp {
  * and the address under the name, and the actions — Hand over and Delete in a **More** menu;
  * **Details** lists the fields as description lists under headings, the empty ones folded under
  * "Show empty fields (N)" and the DN under "Technical details"; a related section (Mailing lists,
- * Members, Attached entries) lists links to other cards.
+ * Members) lists links to other cards; an organization's card lists its People and Groups in tables.
  */
 export class EntryPage {
   readonly page: Page;
@@ -153,7 +153,7 @@ export class EntryPage {
     );
   }
 
-  /** A related section (Mailing lists, Members, Attached entries), by its heading */
+  /** A related section (Mailing lists, Members), by its heading */
   related(heading: string): Locator {
     return this.article.locator('section').filter({
       has: this.page.getByRole('heading', { name: heading, exact: true }),
@@ -163,6 +163,33 @@ export class EntryPage {
   /** The links of a related section */
   relatedItems(heading: string): Locator {
     return this.related(heading).getByRole('listitem');
+  }
+
+  /**
+   * A table of an organization's card, People or Groups, by its heading without the count:
+   * "People" finds "People (1)". Its heading carries New user here or New group here
+   */
+  attached(heading: string): Locator {
+    return this.article.locator('section[data-attached]').filter({
+      has: this.page.getByRole('heading', {
+        name: new RegExp(`^${escapeRegExp(heading)} \\(`),
+      }),
+    });
+  }
+
+  /** The heading of a table of an organization's card, count included: "People (1)" */
+  attachedHeading(heading: string): Locator {
+    return this.attached(heading).getByRole('heading');
+  }
+
+  /** The rows of a table of an organization's card */
+  attachedRows(heading: string): Locator {
+    return this.attached(heading).locator('tbody tr');
+  }
+
+  /** The row of a table of an organization's card holding a text: a name, an identifier */
+  attachedRow(heading: string, text: string): Locator {
+    return this.attachedRows(heading).filter({ hasText: text });
   }
 
   async expectName(name: string): Promise<void> {

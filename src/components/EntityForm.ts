@@ -62,6 +62,12 @@ export interface FormOptions {
   translator: Translator;
   /** Existing entry when editing; absent when creating */
   entry?: Entry;
+  /**
+   * What a new entry starts with, when it is created from somewhere that
+   * says part of it: the department of the organization card it was asked
+   * for on, with that department's path to name it. Ignored when editing
+   */
+  preset?: Entry;
   /** Load the candidates of a pointer field */
   pointerOptions(branch: string): Promise<{ dn: string; label: string }[]>;
   /**
@@ -226,8 +232,9 @@ export class EntityForm {
   constructor(options: FormOptions) {
     this.options = options;
     this.fields = this.editableFields();
+    const start = options.entry ?? options.preset;
     for (const [name, attr] of this.fields) {
-      this.values[name] = toList(entryValue(options.entry, name));
+      this.values[name] = toList(entryValue(start, name));
       const pointer = attr.type === 'pointer' || attr.items?.type === 'pointer';
       const branch = (attr.branch || attr.items?.branch || [])[0];
       const search = pointer && branch ? this.searchOf(branch) : undefined;
@@ -252,7 +259,7 @@ export class EntityForm {
       // alone would show the bare name of the last organization.
       const pathName = options.entity.organizationPath;
       if (search && name === options.entity.organizationLink && pathName) {
-        const path = toList(entryValue(options.entry, pathName))[0];
+        const path = toList(entryValue(start, pathName))[0];
         if (path && this.values[name].length === 1)
           this.picked.set(this.values[name][0], path);
       }

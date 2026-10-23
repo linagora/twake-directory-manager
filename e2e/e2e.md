@@ -88,7 +88,7 @@ Conventions).
 
 ## Organizations
 
-- [x] ORG-01 (P1) Browse the tree and open a card — `organizations.spec.ts`
+- [x] ORG-01 (P1) Browse the tree and open a card — `organizations.spec.ts` (the Sales card lists People (1) and Groups (1) in tables, with name, email, position or group type, and status, #128)
 - [x] ORG-02 (P1) Tree filter types forwards — `organizations.spec.ts` (from two letters the filter lists paths from the whole tree, #132)
 - [x] ORG-03 (P2) Create a sub-organization — `organizations.spec.ts`
 - [x] ORG-04 (P2) Edit an organization: managers, local administrators, mail domains — `organizations.spec.ts` (Mail domains is a typed search since v0.8.0, no longer a select; the new administrator's banner is checked at once, without the 5 min cache wait)
@@ -96,9 +96,10 @@ Conventions).
 - [x] ORG-06 (P2) Local administrator and organizations — `organizations.spec.ts`
 - [x] ORG-07 (P3) Department path link from an entry opens the tree — `organizations.spec.ts`
 - [x] ORG-08 (P2) Tree keeps its state after a write, and a typed address opens it down — `organizations.spec.ts`
-- [x] ORG-09 (P3) Organization card counts the attached entries it does not list — `organizations.spec.ts` (accounts written to the directory rather than imported; the singular with 51)
+- [x] ORG-09 (P3) Organization card counts the attached entries it does not list — `organizations.spec.ts` (accounts written to the directory rather than imported; the singular with 51; the notice under the People table, headed People (50+), #128)
 - [x] ORG-10 (P1) Filter finds an organization under a closed branch, selecting a row opens it, its "+" stays shown, and the card's New organization here creates under it — `organizations.spec.ts` (#132)
 - [x] ORG-11 (P2) A local administrator's filter finds only their branch's organizations — `organizations.spec.ts` (#132)
+- [x] ORG-12 (P1) The card's People and Groups rows open the entry's card (click, Enter, Back returns), New user here shows where the caller creates (sophie.martin on Sales / France, not alice), and creates with the department set, the new account joining the table without a reload — `organizations.spec.ts` (#128)
 
 ## Transit: hand over and claim
 
