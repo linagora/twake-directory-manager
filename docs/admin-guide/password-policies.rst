@@ -51,6 +51,10 @@ Each field shows the name of the directory attribute it sets. Durations are
 typed with their unit. A field left empty removes the setting: the directory
 then applies its own default, which the :guilabel:`Not set` choices name.
 
+Only the settings the directory knows are offered. OpenLDAP 2.4 has no
+:guilabel:`Maximum length`, :guilabel:`Account unused for` or delays after a
+failure, and only OpenLDAP 2.6 has the check module's settings.
+
 :guilabel:`Applies to` and :guilabel:`Check module` are shown but cannot be
 changed: they are set in the directory's configuration.
 

@@ -1656,16 +1656,19 @@ export class DirectoryConsole {
         </header>
         <div data-list><p class="dc-empty">${escapeHtml(t('app.loading'))}</p></div>
       </section>`;
+    let attributes: string[] | undefined;
     main
       .querySelector('[data-new]')
-      ?.addEventListener('click', () => this.openPolicyForm());
+      ?.addEventListener('click', () =>
+        this.openPolicyForm(undefined, attributes)
+      );
 
     const holder = main.querySelector<HTMLElement>(
       '[data-list]'
     ) as HTMLElement;
     let policies: PasswordPolicy[];
     try {
-      policies = await this.api.passwordPolicies();
+      ({ policies, attributes } = await this.api.passwordPolicies());
     } catch (err) {
       if (!this.current(generation)) return;
       const failure = readFailure(err, this.translator);
@@ -1681,7 +1684,7 @@ export class DirectoryConsole {
     )) {
       const open = (): void => {
         const policy = policies.find(item => item.cn === row.dataset.policy);
-        if (policy) this.openPolicyForm(policy);
+        if (policy) this.openPolicyForm(policy, attributes);
       };
       row.addEventListener('click', open);
       row.addEventListener('keydown', event => {
@@ -1690,8 +1693,12 @@ export class DirectoryConsole {
     }
   }
 
-  /** Create a password policy, or edit one. */
-  private openPolicyForm(policy?: PasswordPolicy): void {
+  /**
+   * Create a password policy, or edit one.
+   *
+   * @param attributes those the directory defines, all when unknown
+   */
+  private openPolicyForm(policy?: PasswordPolicy, attributes?: string[]): void {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     this.openPanel(
@@ -1702,6 +1709,7 @@ export class DirectoryConsole {
         new PolicyForm({
           translator: this.translator,
           policy,
+          attributes,
           canDelete: this.canDelete(),
           onSave: async (cn, values): Promise<void> => {
             try {

@@ -223,3 +223,13 @@ export interface PasswordPolicy {
   isDefault: boolean;
   [attribute: string]: unknown;
 }
+
+/** The password policies, as `GET /password-policies` serves them. */
+export interface PasswordPolicies {
+  policies: PasswordPolicy[];
+  /**
+   * The attributes a policy can be given, those the directory's schema
+   * defines; absent when the server does not tell them
+   */
+  attributes?: string[];
+}

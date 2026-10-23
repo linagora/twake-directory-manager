@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- A password policy offers only the settings the directory knows: OpenLDAP
+  2.4 refused _Maximum length_, _Account unused for_ and the delays after a
+  failure. Needs an ldap-rest that lists them (linagora/ldap-rest#366) (#118)
+
 ## v0.10.1 (2026-10-22)
 
 Built on ldap-rest 0.23.0.
