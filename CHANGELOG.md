@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- The New user form shows the identifier the address will give, fills the
+  common name from the full name, and Enter takes the domain the address
+  completion offers; the creation message names the entry (#130)
+
 ## v0.10.2 (2026-10-23)
 
 Built on ldap-rest 0.24.0.

@@ -28,7 +28,7 @@ test.describe('DOMAIN mail domains', () => {
     await form.fill('Identifier', id);
     await form.fill('Mail domain', name);
     await form.submit();
-    await app.expectToast('Created');
+    await app.expectToast(`${name} created`);
     expect(await directory.values(dn, 'associatedDomain')).toEqual([name]);
 
     // "@" offers it with no department chosen

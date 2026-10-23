@@ -625,6 +625,11 @@ export class EntityForm {
         ${heading}
         ${control}
         ${hint ? `<p class="dc-hint" data-hint>${escapeHtml(hint)}</p>` : ''}
+        ${
+          this.identifierSource()?.field === name
+            ? `<p class="dc-hint" id="dc-identifier-${escapeHtml(name)}" data-identifier hidden></p>`
+            : ''
+        }
         <p class="dc-error" id="dc-error-${escapeHtml(name)}" data-error hidden></p>
         ${
           // Why the branch offers nothing, when that is not the truth. Apart
@@ -828,6 +833,7 @@ export class EntityForm {
     });
 
     this.bindFullName(root);
+    const identifier = this.identifierSource();
 
     for (const [name, attr] of this.fields) {
       const wrapper = root.querySelector<HTMLElement>(
@@ -857,6 +863,10 @@ export class EntityForm {
             : [attr.type === 'date' ? EntityForm.toDirectoryDate(raw) : raw];
       };
       control?.addEventListener('change', () => store(control.value));
+      const preview =
+        control && identifier?.field === name
+          ? this.bindIdentifier(name, attr, control, wrapper)
+          : undefined;
       if (control && this.addresses.has(name)) {
         // A completion writes the box without the `change` a person's
         // typing ends in: the value is stored as it is written.
@@ -864,7 +874,10 @@ export class EntityForm {
           name,
           control as HTMLInputElement,
           wrapper,
-          store
+          value => {
+            store(value);
+            preview?.(value);
+          }
         );
         control.addEventListener('keydown', event => {
           completion?.key(event as KeyboardEvent);
@@ -879,6 +892,7 @@ export class EntityForm {
    * the parts last made of it — on an entry as on a new one, so that a
    * surname changed carries the full name along. The fields are found by
    * their schema roles; the order is the deployment's (`fullNameFormat`).
+   * On a new entry, the common name follows the full name in turn.
    */
   private bindFullName(root: HTMLElement): void {
     const plain = (role: string): string | undefined =>
@@ -889,15 +903,18 @@ export class EntityForm {
           !this.searches.has(name)
       )?.[0];
     const display = plain('displayName');
-    const parts = [plain('givenName'), plain('surname')];
-    if (!display || parts.some(name => !name)) return;
+    if (!display) return;
     const control = (name: string): HTMLInputElement | null =>
       root.querySelector<HTMLInputElement>(
         `[data-field="${selectorValue(name)}"] .dc-input`
       );
     const target = control(display);
+    if (!target) return;
+    const common = this.bindCommonName(display, target, control);
+    const parts = [plain('givenName'), plain('surname')];
+    if (parts.some(name => !name)) return;
     const [given, surname] = parts.map(name => control(name!));
-    if (!target || !given || !surname) return;
+    if (!given || !surname) return;
     const compose = (givenName: string, surnameValue: string): string =>
       givenName && surnameValue
         ? EntityForm.fullName(
@@ -915,9 +932,152 @@ export class EntityForm {
       written = compose(given.value.trim(), surname.value.trim());
       target.value = written;
       this.values[display] = written ? [written] : [];
+      common?.(written);
     };
     given.addEventListener('input', follow);
     surname.addEventListener('input', follow);
+  }
+
+  /**
+   * Write the common name from the full name, on a new entry, for as long
+   * as nobody wrote it otherwise. The member pickers match names through
+   * it: an account created here, with none, was not found by its full name.
+   * No role marks the field; it is the one named `cn`. An entry's own is
+   * left alone.
+   *
+   * @param display the full name field
+   * @param source its box
+   * @param control the box of a field
+   * @returns what a full name written by its parts is handed to
+   */
+  private bindCommonName(
+    display: string,
+    source: HTMLInputElement,
+    control: (name: string) => HTMLInputElement | null
+  ): ((fullName: string) => void) | undefined {
+    if (this.options.entry) return undefined;
+    const name = this.fields.find(
+      ([field, attr]) =>
+        field !== display &&
+        field.toLowerCase() === 'cn' &&
+        attr.type === 'string' &&
+        !this.searches.has(field)
+    )?.[0];
+    const target = name ? control(name) : null;
+    if (!name || !target) return undefined;
+    let written = '';
+    const follow = (fullName: string): void => {
+      if (target.value !== '' && target.value !== written) return;
+      written = fullName.trim();
+      target.value = written;
+      this.values[name] = written ? [written] : [];
+    };
+    source.addEventListener('input', () => follow(source.value));
+    return follow;
+  }
+
+  /**
+   * Where a new entry's identifier comes from, when the server generates it
+   * (`generatedFrom`): the field it is taken from, and the rule. The form
+   * has no identifier field then, and the operator met it on the card only.
+   */
+  private identifierSource():
+    | {
+        field: string;
+        rule: NonNullable<SchemaAttribute['generatedFrom']>;
+      }
+    | undefined {
+    const { entity, entry } = this.options;
+    if (entry) return undefined;
+    const main = entity.schema.attributes[entity.mainAttribute];
+    const rule = main?.generated ? main.generatedFrom : undefined;
+    if (!rule || !this.fields.some(([name]) => name === rule.attribute))
+      return undefined;
+    return { field: rule.attribute, rule };
+  }
+
+  /**
+   * The identifier the server generates from a value, as ldap-rest does:
+   * the `extract` group (or the whole match), in lower case, without what
+   * `strip` names. A collision is the server's to settle.
+   *
+   * @param rule the identifier's `generatedFrom`
+   * @param value the value it is generated from
+   * @returns the identifier, or undefined when none comes out
+   */
+  static generatedIdentifier(
+    rule: NonNullable<SchemaAttribute['generatedFrom']>,
+    value: string
+  ): string | undefined {
+    let id = value;
+    try {
+      if (rule.extract) {
+        const match = new RegExp(rule.extract).exec(id);
+        if (match) id = match[1] !== undefined ? match[1] : match[0];
+      }
+      if (rule.lowercase) id = id.toLowerCase();
+      if (rule.strip) id = id.replace(new RegExp(rule.strip, 'g'), '');
+    } catch {
+      return undefined; // A pattern the browser cannot compile
+    }
+    return id || undefined;
+  }
+
+  /**
+   * Show, under the field a new entry's identifier is generated from, the
+   * identifier it will get, once the field holds a value it accepts.
+   *
+   * @param name the field
+   * @param attr its schema definition
+   * @param control its box
+   * @param wrapper the field, holding the line
+   * @returns what a value written into the box is handed to
+   */
+  private bindIdentifier(
+    name: string,
+    attr: SchemaAttribute,
+    control: HTMLInputElement | HTMLSelectElement,
+    wrapper: HTMLElement
+  ): ((value: string) => void) | undefined {
+    const line = wrapper.querySelector<HTMLElement>('[data-identifier]');
+    const source = this.identifierSource();
+    if (!line || !source) return undefined;
+    const { entity, translator } = this.options;
+    const main = entity.schema.attributes[entity.mainAttribute];
+    let accepts: RegExp | undefined;
+    try {
+      accepts = attr.test ? new RegExp(attr.test) : undefined;
+    } catch {
+      accepts = undefined;
+    }
+    const described = control.getAttribute?.('aria-describedby');
+    control.setAttribute(
+      'aria-describedby',
+      [described, `dc-identifier-${name}`].filter(Boolean).join(' ')
+    );
+    const show = (value: string): void => {
+      const typed = value.trim();
+      const id =
+        typed && (!accepts || accepts.test(typed))
+          ? EntityForm.generatedIdentifier(source.rule, typed)
+          : undefined;
+      line.hidden = !id;
+      line.textContent = id
+        ? [
+            translator.t('form.identifierPreview', {
+              label: this.label(entity.mainAttribute, main),
+              id,
+            }),
+            source.rule.onCollision === 'suffix'
+              ? translator.t('form.identifierTaken')
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' ')
+        : '';
+    };
+    control.addEventListener('input', () => show(control.value));
+    return show;
   }
 
   /**
@@ -1342,11 +1502,12 @@ export class EntityForm {
    * a list under the box, as a picker's, that completes the address with
    * the domain chosen in it.
    *
-   * Nothing is chosen until the operator goes down the list: Enter in a
-   * token box adds what is typed, and in any other box submits the form,
-   * as before — a list that took Enter for its first line would have made
-   * every address typed whole take two. Up and Down move through it,
-   * Escape closes it, and leaving the box closes it too.
+   * The first line is chosen, as a picker's is: Enter takes it. Nothing
+   * else would have: "jane@" and Enter left "jane@", and the form refused
+   * it. An address typed whole, its domain among those offered, opens no
+   * list, and Enter goes on adding it or submitting the form. Up and Down
+   * move through the list, Escape closes it, and leaving the box closes it
+   * too.
    *
    * @param name the field
    * @param input its text box
@@ -1421,7 +1582,7 @@ export class EntityForm {
           ...starts,
           ...matching.filter(domain => !starts.includes(domain)),
         ].map(domain => `${local}@${domain}`);
-        active = -1;
+        active = 0;
         if (suggestions.length === 0) close();
         else paint();
       });

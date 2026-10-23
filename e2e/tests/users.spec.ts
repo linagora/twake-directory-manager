@@ -93,6 +93,10 @@ test.describe('USER user accounts', () => {
     });
     await form.fill('Full name', 'Tom Tester');
     await form.fill('Email', `${uid}@example.com`);
+    // the identifier the server will take from it, before it is created
+    await expect(form.identifier('Email')).toHaveText(
+      `Identifier: ${uid} (sign-in name, cannot be changed later). A number is added to it if it is already taken.`
+    );
     await form.select('Title', 'Mr');
     await form.select('Position', 'Software Engineer');
     await form.pick('Department', 'Back', backend.path);
@@ -100,7 +104,7 @@ test.describe('USER user accounts', () => {
     await form.addValue('Email aliases', `tom-${unique}@example.com`);
     await form.submit();
 
-    await app.expectToast('Created');
+    await app.expectToast('Tom Tester created');
     await form.expectClosed();
     const card = app.entry();
     await card.expectName(uid);
@@ -174,7 +178,7 @@ test.describe('USER user accounts', () => {
     });
     await form.pick('Department', 'Human', 'Human Resources');
     await form.submit();
-    await app.expectToast('Created');
+    await app.expectToast('Checked Form created');
     await expect(app.entry().detail('Mailbox size')).toHaveText('4 GB');
     expect(creations).toHaveLength(1);
   });
@@ -277,7 +281,7 @@ test.describe('USER user accounts', () => {
 
     await form.control('Deletion date').fill('');
     await form.submit();
-    await app.expectToast('Created');
+    await app.expectToast(`Dr Jeanne Durand${unique} created`);
     expect(await directory.values(dn, 'displayName')).toEqual([
       `Dr Jeanne Durand${unique}`,
     ]);
@@ -302,6 +306,9 @@ test.describe('USER user accounts', () => {
     const email = form.control('Email');
     await email.pressSequentially(`${local}@`);
     await expect(form.options('Email')).toHaveText([`${local}@example.com`]);
+    // Enter takes the first, as in the other pickers
+    await email.press('Enter');
+    await expect(email).toHaveValue(`${local}@example.com`);
 
     // its own lists.example.com, beside example.com, which the top links
     await form.removeToken('Department', 'Human Resources');
@@ -859,7 +866,7 @@ test.describe('USER user accounts', () => {
     });
     await form.pick('Department', 'Front', frontend.path);
     await form.submit();
-    await app.expectToast('Created');
+    await app.expectToast('Front Dev created');
     await app.entry().expectName(uid);
 
     await app.navItem('Users').click();

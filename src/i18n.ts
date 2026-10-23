@@ -99,6 +99,9 @@ const en: Catalogue = {
   'form.fieldRequired': 'Required',
   'form.optional': 'Optional fields ({count})',
   'form.addValue': 'Press Enter to add a value',
+  'form.identifierPreview':
+    '{label}: {id} (sign-in name, cannot be changed later).',
+  'form.identifierTaken': 'A number is added to it if it is already taken.',
   'form.removeValue': 'Remove {value}',
   'form.none': '—',
   'form.choose': 'Choose…',
@@ -237,6 +240,7 @@ const en: Catalogue = {
 
   'save.done': 'Saved',
   'create.done': 'Created',
+  'create.doneNamed': '{name} created',
 
   'nav.policies': 'Password policies',
   'policy.new': 'New policy',
@@ -418,6 +422,9 @@ const fr: Catalogue = {
   'form.fieldRequired': 'Obligatoire',
   'form.optional': 'Champs facultatifs ({count})',
   'form.addValue': 'Appuyez sur Entrée pour ajouter une valeur',
+  'form.identifierPreview':
+    '{label} : {id} (nom de connexion, non modifiable ensuite).',
+  'form.identifierTaken': 'Un numéro y est ajouté s’il est déjà pris.',
   'form.removeValue': 'Retirer {value}',
   'form.none': '—',
   'form.choose': 'Choisir…',
@@ -570,6 +577,7 @@ const fr: Catalogue = {
 
   'save.done': 'Enregistré',
   'create.done': 'Créé',
+  'create.doneNamed': '{name} est maintenant dans l’annuaire',
 
   'nav.policies': 'Politiques de mot de passe',
   'policy.new': 'Nouvelle politique',
@@ -735,6 +743,9 @@ const mn: Catalogue = {
   'form.fieldRequired': 'Заавал бөглөнө',
   'form.optional': 'Заавал бус талбарууд ({count})',
   'form.addValue': 'Утга нэмэхийн тулд Enter дарна уу',
+  'form.identifierPreview':
+    '{label}: {id} (нэвтрэх нэр, дараа нь өөрчлөх боломжгүй).',
+  'form.identifierTaken': 'Аль хэдийн ашиглагдсан бол ард нь дугаар нэмнэ.',
   'form.removeValue': '{value} утгыг хасах',
   'form.none': '—',
   'form.choose': 'Сонгох…',
@@ -868,6 +879,7 @@ const mn: Catalogue = {
 
   'save.done': 'Хадгалагдлаа',
   'create.done': 'Үүсгэгдлээ',
+  'create.doneNamed': '{name} үүсгэгдлээ',
 
   'nav.policies': 'Нууц үгийн бодлого',
   'policy.new': 'Шинэ бодлого',

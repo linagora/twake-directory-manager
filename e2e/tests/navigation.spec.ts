@@ -140,7 +140,7 @@ test.describe('NAV layout, navigation and language', () => {
     directory.track(dn);
     await form.fill('Name', name);
     await form.submit();
-    await local.expectToast('Created');
+    await local.expectToast(`${name} created`);
     expect(await directory.values(dn, 'twakeDepartmentPath')).toEqual([
       `${tenant.org.path} / ${name}`,
     ]);

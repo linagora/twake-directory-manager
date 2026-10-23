@@ -1456,6 +1456,33 @@ describe('Directory console', () => {
       ).to.equal('Importer des utilisateurs');
     });
 
+    it('should name what was created in its toast', () => {
+      // "Created" alone did not say what.
+      type Toasting = {
+        createdToast(
+          entity: EntityDescriptor,
+          values: Record<string, string | string[]>,
+          id: string
+        ): string;
+      };
+      const en = consoleIn({}) as unknown as Toasting;
+      const fr = consoleIn({}, 'fr') as unknown as Toasting;
+      // By its full name (the fixture's cn holds that role)
+      expect(en.createdToast(users, { cn: 'Ux Audit' }, 'ux-audit-1')).to.equal(
+        'Ux Audit created'
+      );
+      // Said without a gender in French, a group or an organization being
+      // named by the same sentence.
+      expect(fr.createdToast(users, { cn: 'Ux Audit' }, 'ux-audit-1')).to.equal(
+        'Ux Audit est maintenant dans l’annuaire'
+      );
+      // Else by its identifier
+      expect(en.createdToast(groups, {}, 'sales-team')).to.equal(
+        'sales-team created'
+      );
+      expect(en.createdToast(groups, {}, '')).to.equal('Created');
+    });
+
     it('should name the department in the import rules as its field does', () => {
       // The Twake schema labels the field "Organisation" / "Байгууллага",
       // the template's column with it: the rules must not say "département".
@@ -5091,6 +5118,43 @@ describe('Directory console', () => {
         expect(page.value('displayName')).to.equal('Bat Dorjiin');
       });
 
+      it('should write the common name from the full name, on a new entry', () => {
+        // The member pickers match names through cn: an account created
+        // with none was not found by its full name.
+        const created = form();
+        const page = typing();
+        created.bindFullName(page.root);
+        page.type('givenName', 'Ux');
+        page.type('sn', 'Audit');
+        expect(page.value('cn')).to.equal('Ux Audit');
+        expect(created.values.cn).to.deep.equal(['Ux Audit']);
+        // The full name typed whole is followed too.
+        page.type('displayName', 'Dr Ux Audit');
+        expect(page.value('cn')).to.equal('Dr Ux Audit');
+        // A common name typed by hand is kept.
+        page.type('cn', 'ux');
+        page.type('sn', 'Auditor');
+        page.type('displayName', 'Ux Auditor');
+        expect(page.value('cn')).to.equal('ux');
+      });
+
+      it('should leave an entry’s common name alone', () => {
+        const page = typing();
+        const entry = {
+          uid: 'bat',
+          givenName: 'Bat',
+          sn: 'Dorj',
+          displayName: 'Bat Dorj',
+        };
+        // Filled from the entry, as the form renders it; no common name.
+        for (const [name, value] of Object.entries(entry))
+          page.type(name, value);
+        form(entry).bindFullName(page.root);
+        page.type('sn', 'Bold');
+        expect(page.value('displayName')).to.equal('Bat Bold');
+        expect(page.value('cn')).to.equal('');
+      });
+
       it('should carry along the full name of an entry its parts made', () => {
         const made = typing();
         const entry = { uid: 'bat', givenName: 'Bat', sn: 'Dorj' };
@@ -6654,8 +6718,11 @@ describe('Directory console', () => {
             0,
             mailList.innerHTML.indexOf('>jane@example.com<')
           );
+          // The first line is chosen, as a picker's: Enter takes it.
           await type(mail, 'jane@ex');
-          mail.fire('keydown', down);
+          expect(mailList.innerHTML).to.match(
+            /aria-selected="true"\s+data-suggestion="0">jane@example\.com</
+          );
           mail.fire('keydown', enter);
           expect(mail.value).to.equal('jane@example.com');
           expect(values.mail).to.deep.equal(['jane@example.com']);
@@ -6693,13 +6760,13 @@ describe('Directory console', () => {
           expect(asked).to.deep.equal([undefined]);
         });
 
-        it('should leave Enter adding an alias as typed, until a domain is chosen', async () => {
+        it('should complete an alias on Enter, and add it on the next', async () => {
           const { alias, aliasList, values } = await addressForm(() =>
             Promise.resolve(['example.com', 'lists.example.com'])
           );
+          // "name@" and Enter left "name@" before: nothing was chosen.
           await type(alias, 'j.doe@exa');
           expect(aliasList.hidden).to.equal(false);
-          // Nothing chosen in the list: Enter adds the text, as it did.
           let prevented = false;
           alias.fire('keydown', {
             key: 'Enter',
@@ -6708,21 +6775,98 @@ describe('Directory console', () => {
             },
           });
           expect(prevented).to.equal(true);
-          expect(values.mailAlternateAddress).to.deep.equal(['j.doe@exa']);
+          expect(alias.value).to.equal('j.doe@example.com');
+          expect(values.mailAlternateAddress).to.deep.equal([]);
           expect(aliasList.hidden).to.equal(true);
+          alias.fire('keydown', enter);
+          expect(values.mailAlternateAddress).to.deep.equal([
+            'j.doe@example.com',
+          ]);
 
-          // Chosen with the arrows, Enter completes; the next one adds.
+          // Another line, chosen with the arrows
           await type(alias, 'doe@');
-          alias.fire('keydown', down);
           alias.fire('keydown', down);
           alias.fire('keydown', enter);
           expect(alias.value).to.equal('doe@lists.example.com');
-          expect(values.mailAlternateAddress).to.deep.equal(['j.doe@exa']);
-          alias.fire('keydown', enter);
-          expect(values.mailAlternateAddress).to.deep.equal([
-            'j.doe@exa',
-            'doe@lists.example.com',
-          ]);
+          // Escape keeps the text as typed, for Enter to add
+          await type(alias, 'x@exa');
+          alias.fire('keydown', { key: 'Escape', preventDefault: () => {} });
+          expect(aliasList.hidden).to.equal(true);
+          expect(alias.value).to.equal('x@exa');
+        });
+
+        it('should show the identifier a new account will get', async () => {
+          // The server takes it from the address; the operator met it on the
+          // card only, once it could no longer be changed.
+          const mail = recorder();
+          const line = recorder();
+          const fields: Record<string, unknown> = {
+            '[data-field="mail"]': recorder({
+              '.dc-input': mail,
+              '[data-completions]': recorder(),
+              '[data-identifier]': line,
+            }),
+          };
+          const container = stubContainer();
+          (
+            container as unknown as { querySelector(s: string): unknown }
+          ).querySelector = selector => fields[selector] ?? null;
+          const entity = (entry?: Entry): EntityForm =>
+            new EntityForm({
+              entity: {
+                ...users,
+                schema: {
+                  attributes: {
+                    ...users.schema.attributes,
+                    uid: {
+                      ...users.schema.attributes.uid,
+                      label: { en: 'Identifier', fr: 'Identifiant' },
+                      generatedFrom: {
+                        attribute: 'mail',
+                        extract: '^([^@]+)@',
+                        lowercase: true,
+                        strip: '[^a-zA-Z0-9._-]',
+                        onCollision: 'suffix',
+                      },
+                    },
+                  },
+                },
+              },
+              entry,
+              translator: new Translator('en'),
+              pointerOptions: () => Promise.resolve([]),
+              mailDomains: () => Promise.resolve(['example.com']),
+              onSubmit: () => Promise.resolve(),
+              onCancel: () => undefined,
+            });
+          await entity().render(container);
+          expect(container.innerHTML).to.include(
+            '<p class="dc-hint" id="dc-identifier-mail" data-identifier hidden></p>'
+          );
+
+          // Not before the address is one
+          await type(mail, 'Ux-Audit+1@');
+          expect(line.hidden).to.equal(true);
+          await type(mail, 'Ux-Audit+1@example.com');
+          expect(line.hidden).to.equal(false);
+          expect(
+            (line as unknown as { textContent: string }).textContent
+          ).to.equal(
+            'Identifier: ux-audit1 (sign-in name, cannot be changed later). A number is added to it if it is already taken.'
+          );
+          // Completed from the list, as typed
+          await type(mail, 'jane@');
+          mail.fire('keydown', enter);
+          expect(
+            (line as unknown as { textContent: string }).textContent
+          ).to.match(/^Identifier: jane /);
+          await type(mail, '');
+          expect(line.hidden).to.equal(true);
+
+          // Editing, the identifier exists: no line
+          const edit = stubContainer();
+          await entity({ uid: 'jane', mail: 'jane@example.com' }).render(edit);
+          expect(edit.innerHTML).not.to.include('data-identifier');
         });
 
         it('should stay a plain box, quietly, when the domains cannot be read', async () => {
