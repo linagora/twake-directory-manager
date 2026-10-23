@@ -1739,7 +1739,40 @@ export class EntityForm {
             pattern: String(pattern),
           });
     }
+    this.showErrors();
+    return Object.keys(this.errors).length === 0;
+  }
 
+  /**
+   * Show the server's refusal of a field under it, as a refusal of the form's
+   * own is shown: the server checks what the form cannot, a value already
+   * used elsewhere, and a toast saying so out of sight of the field left the
+   * operator guessing which one to correct. The next save clears it.
+   *
+   * @param attribute the attribute refused, as the server names it
+   * @param message what to show under it
+   * @returns false when the form has no such field, for the caller to say it
+   *   elsewhere
+   */
+  refuse(attribute: string, message: string): boolean {
+    const name = this.fields
+      .map(([candidate]) => candidate)
+      .find(candidate => candidate.toLowerCase() === attribute.toLowerCase());
+    if (
+      name === undefined ||
+      !this.root?.querySelector(`[data-field="${selectorValue(name)}"]`)
+    )
+      return false;
+    this.errors = { [name]: message };
+    this.showErrors();
+    return true;
+  }
+
+  /**
+   * Draw {@link errors} under their fields, clearing the others, and take
+   * the focus to the first field refused.
+   */
+  private showErrors(): void {
     const root = this.root;
     if (root) {
       for (const [name] of this.fields) {
@@ -1782,7 +1815,6 @@ export class EntityForm {
           ?.focus({ preventScroll: true });
       }
     }
-    return Object.keys(this.errors).length === 0;
   }
 
   /**

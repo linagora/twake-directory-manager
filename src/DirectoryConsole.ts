@@ -33,8 +33,8 @@ import {
   attributeLabel,
   comparableDn,
   entryValue,
+  explainRefusal,
   isDnShaped,
-  nameAttributes,
   parentDn as parentOf,
   ownValueLabel,
   pointerLabel,
@@ -1966,9 +1966,11 @@ export class DirectoryConsole {
         values: Record<string, string | string[]>,
         cleared: string[]
       ): Promise<void> => {
+        const id = entry
+          ? String(entryValue(entry, entity.mainAttribute) ?? '')
+          : createdEntryId(entity, undefined, values);
         try {
           if (entry) {
-            const id = String(entryValue(entry, entity.mainAttribute) ?? '');
             // The entry as stored: what a membership change is diffed against.
             await this.api.update(entity, id, values, cleared, entry);
             this.toast(t('save.done'));
@@ -1976,15 +1978,24 @@ export class DirectoryConsole {
             await this.renderMain();
           } else {
             const created = await this.api.create(entity, values as Entry);
-            const id = createdEntryId(entity, created, values);
-            this.toast(this.createdToast(entity, values, id));
+            const createdId = createdEntryId(entity, created, values);
+            this.toast(this.createdToast(entity, values, createdId));
             this.closePanel();
             this.go(
-              id ? `${entity.key}/${encodeURIComponent(id)}` : entity.key
+              createdId
+                ? `${entity.key}/${encodeURIComponent(createdId)}`
+                : entity.key
             );
           }
         } catch (err) {
-          this.toast(this.refusal(err, entity), true);
+          this.refuseSave(
+            err,
+            entity,
+            form,
+            entry
+              ? this.personName(entity, entry, id)
+              : this.submittedName(entity, values, id)
+          );
         }
       },
     });
@@ -2061,7 +2072,7 @@ export class DirectoryConsole {
         values: Record<string, string | string[]>,
         cleared: string[]
       ): Promise<void> =>
-        this.submitOrganization(entity, values, cleared, entry, parent()),
+        this.submitOrganization(entity, values, cleared, entry, parent(), form),
     });
 
     this.openPanel(
@@ -2156,13 +2167,42 @@ export class DirectoryConsole {
       names.get(comparableDn(dn)) ?? pointerLabel(this.entities, dn, language);
   }
 
-  /** A refused save, naming the fields the way the form does. */
-  private refusal(err: unknown, entity: EntityDescriptor): string {
-    return nameAttributes(
-      (err as Error).message,
-      entity.schema,
-      this.translator.language
-    );
+  /**
+   * A refusal in the interface's language, naming the fields the way the
+   * form does (see {@link explainRefusal}).
+   *
+   * @param err what the request threw
+   * @param entity the entity of the entry refused
+   * @param name the entry the change was about
+   */
+  private refusal(
+    err: unknown,
+    entity: EntityDescriptor,
+    name?: string
+  ): { message: string; attribute?: string } {
+    return explainRefusal(err, entity.schema, this.translator, name);
+  }
+
+  /**
+   * Say why a save was refused: under the field at fault when the form shows
+   * it, the toast then only pointing there — it disappears while the form
+   * stays open — and in the toast otherwise.
+   *
+   * @param err what the request threw
+   * @param entity the entity of the entry refused
+   * @param form the form that was saved
+   * @param name the entry the change was about
+   */
+  private refuseSave(
+    err: unknown,
+    entity: EntityDescriptor,
+    form: EntityForm | undefined,
+    name: string
+  ): void {
+    const { message, attribute } = this.refusal(err, entity, name || undefined);
+    if (attribute && form?.refuse(attribute, message))
+      this.toast(this.translator.t('refusal.seeField'), true);
+    else this.toast(message, true);
   }
 
   /**
@@ -2177,13 +2217,15 @@ export class DirectoryConsole {
    * @param cleared attributes the form emptied
    * @param entry the organization edited; none for a new one
    * @param parentDn where a new one goes; the server's default when omitted
+   * @param form the form submitted, to show a refusal under its field
    */
   private async submitOrganization(
     entity: EntityDescriptor,
     values: Record<string, string | string[]>,
     cleared: string[],
     entry?: Entry,
-    parentDn?: string
+    parentDn?: string,
+    form?: EntityForm
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
@@ -2228,7 +2270,18 @@ export class DirectoryConsole {
       }
       await this.renderMain();
     } catch (err) {
-      this.toast(this.refusal(err, entity), true);
+      // Named as the panel's title names it.
+      const id = entry
+        ? String(entryValue(entry, entity.mainAttribute) ?? '')
+        : createdEntryId(entity, undefined, values);
+      this.refuseSave(
+        err,
+        entity,
+        form,
+        entry
+          ? this.entryName(entity, id)
+          : this.submittedName(entity, values, id)
+      );
     }
   }
 
@@ -2712,14 +2765,31 @@ export class DirectoryConsole {
     values: Record<string, string | string[]>,
     id: string
   ): string {
-    const display = roleAttribute(entity.schema, 'displayName');
-    const full = display ? values[display] : undefined;
-    const name =
-      (Array.isArray(full) ? full[0] : full)?.trim() ||
-      (id ? this.entryName(entity, id) : '');
+    const name = this.submittedName(entity, values, id);
     return name
       ? this.translator.t('create.doneNamed', { name })
       : this.translator.t('create.done');
+  }
+
+  /**
+   * A new entry named by its full name, else as its card names it.
+   *
+   * @param entity the entity the entry belongs to
+   * @param values what the form sent
+   * @param id the entry's main attribute value; empty when unknown
+   * @returns the name, empty when the form gave none
+   */
+  private submittedName(
+    entity: EntityDescriptor,
+    values: Record<string, string | string[]>,
+    id: string
+  ): string {
+    const display = roleAttribute(entity.schema, 'displayName');
+    const full = display ? values[display] : undefined;
+    return (
+      (Array.isArray(full) ? full[0] : full)?.trim() ||
+      (id ? this.entryName(entity, id) : '')
+    );
   }
 
   /*
@@ -2751,7 +2821,10 @@ export class DirectoryConsole {
       this.toast(this.translator.t('delete.done'));
       this.go(entity.key);
     } catch (err) {
-      this.toast(this.inUse(err, entity, id) ?? (err as Error).message, true);
+      this.toast(
+        this.inUse(err, entity, id) ?? this.refusal(err, entity, name).message,
+        true
+      );
     }
   }
 
@@ -2829,7 +2902,7 @@ export class DirectoryConsole {
       // The server's refusal names the DN, in English: say it in words.
       if ((err as { status?: number }).status === 409)
         this.toast(this.translator.t('delete.notEmpty', { name }), true);
-      else this.toast((err as Error).message, true);
+      else this.toast(this.refusal(err, entity, name).message, true);
     }
   }
 

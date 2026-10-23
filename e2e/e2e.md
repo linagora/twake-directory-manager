@@ -62,8 +62,8 @@ Conventions).
 - [x] USER-01 (P1) Account card — `users.spec.ts`
 - [x] USER-02 (P1) Create an account through the form — `users.spec.ts`
 - [x] USER-03 (P2) Form validation before sending — `users.spec.ts`
-- [x] USER-04 (P2) Server rules: unique address and allowed domain — `users.spec.ts`
-- [x] USER-05 (P1) Edit an account — `users.spec.ts` (also the address: an address or alias another account holds and a foreign domain refused on edit, a new one saved and searched, the identifier kept)
+- [x] USER-04 (P2) Server rules: unique address and allowed domain — `users.spec.ts` (each said under _Email_ in the console's words, the field invalid and focused, the toast pointing there; the taken address also in French)
+- [x] USER-05 (P1) Edit an account — `users.spec.ts` (also the address: an address or alias another account holds and a foreign domain refused on edit, under _Email_, a new one saved and searched, the identifier kept)
 - [x] USER-06 (P1) Department field searches the tree — `users.spec.ts`
 - [x] USER-07 (P2) Account-pointer fields are search boxes (Delegates) — `users.spec.ts`
 - [x] USER-08 (P1) Change an account's state — `users.spec.ts` (also as a local administrator, on an account of their branch)
@@ -113,7 +113,7 @@ Conventions).
 - [x] IMPORT-01 (P2) Import panel and empty template — `import.spec.ts`
 - [x] IMPORT-02 (P2) Column matching — `import.spec.ts`
 - [x] IMPORT-03 (P1) Check and import valid rows — `import.spec.ts`
-- [x] IMPORT-04 (P2) Rows with errors and refused rows — `import.spec.ts` (a repeated address reads "is already on line N", the plan's "repeats line N" predates it)
+- [x] IMPORT-04 (P2) Rows with errors and refused rows — `import.spec.ts` (a repeated address reads "is already on line N", the plan's "repeats line N" predates it; the address the server refuses is said in the console's words, on screen and in the refused rows file)
 - [x] IMPORT-05 (P2) Import respects the scope — `import.spec.ts`
 - [x] IMPORT-06 (P3) Stop an import — `import.spec.ts` (150 rows)
 

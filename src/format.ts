@@ -12,11 +12,13 @@
 
 import { toTitleCase } from './shared/dom';
 
+import type { Translator } from './i18n';
 import type {
   EntityDescriptor,
   EntitySchema,
   Entry,
   LocalizedText,
+  Refusal,
   SchemaAttribute,
 } from './types';
 
@@ -280,14 +282,8 @@ export function nameAttributes(
   schema: EntitySchema,
   language: string
 ): string {
-  const labelOf = (name: string): string | undefined => {
-    const key = Object.keys(schema.attributes).find(
-      candidate => candidate.toLowerCase() === name.toLowerCase()
-    );
-    return key === undefined
-      ? undefined
-      : attributeLabel(key, schema.attributes[key], language);
-  };
+  const labelOf = (name: string): string | undefined =>
+    schemaLabel(name, schema, language);
   return message.replace(
     /"([a-z][\w-]*)"|\b(field) ([a-z][\w-]*)/gi,
     (match, quoted?: string, word?: string, bare?: string) => {
@@ -296,6 +292,90 @@ export function nameAttributes(
       return quoted === undefined ? `${word} "${label}"` : `"${label}"`;
     }
   );
+}
+
+/**
+ * The label of an attribute the server names, spelt as the directory spells
+ * it: the schema's own key may differ in case.
+ *
+ * @param name attribute as the server names it
+ * @param schema schema of the entry
+ * @param language interface language
+ * @returns its label, or undefined for a name the schema does not know
+ */
+function schemaLabel(
+  name: string,
+  schema: EntitySchema,
+  language: string
+): string | undefined {
+  const key = Object.keys(schema.attributes).find(
+    candidate => candidate.toLowerCase() === name.toLowerCase()
+  );
+  return key === undefined
+    ? undefined
+    : attributeLabel(key, schema.attributes[key], language);
+}
+
+/**
+ * A server refusal in the interface's language, and the attribute at fault.
+ *
+ * ldap-rest describes its common refusals besides wording them (see
+ * {@link Refusal}): a value already used, an address outside the mail domains
+ * of its organization, a change outside the caller's branches. Those are said
+ * here in the console's words, the field named by its label; the attribute is
+ * handed back for a form to show the message under it. Any other refusal is
+ * the server's own sentence, fields named by their labels, said to be the
+ * server's: its words are not the console's. A failure no server answered —
+ * the network, say — is left as it is.
+ *
+ * @param err what the request threw
+ * @param schema schema of the entry refused
+ * @param translator interface language
+ * @param name the entry the change was about, for a refusal of the caller's
+ *   rights; without it, that refusal is said as the server worded it
+ * @returns the message, and the attribute it is about when it is about one
+ */
+export function explainRefusal(
+  err: unknown,
+  schema: EntitySchema,
+  translator: Translator,
+  name?: string
+): { message: string; attribute?: string } {
+  const { message, status, refusal } = (err ?? {}) as {
+    message?: string;
+    status?: number;
+    refusal?: Refusal;
+  };
+  const { language } = translator;
+  const { code, attribute, value, domains } = refusal ?? { code: '' };
+  const field =
+    attribute === undefined
+      ? undefined
+      : (schemaLabel(attribute, schema, language) ??
+        attributeLabel(attribute, undefined, language));
+  if (code === 'unique' && field !== undefined && value !== undefined)
+    return {
+      message: translator.t('refusal.unique', { field, value }),
+      attribute,
+    };
+  if (code === 'mailDomain' && field !== undefined && value && domains)
+    return {
+      message: translator.t('refusal.domain', {
+        field,
+        domain: value.slice(value.lastIndexOf('@') + 1),
+        domains: domains.join(', '),
+      }),
+      attribute,
+    };
+  if (code === 'forbidden' && name)
+    return { message: translator.t('refusal.forbidden', { name }) };
+  const named = nameAttributes(String(message ?? ''), schema, language);
+  return {
+    message:
+      typeof status === 'number'
+        ? translator.t('refusal.server', { message: named })
+        : named,
+  };
 }
 
 /**

@@ -48,6 +48,7 @@ import { OrganizationTree } from '../src/components/OrganizationTree';
 import { availableLanguages, languageName, Translator } from '../src/i18n';
 import {
   beforeToday,
+  explainRefusal,
   formatByteSize,
   nameAttributes,
   parseByteSize,
@@ -1568,6 +1569,55 @@ describe('Directory console', () => {
       await state.run();
       expect(state.failures.map(failure => failure.message)).to.deep.equal([
         'Attribute "Nom" must not be empty',
+      ]);
+    });
+
+    it('should say a refused row in the interface language, as a form does', async () => {
+      const refusals = [
+        Object.assign(new Error('user: "alice@example.com" is already used'), {
+          status: 409,
+          refusal: {
+            code: 'unique',
+            attribute: 'mail',
+            value: 'alice@example.com',
+          },
+        }),
+        Object.assign(new Error('Token does not have permission'), {
+          status: 403,
+          refusal: { code: 'forbidden' },
+        }),
+        Object.assign(new Error('Attribute "cn" must not be empty'), {
+          status: 400,
+        }),
+      ];
+      const importer = new EntityImport({
+        entity: users,
+        translator: new Translator('fr'),
+        pointerOptions: () => Promise.resolve([]),
+        create: () => Promise.reject(refusals.shift()),
+        onDone: () => undefined,
+        onClose: () => undefined,
+      });
+      const state = importer as unknown as {
+        rows: {
+          line: number;
+          cells: string[];
+          values: object;
+          errors: string[];
+        }[];
+        failures: { message: string }[];
+        run(): Promise<void>;
+      };
+      state.rows = [
+        { line: 2, cells: [], values: {}, errors: [] },
+        { line: 3, cells: [], values: { cn: 'Eva Ernst' }, errors: [] },
+        { line: 4, cells: [], values: {}, errors: [] },
+      ];
+      await state.run();
+      expect(state.failures.map(failure => failure.message)).to.deep.equal([
+        'Mail « alice@example.com » : déjà utilisé par une autre entrée.',
+        'Vous n’administrez pas Eva Ernst : cette modification ne vous revient pas.',
+        'Le serveur a refusé : Attribute "Nom" must not be empty',
       ]);
     });
 
@@ -3724,6 +3774,36 @@ describe('Directory console', () => {
       }
     });
 
+    it('should hand on what ldap-rest says of a refusal besides its sentence', async () => {
+      nock(baseUrl).post('/api/v1/ldap/users').reply(409, {
+        error:
+          'user: "alice@example.com" is already used (mail must be unique)',
+        code: 'unique',
+        attribute: 'mail',
+        value: 'alice@example.com',
+      });
+      nock(baseUrl)
+        .post('/api/v1/ldap/users')
+        .reply(409, { error: 'Conflict' });
+
+      const client = new ConsoleApiClient(baseUrl);
+      const refusal = (err: unknown) => (err as { refusal?: unknown }).refusal;
+      const first = await client
+        .create(users, { mail: 'alice@example.com' })
+        .catch((err: unknown) => err);
+      expect(refusal(first)).to.deep.equal({
+        code: 'unique',
+        attribute: 'mail',
+        value: 'alice@example.com',
+      });
+      // An older server, or another refusal: nothing besides the sentence.
+      const second = await client
+        .create(users, { mail: 'alice@example.com' })
+        .catch((err: unknown) => err);
+      expect((second as Error).message).to.equal('Conflict');
+      expect(refusal(second)).to.equal(undefined);
+    });
+
     it('should search on the chosen attribute', async () => {
       nock(baseUrl)
         .get('/api/v1/ldap/users')
@@ -5673,6 +5753,202 @@ describe('Directory console', () => {
         nameAttributes('Entry "jsmith" already exists', schema, 'en')
       ).to.equal('Entry "jsmith" already exists');
     });
+
+    describe('a refusal ldap-rest describes', () => {
+      const schema: EntitySchema = {
+        attributes: {
+          mail: {
+            type: 'string',
+            label: {
+              en: 'Email',
+              fr: 'Adresse électronique',
+              mn: 'Цахим шуудан',
+            },
+          },
+          cn: { type: 'string', label: { en: 'Name', fr: 'Nom' } },
+        },
+      };
+      /** What the API client throws for an answer. */
+      const refused = (
+        status: number,
+        message: string,
+        refusal?: Record<string, unknown>
+      ) => Object.assign(new Error(message), { status, refusal });
+      const taken = refused(
+        409,
+        'user: "alice@example.com" is already used (mail must be unique)',
+        { code: 'unique', attribute: 'mail', value: 'alice@example.com' }
+      );
+      const outside = refused(
+        409,
+        'The mail domain of "x@other.org" is not one of the authorised domains (example.com, lists.example.com)',
+        {
+          code: 'mailDomain',
+          attribute: 'mail',
+          value: 'x@other.org',
+          domains: ['example.com', 'lists.example.com'],
+        }
+      );
+      const forbidden = refused(
+        403,
+        'Token does not have permission on this branch',
+        { code: 'forbidden' }
+      );
+
+      it('should say an address already used in the interface language, naming the field', () => {
+        expect(
+          explainRefusal(taken, schema, new Translator('fr'))
+        ).to.deep.equal({
+          message:
+            'Adresse électronique « alice@example.com » : déjà utilisé par une autre entrée.',
+          attribute: 'mail',
+        });
+        expect(
+          explainRefusal(taken, schema, new Translator('en')).message
+        ).to.equal(
+          'Email “alice@example.com” is already used by another entry.'
+        );
+        expect(
+          explainRefusal(taken, schema, new Translator('mn')).message
+        ).to.equal(
+          'Цахим шуудан «alice@example.com» өөр бичлэгт ашиглагдаж байна.'
+        );
+      });
+
+      it('should say a mail domain the organization may not use, and those it may', () => {
+        expect(
+          explainRefusal(outside, schema, new Translator('en'))
+        ).to.deep.equal({
+          message:
+            'Email: other.org is not a mail domain of this organization. Allowed: example.com, lists.example.com.',
+          attribute: 'mail',
+        });
+        expect(
+          explainRefusal(outside, schema, new Translator('fr')).message
+        ).to.equal(
+          'Adresse électronique : other.org n’est pas un domaine de messagerie de cette organisation. Autorisés : example.com, lists.example.com.'
+        );
+      });
+
+      it('should name an attribute the schema does not know as the console names it', () => {
+        const other = refused(409, 'already used', {
+          code: 'unique',
+          attribute: 'employeeNumber',
+          value: 'E0010',
+        });
+        expect(
+          explainRefusal(other, schema, new Translator('en'))
+        ).to.deep.equal({
+          message: 'Employee Number “E0010” is already used by another entry.',
+          attribute: 'employeeNumber',
+        });
+      });
+
+      it('should say a refusal of the caller’s rights naming the entry, not the token', () => {
+        expect(
+          explainRefusal(forbidden, schema, new Translator('en'), 'Transit')
+        ).to.deep.equal({
+          message:
+            'You do not administer Transit: this change is not yours to make.',
+        });
+        expect(
+          explainRefusal(forbidden, schema, new Translator('fr'), 'Transit')
+            .message
+        ).to.equal(
+          'Vous n’administrez pas Transit : cette modification ne vous revient pas.'
+        );
+      });
+
+      it('should keep the server’s words for another refusal, saying they are its own', () => {
+        expect(
+          explainRefusal(
+            refused(400, 'Attribute "cn" must not be empty'),
+            schema,
+            new Translator('en')
+          )
+        ).to.deep.equal({
+          message: 'The server refused: Attribute "Name" must not be empty',
+        });
+        expect(
+          explainRefusal(
+            refused(409, 'Something else', { code: 'somethingNew' }),
+            schema,
+            new Translator('fr')
+          ).message
+        ).to.equal('Le serveur a refusé : Something else');
+        // Without the entry it is about, a refusal of rights stays the
+        // server's.
+        expect(
+          explainRefusal(forbidden, schema, new Translator('en')).message
+        ).to.equal(
+          'The server refused: Token does not have permission on this branch'
+        );
+        // A failure no server answered is not one of its refusals.
+        expect(
+          explainRefusal(
+            new TypeError('Failed to fetch'),
+            schema,
+            new Translator('en')
+          ).message
+        ).to.equal('Failed to fetch');
+      });
+
+      it('should show a refusal under the field at fault, the toast pointing there', () => {
+        const app = consoleIn({}) as unknown as {
+          toast(message: string, isError?: boolean): void;
+          refuseSave(
+            err: unknown,
+            entity: EntityDescriptor,
+            form: { refuse(attribute: string, message: string): boolean },
+            name: string
+          ): void;
+        };
+        const toasts: [string, boolean | undefined][] = [];
+        app.toast = (message, isError) => toasts.push([message, isError]);
+        const shown: [string, string][] = [];
+        const form = {
+          refuse: (attribute: string, message: string) => {
+            shown.push([attribute, message]);
+            return attribute === 'mail';
+          },
+        };
+        app.refuseSave(taken, users, form, 'Alice');
+        expect(shown).to.deep.equal([
+          [
+            'mail',
+            'Mail “alice@example.com” is already used by another entry.',
+          ],
+        ]);
+        expect(toasts).to.deep.equal([
+          ['Not saved: see the highlighted field', true],
+        ]);
+
+        // A field the form does not show: the toast says it all.
+        toasts.length = 0;
+        app.refuseSave(
+          refused(409, 'already used', {
+            code: 'unique',
+            attribute: 'employeeNumber',
+            value: 'E0010',
+          }),
+          users,
+          form,
+          'Alice'
+        );
+        expect(toasts).to.deep.equal([
+          ['Employee Number “E0010” is already used by another entry.', true],
+        ]);
+
+        toasts.length = 0;
+        app.refuseSave(forbidden, users, form, 'Transit');
+        expect(toasts).to.deep.equal([
+          [
+            'You do not administer Transit: this change is not yours to make.',
+            true,
+          ],
+        ]);
+      });
+    });
   });
 
   describe('escapeDnValue', () => {
@@ -6152,6 +6428,38 @@ describe('Directory console', () => {
         expect(controls.get('mail')!.attributes).to.deep.equal({
           'aria-describedby': 'dc-help-mail',
         });
+
+        // The server's refusal of a field is shown the same way.
+        controls.get('cn')!.focused = false;
+        expect(
+          (created as unknown as EntityForm).refuse(
+            'MAIL',
+            'Email “jane@example.com” is already used by another entry.'
+          )
+        ).to.equal(true);
+        const error = (
+          field('mail') as { querySelector(selector: string): unknown }
+        ).querySelector('[data-error]') as {
+          textContent: string;
+          hidden: boolean;
+        };
+        expect(error).to.deep.include({
+          textContent:
+            'Email “jane@example.com” is already used by another entry.',
+          hidden: false,
+        });
+        expect(controls.get('mail')!.attributes).to.deep.equal({
+          'aria-describedby': 'dc-help-mail dc-error-mail',
+          'aria-invalid': 'true',
+        });
+        expect(controls.get('mail')!.focused).to.equal(true);
+        expect(controls.get('cn')!.attributes['aria-invalid']).to.equal(
+          undefined
+        );
+        // A field the form does not hold is left to the toast.
+        expect(
+          (created as unknown as EntityForm).refuse('employeeNumber', 'Taken')
+        ).to.equal(false);
       });
     });
 

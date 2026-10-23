@@ -19,6 +19,7 @@ import type {
   OrganizationNode,
   PasswordPolicies,
   PasswordPolicy,
+  Refusal,
   Scope,
   SchemaAttribute,
 } from '../types';
@@ -254,18 +255,36 @@ function toValues(value: string | string[] | undefined): string[] {
 /**
  * An `Error` carrying the status the answer came with. The status is what
  * tells an endpoint the server does not serve from one it refused, so it is
- * attached whatever the body turned out to hold.
+ * attached whatever the body turned out to hold. A refusal ldap-rest
+ * describes (see {@link Refusal}) is attached too, for the console to say it
+ * in its own words.
  *
  * @param message message to show
  * @param status HTTP status of the answer
+ * @param body the answer, when it was JSON
  * @returns the error to throw
  */
 function statusError(
   message: string,
-  status: number
-): Error & { status: number } {
-  const error = new Error(message) as Error & { status: number };
+  status: number,
+  body?: unknown
+): Error & { status: number; refusal?: Refusal } {
+  const error = new Error(message) as Error & {
+    status: number;
+    refusal?: Refusal;
+  };
   error.status = status;
+  const { code, attribute, value, domains } = (body ?? {}) as Record<
+    string,
+    unknown
+  >;
+  if (typeof code === 'string')
+    error.refusal = {
+      code,
+      ...(typeof attribute === 'string' ? { attribute } : {}),
+      ...(typeof value === 'string' ? { value } : {}),
+      ...(Array.isArray(domains) ? { domains: domains.map(String) } : {}),
+    };
   return error;
 }
 
@@ -439,7 +458,8 @@ export class ConsoleApiClient {
     if (!response.ok)
       throw statusError(
         (isJson && (payload as { error?: string } | null)?.error) || status,
-        response.status
+        response.status,
+        isJson ? payload : undefined
       );
     // A success nobody can read is still a failure, and it is one the caller
     // should be able to tell apart by its status like any other.
