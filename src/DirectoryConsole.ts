@@ -861,7 +861,7 @@ export class DirectoryConsole {
         : this.renderDashboard(main);
 
     const entity = this.entity(this.route.entity);
-    if (!entity) return this.renderDashboard(main);
+    if (!entity) return this.renderNotFound(main);
     if (entity.kind === 'organization')
       return this.renderOrganizations(main, generation);
     if (this.route.id)
@@ -1141,6 +1141,22 @@ export class DirectoryConsole {
         const entity = this.entity(button.dataset.new as string);
         if (entity) void this.openForm(entity);
       });
+  }
+
+  /**
+   * What an address naming no page shows. It drew the overview, which made
+   * a mistyped or outdated link, `#/passwordPolicies` for
+   * `#/password-policies`, look as though it had worked.
+   */
+  private renderNotFound(main: HTMLElement): void {
+    const t = (key: string): string => this.translator.t(key);
+    main.innerHTML = `
+      <section class="dc-view">
+        <div class="dc-empty" data-not-found>
+          <p>${escapeHtml(t('app.notFound'))}</p>
+          <a class="dc-button" href="#/">${escapeHtml(t('app.toOverview'))}</a>
+        </div>
+      </section>`;
   }
 
   /** The table of an entity. */
