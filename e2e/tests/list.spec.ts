@@ -544,6 +544,8 @@ test.describe('LIST lists, search and bulk actions', () => {
     await panel.run();
     await expect(panel.stat('created')).toHaveText('1');
     await panel.closeButton.click();
+    // the list shows what the import created, until asked back to its search
+    await list.backToSearchButton.click();
 
     await app.setLanguage('fr');
     await askToDelete(one.lastName, '1 sélectionné', [
