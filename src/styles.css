@@ -1041,7 +1041,10 @@
   transition: opacity 0.12s;
 }
 
+/* Hover is no way to find a control by touch, or without a pointer: the
+   selected organization keeps its "+" in view. */
 .dc-tree-row:hover .dc-tree-add,
+.dc-tree-node.dc-selected > .dc-tree-row .dc-tree-add,
 .dc-tree-add:focus-visible {
   opacity: 1;
 }

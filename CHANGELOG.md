@@ -25,6 +25,11 @@ Built on ldap-rest 0.25.0.
 - An address naming no page, such as a mistyped or outdated link, says
   _There is no page at this address._ with a link back to the Overview,
   instead of showing the Overview as if it had worked (#137)
+- The Organizations _Filter_ searches the whole tree, not only the branches
+  opened, and lists what it finds by path (_Sales / France_); choosing one
+  opens the tree down to it and shows its card. Selecting an organization
+  also opens its branch, its card offers _New organization here_ beside
+  _Edit_, and the selected row keeps its "+" in view (#132)
 
 ## v0.10.2 (2026-10-23)
 

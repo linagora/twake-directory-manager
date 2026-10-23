@@ -994,6 +994,28 @@ export class DirectoryConsole {
     );
   }
 
+  /**
+   * Whether the caller may create an organization under this one.
+   *
+   * Every written branch counts here, not only the organizations among
+   * them: a branch written above the root of the tree, as an administrator
+   * of the whole directory has, covers every node. The transit branch is
+   * still no organization of theirs to grow.
+   *
+   * @param dn the organization a new one would hang from
+   */
+  private createsUnder(dn: string): boolean {
+    if (!this.canWrite()) return false;
+    if (!scopeRestricts(this.scope)) return true;
+    const transit = this.scope.transit;
+    return this.scope.branches.some(
+      branch =>
+        branch.write &&
+        !(transit && withinDn(branch.dn, transit)) &&
+        withinDn(dn, branch.dn)
+    );
+  }
+
   /** Whether the caller may write anywhere at all. */
   private canWrite(): boolean {
     if (this.scopeError) return false;
@@ -1384,16 +1406,6 @@ export class DirectoryConsole {
         </div>
       </section>`;
 
-    // Every written branch counts here, not only the organizations among
-    // them: a branch written above the root of the tree, as an administrator
-    // of the whole directory has, covers every node. The transit branch is
-    // still no organization of theirs to grow.
-    const transit = this.scope?.transit;
-    const writable = scopeRestricts(this.scope)
-      ? this.scope.branches.filter(
-          branch => branch.write && !(transit && withinDn(branch.dn, transit))
-        )
-      : undefined;
     this.tree = new OrganizationTree(
       {
         translator: this.translator,
@@ -1419,10 +1431,13 @@ export class DirectoryConsole {
                 void this.openOrganizationForm(entity, undefined, node.dn);
               }
             : undefined,
-        canCreateChild: writable
-          ? (node: OrganizationNode): boolean =>
-              writable.some(branch => withinDn(node.dn, branch.dn))
-          : undefined,
+        canCreateChild: (node: OrganizationNode): boolean =>
+          this.createsUnder(node.dn),
+        // Walked from the root the tree is drawn from: the server roots a
+        // local administrator's tree at their branch, and the filter finds
+        // what the tree can open down to, no more.
+        everywhere: (): Promise<{ dn: string; label: string }[]> =>
+          this.api.organizationOptions(),
       },
       this.tree
     );
@@ -1493,6 +1508,13 @@ export class DirectoryConsole {
       onDelete: (): void => {
         void this.confirmDeleteOrganization(entity, entry, node.dn);
       },
+      // What the tree's "+" does, said in words where the reader is looking:
+      // the "+" shows on a row only once it is pointed at or selected.
+      onCreateChild: this.createsUnder(node.dn)
+        ? (): void => {
+            void this.openOrganizationForm(entity, undefined, node.dn);
+          }
+        : undefined,
       onStatus: (): void => undefined,
       onResetPassword: (): void => undefined,
     }).render(holder);

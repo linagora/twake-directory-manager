@@ -30,7 +30,21 @@ export interface TreeOptions {
    * "+" it would refuse is one the reader should not be offered
    */
   canCreateChild?(node: OrganizationNode): boolean;
+  /**
+   * Every organization the filter may find, labelled by its path. The tree
+   * reads only the branches opened, and a filter limited to them found
+   * nothing of a department under a closed one: this is what a filter of
+   * {@link FILTER_EVERYWHERE} characters or more searches instead. Asked
+   * the first time a filter needs it, then kept until the tree is read again
+   */
+  everywhere?(): Promise<{ dn: string; label: string }[]>;
 }
+
+/**
+ * Length from which the filter searches the whole tree rather than the
+ * branches opened: one letter is in most names, and lists most of the tree.
+ */
+export const FILTER_EVERYWHERE = 2;
 
 export class OrganizationTree {
   private readonly options: TreeOptions;
@@ -40,6 +54,12 @@ export class OrganizationTree {
   private selectedDn: string | null = null;
   private filter = '';
   private error: string | null = null;
+  /**
+   * What {@link TreeOptions.everywhere} answered: undefined until asked, null
+   * when it failed, the filter then searching the opened branches as before
+   */
+  private index: { dn: string; label: string }[] | null | undefined;
+  private indexing: Promise<void> | null = null;
 
   /**
    * @param options what the tree reads, and whom it tells
@@ -54,6 +74,7 @@ export class OrganizationTree {
       this.tree = previous.tree;
       this.expanded = previous.expanded;
       this.filter = previous.filter;
+      this.index = previous.index;
     }
   }
 
@@ -142,6 +163,10 @@ export class OrganizationTree {
    */
   async refresh(dn?: string): Promise<OrganizationNode[]> {
     const node = dn === undefined ? this.tree : this.find(dn);
+    // An organization created, renamed or deleted is one the filter finds,
+    // under its new name, or no longer: it is searched afresh next time.
+    this.index = undefined;
+    this.indexing = null;
     if (!node) return [];
     await this.load(node);
     this.draw();
@@ -225,19 +250,97 @@ export class OrganizationTree {
     const list = this.container?.querySelector<HTMLElement>('[data-tree-list]');
     if (!list) return;
     const { translator } = this.options;
-    // A filter matching none of the branches opened says so, rather than
-    // leave a blank where the tree was: the others are not searched.
-    const nodes = this.tree ? this.nodeMarkup(this.tree, 0) : '';
-    list.innerHTML = this.error
-      ? `<p class="dc-empty dc-error-block">${escapeHtml(this.error)}</p>`
-      : !this.tree
-        ? `<p class="dc-empty">${escapeHtml(translator.t('app.loading'))}</p>`
-        : nodes
-          ? `<ul class="dc-tree-list">${nodes}</ul>`
-          : `<p class="dc-empty">${escapeHtml(
-              translator.t('tree.noMatch', { filter: this.filter })
-            )}</p>`;
+    const loading = `<p class="dc-empty">${escapeHtml(
+      translator.t('app.loading')
+    )}</p>`;
+    const none = `<p class="dc-empty">${escapeHtml(
+      translator.t('tree.noMatch', { filter: this.filter })
+    )}</p>`;
+    if (this.error)
+      list.innerHTML = `<p class="dc-empty dc-error-block">${escapeHtml(
+        this.error
+      )}</p>`;
+    else if (!this.tree) list.innerHTML = loading;
+    else if (this.searchesEverywhere()) {
+      // The whole tree, read once: until it is, saying "no match" would be
+      // saying it of the branches opened only.
+      if (this.index === undefined) {
+        void this.loadIndex();
+        list.innerHTML = loading;
+      } else {
+        const found = this.found();
+        list.innerHTML = found.length
+          ? `<ul class="dc-tree-list dc-tree-found">${found
+              .map(
+                option => `
+            <li class="dc-tree-result" style="--depth:0">
+              <div class="dc-tree-row">
+                <button type="button" class="dc-tree-label" data-found="${escapeHtml(
+                  option.dn
+                )}" title="${escapeHtml(option.label)}">${escapeHtml(
+                  option.label
+                )}</button>
+              </div>
+            </li>`
+              )
+              .join('')}</ul>`
+          : none;
+      }
+    } else {
+      // A short filter, or a tree that could not be searched whole, matches
+      // the branches opened; matching none of them, it says so rather than
+      // leave a blank where the tree was.
+      const nodes = this.nodeMarkup(this.tree, 0);
+      list.innerHTML = nodes ? `<ul class="dc-tree-list">${nodes}</ul>` : none;
+    }
     this.bind(list);
+  }
+
+  /** Whether the filter searches the whole tree rather than the opened branches. */
+  private searchesEverywhere(): boolean {
+    return (
+      !!this.options.everywhere &&
+      this.filter.length >= FILTER_EVERYWHERE &&
+      this.index !== null
+    );
+  }
+
+  /**
+   * Read every organization the filter may find, once, and draw the list
+   * again. A failure leaves the filter to the opened branches.
+   */
+  private loadIndex(): Promise<void> {
+    if (this.indexing) return this.indexing;
+    const indexing = this.readIndex().then(index => {
+      // Read again meanwhile: what this read found may be out of date.
+      if (this.indexing !== indexing) return;
+      this.indexing = null;
+      this.index = index;
+      this.drawList();
+    });
+    this.indexing = indexing;
+    return indexing;
+  }
+
+  private async readIndex(): Promise<{ dn: string; label: string }[] | null> {
+    try {
+      return (await this.options.everywhere?.()) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** The organizations whose path holds the filter, in reading order. */
+  private found(): { dn: string; label: string }[] {
+    const needle = this.filter.toLowerCase();
+    return (this.index || [])
+      .filter(option => option.label.toLowerCase().includes(needle))
+      .sort((a, b) =>
+        a.label.localeCompare(b.label, undefined, {
+          sensitivity: 'base',
+          numeric: true,
+        })
+      );
   }
 
   /** One node and, when it is open, its children. */
@@ -324,12 +427,18 @@ export class OrganizationTree {
       container.querySelectorAll<HTMLElement>('[data-select]')
     )) {
       button.addEventListener('click', () => {
-        const dn = button.dataset.select as string;
-        const node = this.find(dn);
-        if (!node) return;
-        this.selectedDn = dn;
-        this.draw();
-        this.options.onSelect(node);
+        void this.pick(button.dataset.select as string);
+      });
+    }
+
+    for (const button of Array.from(
+      container.querySelectorAll<HTMLElement>('[data-found]')
+    )) {
+      button.addEventListener('click', () => {
+        void this.choose(
+          button.dataset.found as string,
+          button.textContent?.trim() || ''
+        );
       });
     }
 
@@ -341,6 +450,55 @@ export class OrganizationTree {
         if (node) this.options.onCreateChild?.(node);
       });
     }
+  }
+
+  /**
+   * Select a node the reader clicked, and open it: its card is on screen,
+   * and what hangs under it is what the reader looks for next. Only the
+   * toggle closes it again.
+   */
+  private async pick(dn: string): Promise<void> {
+    const node = this.find(dn);
+    if (!node) return;
+    this.selectedDn = dn;
+    this.draw();
+    this.options.onSelect(node);
+    if (!this.expanded.has(node.dn)) await this.toggle(node.dn);
+    this.focusSelected();
+  }
+
+  /**
+   * Show an organization the filter found: the filter is cleared, so the
+   * tree is back, opened down to it, and it is selected and shown.
+   *
+   * @param dn organization chosen
+   * @param label its path, naming it should the tree not hold it
+   */
+  private async choose(dn: string, label: string): Promise<void> {
+    this.filter = '';
+    const input =
+      this.container?.querySelector<HTMLInputElement>('[data-filter]');
+    if (input) input.value = '';
+    await this.reveal(dn);
+    const node = this.find(dn);
+    this.options.onSelect(node ?? { dn, name: label });
+    if (node && !this.expanded.has(node.dn)) await this.toggle(node.dn);
+    this.focusSelected();
+  }
+
+  /**
+   * Give the focus back to the selected node. The button pressed was
+   * replaced when the list was drawn again, and the focus went with it to
+   * the top of the page, where a keyboard had to find the tree again. Left
+   * alone when the reader has moved it elsewhere meanwhile.
+   */
+  private focusSelected(): void {
+    if (typeof document === 'undefined') return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    this.container
+      ?.querySelector<HTMLElement>('.dc-selected > .dc-tree-row .dc-tree-label')
+      ?.focus();
   }
 
   /** Open or close a node, loading its children the first time. */

@@ -4,7 +4,8 @@ import { EntryPage, exactly } from './EntryPage';
 
 /**
  * The Organizations screen: the tree on the left (Filter box, ▸ / ▾ toggles, a **+** per
- * organization), the card of the selected organization on the right.
+ * organization), the card of the selected organization on the right. A filter of two letters
+ * or more lists the organizations of the whole tree by path in place of the tree.
  */
 export class OrganizationsPage {
   readonly page: Page;
@@ -14,6 +15,10 @@ export class OrganizationsPage {
   readonly detail: Locator;
   readonly card: EntryPage;
   readonly selected: Locator;
+  /** What a filter of two letters or more found in the whole tree, by path */
+  readonly results: Locator;
+  /** What the tree says in place of a list: loading, or that nothing matches */
+  readonly notice: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -24,6 +29,13 @@ export class OrganizationsPage {
     this.selected = this.tree.locator(
       'li.dc-selected > .dc-tree-row .dc-tree-label'
     );
+    this.results = this.tree.locator('[data-found]');
+    this.notice = this.tree.locator('[data-tree-list] > .dc-empty');
+  }
+
+  /** An organization the filter found, by its path */
+  result(path: string): Locator {
+    return this.results.filter({ hasText: exactly(path) });
   }
 
   /** The node of an organization, by its name: its row and, when open, its children */
