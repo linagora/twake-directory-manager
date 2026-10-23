@@ -234,6 +234,46 @@ describe('Password policies', () => {
       ]);
     });
 
+    it('should offer only the attributes the directory defines', () => {
+      // OpenLDAP 2.4 refuses pwdMaxLength, pwdMaxIdle, pwdMinDelay and
+      // pwdMaxDelay: "attribute type undefined"
+      const defined = POLICY_GROUPS.flatMap(group =>
+        group.fields.map(field => field.name)
+      ).filter(
+        name =>
+          ![
+            'pwdMaxLength',
+            'pwdMaxIdle',
+            'pwdMinDelay',
+            'pwdMaxDelay',
+            'pwdMustChange',
+            'pwdAllowUserChange',
+            'pwdSafeModify',
+          ].includes(name)
+      );
+      const markup = (attributes?: string[]): string => {
+        const container = { innerHTML: '', querySelector: () => null };
+        new PolicyForm({
+          translator: en,
+          policy,
+          attributes,
+          canDelete: true,
+          onSave: async () => undefined,
+          onDelete: () => undefined,
+          onCancel: () => undefined,
+        }).render(container as unknown as HTMLElement);
+        return container.innerHTML;
+      };
+      const offered = markup(defined);
+      expect(offered).to.include('id="dc-policy-pwdMinLength"');
+      for (const name of ['pwdMaxLength', 'pwdMaxIdle', 'pwdMinDelay'])
+        expect(offered).not.to.include(`id="dc-policy-${name}"`);
+      // A group left with no field is not shown at all
+      expect(offered).not.to.include(en.t('policy.group.changes'));
+      // A server that does not say offers everything
+      expect(markup()).to.include('id="dc-policy-pwdMaxLength"');
+    });
+
     it('should not offer to delete the default policy', () => {
       const container = { innerHTML: '', querySelector: () => null };
       new PolicyForm({
@@ -271,8 +311,11 @@ describe('Password policies', () => {
 
       nock(baseUrl)
         .get('/api/v1/password-policies')
-        .reply(200, { policies: [policy] });
-      expect(await client.passwordPolicies()).to.deep.equal([policy]);
+        .reply(200, { policies: [policy], attributes: ['pwdMaxAge'] });
+      expect(await client.passwordPolicies()).to.deep.equal({
+        policies: [policy],
+        attributes: ['pwdMaxAge'],
+      });
 
       nock(baseUrl)
         .post('/api/v1/password-policies', {

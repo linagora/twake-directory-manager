@@ -17,6 +17,7 @@ import type {
   ExternalMembers,
   LocalizedText,
   OrganizationNode,
+  PasswordPolicies,
   PasswordPolicy,
   Scope,
   SchemaAttribute,
@@ -910,12 +911,12 @@ export class ConsoleApiClient {
     );
   }
 
-  /** The password policies, sorted by name. */
-  async passwordPolicies(): Promise<PasswordPolicy[]> {
-    const { policies } = await this.call<{ policies: PasswordPolicy[] }>(
+  /** The password policies, sorted by name, and the attributes they take. */
+  async passwordPolicies(): Promise<PasswordPolicies> {
+    const { policies, attributes } = await this.call<PasswordPolicies>(
       this.policyPath()
     );
-    return policies;
+    return { policies, attributes };
   }
 
   /**

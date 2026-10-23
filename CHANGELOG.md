@@ -8,6 +8,9 @@
   _байгууллага_ in Mongolian, as its field and the template's column do (#119)
 - An empty required field says _Required_ under it, no longer the form's
   legend _Fields marked with * are required_ once per field (#120)
+- A password policy offers only the settings the directory knows: OpenLDAP
+  2.4 refused _Maximum length_, _Account unused for_ and the delays after a
+  failure. Needs an ldap-rest that lists them (linagora/ldap-rest#366) (#118)
 
 ## v0.10.1 (2026-10-22)
 

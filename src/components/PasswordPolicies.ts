@@ -227,6 +227,11 @@ export interface PolicyFormOptions {
   translator: Translator;
   /** The policy to edit; none to create one */
   policy?: PasswordPolicy;
+  /**
+   * The attributes the directory defines, the only ones offered: OpenLDAP
+   * 2.4 refuses pwdMaxLength. All of them when the server does not say.
+   */
+  attributes?: string[];
   canDelete: boolean;
   /**
    * Send the form: the name and every attribute to set for a new policy,
@@ -247,10 +252,16 @@ export class PolicyForm {
 
   render(container: HTMLElement): void {
     this.container = container;
-    const { translator, policy, canDelete } = this.options;
+    const { translator, policy, canDelete, attributes } = this.options;
     const t = (key: string, values?: Record<string, string | number>): string =>
       translator.t(key, values);
     const fixed = READ_ONLY.filter(name => policy?.[name] !== undefined);
+    const groups = POLICY_GROUPS.map(group => ({
+      ...group,
+      fields: group.fields.filter(
+        field => !attributes || attributes.includes(field.name)
+      ),
+    })).filter(group => group.fields.length > 0);
 
     container.innerHTML = `
       <form class="dc-form dc-policy-form" novalidate>
@@ -263,13 +274,15 @@ export class PolicyForm {
                 <p class="dc-error" data-error hidden></p>
               </div>`
         }
-        ${POLICY_GROUPS.map(
-          group => `
+        ${groups
+          .map(
+            group => `
           <fieldset class="dc-form-group">
             <legend>${escapeHtml(t(`policy.group.${group.key}`))}</legend>
             ${group.fields.map(field => this.fieldMarkup(field)).join('')}
           </fieldset>`
-        ).join('')}
+          )
+          .join('')}
         ${
           fixed.length
             ? `<fieldset class="dc-form-group">
