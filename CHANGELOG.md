@@ -11,6 +11,9 @@ Built on ldap-rest 0.25.0.
   lists the settings the directory defines (#118, linagora/ldap-rest#366)
 - The keyboard opens an entry from the Users, Groups and reference lists: the
   first column of each row is a link, which also opens in a new tab (#135)
+- A generated password stays in the Reset password panel, with a _Copy_
+  button, until it is closed on purpose; closing it uncopied asks first. In a
+  toast, the click that began selecting it dismissed it for good (#124)
 
 ## v0.10.2 (2026-10-23)
 

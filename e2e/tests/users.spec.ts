@@ -610,14 +610,30 @@ test.describe('USER user accounts', () => {
     await expect(dialog.hint).toHaveText('Leave empty to generate a password');
     await expect(dialog.forceChange).toBeChecked();
     await dialog.confirmButton.click();
-    await expect(app.toast).toHaveText(
-      /^New password: .+ — copy it now, it will not be shown again$/
+    // in the panel, never in a toast, which one click dismissed for good
+    await expect(dialog.title).toHaveText(`New password — ${user.uid}`);
+    await expect(dialog.generated).toHaveValue(/.+/);
+    await expect(dialog.generated).toBeFocused();
+    await expect(dialog.generatedHelp).toHaveText(
+      `Give this password to ${user.uid}. It will not be shown again. They will have to change it when they next sign in.`
     );
-    // it stays, until clicked
-    await page.clock.runFor(30_000);
-    await expect(app.toast).toBeVisible();
-    await app.toast.click();
+    await expect(dialog.copyButton).toHaveText('Copy');
     await expect(app.toast).toBeHidden();
+    // it stays, and a click in it selects it rather than losing it
+    await page.clock.runFor(30_000);
+    await dialog.generated.click();
+    await expect(dialog.generated).toBeVisible();
+    // closing it uncopied asks first, once per attempt
+    await dialog.doneButton.click();
+    await expect(dialog.leavePrompt).toContainText(
+      'Close without copying the password?'
+    );
+    await dialog.leaveBack.click();
+    await expect(dialog.leavePrompt).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(dialog.leavePrompt).toBeVisible();
+    await dialog.leaveClose.click();
+    await expect(dialog.dialog).toBeHidden();
 
     await card.action('Reset password').click();
     await dialog.passwordInput.fill('N3w-Passw0rd!');
@@ -700,11 +716,8 @@ test.describe('USER user accounts', () => {
     await dialog.expectOpen();
     await expect(dialog.forceChange).toBeChecked();
     await dialog.confirmButton.click();
-    await expect(app.toast).toHaveText(
-      /^New password: .+ — copy it now, it will not be shown again$/
-    );
-    await app.toast.click();
-    await expect(app.toast).toBeHidden();
+    await expect(dialog.generated).toHaveValue(/.+/);
+    await dialog.closeUncopied();
     expect(await directory.values(user.dn, 'pwdReset')).toEqual(['TRUE']);
 
     // typed, no change required

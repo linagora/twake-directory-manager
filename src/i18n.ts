@@ -210,8 +210,13 @@ const en: Catalogue = {
   'password.generateHint': 'Leave empty to generate a password',
   'password.choose': 'Set a password',
   'password.forceChange': 'Require a change at next sign-in',
-  'password.generated':
-    'New password: {password} — copy it now, it will not be shown again',
+  'password.generatedTitle': 'New password — {name}',
+  'password.generatedHelp':
+    'Give this password to {name}. It will not be shown again.',
+  'password.mustChange': 'They will have to change it when they next sign in.',
+  'password.copyFailed': 'Select the password to copy it',
+  'password.done': 'Done',
+  'password.leaveUncopied': 'Close without copying the password?',
   'password.set': 'Password changed',
 
   'delete.notEmpty': '{name} is not empty: move or delete its entries first',
@@ -539,8 +544,13 @@ const fr: Catalogue = {
   'password.generateHint': 'Laissez vide pour générer un mot de passe',
   'password.choose': 'Définir un mot de passe',
   'password.forceChange': 'Exiger un changement à la prochaine connexion',
-  'password.generated':
-    'Nouveau mot de passe : {password} — copiez-le maintenant, il ne sera plus affiché',
+  'password.generatedTitle': 'Nouveau mot de passe — {name}',
+  'password.generatedHelp':
+    'Transmettez ce mot de passe à {name}. Il ne sera plus affiché.',
+  'password.mustChange': 'Il devra être changé à la prochaine connexion.',
+  'password.copyFailed': 'Sélectionnez le mot de passe pour le copier',
+  'password.done': 'Terminé',
+  'password.leaveUncopied': 'Fermer sans copier le mot de passe ?',
   'password.set': 'Mot de passe modifié',
 
   'delete.notEmpty':
@@ -841,8 +851,13 @@ const mn: Catalogue = {
   'password.generateHint': 'Нууц үг үүсгэхийн тулд талбарыг хоосон орхино уу',
   'password.choose': 'Нууц үг тохируулах',
   'password.forceChange': 'Дараагийн нэвтрэлтэд солихыг шаардах',
-  'password.generated':
-    'Шинэ нууц үг: {password} — одоо хуулж авна уу, дахин харагдахгүй',
+  'password.generatedTitle': 'Шинэ нууц үг — {name}',
+  'password.generatedHelp':
+    'Энэ нууц үгийг {name}-д өгнө үү. Дахин харагдахгүй.',
+  'password.mustChange': 'Дараагийн нэвтрэлтэд солих шаардлагатай.',
+  'password.copyFailed': 'Нууц үгийг сонгоод хуулна уу',
+  'password.done': 'Болсон',
+  'password.leaveUncopied': 'Нууц үгийг хуулалгүй хаах уу?',
   'password.set': 'Нууц үг солигдлоо',
 
   'delete.notEmpty':
