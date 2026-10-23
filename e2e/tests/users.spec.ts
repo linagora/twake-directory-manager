@@ -3,7 +3,6 @@ import { ADMIN, ALICE, ORG, SOPHIE } from '../support/accounts';
 import { answerNextConfirm } from '../support/confirm';
 import { HUMAN_RESOURCES, TEST_DOMAIN, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
-import { knownIssue } from '../support/knownIssues';
 
 /** Today plus `days`, as a date input takes it */
 function isoDate(days: number): string {
@@ -760,7 +759,6 @@ test.describe('USER user accounts', () => {
     directory,
     loginInNewContext,
   }) => {
-    knownIssue('account-delete-leaves-local-admin-links');
     const leaver = await directory.createUser({ prefix: 'leaver' });
     const colleague = await directory.createUser();
     const org = await directory.createOrganization({
@@ -775,11 +773,16 @@ test.describe('USER user accounts', () => {
     await message;
     await app.expectToast('Deleted');
 
-    expect(await directory.values(org.dn, 'twakeLocalAdminLink')).toEqual([]);
-    expect(await directory.values(org.dn, 'twakeManagerLink')).toEqual([]);
-    expect(await directory.values(colleague.dn, 'twakeDelegatedUsers')).toEqual(
-      []
-    );
+    // the server removes the links once the deletion has landed, after its answer
+    await expect
+      .poll(() => directory.values(org.dn, 'twakeLocalAdminLink'))
+      .toEqual([]);
+    await expect
+      .poll(() => directory.values(org.dn, 'twakeManagerLink'))
+      .toEqual([]);
+    await expect
+      .poll(() => directory.values(colleague.dn, 'twakeDelegatedUsers'))
+      .toEqual([]);
 
     const organizations = await app.openOrganizations(org.dn);
     await expect(organizations.card.detail('Local administrators')).toHaveText(

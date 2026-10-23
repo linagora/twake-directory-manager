@@ -187,9 +187,14 @@ Deleting an account
 On the card, click :guilabel:`Delete`, then confirm. Several accounts are
 deleted at once from the list (see :doc:`lists`).
 
+The account also leaves what named it: the organizations it managed or
+administered, the mailboxes delegated to it, the groups and shared mailboxes
+it owned. An account created again at the same address starts with none of
+these rights.
+
 .. warning::
 
    As far as the console is concerned, deletion is permanent. Depending on the
    deployment, the account may go to a trash branch of the directory, from
-   which the operations team can restore it — this is not the default. When in
-   doubt, prefer the :guilabel:`Disabled` or :guilabel:`To be deleted` state.
+   which the operations team can restore it — this is not the default; a
+   restored account has to be given its rights again. When in doubt, prefer the :guilabel:`Disabled` or :guilabel:`To be deleted` state.
