@@ -1674,6 +1674,114 @@ describe('Directory console', () => {
       expect(form.values.twakeDepartmentLink).to.deep.equal([france]);
       expect(form.picked.get(france)).to.equal('Sales / France');
     });
+
+    describe('what waits in transit', () => {
+      const bob: Entry = {
+        ...sophie,
+        dn: 'uid=bob,ou=users,dc=example,dc=com',
+        uid: 'bob',
+        displayName: 'Bob Schneider',
+        mail: 'bob@example.com',
+      };
+      const grace: Entry = {
+        ...sophie,
+        dn: 'uid=grace,ou=users,dc=example,dc=com',
+        uid: 'grace',
+        displayName: 'Grace Kim',
+        mail: 'grace@example.com',
+      };
+      type Waiting = {
+        scope: Scope | null;
+        readTransit(): Promise<unknown>;
+        showTransitWaiting(main: unknown, generation: number): Promise<void>;
+        organizationRights(dn: string): { write: boolean; delete: boolean };
+        claim(entity: EntityDescriptor, id: string): Promise<void>;
+      };
+      /** A console of this scope, the transit branch holding these entries */
+      const setup = (scope: Scope | null, waiting: Entry[]) => {
+        const link = { textContent: 'Transit' };
+        const holder = stubContainer();
+        const app = consoleIn({ '[data-transit-link]': link });
+        Object.assign(app as unknown as object, { entities, scope });
+        Object.assign((app as unknown as { api: object }).api, {
+          organizationMembers: async (dn: string) => {
+            expect(dn).to.equal(transit);
+            return {
+              entries: waiting.map(entry => attachedEntry(entry, entities)),
+              truncated: false,
+            };
+          },
+          pointerOptions: async () => [],
+        });
+        const main = {
+          querySelector: (selector: string) =>
+            selector === '[data-transit-waiting]' ? holder : null,
+        };
+        return { app: app as unknown as Waiting, link, holder, main };
+      };
+      const eric = (): Scope => ({
+        ...localAdmin(`ou=Engineering,${top}`),
+        branches: [
+          {
+            dn: `ou=Engineering,${top}`,
+            read: true,
+            write: true,
+            delete: true,
+          },
+        ],
+      });
+
+      it('should count what waits on the banner, and list it on the Overview', async () => {
+        const { app, link, holder, main } = setup(eric(), [bob, grace]);
+        await app.showTransitWaiting(main, 0);
+        expect(link.textContent).to.equal('Transit (2)');
+        expect(holder.innerHTML).to.include('Waiting in transit (2)');
+        expect(holder.innerHTML).to.include(
+          'Handed over by another administrator: claim those that belong to you.'
+        );
+        expect(holder.innerHTML).to.include('>Bob Schneider<');
+        expect(holder.innerHTML).to.include('>Grace Kim<');
+        expect(holder.innerHTML.match(/>Claim…</g)).to.have.length(2);
+        // No group waits: no Groups table saying so.
+        expect(holder.innerHTML).to.not.include('data-attached="groups"');
+      });
+
+      it('should say nothing when nothing waits', async () => {
+        const { app, link, holder, main } = setup(eric(), []);
+        await app.showTransitWaiting(main, 0);
+        expect(link.textContent).to.equal('Transit');
+        expect(holder.innerHTML).to.equal('');
+
+        // Nor to a scope without a transit branch, which is not asked.
+        const none = setup({ ...eric(), transit: null }, [bob]);
+        await none.app.showTransitWaiting(none.main, 0);
+        expect(none.holder.innerHTML).to.equal('');
+      });
+
+      it('should offer Edit and Delete on the transit branch to its writer above only', () => {
+        // Every administrator writes the transit branch to hand entries
+        // over: Edit was offered on it, and Save refused at the end.
+        const local = setup(eric(), []).app;
+        expect(local.organizationRights(transit)).to.deep.equal({
+          write: false,
+          delete: false,
+        });
+        expect(local.organizationRights(`ou=Engineering,${top}`)).to.deep.equal(
+          { write: true, delete: true }
+        );
+        const admin = setup(
+          {
+            ...eric(),
+            branches: [{ dn: top, read: true, write: true, delete: true }],
+          },
+          []
+        ).app;
+        expect(admin.organizationRights(transit)).to.deep.equal({
+          write: true,
+          delete: true,
+        });
+      });
+    });
   });
 
   describe('OrganizationTree, revealing a node', () => {
@@ -2902,6 +3010,49 @@ describe('Directory console', () => {
           reversible: true,
         },
       ]);
+    });
+
+    it('should say where a handed-over entry comes from', async () => {
+      // In transit the entry no longer names its organization: the toast is
+      // the last place that says where it came from.
+      const toast = toastElement();
+      const moved: string[] = [];
+      const app = consoleIn({ '[data-toast]': toast }) as unknown as {
+        scope: Scope;
+        api: object;
+        confirmAction(): Promise<boolean>;
+        renderMain(): Promise<void>;
+        readTransit(): Promise<null>;
+        handOver(
+          entity: EntityDescriptor,
+          id: string,
+          entry: Entry
+        ): Promise<void>;
+      };
+      app.scope = {
+        transit: 'ou=transit,dc=example,dc=com',
+      } as unknown as Scope;
+      app.confirmAction = async () => true;
+      app.renderMain = async () => undefined;
+      app.readTransit = async () => null;
+      Object.assign(app.api, {
+        move: async (_entity: EntityDescriptor, id: string) => {
+          moved.push(id);
+        },
+      });
+      await app.handOver(users, 'bob', {
+        dn: 'uid=bob,ou=users,dc=example,dc=com',
+        uid: 'bob',
+        twakeDepartmentPath: 'Sales / Germany',
+      });
+      expect(moved).to.deep.equal(['bob']);
+      expect(toast.textContent).to.equal('bob (Sales / Germany) is in transit');
+
+      await app.handOver(users, 'bob', {
+        dn: 'uid=bob,ou=users,dc=example,dc=com',
+        uid: 'bob',
+      });
+      expect(toast.textContent).to.equal('bob is in transit');
     });
 
     it('should explain a refused deletion of an entry still pointed at', async () => {

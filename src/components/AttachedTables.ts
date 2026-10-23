@@ -52,6 +52,17 @@ export interface AttachedOptions {
   onCreate?: Partial<Record<AttachedKind, () => void>>;
   /** Open a card, given the address `EntityList.entryHref` gives it */
   onOpen(href: string): void;
+  /**
+   * What a row offers besides its card, as a button at its end — Claim… on
+   * what waits in transit — on the entries `offered` accepts
+   */
+  rowAction?: {
+    label: string;
+    offered(entry: AttachedEntry, entity: EntityDescriptor): boolean;
+    run(entry: AttachedEntry, entity: EntityDescriptor): void;
+  };
+  /** Leave out a table with no row, rather than say that no one is there */
+  hideEmpty?: boolean;
 }
 
 /**
@@ -156,7 +167,10 @@ export class AttachedTables {
     const notice: AttachedKind =
       rows.people.length || !rows.groups.length ? 'people' : 'groups';
     return (['people', 'groups'] as const)
-      .filter(kind => rows[kind].length || this.lead(kind))
+      .filter(
+        kind =>
+          rows[kind].length || (!this.options.hideEmpty && this.lead(kind))
+      )
       .map(kind => this.tableMarkup(kind, rows[kind], kind === notice))
       .join('');
   }
@@ -215,7 +229,9 @@ export class AttachedTables {
                         role =>
                           `<th>${escapeHtml(this.heading(lead, role))}</th>`
                       )
-                      .join('')}</tr>
+                      .join(
+                        ''
+                      )}${this.options.rowAction ? '<th></th>' : ''}</tr>
                   </thead>
                   <tbody>${rows
                     .map(entry => this.rowMarkup(entry, roles))
@@ -259,6 +275,17 @@ export class AttachedTables {
           : escapeHtml(shown);
       return `<td title="${escapeHtml(shown)}">${content}</td>`;
     });
+    const action = this.options.rowAction;
+    if (action)
+      cells.push(
+        `<td class="dc-attached-action">${
+          entity && action.offered(entry, entity)
+            ? `<button type="button" class="dc-button" data-row-action="${escapeHtml(
+                entry.dn
+              )}">${escapeHtml(action.label)}</button>`
+            : ''
+        }</td>`
+      );
     return `<tr${href ? ` data-href="${escapeHtml(href)}"` : ''}>${cells.join(
       ''
     )}</tr>`;
@@ -304,8 +331,14 @@ export class AttachedTables {
       container.querySelectorAll<HTMLElement>('[data-attached] tr[data-href]')
     ))
       row.addEventListener('click', event => {
-        // The link follows itself, into this tab or, with Ctrl, a new one.
-        if ((event.target as HTMLElement).closest('.dc-row-link')) return;
+        // The link follows itself, into this tab or, with Ctrl, a new one;
+        // the button at the end of the row does what it says.
+        if (
+          (event.target as HTMLElement).closest(
+            '.dc-row-link, [data-row-action]'
+          )
+        )
+          return;
         this.options.onOpen(row.dataset.href as string);
       });
     for (const button of Array.from(
@@ -316,5 +349,15 @@ export class AttachedTables {
           button.dataset.createAttached as AttachedKind
         ]?.()
       );
+    for (const button of Array.from(
+      container.querySelectorAll<HTMLElement>('[data-row-action]')
+    ))
+      button.addEventListener('click', () => {
+        const entry = this.options.members.entries.find(
+          item => item.dn === button.dataset.rowAction
+        );
+        const entity = entry && this.entityOf(entry);
+        if (entry && entity) this.options.rowAction?.run(entry, entity);
+      });
   }
 }

@@ -28,7 +28,10 @@ export class ConsolePage {
   readonly banner: Locator;
   /** One item per administered branch: name, then rights */
   readonly scopeBranches: Locator;
+  /** "Transit", or "Transit (2)" when entries wait there */
   readonly transitLink: Locator;
+  /** Waiting in transit (N), on the Overview, when entries wait there */
+  readonly transitWaiting: Locator;
   readonly signOutLink: Locator;
   readonly main: Locator;
   readonly mainHeading: Locator;
@@ -50,6 +53,7 @@ export class ConsolePage {
     this.banner = page.locator('.dc-header');
     this.scopeBranches = this.banner.getByRole('listitem');
     this.transitLink = this.banner.getByRole('link', { name: 'Transit' });
+    this.transitWaiting = page.locator('[data-transit-section]');
     this.signOutLink = this.banner.getByRole('link').last();
     this.main = page.getByRole('main');
     this.mainHeading = this.main.getByRole('heading', { level: 1 });

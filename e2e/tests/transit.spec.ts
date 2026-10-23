@@ -48,7 +48,8 @@ test.describe('TRANSIT hand over and claim', () => {
     await expect(confirm.cancelButton).toBeFocused();
     await expect(confirm.confirmButton).toHaveText('Hand over');
     await confirm.confirm();
-    await app.expectToast(`${user.uid} is in transit`);
+    // the toast says where it came from, which the entry no longer does
+    await app.expectToast(`${user.uid} (${tenant.org.path}) is in transit`);
     expect(await directory.values(user.dn, 'twakeDepartmentLink')).toEqual([
       ORG.transit,
     ]);
@@ -58,9 +59,14 @@ test.describe('TRANSIT hand over and claim', () => {
     await app.list().search(user.uid);
     await expect(app.list().cells(user.uid).nth(4)).toHaveText('Transit');
 
+    // the banner counts what waits there
+    await expect(app.transitLink).toHaveText(/^Transit \(\d+\+?\)$/);
     await app.transitLink.click();
     const transit = app.organizations().card;
     await expect(transit.heading).toHaveText('Transit');
+    // every administrator hands over through it; none but the global one changes it
+    await expect(transit.action('Edit')).toHaveCount(0);
+    await expect(transit.action('Delete')).toHaveCount(0);
     await expect(transit.attachedRow('People', user.displayName)).toBeVisible();
     await expect(transit.attachedRow('People', 'Grace Kim')).toBeVisible();
 
@@ -163,6 +169,12 @@ test.describe('TRANSIT hand over and claim', () => {
     );
     await claim.cancelButton.click();
     await expect(claim.dialog).toBeHidden();
+
+    // who writes above the transit branch keeps Edit and Delete on it
+    const transit = (await app.openOrganizations(ORG.transit)).card;
+    await expect(transit.heading).toHaveText('Transit');
+    await expect(transit.action('Edit')).toBeVisible();
+    await expect(transit.action('Delete')).toHaveCount(1);
   });
 
   test('TRANSIT-04 hand over and claim a group', async ({
@@ -183,7 +195,7 @@ test.describe('TRANSIT hand over and claim', () => {
 
     await app.entry().perform('Hand over');
     await new ConfirmDialog(page).confirm();
-    await app.expectToast(`${group.cn} is in transit`);
+    await app.expectToast(`${group.cn} (${tenant.org.path}) is in transit`);
     expect(await directory.values(group.dn, 'twakeDepartmentLink')).toEqual([
       ORG.transit,
     ]);
@@ -226,5 +238,60 @@ test.describe('TRANSIT hand over and claim', () => {
         'twakeDepartmentLink'
       )
     ).toEqual([ORG.transit]);
+  });
+
+  test('TRANSIT-06 the Overview tells what waits in transit, and claims it', async ({
+    page,
+    directory,
+  }) => {
+    const other = await otherTenant(directory);
+    const user = await directory.createUser({ org: TRANSIT });
+    const app = await new LoginPage(page).loginAs(other.admin);
+
+    // first on the Overview, above what the administrator manages
+    const waiting = app.transitWaiting;
+    await expect(waiting.getByRole('heading', { level: 2 })).toHaveText(
+      /^Waiting in transit \(\d+\+?\)$/
+    );
+    await expect(
+      app.main.getByRole('heading', { level: 2 }).first()
+    ).toHaveText(/^Waiting in transit/);
+    await expect(waiting).toContainText(
+      'Handed over by another administrator: claim those that belong to you.'
+    );
+    for (const name of [user.displayName, 'Grace Kim'])
+      await expect(
+        waiting
+          .locator('tbody tr')
+          .filter({ hasText: name })
+          .getByRole('button', { name: 'Claim…' })
+      ).toBeVisible();
+    await expect(app.transitLink).toHaveText(/^Transit \(\d+\+?\)$/);
+
+    // claimed from there, it leaves the list without a reload
+    await page.evaluate(() => {
+      (window as unknown as { kept: boolean }).kept = true;
+    });
+    await waiting
+      .locator('tbody tr')
+      .filter({ hasText: user.displayName })
+      .getByRole('button', { name: 'Claim…' })
+      .click();
+    const claim = new ClaimDialog(page);
+    await expect(claim.title).toHaveText(`Claim ${user.uid}`);
+    await claim.claimInto(other.backend.path);
+    await app.expectToast(`${user.uid} moved to ${other.backend.path}`);
+    await expect(
+      waiting.locator('tbody tr').filter({ hasText: user.displayName })
+    ).toHaveCount(0);
+    await expect(
+      waiting.locator('tbody tr').filter({ hasText: 'Grace Kim' })
+    ).toBeVisible();
+    expect(
+      await page.evaluate(() => (window as unknown as { kept?: boolean }).kept)
+    ).toBe(true);
+    expect(await directory.values(user.dn, 'twakeDepartmentLink')).toEqual([
+      other.backend.dn,
+    ]);
   });
 });

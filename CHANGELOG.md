@@ -66,6 +66,12 @@ Built on ldap-rest 0.25.0.
   identifiers. _New user here_ and _New group here_ open the creation form
   with the department already set, where the administrator may create, and
   the new entry joins the table (#128)
+- An administrator is told what waits in transit: the Overview opens on
+  _Waiting in transit (N)_, each entry with _Claim…_, and the banner's link
+  reads _Transit (N)_. The Transit organization's card no longer offers a
+  local administrator _Edit_ and _Delete_, which the server refused on
+  _Save_, and lists what waits there with _Claim…_. Handing an entry over
+  says where it came from: _bob (Sales / Germany) is in transit_ (#127)
 
 ## v0.10.2 (2026-10-23)
 
