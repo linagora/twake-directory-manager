@@ -5719,6 +5719,59 @@ describe('Directory console', () => {
       expect(view.imported).to.equal(undefined);
       expect(searched).to.deep.equal(['ali']);
     });
+
+    it('should read only the page shown of a large import', async () => {
+      // Two thousand rows read whole on every draw, to show 25 of them
+      const ids = Array.from(
+        { length: 60 },
+        (_, i) => `u${String(i).padStart(2, '0')}`
+      );
+      const read: string[] = [];
+      const gone = new Set(['u03', 'u30']);
+      const view: ListView = { imported: { ids: [...ids].reverse() } };
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () => Promise.resolve({}),
+        read: (id: string) => {
+          read.push(id);
+          return gone.has(id)
+            ? Promise.reject(Object.assign(new Error('gone'), { status: 404 }))
+            : Promise.resolve({ uid: id, cn: `Name ${id}` });
+        },
+        listable: false,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+        view,
+      });
+      const container = stubContainer();
+      await list.render(container);
+      // The first page, by identifier, refilled past the one found gone
+      expect(read).to.have.length(26);
+      expect(read).to.include.members(['u00', 'u03', 'u25']);
+      expect(container.innerHTML)
+        .to.contain('Name u25')
+        // Counted from the identifiers: the pages not shown are not checked
+        .and.contain('Just imported (59)')
+        .and.contain('1–25 of 59')
+        .and.not.contain('Name u03')
+        .and.not.contain('Name u26');
+
+      // The next page reads its own entries, and only those
+      read.length = 0;
+      const state = list as unknown as { page: number; turnPage(): void };
+      state.page = 1;
+      state.turnPage();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(read).to.have.length(26);
+      expect(read).to.include.members(['u26', 'u30', 'u51']);
+      expect(container.innerHTML)
+        .to.contain('Name u51')
+        .and.contain('26–50 of 58')
+        .and.not.contain('Name u25');
+      expect(view.imported?.ids).to.have.length(58);
+    });
   });
 
   describe('importing pointers into a large branch', () => {

@@ -123,7 +123,11 @@ const PAGE_SIZE_KEY = 'ldap-rest.console.pageSize';
  * search until the reader goes back to it.
  */
 export interface ImportedView {
-  /** Their identifiers, less those found gone since */
+  /**
+   * Their identifiers, less those found gone since. Only the pages shown
+   * are read, so the count may include an entry of another page deleted
+   * meanwhile
+   */
   ids: string[];
   /** The page of them the reader is on; the search keeps its own */
   page?: number;
@@ -224,6 +228,8 @@ export class EntityList {
   private imported: ImportedView | undefined;
   /** The page the search was on, while the import's entries are shown */
   private searchPage = 0;
+  /** The entries of the import read since this list was drawn */
+  private readonly importedRead = new Map<string, Entry>();
   /**
    * Which load is the current one. A search is debounced, not serialised, so
    * two requests are in flight whenever the operator keeps typing — and the
@@ -394,73 +400,114 @@ export class EntityList {
   }
 
   /**
-   * Show the entries of the last import, read one by one: what the create
-   * endpoint answered holds little more than their identifiers. One gone
-   * since, or out of the reader's reach, is left out; with none left, the
-   * list goes back to its search.
+   * Show the entries of the last import, from their identifiers: what the
+   * create endpoint answered holds little more. They are sorted and paged by
+   * identifier, and read afresh — once per list drawn, so a change made on a
+   * card shows — page by page: an import of thousands of rows is not read
+   * whole to show its first 25.
    */
   private async reloadImported(
     generation: number,
     keepPage: boolean
   ): Promise<void> {
     const imported = this.imported as ImportedView;
+    imported.ids = [...new Set(imported.ids)].sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' })
+    );
+    this.importedRead.clear();
+    this.selected.clear();
+    if (!keepPage) this.page = 0;
+    await this.showImported(generation);
+  }
+
+  /**
+   * Read the entries of the page shown that are not read yet, and draw it.
+   * One gone since, or out of the reader's reach, is left out, and the page
+   * filled from the next; with none left, the list goes back to its search.
+   *
+   * @param generation the load this is part of; a new one when paging
+   */
+  private async showImported(generation = ++this.generation): Promise<void> {
+    const imported = this.imported as ImportedView;
     const { read } = this.options;
     const { mainAttribute } = this.options.entity;
     this.error = null;
-    this.loading = true;
-    this.draw();
-    const queue = [...imported.ids];
-    const entries: Record<string, Entry> = {};
-    let failed = false;
-    try {
-      await Promise.all(
-        Array.from(
-          { length: Math.min(READ_CONCURRENCY, queue.length) },
-          async () => {
-            // A failure ends the reading: the others stop taking entries
-            // rather than send requests nobody will read the answer to.
-            for (
-              let id = queue.shift();
-              id !== undefined && !failed;
-              id = queue.shift()
-            ) {
-              try {
-                entries[id] = read ? await read(id) : { [mainAttribute]: id };
-              } catch (err) {
-                // Gone, or refused as a card is: left out, not a failure
-                const status = (err as { status?: number } | null)?.status;
-                if (status === 404 || status === 403) continue;
-                failed = true;
-                throw err;
+    this.truncated = false;
+    for (;;) {
+      const last = Math.max(
+        0,
+        Math.ceil(imported.ids.length / this.pageSize) - 1
+      );
+      this.page = Math.min(this.page, last);
+      const from = this.page * this.pageSize;
+      const queue = imported.ids
+        .slice(from, from + this.pageSize)
+        .filter(id => !this.importedRead.has(id));
+      if (!queue.length) break;
+      this.loading = true;
+      this.draw();
+      const gone = new Set<string>();
+      let failed = false;
+      try {
+        await Promise.all(
+          Array.from(
+            { length: Math.min(READ_CONCURRENCY, queue.length) },
+            async () => {
+              // A failure ends the reading: the others stop taking entries
+              // rather than send requests nobody will read the answer to.
+              for (
+                let id = queue.shift();
+                id !== undefined && !failed;
+                id = queue.shift()
+              ) {
+                try {
+                  this.importedRead.set(
+                    id,
+                    read ? await read(id) : { [mainAttribute]: id }
+                  );
+                } catch (err) {
+                  // Gone, or refused as a card is: left out, not a failure
+                  const status = (err as { status?: number } | null)?.status;
+                  if (status === 404 || status === 403) {
+                    gone.add(id);
+                    continue;
+                  }
+                  failed = true;
+                  throw err;
+                }
               }
             }
-          }
-        )
-      );
-    } catch (err) {
+          )
+        );
+      } catch (err) {
+        if (generation !== this.generation) return;
+        this.error = listFailure(err, this.options.translator);
+        this.loading = false;
+        this.draw();
+        return;
+      }
       if (generation !== this.generation) return;
-      this.error = listFailure(err, this.options.translator);
-      this.entries = [];
-      this.loading = false;
-      this.draw();
-      return;
+      if (gone.size) imported.ids = imported.ids.filter(id => !gone.has(id));
+      if (imported.ids.length === 0) {
+        this.loading = false;
+        return this.leaveImported();
+      }
     }
-    if (generation !== this.generation) return;
+    // Every identifier has its row, read or not: the page shown is read,
+    // and a selection made on another page was read when it was shown.
+    this.entries = imported.ids.map(id => [
+      id,
+      this.importedRead.get(id) ?? { [mainAttribute]: id },
+    ]);
     this.loading = false;
-    imported.ids = imported.ids.filter(id => id in entries);
-    if (imported.ids.length === 0) return this.leaveImported();
-    this.entries = Object.entries(entries).sort(([a], [b]) =>
-      a.localeCompare(b, undefined, { sensitivity: 'base' })
-    );
-    this.truncated = false;
     this.loaded = true;
-    const last = Math.max(
-      0,
-      Math.ceil(this.entries.length / this.pageSize) - 1
-    );
-    this.page = keepPage ? Math.min(this.page, last) : 0;
-    this.selected.clear();
     this.draw();
+  }
+
+  /** Draw the page now shown, reading it first for an import's entries. */
+  private turnPage(): void {
+    if (this.imported) void this.showImported();
+    else this.draw();
   }
 
   /** Back from the entries of the last import to the list's search. */
@@ -834,7 +881,7 @@ export class EntityList {
           localStorage.setItem(PAGE_SIZE_KEY, String(this.pageSize));
           // eslint-disable-next-line no-empty
         } catch {}
-        this.draw();
+        this.turnPage();
       });
 
     for (const button of Array.from(
@@ -842,7 +889,7 @@ export class EntityList {
     )) {
       button.addEventListener('click', () => {
         this.page += Number(button.dataset.page);
-        this.draw();
+        this.turnPage();
       });
     }
 
