@@ -861,7 +861,7 @@ export class DirectoryConsole {
         : this.renderDashboard(main);
 
     const entity = this.entity(this.route.entity);
-    if (!entity) return this.renderDashboard(main);
+    if (!entity) return this.renderNotFound(main);
     if (entity.kind === 'organization')
       return this.renderOrganizations(main, generation);
     if (this.route.id)
@@ -1019,14 +1019,21 @@ export class DirectoryConsole {
   }
 
   /**
-   * Whether the caller manages the password policies. Asked of the server
-   * rather than read from the scope: who holds them is its rule
-   * (`--authz-global-branches`), and the scope names no branch outside the
-   * tree. A refusal hides the page; any other failure shows it, with the
-   * failure on it.
+   * Whether the caller manages the password policies. Who holds them is the
+   * server's rule (`--authz-global-branches`), outside the tree the scope's
+   * branches name, so the scope says it in `passwordPolicies`. Only a server
+   * that predates it is asked for the policies themselves: every page load
+   * of a local administrator then logged a refusal. An undescribed scope
+   * answers `false` for want of a model, and the console asks there too, as
+   * it leaves the server to answer whatever else such a scope cannot say. A
+   * refusal hides the page; any other failure shows it, with the failure on
+   * it.
    */
   private async readsPolicies(): Promise<boolean> {
     if (!this.api.servesPasswordPolicies) return false;
+    const told = this.scope?.passwordPolicies;
+    if (typeof told === 'boolean' && this.scope?.described !== false)
+      return told;
     try {
       await this.api.passwordPolicies();
       return true;
@@ -1141,6 +1148,22 @@ export class DirectoryConsole {
         const entity = this.entity(button.dataset.new as string);
         if (entity) void this.openForm(entity);
       });
+  }
+
+  /**
+   * What an address naming no page shows. It drew the overview, which made
+   * a mistyped or outdated link, `#/passwordPolicies` for
+   * `#/password-policies`, look as though it had worked.
+   */
+  private renderNotFound(main: HTMLElement): void {
+    const t = (key: string): string => this.translator.t(key);
+    main.innerHTML = `
+      <section class="dc-view">
+        <div class="dc-empty" data-not-found>
+          <p>${escapeHtml(t('app.notFound'))}</p>
+          <a class="dc-button" href="#/">${escapeHtml(t('app.toOverview'))}</a>
+        </div>
+      </section>`;
   }
 
   /** The table of an entity. */
