@@ -145,13 +145,37 @@ export interface EntryList {
   truncated: boolean;
 }
 
+/** An entry attached to an organization, as its card lists it. */
+export interface AttachedEntry {
+  dn: string;
+  /** Its own name: the value of its RDN */
+  label: string;
+  /** Key of the entity holding it, absent when the console knows none */
+  entity?: string;
+  /**
+   * The first value of what the card shows of it, keyed by the role of the
+   * attribute holding it: the full name, the address, the position and the
+   * state of an account, the address and the type of a group. A pointer is
+   * kept as the DN it holds
+   */
+  values?: Record<string, string>;
+}
+
 /** Entries attached to an organization, as many as the server listed. */
 export interface AttachedEntries {
-  entries: { dn: string; label: string }[];
+  entries: AttachedEntry[];
   /** The server left some out */
   truncated: boolean;
   /** How many it left out, when the directory let it count them */
   more?: number;
+  /**
+   * What it left out of the accounts and of the groups, each asked on its
+   * own: the server caps and counts each answer apart. Absent when both
+   * were asked in one answer, whose cut says nothing of the kind
+   */
+  cut?: Partial<
+    Record<'people' | 'groups', { truncated: boolean; more?: number }>
+  >;
 }
 
 /** Answer of `GET /v1/authz/scope`. */
