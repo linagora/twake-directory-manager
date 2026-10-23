@@ -1,105 +1,54 @@
 # Changelog
 
-## Unreleased
+## v0.11.0 (2026-10-23)
 
 Built on ldap-rest 0.25.1.
 
+### Features
+
+- The Overview names who is signed in, offers the languages by their own
+  names, and tells an account administering nothing so, with a _Sign out_
+  button, instead of three cards leading nowhere (#134)
+- An administrator sees what waits in transit: _Waiting in transit (N)_ on
+  the Overview with _Claim…_ on each entry, _Transit (N)_ in the banner, and
+  the origin in the hand-over message. A local administrator is no longer
+  offered _Edit_ and _Delete_ on the Transit card (#127)
+- An account's card is headed by its full name, groups its details, folds
+  the empty fields and the DN away, reads sizes as _1.07 GB_, and keeps _Hand
+  over_ and _Delete_ under _More_ (#133)
+- An account's groups are managed from its card: the _Groups_ section gives
+  each group's type, _Add to a group…_ searches the groups one may write, and
+  a × takes the account out of one (#129)
+- An organization's card lists its _People_ and _Groups_ in two tables, with
+  _New user here_ and _New group here_ (#128)
+- The Organizations filter searches the whole tree and lists matches by
+  path; the card offers _New organization here_ (#132)
+- A CSV import lists the entries it created, linked to their cards, and the
+  list then shows them as _Just imported (N)_ (#136)
+- The server's common refusals are said in the interface's language, under
+  the field at fault, naming the organization when rights are missing (#126,
+  linagora/ldap-rest#372)
+- Deletions and hand-overs are confirmed in a dialog of the console naming
+  the person, the groups they leave and the button's action, offering
+  _Disabled_ instead of deleting an account (#131)
+- _Change state…_ opens a panel describing each state and writes nothing
+  until the choice is confirmed; the states are named the same everywhere
+  (#125)
+
 ### Bug Fixes
 
-- On OpenLDAP 2.4, a password policy no longer offers _Maximum length_,
-  _Account unused for_ or the delays after a failure, now that ldap-rest
-  lists the settings the directory defines (#118, linagora/ldap-rest#366)
-- The keyboard opens an entry from the Users, Groups and reference lists: the
-  first column of each row is a link, which also opens in a new tab (#135)
-- A generated password stays in the Reset password panel, with a _Copy_
-  button, until it is closed on purpose; closing it uncopied asks first. In a
-  toast, the click that began selecting it dismissed it for good (#124)
-- _Change state…_ opens a panel showing the current state and what each other
-  one is for, and writes nothing until the button naming the choice is
-  pressed: an arrow key on the former select changed the state at once. The
-  states read _Active_ and _To delete_ everywhere in English, and the message
-  names the account: _Ada Lovelace is now Disabled_ (#125)
-- The New user form shows the identifier the address will give, fills the
-  common name from the full name, and Enter takes the domain the address
-  completion offers; the creation message names the entry (#130)
-- An address already used, a mail domain the organization may not use and a
-  change outside the branches one administers are said in the interface's
-  language, under the field at fault when the form shows it, the toast
-  reading _Not saved: see the highlighted field_; the import's result and its
-  refused rows file say them the same way. A creation, an import row or a
-  change of organization refused for want of rights names the organization
-  at fault, under the organization field, not the entry. A state change, a
-  hand-over, a claim, a selection's deletion and a password policy's save or
-  deletion say their refusals the same way. Any other refusal reads _The
-  server refused:_ before the server's own words; a server failing reads
-  _Something went wrong_, with its words when they say more (#126,
-  linagora/ldap-rest#372)
-- A local administrator's page load no longer asks for the password
-  policies only to be refused (403): the scope says who manages them, and
-  only an ldap-rest before 0.25.0 is still asked (#138, linagora/ldap-rest#367)
-- An address naming no page, such as a mistyped or outdated link, says
-  _There is no page at this address._ with a link back to the Overview,
-  instead of showing the Overview as if it had worked (#137)
-- The Organizations _Filter_ searches the whole tree, not only the branches
-  opened, and lists what it finds by path (_Sales / France_); choosing one
-  opens the tree down to it and shows its card. A server that searches the
-  tree is asked once per filter, and when it keeps only the first matches the
-  list ends with _First 50 matches — type more to narrow_; otherwise, where
-  the tree is too wide to be read whole, or could not be read, the filter
-  says it found nothing _among the opened branches_. Selecting an organization also opens its branch, its
-  card offers _New organization here_ beside _Edit_, and the selected row
-  keeps its "+" in view. An organization with no sub-organization is not
-  announced as expanded, and a branch whose sub-organizations could not be
-  read can be opened again (#132)
-- The Overview speaks in names: _Signed in as Ada Admin (admin@example.com)_
-  rather than a DN, or by the identifier, _Signed in as admin_, where the
-  account cannot be read, as an administrator's own account attached outside
-  the branches they administer; the _Language_ select offers _English_, _Français_
-  and _Монгол_. An account administering nothing finds one message on it,
-  _There is nothing for you to manage here_, with a _Sign out_ button,
-  instead of three cards leading nowhere; its sidebar offers only the
-  Overview, and its banner's dot is grey, not green (#134)
-- Deleting an entry, a selection, an organization or a password policy, and
-  handing an entry over, are confirmed in a dialog of the console, in its
-  language, instead of the browser's. It names an account by its full name,
-  email and organization, lists the groups it leaves, or says they could not
-  be listed rather than nothing as if there were none, and offers to set the
-  state to _Disabled_ instead; _Cancel_ has the focus, and the button names the
-  action: _Delete Jane_, _Delete group_, _Hand over_. The Reset password and
-  Claim panels' buttons read _Reset password_ and _Claim into Sales_ rather
-  than _Confirm_. Cancelling a selection's deletion leaves the list, its
-  selection and the focus as they were (#131)
-- An account's card is headed by the full name, with the identifier and the
-  address under it, as is the browser tab. Its details are grouped under
-  headings, a value said twice is said once, the empty fields wait under
-  _Show empty fields (N)_ and the DN under _Technical details_; a mailbox
-  size no unit says exactly reads _1.07 GB_, the bytes in its tooltip, and
-  _1 GB_ rather than _1000 MB_ just below it. _Edit_ comes first, and _Hand
-  over_ and _Delete_ moved to a _More_ menu. The tab no longer keeps the name
-  of the organization shown before one whose card fails to load (#133)
-- A CSV import's result lists each entry it created, by full name and
-  identifier, linked to its card; once the result is closed, the list shows
-  them as _Just imported (2)_ until _Back to search_, rather than asking for
-  a search to find each one (#136)
-- An organization's card lists its _People_ (full name, email, position,
-  status) and its _Groups_ (name, email, group type) in two tables, each
-  counted and each row opening the entry's card, instead of a row of
-  identifiers. _New user here_ and _New group here_ open the creation form
-  with the department already set, where the administrator may create, and
-  the new entry joins the table (#128)
-- An account's groups are managed from its card. The section reads _Groups_
-  rather than _Mailing lists_, and says each group's type: _sales-team ·
-  Shared mailbox_. _Add to a group…_ opens a panel searching the groups the
-  administrator may write, by name, type and address; the groups chosen are
-  joined at once, a refused one staying in the panel with why. A × on each
-  group the administrator may write takes the account out of it in one click
-  (#129)
-- An administrator is told what waits in transit: the Overview opens on
-  _Waiting in transit (N)_, each entry with _Claim…_, and the banner's link
-  reads _Transit (N)_. The Transit organization's card no longer offers a
-  local administrator _Edit_ and _Delete_, which the server refused on
-  _Save_, and lists what waits there with _Claim…_. Handing an entry over
-  says where it came from: _bob (Sales / Germany) is in transit_ (#127)
+- On OpenLDAP 2.4, a password policy no longer offers the settings the
+  directory lacks (#118, linagora/ldap-rest#366)
+- The keyboard opens an entry from a list: the first column of each row is a
+  link (#135)
+- A generated password stays in its panel, with _Copy_, until closed on
+  purpose (#124)
+- The New user form shows the identifier the address gives, fills the common
+  name, and Enter takes the offered mail domain (#130)
+- A local administrator's page load no longer asks for the password policies
+  only to be refused (#138, linagora/ldap-rest#367)
+- An unknown address says the page does not exist instead of showing the
+  Overview (#137)
 
 ## v0.10.2 (2026-10-23)
 
