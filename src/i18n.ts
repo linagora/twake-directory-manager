@@ -236,6 +236,8 @@ const en: Catalogue = {
   'tree.noMatch': 'No organization matches “{filter}”',
   'tree.noMatchOpened':
     'No organization matches “{filter}” among the opened branches',
+  'tree.firstMatches.one': 'First match only — type more to narrow',
+  'tree.firstMatches.other': 'First {count} matches — type more to narrow',
   'tree.parent': 'Parent organization',
 
   'status.title': 'Account state',
@@ -655,6 +657,10 @@ const fr: Catalogue = {
   'tree.noMatch': 'Aucune organisation ne correspond à « {filter} »',
   'tree.noMatchOpened':
     'Aucune organisation ne correspond à « {filter} » parmi les branches ouvertes',
+  'tree.firstMatches.one':
+    'Première correspondance seulement — précisez le texte pour affiner',
+  'tree.firstMatches.other':
+    'Les {count} premières correspondances — précisez le texte pour affiner',
   'tree.parent': 'Organisation parente',
 
   'status.title': 'État du compte',
@@ -1044,6 +1050,8 @@ const mn: Catalogue = {
   'tree.noMatch': '«{filter}»-д тохирох байгууллага алга',
   'tree.noMatchOpened':
     'Нээсэн салбаруудад «{filter}»-д тохирох байгууллага алга',
+  'tree.firstMatches':
+    'Эхний {count} тохирол — нарийсгахын тулд үргэлжлүүлэн бичнэ үү',
   'tree.parent': 'Дээд байгууллага',
 
   'status.title': 'Бүртгэлийн төлөв',

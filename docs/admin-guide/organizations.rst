@@ -17,12 +17,19 @@ Browsing the tree
 - The :guilabel:`Filter` box searches the whole tree from two characters on,
   closed branches included, and lists the organizations whose path contains
   the text typed (``Sales / France``). A click on one opens the tree down to
-  it and shows its card. A single character only hides, in the branches
-  already opened, the organizations whose name does not contain it. When the
-  whole tree cannot be searched (an ldap-rest without organization search
-  whose tree is too wide to read whole, or a failure), the filter also
-  searches the branches already opened and says it found nothing *among the
-  opened branches*: another branch may still hold a match.
+  it and shows its card. An ldap-rest that searches the tree keeps only the
+  first matches of a broad text (50 by default, its
+  ``ldap_organization_max_subnodes`` setting), and the list then ends with
+  *First 50 matches — type more to narrow*: those kept are the first the
+  directory found, not the first in alphabetical order, so one missing from
+  the list may still exist. Such a server also matches the organizations’
+  descriptions, so a match may not show the text typed in its path. A single
+  character only hides, in the branches already opened, the organizations
+  whose name does not contain it. When the whole tree cannot be searched (an
+  ldap-rest without organization search whose tree is too wide to read
+  whole, or a failure), the filter also searches the branches already opened
+  and says it found nothing *among the opened branches*: another branch may
+  still hold a match.
 - The transit organization, when the deployment has one, is tagged
   :guilabel:`Transit` (see :doc:`transit`).
 

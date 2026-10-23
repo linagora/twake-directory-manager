@@ -1859,12 +1859,36 @@ export class ConsoleApiClient {
     from = this.topOrganization,
     limit = POINTER_SEARCH_LIMIT
   ): Promise<{ dn: string; label: string }[]> {
-    if (!from) return [];
-    const found = await this.call<Entry[]>(
-      `${this.apiPrefix}/v1/ldap/organizations/${encodeURIComponent(from)}` +
-        `/search?q=${encodeURIComponent(query)}`
-    );
-    return (found || [])
+    return (await this.organizationSearchRead(query, from, limit))
+      .organizations;
+  }
+
+  /**
+   * {@link organizationSearch}, saying whether the answer was cut, by the
+   * server or by `limit`: the matches kept are the first ones found, not the
+   * first in reading order, and a list that looks whole would hide the
+   * others.
+   *
+   * @param query text to look for
+   * @param from organization whose subtree is searched; the top by default
+   * @param limit most matches kept
+   * @returns the matches, in reading order, and whether some were left out
+   */
+  async organizationSearchRead(
+    query: string,
+    from = this.topOrganization,
+    limit = POINTER_SEARCH_LIMIT
+  ): Promise<{
+    organizations: { dn: string; label: string }[];
+    truncated: boolean;
+  }> {
+    if (!from) return { organizations: [], truncated: false };
+    const found =
+      (await this.call<Entry[]>(
+        `${this.apiPrefix}/v1/ldap/organizations/${encodeURIComponent(from)}` +
+          `/search?q=${encodeURIComponent(query)}`
+      )) || [];
+    const matches = found
       .filter(entry => !isMoreIndicator(entry))
       .map(entry => this.toNode(entry))
       .map(node => ({ dn: node.dn, label: node.path || node.name }))
@@ -1873,8 +1897,11 @@ export class ConsoleApiClient {
           sensitivity: 'base',
           numeric: true,
         })
-      )
-      .slice(0, limit);
+      );
+    return {
+      organizations: matches.slice(0, limit),
+      truncated: found.some(isMoreIndicator) || matches.length > limit,
+    };
   }
 
   /** Turn an organization entry into a tree node. */

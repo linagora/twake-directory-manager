@@ -1087,7 +1087,10 @@ describe('Directory console', () => {
       const searched: [string, string][] = [];
       const answers = new Map<
         string,
-        (found: { dn: string; label: string }[]) => void
+        (found: {
+          organizations: { dn: string; label: string }[];
+          truncated: boolean;
+        }) => void
       >();
       let walks = 0;
       const container = treeContainer();
@@ -1114,13 +1117,21 @@ describe('Directory console', () => {
       container.filter.value = 'Fra';
       container.filter.fire();
       await pause();
-      answers.get('Fra')?.([{ dn: france, label: 'Sales / France' }]);
+      answers.get('Fra')?.({
+        organizations: [{ dn: france, label: 'Sales / France' }],
+        truncated: false,
+      });
       await settle();
-      answers.get('Sal')?.([{ dn: sales, label: 'Sales' }]);
+      answers.get('Sal')?.({
+        organizations: [{ dn: sales, label: 'Sales' }],
+        truncated: false,
+      });
       await settle();
       expect(container.list.innerHTML)
         .to.include(`data-found="${france}"`)
-        .and.not.include(`data-found="${sales}"`);
+        .and.not.include(`data-found="${sales}"`)
+        // A whole answer is not said to be cut.
+        .and.not.include('dc-tree-cut');
       expect(walks).to.equal(0);
 
       // Its "no match" is the whole tree's; a failure leaves the opened
@@ -1128,7 +1139,7 @@ describe('Directory console', () => {
       container.filter.value = 'zzz';
       container.filter.fire();
       await pause();
-      answers.get('zzz')?.([]);
+      answers.get('zzz')?.({ organizations: [], truncated: false });
       await settle();
       expect(container.list.innerHTML)
         .to.include('No organization matches “zzz”')
@@ -1142,6 +1153,31 @@ describe('Directory console', () => {
         'zzz',
         'yyy',
       ]);
+    });
+
+    it('should say when the server kept only the first matches', async () => {
+      const container = treeContainer();
+      await new OrganizationTree({
+        ...options([]),
+        search: async () => ({
+          organizations: [
+            { dn: france, label: 'Sales / France' },
+            { dn: sales, label: 'Sales' },
+          ],
+          truncated: true,
+        }),
+      }).render(container);
+      container.filter.value = 'Sa';
+      container.filter.fire();
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await settle();
+      expect(container.list.innerHTML)
+        .to.include(`data-found="${france}"`)
+        .and.include(`data-found="${sales}"`)
+        .and.include(
+          '<p class="dc-tree-cut">First 2 matches — type more to narrow</p>'
+        )
+        .and.not.include('No organization matches');
     });
 
     it('should show the opened branches, hedged, when the server search fails', async () => {
@@ -5209,11 +5245,46 @@ describe('Directory console', () => {
               _displayedCount: 3,
             },
           ]);
-        expect(await client.organizationSearch('lin')).to.deep.equal([
-          { dn: `ou=c,${orgTop}`, label: 'Gamma' },
-          { dn: `ou=a,${orgTop}`, label: 'Government / Alpha' },
-          { dn: `ou=b,${orgTop}`, label: 'Government / Beta' },
+        expect(await client.organizationSearchRead('lin')).to.deep.equal({
+          organizations: [
+            { dn: `ou=c,${orgTop}`, label: 'Gamma' },
+            { dn: `ou=a,${orgTop}`, label: 'Government / Alpha' },
+            { dn: `ou=b,${orgTop}`, label: 'Government / Beta' },
+          ],
+          // The sentinel says the server kept only these.
+          truncated: true,
+        });
+      });
+
+      it('should say a search is cut only when it was', async () => {
+        const client = await discover('/api/v1/ldap/organizations/:dn/search');
+        const matches = ['a', 'b', 'c'].map(ou => ({
+          dn: `ou=${ou},${orgTop}`,
+          ou,
+          objectClass: ['organizationalUnit'],
+        }));
+        nock(baseUrl)
+          .get(
+            `/api/v1/ldap/organizations/${encodeURIComponent(orgTop)}/search`
+          )
+          .query(true)
+          .times(3)
+          .reply(200, matches);
+        // Whole.
+        expect(
+          (await client.organizationSearchRead('x', orgTop, Infinity)).truncated
+        ).to.equal(false);
+        // Cut here, to the suggestions' length.
+        const cut = await client.organizationSearchRead('x', orgTop, 2);
+        expect(cut.organizations.map(option => option.label)).to.deep.equal([
+          'a',
+          'b',
         ]);
+        expect(cut.truncated).to.equal(true);
+        // The form's suggestions keep their plain list.
+        expect(await client.organizationSearch('x', orgTop, 3)).to.have.length(
+          3
+        );
       });
 
       it('should search from the caller’s own top, not the directory’s', async () => {

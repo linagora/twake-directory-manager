@@ -53,7 +53,10 @@ import {
 import { availableLanguages, languageName, Translator } from './i18n';
 import { signInAgain } from './session';
 import type { ListView } from './components/EntityList';
-import type { OrganizationIndex } from './components/OrganizationTree';
+import type {
+  OrganizationIndex,
+  OrganizationMatches,
+} from './components/OrganizationTree';
 import type { PointerLookup } from './importer';
 import type {
   AttachedEntries,
@@ -2017,15 +2020,13 @@ export class DirectoryConsole {
         // server roots a local administrator's tree at their branch, and the
         // filter finds what the tree can open down to, no more. A server
         // that searches the tree is asked once per filter rather than walked
-        // an organization at a time, up to a bound a wide tree goes past.
+        // an organization at a time, up to a bound a wide tree goes past;
+        // it keeps the first matches of a broad text, and says so.
         everywhere: (): Promise<OrganizationIndex> =>
           this.api.organizationWalk(),
         search: this.api.searchesOrganizations
-          ? (
-              query: string,
-              root: string
-            ): Promise<{ dn: string; label: string }[]> =>
-              this.api.organizationSearch(query, root, Infinity)
+          ? (query: string, root: string): Promise<OrganizationMatches> =>
+              this.api.organizationSearchRead(query, root, Infinity)
           : undefined,
       },
       this.tree
