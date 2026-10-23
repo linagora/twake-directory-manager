@@ -1832,9 +1832,15 @@ describe('Directory console', () => {
        * A console on an account's card, its panel body holding the radios the
        * panel draws, and nothing written before its button is pressed.
        */
-      const setup = (language = 'en', stored = 'cn=active') => {
+      const setup = (
+        language = 'en',
+        stored: string | undefined = 'cn=active',
+        entity: EntityDescriptor = users
+      ) => {
         const toast = toastElement();
-        const radios = ['enabled', 'disabled'].map(value => {
+        const states =
+          entity.schema.attributes.twakeAccountStatus?.states ?? {};
+        const radios = Object.keys(states).map(value => {
           const radio = {
             value,
             checked: false,
@@ -1883,7 +1889,7 @@ describe('Directory console', () => {
           language
         );
         Object.assign(app, {
-          entities: [users],
+          entities: [entity],
           renderMain: async () => undefined,
         });
         const open = (): Promise<void> =>
@@ -1895,10 +1901,10 @@ describe('Directory console', () => {
                 entry: Entry
               ): Promise<void>;
             }
-          ).changeState(users, 'frank', {
+          ).changeState(entity, 'frank', {
             uid: 'frank',
             cn: 'Frank Martin',
-            twakeAccountStatus: stored,
+            ...(stored === undefined ? {} : { twakeAccountStatus: stored }),
           });
         const pick = (value: string): void => {
           for (const radio of radios) radio.checked = radio.value === value;
@@ -1917,6 +1923,37 @@ describe('Directory console', () => {
         expect(body.innerHTML).to.include(
           'Suspended, during a long absence for instance.'
         );
+      });
+
+      it('should translate the states it knows and keep the ones it does not', async () => {
+        const entity: EntityDescriptor = {
+          ...users,
+          schema: {
+            attributes: {
+              ...usersSchema.attributes,
+              twakeAccountStatus: {
+                type: 'pointer',
+                role: 'accountStatus',
+                states: { disabled: 'cn=disabled', seconded: 'cn=seconded' },
+              },
+            },
+          },
+        };
+        const { body, submit, open, pick } = setup('fr', undefined, entity);
+        await open();
+        expect(body.innerHTML).to.include('>Désactivé</label>');
+        expect(body.innerHTML).to.include(
+          'Suspendu, pendant une longue absence par exemple.'
+        );
+        // A state the deployment invented keeps the name the deployment gave
+        // it, with no explanation the catalogue would have to invent, and a
+        // button that says what it does in general terms.
+        expect(body.innerHTML).to.include('>seconded</label>');
+        expect(body.innerHTML).to.not.include('dc-state-seconded-help');
+        pick('seconded');
+        expect(submit.textContent).to.equal('Changer l’état');
+        pick('disabled');
+        expect(submit.textContent).to.equal('Désactiver');
       });
 
       it('should write nothing until the button naming the choice is pressed', async () => {
@@ -6984,37 +7021,6 @@ describe('Directory console', () => {
         '20241399000000Z'
       );
       expect(displayValue({ type: 'date' }, 'soon')).to.equal('soon');
-    });
-
-    it('should translate the states it knows and keep the ones it does not', () => {
-      const entity: EntityDescriptor = {
-        ...users,
-        schema: {
-          attributes: {
-            ...usersSchema.attributes,
-            twakeAccountStatus: {
-              type: 'pointer',
-              role: 'accountStatus',
-              states: { disabled: 'cn=disabled', seconded: 'cn=seconded' },
-            },
-          },
-        },
-      };
-      const container = stubContainer();
-      new EntityDetail({
-        entity,
-        entry: { uid: 'jsmith' },
-        translator: new Translator('fr'),
-        canWrite: true,
-        canDelete: true,
-        onEdit: () => undefined,
-        onDelete: () => undefined,
-        onStatus: () => undefined,
-        onResetPassword: () => undefined,
-      }).render(container);
-      expect(container.innerHTML).to.include('>Désactivé<');
-      // A state the deployment invented keeps the name the deployment gave it.
-      expect(container.innerHTML).to.include('>seconded<');
     });
 
     it('should show every attribute, empty ones included', () => {
