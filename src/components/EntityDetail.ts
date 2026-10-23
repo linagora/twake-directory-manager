@@ -27,6 +27,7 @@ import {
   resolveText,
 } from '../format';
 import { hasRole, roleAttribute } from '../api/ConsoleApiClient';
+import type { AttachedTables } from './AttachedTables';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
 
@@ -129,6 +130,11 @@ export interface DetailOptions {
    * settled once the server has answered
    */
   onLeaveGroup?(id: string): Promise<void> | void;
+  /**
+   * The people and the groups attached to an organization, shown as tables
+   * in place of the related entries
+   */
+  attached?: AttachedTables;
 }
 
 /** Read an entry value as a list of display strings. */
@@ -194,7 +200,7 @@ export class EntityDetail {
           ${this.dnMarkup()}
         </section>
 
-        ${this.relationsMarkup()}
+        ${this.options.attached?.markup() ?? this.relationsMarkup()}
       </article>`;
 
     this.bind(container);
@@ -576,6 +582,7 @@ export class EntityDetail {
 
   private bind(container: HTMLElement): void {
     const closeMenu = this.bindMenu(container);
+    this.options.attached?.bind(container);
     container
       .querySelector('[data-edit]')
       ?.addEventListener('click', () => this.options.onEdit());

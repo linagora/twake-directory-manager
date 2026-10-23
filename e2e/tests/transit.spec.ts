@@ -61,17 +61,12 @@ test.describe('TRANSIT hand over and claim', () => {
     await app.transitLink.click();
     const transit = app.organizations().card;
     await expect(transit.heading).toHaveText('Transit');
-    await expect(
-      transit.relatedItems('Attached entries').filter({ hasText: user.uid })
-    ).toBeVisible();
-    await expect(
-      transit.relatedItems('Attached entries').filter({ hasText: 'grace' })
-    ).toBeVisible();
+    await expect(transit.attachedRow('People', user.displayName)).toBeVisible();
+    await expect(transit.attachedRow('People', 'Grace Kim')).toBeVisible();
 
     await transit
-      .relatedItems('Attached entries')
-      .filter({ hasText: user.uid })
-      .getByRole('button')
+      .attachedRow('People', user.displayName)
+      .getByRole('link')
       .click();
     await expect(card.transitTag).toHaveText('In transit');
     await expect(card.actions()).toHaveText(['Claim…']);
@@ -89,9 +84,8 @@ test.describe('TRANSIT hand over and claim', () => {
     await app.transitLink.click();
     const transit = app.organizations().card;
     await transit
-      .relatedItems('Attached entries')
-      .filter({ hasText: user.uid })
-      .getByRole('button')
+      .attachedRow('People', user.displayName)
+      .getByRole('link')
       .click();
     const card = app.entry();
     await expect(card.transitTag).toBeVisible();
