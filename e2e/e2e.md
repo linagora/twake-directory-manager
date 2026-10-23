@@ -54,6 +54,7 @@ Conventions).
 - [x] LIST-09 (P3) Header checkbox reflects the selection and clears the page — `list.spec.ts`
 - [x] LIST-10 (P2) Back from a card returns to the list as it was left — `list.spec.ts`
 - [x] LIST-11 (P3) A count of one reads in the singular — `list.spec.ts`
+- [x] LIST-12 (P2) A keyboard user opens an entry from a list: Tab reaches a link in each row, Enter opens the card — `list.spec.ts` (#135; not in the plan)
 
 ## User accounts
 
