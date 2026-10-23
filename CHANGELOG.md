@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Bug Fixes
+
+- A generated password stays in the Reset password panel, with a _Copy_
+  button, until it is closed on purpose; closing it uncopied asks first. In a
+  toast, the click that began selecting it dismissed it for good (#124)
+
 ## v0.10.2 (2026-10-23)
 
 Built on ldap-rest 0.24.0.

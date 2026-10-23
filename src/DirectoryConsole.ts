@@ -362,9 +362,8 @@ export function listLoader(
  * The console's one toast element: a message, then hidden after a while.
  *
  * Every message replaces the previous one, and so must its timer. A timer left
- * running from an earlier message hid the next one early — including the
- * generated password, which is shown once and sticky precisely because the
- * server cannot hand it back.
+ * running from an earlier message hid the next one early. Nothing that cannot
+ * be shown again goes here: a generated password stays in its panel.
  *
  * It sits in a live region drawn with the shell, so that a screen reader
  * says each message as it shows: a region that is hidden, or new, when its
@@ -375,15 +374,15 @@ export class ToastController {
 
   /**
    * @param element finds the toast element, which survives re-renders
-   * @param delay how long a non-sticky message stays, in milliseconds
+   * @param delay how long a message stays, in milliseconds
    */
   constructor(
     private readonly element: () => HTMLElement | null | undefined,
     private readonly delay = 5000
   ) {}
 
-  /** Show a message; a sticky one waits to be dismissed. */
-  show(message: string, isError = false, sticky = false): void {
+  /** Show a message. */
+  show(message: string, isError = false): void {
     const toast = this.element();
     if (!toast) return;
     if (this.timer !== undefined) {
@@ -397,13 +396,6 @@ export class ToastController {
     // Shown before it is written, for the region to announce the text.
     toast.hidden = false;
     toast.textContent = message;
-    if (sticky) {
-      toast.onclick = (): void => {
-        toast.hidden = true;
-      };
-      return;
-    }
-    toast.onclick = null;
     this.timer = setTimeout((): void => {
       this.timer = undefined;
       toast.hidden = true;
@@ -451,6 +443,11 @@ export class DirectoryConsole {
    * a keyboard user is otherwise left at the top of the page.
    */
   private panelOpener: HTMLElement | null = null;
+  /**
+   * Asked before the side panel closes, when it holds what cannot be shown
+   * again: `false` keeps it open. Each panel opens without one.
+   */
+  private panelGuard: (() => boolean) | null = null;
 
   constructor(options: ConsoleOptions) {
     this.options = options;
@@ -1520,6 +1517,7 @@ export class DirectoryConsole {
     if (panel.hidden && typeof document !== 'undefined')
       this.panelOpener = document.activeElement as HTMLElement | null;
     heading.textContent = title;
+    this.panelGuard = null;
     panel.classList.toggle('dc-panel-modal', modal);
     panel.classList.toggle('dc-panel-wide', wide);
     body.innerHTML = '';
@@ -1535,9 +1533,16 @@ export class DirectoryConsole {
     (this.focusables(body)[0] ?? dialog)?.focus();
   }
 
-  private closePanel(): void {
+  /**
+   * Close the side panel, unless what it holds asks to stay.
+   *
+   * @param force close it whatever it holds
+   */
+  private closePanel(force = false): void {
     const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
     if (!panel || panel.hidden) return;
+    if (!force && this.panelGuard && !this.panelGuard()) return;
+    this.panelGuard = null;
     panel.hidden = true;
     const opener = this.panelOpener;
     this.panelOpener = null;
@@ -2089,8 +2094,8 @@ export class DirectoryConsole {
   }
 
   /**
-   * Reset a password. The generated one is shown once, in a message that stays
-   * until it is dismissed — it cannot be read back afterwards.
+   * Reset a password. A generated one is shown once, in the panel that asked
+   * for it: it cannot be read back afterwards.
    */
   private async resetPassword(
     entity: EntityDescriptor,
@@ -2135,18 +2140,128 @@ export class DirectoryConsole {
         void this.api
           .resetPassword(entity, id, password || undefined, force)
           .then(result => {
+            if (result.generated && result.password) {
+              this.showGeneratedPassword(body, id, result.password, force);
+              return;
+            }
             this.closePanel();
-            this.toast(
-              result.generated && result.password
-                ? t('password.generated', { password: result.password })
-                : t('password.set'),
-              false,
-              result.generated
-            );
+            this.toast(t('password.set'));
           })
           .catch((err: Error) => this.toast(err.message, true));
       });
     });
+  }
+
+  /**
+   * The password the server generated, in place of the form that asked for
+   * it. It is the one value the console cannot fetch again: a toast lost it
+   * to the click that began selecting it, and to the next message. So it
+   * stays until the panel is closed on purpose, and closing it uncopied asks
+   * first, in the panel rather than in a native dialog.
+   *
+   * @param body the Reset password panel's body
+   * @param name the account, as the panel names it
+   * @param password the generated password
+   * @param mustChange whether a change is required at the next sign-in
+   */
+  private showGeneratedPassword(
+    body: HTMLElement,
+    name: string,
+    password: string,
+    mustChange: boolean
+  ): void {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    const heading =
+      this.container?.querySelector<HTMLElement>('[data-panel-title]');
+    if (heading) heading.textContent = t('password.generatedTitle', { name });
+    const help = [
+      t('password.generatedHelp', { name }),
+      ...(mustChange ? [t('password.mustChange')] : []),
+    ].join(' ');
+    body.innerHTML = `
+      <div class="dc-form">
+        <div class="dc-field">
+          <div class="dc-generated">
+            <input id="dc-generated-password" class="dc-input dc-generated-password"
+              readonly value="${escapeHtml(password)}"
+              aria-labelledby="dc-panel-title"
+              aria-describedby="dc-generated-password-help" />
+            <button type="button" class="dc-button" data-copy-password>${escapeHtml(
+              t('detail.copy')
+            )}</button>
+          </div>
+          <p id="dc-generated-password-help" class="dc-hint">${escapeHtml(help)}</p>
+        </div>
+        <div class="dc-generated-leave" data-leave hidden>
+          <p>${escapeHtml(t('password.leaveUncopied'))}</p>
+          <button type="button" class="dc-button" data-leave-back>${escapeHtml(
+            t('app.back')
+          )}</button>
+          <button type="button" class="dc-button dc-button-primary" data-leave-close>${escapeHtml(
+            t('app.close')
+          )}</button>
+        </div>
+        <div class="dc-form-actions" data-done-actions>
+          <button type="button" class="dc-button dc-button-primary" data-done>${escapeHtml(
+            t('password.done')
+          )}</button>
+        </div>
+      </div>`;
+
+    const field = body.querySelector<HTMLInputElement>(
+      '#dc-generated-password'
+    );
+    const leave = body.querySelector<HTMLElement>('[data-leave]');
+    const done = body.querySelector<HTMLElement>('[data-done-actions]');
+    let copied = false;
+    // Asked once per attempt to close: a second Escape, or Close, goes.
+    const ask = (shown: boolean): void => {
+      if (leave) leave.hidden = !shown;
+      if (done) done.hidden = shown;
+    };
+    this.panelGuard = (): boolean => {
+      if (copied || (leave && !leave.hidden)) return true;
+      ask(true);
+      body.querySelector<HTMLElement>('[data-leave-close]')?.focus();
+      return false;
+    };
+
+    field?.addEventListener('focus', () => field.select());
+    const copy = body.querySelector<HTMLElement>('[data-copy-password]');
+    copy?.addEventListener('click', () => {
+      // Absent outside a secure context, or refused: the password is
+      // selected for the reader to copy by hand.
+      const said = (key: string): void => {
+        copy.textContent = t(key);
+        setTimeout(() => {
+          copy.textContent = t('detail.copy');
+        }, 2000);
+      };
+      const failed = (): void => {
+        field?.focus();
+        field?.select();
+        said('password.copyFailed');
+      };
+      if (!navigator.clipboard) return failed();
+      navigator.clipboard.writeText(password).then(() => {
+        copied = true;
+        ask(false);
+        said('detail.copied');
+      }, failed);
+    });
+    body
+      .querySelector('[data-done]')
+      ?.addEventListener('click', () => this.closePanel());
+    body.querySelector('[data-leave-back]')?.addEventListener('click', () => {
+      ask(false);
+      field?.focus();
+    });
+    body
+      .querySelector('[data-leave-close]')
+      ?.addEventListener('click', () => this.closePanel(true));
+    // Said by a screen reader with its name and its help, from the field.
+    field?.focus();
   }
 
   /**
@@ -2391,8 +2506,8 @@ export class DirectoryConsole {
     );
   }
 
-  /** Show a short message; a sticky one waits to be dismissed. */
-  private toast(message: string, isError = false, sticky = false): void {
-    this.toasts.show(message, isError, sticky);
+  /** Show a short message. */
+  private toast(message: string, isError = false): void {
+    this.toasts.show(message, isError);
   }
 }
