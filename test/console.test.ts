@@ -1980,32 +1980,174 @@ describe('Directory console', () => {
   });
 
   describe('the shell and its actions', () => {
-    it('should name the new state the way the state select does', async () => {
-      const toast = toastElement();
-      const app = consoleIn({ '[data-toast]': toast }, 'fr');
-      const setStatus = (id: string, state: string): Promise<void> =>
-        (
-          app as unknown as {
-            setStatus(
-              entity: EntityDescriptor,
-              id: string,
-              state: string
-            ): Promise<void>;
-          }
-        ).setStatus(users, id, state);
+    describe('the change of state', () => {
+      /**
+       * A console on an account's card, its panel body holding the radios the
+       * panel draws, and nothing written before its button is pressed.
+       */
+      const setup = (
+        language = 'en',
+        stored: string | undefined = 'cn=active',
+        entity: EntityDescriptor = users
+      ) => {
+        const toast = toastElement();
+        const states =
+          entity.schema.attributes.twakeAccountStatus?.states ?? {};
+        const radios = Object.keys(states).map(value => {
+          const radio = {
+            value,
+            checked: false,
+            listener: undefined as (() => void) | undefined,
+            addEventListener: (_type: string, callback: () => void) => {
+              radio.listener = callback;
+            },
+          };
+          return radio;
+        });
+        const submit = { disabled: true, textContent: '' };
+        let send: ((event: unknown) => void) | undefined;
+        const form = {
+          addEventListener: (
+            _type: string,
+            callback: (event: unknown) => void
+          ) => {
+            send = callback;
+          },
+        };
+        const body = {
+          innerHTML: '',
+          querySelector: (selector: string) =>
+            selector === 'button[type="submit"]'
+              ? submit
+              : selector === 'form'
+                ? form
+                : selector === 'input[name="dc-state"]:checked'
+                  ? (radios.find(radio => radio.checked) ?? null)
+                  : null,
+          querySelectorAll: (selector: string) =>
+            selector === 'input[name="dc-state"]'
+              ? radios.filter(radio =>
+                  body.innerHTML.includes(`value="${radio.value}"`)
+                )
+              : [],
+        };
+        const panel = { hidden: true, classList: { toggle: () => undefined } };
+        const app = consoleIn(
+          {
+            '[data-panel]': panel,
+            '[data-panel-title]': { textContent: '' },
+            '[data-panel-body]': body,
+            '[data-toast]': toast,
+          },
+          language
+        );
+        Object.assign(app, {
+          entities: [entity],
+          renderMain: async () => undefined,
+        });
+        const open = (): Promise<void> =>
+          (
+            app as unknown as {
+              changeState(
+                entity: EntityDescriptor,
+                id: string,
+                entry: Entry
+              ): Promise<void>;
+            }
+          ).changeState(entity, 'frank', {
+            uid: 'frank',
+            cn: 'Frank Martin',
+            ...(stored === undefined ? {} : { twakeAccountStatus: stored }),
+          });
+        const pick = (value: string): void => {
+          for (const radio of radios) radio.checked = radio.value === value;
+          radios.find(radio => radio.value === value)?.listener?.();
+        };
+        const press = (): void => send?.({ preventDefault: () => undefined });
+        return { app, toast, body, submit, panel, open, pick, press };
+      };
 
-      nock(baseUrl)
-        .post('/api/v1/ldap/users/frank/status', { state: 'noAccess' })
-        .reply(200, {});
-      await setStatus('frank', 'noAccess');
-      expect(toast.textContent).to.equal('État passé à Sans accès');
+      it('should show the current state and offer the others, explained', async () => {
+        const { body, open } = setup();
+        await open();
+        expect(body.innerHTML).to.include('Current state: Active');
+        expect(body.innerHTML).to.include('value="disabled"');
+        expect(body.innerHTML).to.not.include('value="enabled"');
+        expect(body.innerHTML).to.include(
+          'Suspended, during a long absence for instance.'
+        );
+      });
 
-      // A state the deployment invented keeps the name it was given.
-      nock(baseUrl)
-        .post('/api/v1/ldap/users/frank/status', { state: 'archived' })
-        .reply(200, {});
-      await setStatus('frank', 'archived');
-      expect(toast.textContent).to.equal('État passé à archived');
+      it('should translate the states it knows and keep the ones it does not', async () => {
+        const entity: EntityDescriptor = {
+          ...users,
+          schema: {
+            attributes: {
+              ...usersSchema.attributes,
+              twakeAccountStatus: {
+                type: 'pointer',
+                role: 'accountStatus',
+                states: { disabled: 'cn=disabled', seconded: 'cn=seconded' },
+              },
+            },
+          },
+        };
+        const { body, submit, open, pick } = setup('fr', undefined, entity);
+        await open();
+        expect(body.innerHTML).to.include('>Désactivé</label>');
+        expect(body.innerHTML).to.include(
+          'Suspendu, pendant une longue absence par exemple.'
+        );
+        // A state the deployment invented keeps the name the deployment gave
+        // it, with no explanation the catalogue would have to invent, and a
+        // button that says what it does in general terms.
+        expect(body.innerHTML).to.include('>seconded</label>');
+        expect(body.innerHTML).to.not.include('dc-state-seconded-help');
+        pick('seconded');
+        expect(submit.textContent).to.equal('Changer l’état');
+        pick('disabled');
+        expect(submit.textContent).to.equal('Désactiver');
+      });
+
+      it('should write nothing until the button naming the choice is pressed', async () => {
+        const { toast, submit, open, pick, press } = setup();
+        // Any request now would fail the test: nock lets none through.
+        await open();
+        expect(submit.disabled).to.equal(true);
+        expect(submit.textContent).to.equal('');
+        pick('disabled');
+        expect(submit.disabled).to.equal(false);
+        expect(submit.textContent).to.equal('Disable');
+        expect(toast.textContent).to.equal('');
+
+        const written = nock(baseUrl)
+          .post('/api/v1/ldap/users/frank/status', { state: 'disabled' })
+          .reply(200, {});
+        press();
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(written.isDone()).to.equal(true);
+        expect(toast.textContent).to.equal('Frank Martin is now Disabled');
+      });
+
+      it('should name the account and the state in the interface language', async () => {
+        const { toast, open, pick, press } = setup('fr', 'cn=disabled');
+        await open();
+        pick('enabled');
+        nock(baseUrl)
+          .post('/api/v1/ldap/users/frank/status', { state: 'enabled' })
+          .reply(200, {});
+        press();
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(toast.textContent).to.equal('Frank Martin est désormais Actif');
+      });
+    });
+
+    it('should name the states the same way in the panel, the card and the reference list', () => {
+      // English said "Enabled" and "To be deleted" in the select, "Active"
+      // and "To delete" on the card and in the Account states list.
+      const en = new Translator('en');
+      expect(en.t('state.enabled')).to.equal('Active');
+      expect(en.t('state.toDelete')).to.equal('To delete');
     });
 
     it('should ask before deleting an organization by its name, not its DN', async () => {
@@ -7108,37 +7250,6 @@ describe('Directory console', () => {
       expect(displayValue({ type: 'date' }, 'soon')).to.equal('soon');
     });
 
-    it('should translate the states it knows and keep the ones it does not', () => {
-      const entity: EntityDescriptor = {
-        ...users,
-        schema: {
-          attributes: {
-            ...usersSchema.attributes,
-            twakeAccountStatus: {
-              type: 'pointer',
-              role: 'accountStatus',
-              states: { disabled: 'cn=disabled', seconded: 'cn=seconded' },
-            },
-          },
-        },
-      };
-      const container = stubContainer();
-      new EntityDetail({
-        entity,
-        entry: { uid: 'jsmith' },
-        translator: new Translator('fr'),
-        canWrite: true,
-        canDelete: true,
-        onEdit: () => undefined,
-        onDelete: () => undefined,
-        onStatus: () => undefined,
-        onResetPassword: () => undefined,
-      }).render(container);
-      expect(container.innerHTML).to.include('>Désactivé<');
-      // A state the deployment invented keeps the name the deployment gave it.
-      expect(container.innerHTML).to.include('>seconded<');
-    });
-
     it('should show every attribute, empty ones included', () => {
       const html = render({ uid: 'jsmith', cn: 'John Smith' });
       // The defect this replaces: a card showing two fields, the rest only
@@ -7174,11 +7285,41 @@ describe('Directory console', () => {
       expect(html).to.include('jsmith@example.com');
     });
 
-    it('should offer the states the schema declares, and no others', () => {
-      const html = render({ uid: 'jsmith' });
-      expect(html).to.include('value="enabled"');
-      expect(html).to.include('value="disabled"');
-      expect(html).to.not.include('value="retired"');
+    it('should only open the change of state, never write it from the card', () => {
+      // A select wrote the state on its first change: an arrow key on it
+      // locked an account out. The card now holds a button that opens the
+      // panel, and nothing on the card names a state to write.
+      let listener: (() => void) | undefined;
+      const opened: unknown[][] = [];
+      const button = {
+        addEventListener: (_type: string, callback: () => void) => {
+          listener = callback;
+        },
+      };
+      const container = Object.assign(stubContainer(), {
+        querySelector: (selector: string) =>
+          selector === '[data-status]' ? button : null,
+      });
+      new EntityDetail({
+        entity: users,
+        entry: { uid: 'jsmith' },
+        translator: new Translator('en'),
+        canWrite: true,
+        canDelete: true,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        onStatus: (...args: unknown[]) => {
+          opened.push(args);
+        },
+        onResetPassword: () => undefined,
+      }).render(container);
+      expect(container.innerHTML).to.not.include('<select');
+      expect(container.innerHTML).to.not.include('value="disabled"');
+      expect(container.innerHTML).to.include(
+        '<button type="button" class="dc-button" data-status>Change state…</button>'
+      );
+      listener?.();
+      expect(opened).to.deep.equal([[]]);
     });
 
     it('should hide every action from a reader', () => {

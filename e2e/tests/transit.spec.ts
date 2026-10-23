@@ -129,6 +129,7 @@ test.describe('TRANSIT hand over and claim', () => {
     await expect(card.actions()).toHaveText([
       'Claim…',
       'Edit',
+      'Change state…',
       'Reset password',
       'Delete',
     ]);

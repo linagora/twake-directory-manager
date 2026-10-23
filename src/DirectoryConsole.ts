@@ -1272,8 +1272,8 @@ export class DirectoryConsole {
       onDelete: (): void => {
         void this.confirmDelete(entity, id);
       },
-      onStatus: (state: string): void => {
-        void this.setStatus(entity, id, state);
+      onStatus: (): void => {
+        void this.changeState(entity, id, entry);
       },
       onResetPassword: (): void => {
         void this.resetPassword(entity, id);
@@ -2075,17 +2075,177 @@ export class DirectoryConsole {
 
   /* --------------------------------------------------------------- actions */
 
+  /**
+   * Change an account's state, once a state is picked and the button naming
+   * it pressed. The select this replaces wrote the state as soon as its value
+   * changed, and an arrow key on it was enough to lock a colleague out.
+   *
+   * The states are named as the card and the lists name them: by the label
+   * the reference data gives the entry each one points at.
+   */
+  private async changeState(
+    entity: EntityDescriptor,
+    id: string,
+    entry: Entry
+  ): Promise<void> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    /** A key of the catalogue, or nothing when it has none for this state */
+    const known = (key: string): string | undefined => {
+      const shown = t(key);
+      return shown === key ? undefined : shown;
+    };
+    const attribute = entity.accountStatus;
+    const states = attribute
+      ? entity.schema.attributes[attribute]?.states
+      : undefined;
+    if (!attribute || !states) return;
+    const { language } = this.translator;
+    const label = (state: string): string =>
+      pointerLabel(this.entities, states[state], language) ??
+      stateLabel(this.translator, state);
+
+    const stored = [entryValue(entry, attribute) ?? []].flat()[0];
+    const current = Object.keys(states).find(
+      state =>
+        stored !== undefined &&
+        comparableDn(states[state]) === comparableDn(String(stored))
+    );
+    const currentName = current
+      ? label(current)
+      : stored === undefined
+        ? undefined
+        : (pointerLabel(this.entities, String(stored), language) ??
+          rdnValue(String(stored)));
+    const offered = Object.keys(states).filter(state => state !== current);
+    const described = await this.stateDescriptions(states);
+    const help = (state: string): string | undefined =>
+      described[state] ?? known(`status.help.${state}`);
+    const name = this.personName(entity, entry, id);
+
+    this.openPanel(t('status.panelTitle', { name }), body => {
+      body.innerHTML = `
+        <form class="dc-form">
+          ${
+            currentName
+              ? `<p class="dc-hint" data-current-state>${escapeHtml(
+                  t('status.current', { state: currentName })
+                )}</p>`
+              : ''
+          }
+          <fieldset class="dc-form-group">
+            <legend>${escapeHtml(t('status.choose'))}</legend>
+            ${offered
+              .map(state => {
+                const field = `dc-state-${state}`;
+                const line = help(state);
+                return `
+              <div class="dc-field dc-state-choice">
+                <input type="radio" id="${escapeHtml(field)}" name="dc-state"
+                  value="${escapeHtml(state)}"${
+                    line ? ` aria-describedby="${escapeHtml(field)}-help"` : ''
+                  } />
+                <label for="${escapeHtml(field)}">${escapeHtml(label(state))}</label>
+                ${
+                  line
+                    ? `<p id="${escapeHtml(field)}-help" class="dc-hint">${escapeHtml(line)}</p>`
+                    : ''
+                }
+              </div>`;
+              })
+              .join('')}
+          </fieldset>
+          <div class="dc-form-actions">
+            <button type="button" class="dc-button" data-cancel>${escapeHtml(
+              t('app.cancel')
+            )}</button>
+            <button type="submit" class="dc-button dc-button-primary" disabled>${escapeHtml(
+              t('status.apply')
+            )}</button>
+          </div>
+        </form>`;
+
+      const submit = body.querySelector<HTMLButtonElement>(
+        'button[type="submit"]'
+      );
+      const chosen = (): string | undefined =>
+        body.querySelector<HTMLInputElement>('input[name="dc-state"]:checked')
+          ?.value;
+      // Picking a state, by click or arrow key, only names the button: the
+      // button writes.
+      for (const radio of Array.from(
+        body.querySelectorAll<HTMLInputElement>('input[name="dc-state"]')
+      )) {
+        radio.addEventListener('change', () => {
+          const state = chosen();
+          if (!submit || !state) return;
+          submit.disabled = false;
+          submit.textContent =
+            known(`status.action.${state}`) ?? t('status.apply');
+        });
+      }
+      body
+        .querySelector('[data-cancel]')
+        ?.addEventListener('click', () => this.closePanel());
+      body.querySelector('form')?.addEventListener('submit', event => {
+        event.preventDefault();
+        const state = chosen();
+        if (state) void this.setStatus(entity, id, state, name, label(state));
+      });
+    });
+  }
+
+  /**
+   * What each state means, as the reference entry it points at describes it:
+   * the deployment's own words before the catalogue's. A list that cannot be
+   * read leaves the catalogue's.
+   *
+   * @param states the states, as the schema declares them
+   * @returns the descriptions, by state, of the entries that have one
+   */
+  private async stateDescriptions(
+    states: Record<string, string>
+  ): Promise<Record<string, string>> {
+    const described: Record<string, string> = {};
+    const parent = parentOf(Object.values(states)[0] ?? '');
+    const owner = parent
+      ? this.entities.find(
+          candidate =>
+            candidate.base &&
+            comparableDn(candidate.base) === comparableDn(parent)
+        )
+      : undefined;
+    if (!owner) return described;
+    let entries: Record<string, Entry>;
+    try {
+      entries = await this.api.list(owner);
+    } catch {
+      return described;
+    }
+    for (const [state, dn] of Object.entries(states)) {
+      const key = rdnValue(dn).toLowerCase();
+      const found = Object.entries(entries).find(
+        ([id]) => id.toLowerCase() === key
+      )?.[1];
+      const text = [entryValue(found, 'description') ?? []].flat()[0];
+      if (text && String(text).trim()) described[state] = String(text).trim();
+    }
+    return described;
+  }
+
+  /** Write a state chosen in the panel, and say whose it now is. */
   private async setStatus(
     entity: EntityDescriptor,
     id: string,
-    state: string
+    state: string,
+    name: string,
+    label: string
   ): Promise<void> {
     try {
       await this.api.setStatus(entity, id, state);
+      this.closePanel();
       this.toast(
-        this.translator.t('status.changed', {
-          state: stateLabel(this.translator, state),
-        })
+        this.translator.t('status.changedFor', { name, state: label })
       );
       await this.renderMain();
     } catch (err) {
@@ -2378,6 +2538,24 @@ export class DirectoryConsole {
         this.translator.language
       ) || id
     );
+  }
+
+  /**
+   * A person as a colleague names them: their full name, else the name
+   * {@link entryName} gives.
+   */
+  private personName(
+    entity: EntityDescriptor,
+    entry: Entry,
+    id: string
+  ): string {
+    const display = roleAttribute(entity.schema, 'displayName');
+    const full = display
+      ? [entryValue(entry, display) ?? []].flat()[0]
+      : undefined;
+    return full && String(full).trim()
+      ? String(full).trim()
+      : this.entryName(entity, id);
   }
 
   private async confirmDelete(

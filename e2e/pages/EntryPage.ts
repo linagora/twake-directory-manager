@@ -23,7 +23,10 @@ export class EntryPage {
   readonly transitTag: Locator;
   /** Back to the list, above the card */
   readonly backButton: Locator;
+  /** Change state…, which opens the panel offering the states */
   readonly changeState: Locator;
+  /** The panel Change state… opens */
+  readonly statePanel: Locator;
   readonly dn: Locator;
   readonly copyButton: Locator;
   /** The plain message standing for a card that cannot be shown */
@@ -35,7 +38,8 @@ export class EntryPage {
     this.heading = this.article.getByRole('heading', { level: 2 });
     this.transitTag = this.heading.locator('.dc-tag-transit');
     this.backButton = scope.getByRole('button', { name: 'Back', exact: true });
-    this.changeState = this.article.getByRole('combobox');
+    this.changeState = this.article.locator('[data-status]');
+    this.statePanel = page.getByRole('dialog');
     this.dn = this.article.locator('code').first();
     this.copyButton = this.dn.locator('xpath=following-sibling::button[1]');
     this.notice = scope.locator('p.dc-empty');
@@ -82,8 +86,21 @@ export class EntryPage {
     await expect(this.heading).toHaveText(exactly(name));
   }
 
-  /** Picks a state in Change state (Enabled, Disabled, No access, To be deleted) */
+  /** The states the Change state panel offers, by their names */
+  stateChoices(): Locator {
+    return this.statePanel.getByRole('radio');
+  }
+
+  /**
+   * Changes the state in the Change state panel (Active, Disabled, No access,
+   * To delete): picks it, then presses the button named after the choice.
+   */
   async changeStateTo(state: string): Promise<void> {
-    await this.changeState.selectOption({ label: state });
+    await this.changeState.click();
+    await this.statePanel
+      .getByRole('radio', { name: state, exact: true })
+      .check();
+    await this.statePanel.locator('button[type=submit]').click();
+    await expect(this.statePanel).toBeHidden();
   }
 }
