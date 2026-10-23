@@ -60,6 +60,10 @@ Built on ldap-rest 0.25.0.
   _Show empty fields (N)_ and the DN under _Technical details_; a mailbox
   size no unit says exactly reads _1.07 GB_, the bytes in its tooltip. _Edit_
   comes first, and _Hand over_ and _Delete_ moved to a _More_ menu (#133)
+- A CSV import's result lists each entry it created, by full name and
+  identifier, linked to its card; once the result is closed, the list shows
+  them as _Just imported (2)_ until _Back to search_, rather than asking for
+  a search to find each one (#136)
 
 ## v0.10.2 (2026-10-23)
 

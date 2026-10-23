@@ -43,6 +43,7 @@ import {
   LIST_LIMIT,
   csvCell,
   listFailure,
+  type ListView,
 } from '../src/components/EntityList';
 import { OrganizationTree } from '../src/components/OrganizationTree';
 import { availableLanguages, languageName, Translator } from '../src/i18n';
@@ -1620,6 +1621,56 @@ describe('Directory console', () => {
         'Mail « alice@example.com » : déjà utilisé par une autre entrée.',
         'Vous n’administrez pas Eva Ernst : cette modification ne vous revient pas.',
         'Le serveur a refusé : Attribute "Nom" must not be empty',
+      ]);
+    });
+
+    it('should name and link each entry an import created', async () => {
+      const done: { id: string; entry: Entry }[][] = [];
+      const answers = [
+        // What ldap-rest answers: the entry as stored
+        { id: 'amartin', entry: { uid: 'amartin', cn: 'Alice Martin' } },
+        // An embedder answering nothing: the row's identifier names it
+        undefined,
+      ];
+      const importer = new EntityImport({
+        entity: users,
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        create: () => Promise.resolve(answers.shift()),
+        onDone: created => done.push(created),
+        onClose: () => undefined,
+      });
+      const state = importer as unknown as {
+        rows: {
+          line: number;
+          cells: string[];
+          values: object;
+          errors: string[];
+        }[];
+        run(): Promise<void>;
+        doneMarkup(): string;
+      };
+      state.rows = [
+        {
+          line: 2,
+          cells: [],
+          values: { mail: 'alice@example.com', cn: 'Alice Martin' },
+          errors: [],
+        },
+        { line: 3, cells: [], values: { uid: 'bob' }, errors: [] },
+      ];
+      await state.run();
+      const markup = state.doneMarkup();
+      expect(markup)
+        .to.contain('href="#&#x2F;users&#x2F;amartin">Alice Martin</a>')
+        .and.contain('(amartin)')
+        // Named by its identifier alone, not twice
+        .and.contain('href="#&#x2F;users&#x2F;bob">bob</a></td>');
+      expect(done).to.deep.equal([
+        [
+          { id: 'amartin', entry: { uid: 'amartin', cn: 'Alice Martin' } },
+          { id: 'bob', entry: { uid: 'bob' } },
+        ],
       ]);
     });
 
@@ -5582,6 +5633,78 @@ describe('Directory console', () => {
       expect(selected.size).to.equal(0);
       expect(headerTag()).to.not.contain('checked');
       expect(header.indeterminate).to.be.false;
+    });
+
+    it('should show the entries just imported without a search', async () => {
+      // Closing the import's result left a large branch asking for three
+      // characters, and each new account took a search of its own to check.
+      const searched: string[] = [];
+      const read: string[] = [];
+      const view: ListView = {
+        search: 'ali',
+        imported: {
+          entries: {
+            bob: { uid: 'bob', cn: 'Bob Brown' },
+            amartin: { uid: 'amartin', cn: 'Alice Martin' },
+          },
+          current: true,
+        },
+      };
+      const options = {
+        entity: users,
+        translator: new Translator('en'),
+        load: (search: string) => {
+          searched.push(search);
+          return Promise.resolve({});
+        },
+        listable: false,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+        view,
+      };
+      const container = stubContainer();
+      await new EntityList(options).render(container);
+      // As the server answered them, and nothing asked of it again
+      expect(searched).to.deep.equal([]);
+      expect(container.innerHTML)
+        .to.contain('Just imported (2)')
+        .and.contain('Back to search')
+        .and.contain('href="#&#x2F;users&#x2F;amartin"')
+        .and.contain('Bob Brown')
+        .and.not.contain('data-search ');
+      expect(container.innerHTML.indexOf('amartin')).to.be.below(
+        container.innerHTML.indexOf('bob')
+      );
+
+      // Back from a card: read again, and one deleted meanwhile left out.
+      const again = stubContainer();
+      await new EntityList({
+        ...options,
+        read: (id: string) => {
+          read.push(id);
+          return id === 'bob'
+            ? Promise.reject(Object.assign(new Error('gone'), { status: 404 }))
+            : Promise.resolve({ uid: id, cn: 'Alice Martin-Durand' });
+        },
+      }).render(again);
+      expect(read).to.have.members(['amartin', 'bob']);
+      expect(again.innerHTML)
+        .to.contain('Just imported (1)')
+        .and.contain('Alice Martin-Durand')
+        .and.not.contain('Bob Brown');
+      expect(Object.keys(view.imported?.entries ?? {})).to.deep.equal([
+        'amartin',
+      ]);
+
+      // Back to search: the search left typed is run again.
+      const list = new EntityList(options);
+      await list.render(stubContainer());
+      await (
+        list as unknown as { leaveImported(): Promise<void> }
+      ).leaveImported();
+      expect(view.imported).to.equal(undefined);
+      expect(searched).to.deep.equal(['ali']);
     });
   });
 

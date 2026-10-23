@@ -57,6 +57,8 @@ const en: Catalogue = {
 
   'list.open': 'Open',
   'list.listEverything': 'List without searching',
+  'list.imported': 'Just imported ({count})',
+  'list.backToSearch': 'Back to search',
   'list.search': 'Search',
   'list.searchIn': 'in',
   'list.searchAnywhere': 'Every field',
@@ -192,6 +194,9 @@ const en: Catalogue = {
   'import.refused': 'refused by the server',
   'import.notSent': 'not sent, the import was stopped',
   'import.downloadRefused': 'Download the refused rows',
+  'import.createdEntry': 'Created',
+  'import.moreCreated':
+    'And {count} more: close this panel to see them all in the list.',
   'import.ambiguous': '{field}: “{value}” matches several entries',
   'import.notFound': '{field}: “{value}” not found',
   'import.undecided':
@@ -434,6 +439,8 @@ const fr: Catalogue = {
 
   'list.open': 'Ouvrir',
   'list.listEverything': 'Lister sans rechercher',
+  'list.imported': 'Dernier import ({count})',
+  'list.backToSearch': 'Revenir à la recherche',
   'list.search': 'Rechercher',
   'list.searchIn': 'dans',
   'list.searchAnywhere': 'Tous les champs',
@@ -582,6 +589,9 @@ const fr: Catalogue = {
   'import.notSent.one': 'non envoyée, l’import a été arrêté',
   'import.notSent.other': 'non envoyées, l’import a été arrêté',
   'import.downloadRefused': 'Télécharger les lignes refusées',
+  'import.createdEntry': 'Créée',
+  'import.moreCreated':
+    'Et {count} de plus : fermez ce panneau pour les voir toutes dans la liste.',
   'import.ambiguous': '{field} : « {value} » correspond à plusieurs entrées',
   'import.notFound': '{field} : « {value} » introuvable',
   'import.undecided':
@@ -818,6 +828,8 @@ const mn: Catalogue = {
 
   'list.open': 'Нээх',
   'list.listEverything': 'Хайлтгүйгээр жагсаах',
+  'list.imported': 'Саяхан импортолсон ({count})',
+  'list.backToSearch': 'Хайлт руу буцах',
   'list.search': 'Хайх',
   'list.searchIn': 'Хайх талбар:',
   'list.searchAnywhere': 'Бүх талбар',
@@ -945,6 +957,9 @@ const mn: Catalogue = {
   'import.refused': 'сервер татгалзсан',
   'import.notSent': 'илгээгээгүй, импортыг зогсоосон',
   'import.downloadRefused': 'Татгалзсан мөрүүдийг татах',
+  'import.createdEntry': 'Үүсгэсэн',
+  'import.moreCreated':
+    'Өөр {count} байна: бүгдийг жагсаалтаас харахын тулд энэ самбарыг хаана уу.',
   'import.ambiguous': '{field}: «{value}» хэд хэдэн бичлэгт тохирч байна',
   'import.notFound': '{field}: «{value}» олдсонгүй',
   'import.undecided':

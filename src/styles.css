@@ -693,6 +693,13 @@
   background-position: 14px center;
 }
 
+.dc-list-imported {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .dc-search-scope {
   display: flex;
   align-items: center;
@@ -1784,16 +1791,19 @@ select.dc-input {
   color: var(--dc-danger);
 }
 
-.dc-import-problems {
+.dc-import-problems,
+.dc-import-created {
   max-height: 320px;
   overflow: auto;
 }
 
-.dc-import-problems tbody tr {
+.dc-import-problems tbody tr,
+.dc-import-created tbody tr {
   cursor: default;
 }
 
-.dc-import-problems td:first-child {
+.dc-import-problems td:first-child,
+.dc-import-created td:first-child {
   width: 64px;
   color: var(--dc-muted);
   font-variant-numeric: tabular-nums;

@@ -119,6 +119,21 @@ const PAGE_SIZES = [25, 50, 100, 200];
 const PAGE_SIZE_KEY = 'ldap-rest.console.pageSize';
 
 /**
+ * The entries an import has just created, shown in the list in place of a
+ * search until the reader goes back to it.
+ */
+export interface ImportedView {
+  /** The entries by identifier, as last read */
+  entries: Record<string, Entry>;
+  /**
+   * Whether they are as the server has just answered them. The list drawn
+   * right after the import shows them so; a list drawn later — Back from a
+   * card where one was changed or deleted — reads them again.
+   */
+  current: boolean;
+}
+
+/**
  * Where the reader left a list: what they searched, in which field, whether
  * they asked for the whole branch, and the page they were on.
  */
@@ -127,6 +142,8 @@ export interface ListView {
   searchAttribute?: string;
   listEverything?: boolean;
   page?: number;
+  /** The entries of the last import, when the list shows them */
+  imported?: ImportedView;
 }
 
 export interface ListOptions {
@@ -149,12 +166,20 @@ export interface ListOptions {
   /** Readable name of the entry a pointer lands on, when its schema has one */
   pointerLabel?(dn: string): string | undefined;
   /**
+   * Read one entry again, for the entries of an import shown once more;
+   * without it they are shown as they were created
+   */
+  read?(id: string): Promise<Entry>;
+  /**
    * Where the reader left this list last time. The list starts from it and
    * keeps it up to date as they search and page, so a list drawn again —
    * Back from a card — opens where it was left rather than empty
    */
   view?: ListView;
 }
+
+/** Entries of an import read again at once. */
+const READ_CONCURRENCY = 4;
 
 /** Controls a repaint must not steal the caret from. */
 const FOCUSABLE = ['[data-search]', '[data-search-attribute]'];
@@ -198,6 +223,8 @@ export class EntityList {
   private truncated = false;
   /** Set when the reader asked for the whole branch despite the guard */
   private listEverything = false;
+  /** The entries of the last import, shown in place of a search */
+  private imported: ImportedView | undefined;
   /**
    * Which load is the current one. A search is debounced, not serialised, so
    * two requests are in flight whenever the operator keeps typing — and the
@@ -222,6 +249,7 @@ export class EntityList {
     this.search = options.view?.search ?? '';
     this.listEverything = options.view?.listEverything ?? false;
     this.page = options.view?.page ?? 0;
+    this.imported = options.view?.imported;
   }
 
   /**
@@ -301,7 +329,9 @@ export class EntityList {
     this.draw();
     // A search left typed is run again, and the page it was left on kept.
     if (
-      (this.listable() || this.query.length >= SEARCH_MINIMUM) &&
+      (this.imported ||
+        this.listable() ||
+        this.query.length >= SEARCH_MINIMUM) &&
       !this.loaded
     )
       await this.reload(true);
@@ -320,6 +350,7 @@ export class EntityList {
    */
   private async reload(keepPage = false): Promise<void> {
     const generation = ++this.generation;
+    if (this.imported) return this.reloadImported(generation, keepPage);
     if (!this.listable() && this.query.length < SEARCH_MINIMUM) {
       this.entries = [];
       this.truncated = false;
@@ -359,6 +390,81 @@ export class EntityList {
     }
   }
 
+  /**
+   * Show the entries of the last import: as the server answered them, the
+   * first time, and read again afterwards. One gone since is left out; with
+   * none left, the list goes back to its search.
+   */
+  private async reloadImported(
+    generation: number,
+    keepPage: boolean
+  ): Promise<void> {
+    const imported = this.imported as ImportedView;
+    const { read } = this.options;
+    this.error = null;
+    if (!imported.current && read) {
+      this.loading = true;
+      this.draw();
+      const ids = Object.keys(imported.entries);
+      const entries: Record<string, Entry> = {};
+      try {
+        await Promise.all(
+          Array.from(
+            { length: Math.min(READ_CONCURRENCY, ids.length) },
+            async () => {
+              for (let id = ids.shift(); id !== undefined; id = ids.shift()) {
+                try {
+                  entries[id] = await read(id);
+                } catch (err) {
+                  if ((err as { status?: number } | null)?.status !== 404)
+                    throw err;
+                }
+              }
+            }
+          )
+        );
+      } catch (err) {
+        if (generation !== this.generation) return;
+        this.error = listFailure(err, this.options.translator);
+        this.entries = [];
+        this.loading = false;
+        this.draw();
+        return;
+      }
+      if (generation !== this.generation) return;
+      imported.entries = entries;
+      this.loading = false;
+    }
+    imported.current = false;
+    if (Object.keys(imported.entries).length === 0) return this.leaveImported();
+    this.entries = Object.entries(imported.entries).sort(([a], [b]) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' })
+    );
+    this.truncated = false;
+    this.loaded = true;
+    const last = Math.max(
+      0,
+      Math.ceil(this.entries.length / this.pageSize) - 1
+    );
+    this.page = keepPage ? Math.min(this.page, last) : 0;
+    this.selected.clear();
+    this.draw();
+  }
+
+  /** Back from the entries of the last import to the list's search. */
+  private async leaveImported(): Promise<void> {
+    this.imported = undefined;
+    if (this.options.view) delete this.options.view.imported;
+    this.entries = [];
+    this.loaded = false;
+    this.page = 0;
+    const reloading = this.reload();
+    // The button pressed is gone with the view: the keyboard goes on from
+    // the search box that took its place.
+    this.root?.querySelector<HTMLInputElement>('[data-search]')?.focus();
+    await reloading;
+  }
+
   /** Repaint the whole table. */
   private draw(): void {
     const root = this.root;
@@ -379,33 +485,18 @@ export class EntityList {
     root.innerHTML = `
       <div class="dc-list">
         <div class="dc-list-toolbar">
-          <div class="dc-search">
-            <input type="search" class="dc-input" data-search
-              value="${escapeHtml(this.search)}"
-              placeholder="${escapeHtml(translator.t('list.search'))}" />
-            <label class="dc-search-scope">
-              <span>${escapeHtml(translator.t('list.searchIn'))}</span>
-              <select class="dc-input" data-search-attribute>
-                <option value="${SEARCH_ANYWHERE}"${
-                  this.searchAttribute === SEARCH_ANYWHERE ? ' selected' : ''
-                }>${escapeHtml(translator.t('list.searchAnywhere'))}</option>
-                ${this.searchableAttributes()
-                  .map(
-                    ([name, attr]) =>
-                      `<option value="${escapeHtml(name)}"${
-                        name === this.searchAttribute ? ' selected' : ''
-                      }>${escapeHtml(
-                        attributeLabel(
-                          name,
-                          attr,
-                          this.options.translator.language
-                        )
-                      )}</option>`
-                  )
-                  .join('')}
-              </select>
-            </label>
-          </div>
+          ${
+            this.imported
+              ? `<div class="dc-list-imported" data-imported>
+                  <strong>${escapeHtml(
+                    translator.t('list.imported', { count: total })
+                  )}</strong>
+                  <button type="button" class="dc-button" data-leave-imported>${escapeHtml(
+                    translator.t('list.backToSearch')
+                  )}</button>
+                </div>`
+              : this.searchMarkup()
+          }
           <div class="dc-bulk" ${this.selected.size ? '' : 'hidden'}>
             <span>${escapeHtml(
               translator.t('list.selected', { count: this.selected.size })
@@ -434,6 +525,35 @@ export class EntityList {
       const picked = slice.filter(([id]) => this.selected.has(id)).length;
       all.indeterminate = picked > 0 && picked < slice.length;
     }
+  }
+
+  /** The search box and the field it searches in. */
+  private searchMarkup(): string {
+    const { translator } = this.options;
+    return `
+      <div class="dc-search">
+        <input type="search" class="dc-input" data-search
+          value="${escapeHtml(this.search)}"
+          placeholder="${escapeHtml(translator.t('list.search'))}" />
+        <label class="dc-search-scope">
+          <span>${escapeHtml(translator.t('list.searchIn'))}</span>
+          <select class="dc-input" data-search-attribute>
+            <option value="${SEARCH_ANYWHERE}"${
+              this.searchAttribute === SEARCH_ANYWHERE ? ' selected' : ''
+            }>${escapeHtml(translator.t('list.searchAnywhere'))}</option>
+            ${this.searchableAttributes()
+              .map(
+                ([name, attr]) =>
+                  `<option value="${escapeHtml(name)}"${
+                    name === this.searchAttribute ? ' selected' : ''
+                  }>${escapeHtml(
+                    attributeLabel(name, attr, this.options.translator.language)
+                  )}</option>`
+              )
+              .join('')}
+          </select>
+        </label>
+      </div>`;
   }
 
   /** Keep where the reader is, for the list drawn in this one's place. */
@@ -494,7 +614,11 @@ export class EntityList {
       return `<p class="dc-empty">${escapeHtml(translator.t('app.loading'))}</p>`;
     if (this.error)
       return `<p class="dc-empty dc-error-block">${escapeHtml(this.error)}</p>`;
-    if (!this.listable() && this.query.length < SEARCH_MINIMUM)
+    if (
+      !this.imported &&
+      !this.listable() &&
+      this.query.length < SEARCH_MINIMUM
+    )
       return `<p class="dc-empty">${escapeHtml(
         translator.t('list.searchGuard', { count: SEARCH_MINIMUM })
       )}<br /><button type="button" class="dc-button" data-list-all>${escapeHtml(
@@ -747,6 +871,10 @@ export class EntityList {
         this.options.onOpen(row.dataset.id as string);
       });
     }
+
+    root
+      .querySelector('[data-leave-imported]')
+      ?.addEventListener('click', () => void this.leaveImported());
 
     root.querySelector('[data-list-all]')?.addEventListener('click', () => {
       this.listEverything = true;
