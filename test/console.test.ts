@@ -2704,6 +2704,129 @@ describe('Directory console', () => {
     });
   });
 
+  describe('an address naming no page', () => {
+    const organizations: EntityDescriptor = {
+      key: 'organizations',
+      pluralName: 'organizations',
+      singularName: 'organization',
+      mainAttribute: 'ou',
+      base: 'ou=organization,dc=example,dc=com',
+      schema: { attributes: { ou: { type: 'string', role: 'identifier' } } },
+      endpoint: '/api/v1/ldap/organizations',
+      kind: 'organization',
+    };
+
+    /**
+     * A console on the page this hash names, its views recording which one
+     * was drawn and its navigation which entry was highlighted.
+     */
+    const visit = async (hash: string, language = 'en') => {
+      const main = { innerHTML: '', querySelectorAll: () => [] };
+      const nav = ['', 'users', 'organizations', 'mailboxTypes'].map(key => {
+        const item = {
+          dataset: { nav: key },
+          active: false,
+          classList: {
+            contains: () => false,
+            toggle: (_name: string, on: boolean) => {
+              item.active = on;
+            },
+          },
+          setAttribute: () => undefined,
+          removeAttribute: () => undefined,
+        };
+        return item;
+      });
+      const app = new DirectoryConsole({
+        containerId: 'console',
+        apiBaseUrl: baseUrl,
+        language,
+      });
+      const drawn: string[] = [];
+      Object.assign(app as unknown as object, {
+        container: {
+          querySelector: (selector: string) =>
+            selector === '[data-main]' ? main : null,
+          querySelectorAll: (selector: string) =>
+            selector === '[data-nav]' ? nav : [],
+        },
+        entities: [users, organizations, mailboxTypes],
+        policiesReadable: true,
+        renderList: async (_main: unknown, entity: EntityDescriptor) => {
+          drawn.push(`list ${entity.key}`);
+        },
+        renderDetail: async (
+          _main: unknown,
+          entity: EntityDescriptor,
+          id: string
+        ) => {
+          drawn.push(`detail ${entity.key} ${id}`);
+        },
+        renderOrganizations: async () => {
+          drawn.push('organizations');
+        },
+        renderPolicies: async () => {
+          drawn.push('policies');
+        },
+      });
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      g.window = { location: { hash } };
+      try {
+        await (app as unknown as { followHash(): Promise<void> }).followHash();
+      } finally {
+        g.window = original;
+      }
+      return {
+        main,
+        drawn,
+        highlighted: nav
+          .filter(item => item.active)
+          .map(item => item.dataset.nav),
+      };
+    };
+
+    it('should say there is no page, with a way to the overview', async () => {
+      // A mistyped or outdated link drew the overview, as if it had worked.
+      for (const [language, text, link] of [
+        ['en', 'There is no page at this address.', 'Go to the Overview'],
+        ['fr', 'Il n’y a pas de page à cette adresse.', 'Aller à l’accueil'],
+        ['mn', 'Энэ хаягт хуудас алга.', 'Нүүр хуудас руу очих'],
+      ]) {
+        for (const hash of ['#/passwordPolicies', '#/accountStates/active']) {
+          const { main, drawn, highlighted } = await visit(hash, language);
+          expect(main.innerHTML)
+            .to.include(text)
+            .and.include(`href="#/">${link}</a>`)
+            .and.not.include('dc-dashboard');
+          expect(drawn).to.deep.equal([]);
+          expect(highlighted).to.deep.equal([]);
+        }
+      }
+    });
+
+    it('should still open the overview and every page that exists', async () => {
+      for (const hash of ['', '#', '#/']) {
+        const { main, highlighted } = await visit(hash);
+        expect(main.innerHTML).to.include('dc-dashboard');
+        expect(highlighted).to.deep.equal(['']);
+      }
+      const pages: [string, string][] = [
+        ['#/users', 'list users'],
+        ['#/users/alice', 'detail users alice'],
+        ['#/mailboxTypes', 'list mailboxTypes'],
+        ['#/organizations', 'organizations'],
+        ['#/organizations/ou=Sales', 'organizations'],
+        ['#/password-policies', 'policies'],
+      ];
+      for (const [hash, page] of pages) {
+        const { main, drawn } = await visit(hash);
+        expect(drawn, hash).to.deep.equal([page]);
+        expect(main.innerHTML, hash).to.not.include('There is no page');
+      }
+    });
+  });
+
   describe('an account administering nothing', () => {
     const top = 'ou=organization,dc=example,dc=com';
     const organizations: EntityDescriptor = {

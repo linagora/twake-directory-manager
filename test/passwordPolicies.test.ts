@@ -392,6 +392,73 @@ describe('Password policies', () => {
       expect(await reads(app)).to.equal(true);
     });
 
+    describe('read from the scope', () => {
+      const local = {
+        user: 'uid=sophie.martin,ou=users,dc=example,dc=com',
+        unrestricted: false,
+        described: true,
+        branches: [
+          { dn: 'ou=sales,dc=example,dc=com', read: true, write: true },
+        ],
+        entities: [],
+      } as Scope;
+      /** Every request to the policies, which none of these should send. */
+      let asked = 0;
+      beforeEach(() => {
+        asked = 0;
+        nock(baseUrl)
+          .get('/api/v1/password-policies')
+          .times(2)
+          .reply(() => {
+            asked++;
+            return [200, { policies: [] }];
+          });
+      });
+      afterEach(() => nock.cleanAll());
+
+      it('should offer the policies the scope says the caller manages, without asking for them', async () => {
+        expect(
+          await reads(await consoleFor({ ...local, passwordPolicies: true }))
+        ).to.equal(true);
+        expect(
+          await reads(
+            await consoleFor({
+              ...local,
+              unrestricted: true,
+              branches: [],
+              passwordPolicies: true,
+            })
+          )
+        ).to.equal(true);
+        expect(asked).to.equal(0);
+      });
+
+      it('should hide the policies the scope says the caller does not manage, without asking for them', async () => {
+        // A local administrator's every page load logged a 403 on them
+        expect(
+          await reads(await consoleFor({ ...local, passwordPolicies: false }))
+        ).to.equal(false);
+        expect(asked).to.equal(0);
+      });
+
+      it('should ask the server that does not say, or whose scope cannot', async () => {
+        // An ldap-rest before 0.25.0, and an undescribed scope, whose
+        // `false` is for want of a model
+        expect(await reads(await consoleFor(local))).to.equal(true);
+        expect(
+          await reads(
+            await consoleFor({
+              ...local,
+              described: false,
+              branches: [],
+              passwordPolicies: false,
+            })
+          )
+        ).to.equal(true);
+        expect(asked).to.equal(2);
+      });
+    });
+
     it('should list the policies with the reference data', async () => {
       const container = {
         innerHTML: '',

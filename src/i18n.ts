@@ -26,6 +26,8 @@ const en: Catalogue = {
   'app.back': 'Back',
   'app.language': 'Language',
   'app.logout': 'Sign out',
+  'app.notFound': 'There is no page at this address.',
+  'app.toOverview': 'Go to the Overview',
 
   'nav.dashboard': 'Overview',
   'nav.reference': 'Reference data',
@@ -371,6 +373,8 @@ const fr: Catalogue = {
   'app.back': 'Retour',
   'app.language': 'Langue',
   'app.logout': 'Se déconnecter',
+  'app.notFound': 'Il n’y a pas de page à cette adresse.',
+  'app.toOverview': 'Aller à l’accueil',
 
   'nav.dashboard': 'Vue d’ensemble',
   'nav.reference': 'Référentiels',
@@ -742,6 +746,8 @@ const mn: Catalogue = {
   'app.back': 'Буцах',
   'app.language': 'Хэл',
   'app.logout': 'Гарах',
+  'app.notFound': 'Энэ хаягт хуудас алга.',
+  'app.toOverview': 'Нүүр хуудас руу очих',
 
   'nav.dashboard': 'Тойм',
   'nav.reference': 'Лавлах өгөгдөл',

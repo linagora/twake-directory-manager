@@ -31,6 +31,7 @@ Conventions).
 - [x] NAV-07 (P3) The bare host opens the console — `navigation.spec.ts`
 - [x] NAV-08 (P2) Side panel is a modal dialog: focus, Tab, Escape — `navigation.spec.ts`
 - [x] NAV-09 (P3) Side panel opens at its top and closes when the page changes — `navigation.spec.ts`
+- [x] NAV-10 (P3) An unknown address says there is no page there, with a link to the Overview — `navigation.spec.ts` (`#/passwordPolicies`, `#/accountStates`; `#/` and the bare console still open the Overview)
 
 ## Scope banner and authorization
 
@@ -122,7 +123,7 @@ deployment should: `DM_PPOLICY_BASE` and `DM_PPOLICY_DEFAULT_DN` (the seed's
 policies and `DM_AUTHZ_GLOBAL_WRITE_BRANCHES` on the mail domains: admin manages them, the local
 administrators do not.
 
-- [x] POLICY-01 (P2) Only the global administrators see the password policies; the default one cannot be deleted — `policies.spec.ts` (the policies API answers 403 to a local administrator)
+- [x] POLICY-01 (P2) Only the global administrators see the password policies; the default one cannot be deleted — `policies.spec.ts` (the policies API answers 403 to a local administrator, whose page load no longer asks for them: the scope says it, #138)
 - [x] POLICY-02 (P1) Create, edit and delete a policy: durations sent in seconds, an emptied field removes its attribute, and only the settings the directory defines are offered (no Maximum length on OpenLDAP 2.4, #118); Cancel on the deletion's confirmation gives the form back — `policies.spec.ts`
 - [x] POLICY-03 (P2) A policy accounts use is not deleted — `policies.spec.ts` (that it holds their passwords cannot be checked: ldap-rest binds as the rootdn, which ppolicy exempts)
 - [x] DOMAIN-01 (P2) A global administrator adds a mail domain, offered after "@" at once, and deletes it — `domains.spec.ts` (named `*.test`, which LIST-08 and USER-15 ignore)
