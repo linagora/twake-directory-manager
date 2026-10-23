@@ -1,16 +1,25 @@
 # Changelog
 
-## Unreleased
+## v0.10.2 (2026-10-23)
+
+Built on ldap-rest 0.24.0.
 
 ### Bug Fixes
 
+- Deleting an account takes it out of the organizations it managed or
+  administered, the mailboxes delegated to it and the groups it owned: an
+  account created again at the same address inherited the old one's rights.
+  Links left by accounts deleted before: see ldap-rest's
+  [upgrade note](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md#links-to-deleted-accounts)
+  (#101, linagora/ldap-rest#365)
 - The import's rules call the department an _organisation_ in French and
   _байгууллага_ in Mongolian, as its field and the template's column do (#119)
 - An empty required field says _Required_ under it, no longer the form's
   legend _Fields marked with * are required_ once per field (#120)
 - A password policy offers only the settings the directory knows: OpenLDAP
   2.4 refused _Maximum length_, _Account unused for_ and the delays after a
-  failure. Needs an ldap-rest that lists them (linagora/ldap-rest#366) (#118)
+  failure. Takes effect with an ldap-rest that lists them
+  (linagora/ldap-rest#366, not in 0.24.0) (#118)
 
 ## v0.10.1 (2026-10-22)
 
