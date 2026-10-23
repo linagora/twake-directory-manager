@@ -1061,6 +1061,15 @@
   font-weight: 550;
 }
 
+/* An entry no entity holds has no card to open. */
+.dc-attached-table tbody tr:not([data-href]) {
+  cursor: default;
+}
+
+.dc-attached-table tbody tr:not([data-href]):hover {
+  background: none;
+}
+
 .dc-attached .dc-table-scroll + .dc-muted {
   margin: 12px 0 0;
 }

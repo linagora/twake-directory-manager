@@ -35,8 +35,8 @@ Finding the entries in transit
 Every administrator can see the entries in transit:
 
 - a click on the transit organization’s name, in the scope banner, opens its
-  card, which lists the entries waiting in it under
-  :guilabel:`Attached entries`;
+  card, which lists the entries waiting in it in its :guilabel:`People` and
+  :guilabel:`Groups` tables;
 - the card of an entry in transit is tagged :guilabel:`In transit`.
 
 The banner is the way in for a local administrator, whose organization tree

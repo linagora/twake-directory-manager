@@ -21,6 +21,7 @@ import {
 import { CONSOLE_LOGO, LINAGORA_LOGO } from './assets';
 import {
   AttachedTables,
+  attachedClass,
   attachedEntity,
   type AttachedKind,
 } from './components/AttachedTables';
@@ -1767,10 +1768,14 @@ export class DirectoryConsole {
 
     // "Who is in this department?" is the question an organization card is
     // opened to answer, and the tree deliberately does not show accounts.
+    let failure: string | undefined;
     const [members, named, attachedNames] = await Promise.all([
-      this.api
-        .organizationMembers(node.dn, this.entities)
-        .catch(() => ({ entries: [], truncated: false, more: undefined })),
+      // A failure is said where the entries would be: an empty table read
+      // as an empty department.
+      this.readMembers(node.dn).catch((err: unknown) => {
+        failure = readFailure(err, this.translator).message;
+        return { entries: [], truncated: false };
+      }),
       this.pointerNames(entity),
       this.attachedNames(),
     ]);
@@ -1800,6 +1805,8 @@ export class DirectoryConsole {
           transit && comparableDn(transit) === comparableDn(node.dn)
             ? this.claimAction()
             : undefined,
+        partial: !this.readsWhole(node.dn),
+        failure,
         onOpen: (href: string): void => {
           window.location.hash = href;
         },
@@ -1890,7 +1897,11 @@ export class DirectoryConsole {
     node: OrganizationNode
   ): Partial<Record<AttachedKind, () => void>> {
     const offered: Partial<Record<AttachedKind, () => void>> = {};
-    if (!this.createsUnder(node.dn)) return offered;
+    // The global administrator writes above the transit branch, and may
+    // grow it, but an account is handed over into it, not created there.
+    const transit = this.scope?.transit;
+    if (!this.createsUnder(node.dn) || (transit && withinDn(node.dn, transit)))
+      return offered;
     // The path names the department in the form's picker, as it does on an
     // entry being edited: the DN alone would show its last name only.
     const path = organizations.organizationPath
@@ -1906,10 +1917,76 @@ export class DirectoryConsole {
       offered[kind] = (): void =>
         void this.openForm(target, undefined, {
           preset,
-          created: (): void => void this.showOrganization(node),
+          // The card is drawn anew, button included: the focus goes back to
+          // the new one, for the next creation, rather than to the page.
+          created: (): void =>
+            void this.showOrganization(node).then(() =>
+              this.container
+                ?.querySelector<HTMLElement>(`[data-create-attached="${kind}"]`)
+                ?.focus()
+            ),
         });
     }
     return offered;
+  }
+
+  /**
+   * The entries attached to an organization, the accounts and the groups
+   * each asked on its own when their classes tell them apart: the server
+   * caps and counts each answer apart, so each table says what it left out.
+   * One answer for both shares one cap, and the count it gives says nothing
+   * of which kind it cut.
+   *
+   * @param dn the organization
+   * @returns what the server listed
+   */
+  private async readMembers(dn: string): Promise<AttachedEntries> {
+    const kinds = (['people', 'groups'] as const).map(kind => ({
+      kind,
+      objectClass: attachedClass(this.entities, kind),
+    }));
+    if (kinds.some(({ objectClass }) => !objectClass))
+      return this.api.organizationMembers(dn, this.entities);
+    const answers = await Promise.all(
+      kinds.map(({ objectClass }) =>
+        this.api.organizationMembers(dn, this.entities, objectClass)
+      )
+    );
+    // An entry of both classes is listed once.
+    const seen = new Set<string>();
+    return {
+      entries: answers
+        .flatMap(answer => answer.entries)
+        .filter(entry => {
+          const key = comparableDn(entry.dn);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }),
+      truncated: answers.some(answer => answer.truncated),
+      cut: Object.fromEntries(
+        kinds.map(({ kind }, index) => [
+          kind,
+          { truncated: answers[index].truncated, more: answers[index].more },
+        ])
+      ),
+    };
+  }
+
+  /**
+   * Whether the server lists the caller everything attached to an
+   * organization. It lists only the entries of the branches they
+   * administer, so on another administrator's organization an empty table
+   * says only that none of theirs is there. The transit branch is every
+   * administrator's to read.
+   *
+   * @param dn the organization
+   */
+  private readsWhole(dn: string): boolean {
+    const scope = this.scope;
+    if (!scopeRestricts(scope)) return true;
+    if (scope.transit && withinDn(dn, scope.transit)) return true;
+    return scope.branches.some(branch => withinDn(dn, branch.dn));
   }
 
   /* ------------------------------------------------------------ side panel */

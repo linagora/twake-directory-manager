@@ -212,6 +212,7 @@ const en: Catalogue = {
   'org.newUserHere': 'New user here',
   'org.newGroupHere': 'New group here',
   'org.nobody': 'No one is attached to {name}.',
+  'org.noneManaged': 'None you manage is attached to {name}.',
   'tree.addUnder': 'New organization under {name}',
   'tree.expand': 'Expand {name}',
   'tree.collapse': 'Collapse {name}',
@@ -611,6 +612,8 @@ const fr: Catalogue = {
   'org.newUserHere': 'Nouvel utilisateur ici',
   'org.newGroupHere': 'Nouveau groupe ici',
   'org.nobody': 'Personne n’est rattaché à {name}.',
+  'org.noneManaged':
+    'Aucune des entrées que vous gérez n’est rattachée à {name}.',
   'tree.addUnder': 'Nouvelle organisation sous {name}',
   'tree.expand': 'Développer {name}',
   'tree.collapse': 'Réduire {name}',
@@ -981,6 +984,8 @@ const mn: Catalogue = {
   'org.newUserHere': 'Энд шинэ хэрэглэгч',
   'org.newGroupHere': 'Энд шинэ бүлэг',
   'org.nobody': '{name}-д хэн ч хавсаргагдаагүй.',
+  'org.noneManaged':
+    'Таны удирддаг бичлэгүүдээс {name}-д хавсаргагдсан нь алга.',
   'tree.addUnder': '{name} дор шинэ байгууллага',
   'tree.expand': '{name}-г дэлгэх',
   'tree.collapse': '{name}-г хураах',

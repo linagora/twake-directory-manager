@@ -1079,8 +1079,9 @@ export class ConsoleApiClient {
    *
    * Asked whole, the answer caps the attached entries at
    * `ldap_organization_max_subnodes` and appends a `moreIndicator` row
-   * counting the rest. Asked for one class, it drops the attached entries
-   * altogether — and with them the cap and the indicator.
+   * counting the rest. Asked for `organizationalUnit`, it holds the child
+   * organizations alone; asked for another class, the attached entries of
+   * that class alone, capped and counted on their own.
    *
    * @param dn organization to read
    * @param objectClass class to restrict the answer to
@@ -1153,15 +1154,18 @@ export class ConsoleApiClient {
    * @param dn organization to read
    * @param entities entities the console knows, to tell an account from a
    *          group and read their values by role
+   * @param objectClass class to ask for alone, so that the server caps and
+   *          counts that kind apart
    * @returns DN, readable name, entity and shown values of each attached
    *          entry, whether the server left some out, and how many when it
    *          counted them
    */
   async organizationMembers(
     dn: string,
-    entities: EntityDescriptor[] = []
+    entities: EntityDescriptor[] = [],
+    objectClass?: string
   ): Promise<AttachedEntries> {
-    const rows = await this.subnodes(dn);
+    const rows = await this.subnodes(dn, objectClass);
     // The child organizations have an indicator of their own, which says
     // nothing about the entries attached to this one.
     const indicator = rows.find(
