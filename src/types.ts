@@ -186,6 +186,12 @@ export interface Scope {
    * whose rule the console then reads from the branches
    */
   linksAnyDomain?: boolean;
+  /**
+   * Whether the caller may list the password policies. Absent when the
+   * server serves none, and before ldap-rest 0.25.0, whose console then asks
+   * for them to know
+   */
+  passwordPolicies?: boolean;
 }
 
 /** Options accepted by the console. */
