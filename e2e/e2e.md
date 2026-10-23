@@ -123,7 +123,7 @@ policies and `DM_AUTHZ_GLOBAL_WRITE_BRANCHES` on the mail domains: admin manages
 administrators do not.
 
 - [x] POLICY-01 (P2) Only the global administrators see the password policies; the default one cannot be deleted — `policies.spec.ts` (the policies API answers 403 to a local administrator)
-- [x] POLICY-02 (P1) Create, edit and delete a policy: durations sent in seconds, an emptied field removes its attribute — `policies.spec.ts`
+- [x] POLICY-02 (P1) Create, edit and delete a policy: durations sent in seconds, an emptied field removes its attribute, and only the settings the directory defines are offered (no Maximum length on OpenLDAP 2.4, #118) — `policies.spec.ts`
 - [x] POLICY-03 (P2) A policy accounts use is not deleted — `policies.spec.ts` (that it holds their passwords cannot be checked: ldap-rest binds as the rootdn, which ppolicy exempts)
 - [x] DOMAIN-01 (P2) A global administrator adds a mail domain, offered after "@" at once, and deletes it — `domains.spec.ts` (named `*.test`, which LIST-08 and USER-15 ignore)
 - [x] DOMAIN-02 (P2) A local administrator reads the mail domains and changes none — `domains.spec.ts`
