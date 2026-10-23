@@ -1,7 +1,6 @@
-import { LoginPage } from '../pages';
+import { ConfirmDialog, LoginPage } from '../pages';
 import { ADMIN, ALICE, CAROL, ERIC, ORG, SOPHIE } from '../support/accounts';
 import { callApi } from '../support/api';
-import { answerNextConfirm } from '../support/confirm';
 import { HUMAN_RESOURCES, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
@@ -121,9 +120,8 @@ test.describe('SCOPE scope banner and authorization', () => {
     await entry.expectName(position.cn);
 
     if ((await entry.action('Delete').count()) > 0) {
-      const message = answerNextConfirm(page, true);
       await entry.perform('Delete');
-      await message;
+      await new ConfirmDialog(page).confirm();
       await expect(app.errorToast).toBeVisible();
       await expect(app.errorToast).not.toHaveText(UNREADABLE);
     }
@@ -141,9 +139,8 @@ test.describe('SCOPE scope banner and authorization', () => {
     const entry = app.entry();
     await entry.expectName('Sales Manager');
     if ((await entry.action('Delete').count()) > 0) {
-      const message = answerNextConfirm(page, true);
       await entry.perform('Delete');
-      await message;
+      await new ConfirmDialog(page).confirm();
       await expect(app.errorToast).toBeVisible();
       await expect(app.errorToast).not.toContainText(
         'cn=Sales Manager,ou=positions'

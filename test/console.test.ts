@@ -45,14 +45,16 @@ import {
   listFailure,
 } from '../src/components/EntityList';
 import { OrganizationTree } from '../src/components/OrganizationTree';
-import { availableLanguages, Translator } from '../src/i18n';
+import { availableLanguages, languageName, Translator } from '../src/i18n';
 import {
   beforeToday,
+  explainRefusal,
   formatByteSize,
   nameAttributes,
   parseByteSize,
   readableByteSize,
 } from '../src/format';
+import type { Confirmation } from '../src/DirectoryConsole';
 import type {
   EntityDescriptor,
   EntitySchema,
@@ -549,6 +551,29 @@ describe('Directory console', () => {
       expect(asked).to.deep.equal([sales, eu]);
     });
 
+    it('should offer a new organization under one only when it may be created', () => {
+      const render = (onCreateChild?: () => void): string => {
+        const container = stubContainer();
+        new EntityDetail({
+          entity: linkedGroups,
+          entry: account(sales),
+          translator: new Translator('en'),
+          canWrite: true,
+          canDelete: false,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          onStatus: () => undefined,
+          onResetPassword: () => undefined,
+          onCreateChild,
+        }).render(container);
+        return container.innerHTML;
+      };
+      expect(render(() => undefined)).to.match(
+        /data-edit>Edit<\/button>\s*<button type="button" class="dc-button" data-create-child>New organization here</
+      );
+      expect(render()).not.to.include('data-create-child');
+    });
+
     it('should mark an entry in transit and offer its moves', () => {
       const render = (options: {
         inTransit?: boolean;
@@ -669,12 +694,130 @@ describe('Directory console', () => {
       container.filter.value = 'zzz';
       container.filter.fire();
       expect(container.list.innerHTML)
-        .to.include('No organization matches “zzz” among the opened branches')
+        .to.include('No organization matches “zzz”')
         .and.not.include('dc-tree-list');
       // Cleared, the tree is back.
       container.filter.value = '';
       container.filter.fire();
       expect(container.list.innerHTML).to.include('>Sales</button>');
+    });
+  });
+
+  describe('OrganizationTree, searching the whole tree', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const sales = `ou=Sales,${top}`;
+    const france = `ou=France,${sales}`;
+    const settle = (): Promise<void> =>
+      new Promise(resolve => setImmediate(resolve));
+    const options = (asked: string[], selected: string[] = []) => ({
+      translator: new Translator('en'),
+      root: async () => ({ dn: top, name: 'organization' }),
+      children: async (dn: string) => {
+        asked.push(dn);
+        if (dn === top) return [{ dn: sales, name: 'Sales' }];
+        if (dn === sales) return [{ dn: france, name: 'France' }];
+        return [];
+      },
+      onSelect: (node: { dn: string }) => {
+        selected.push(node.dn);
+      },
+      everywhere: async () => [
+        { dn: top, label: 'organization' },
+        { dn: sales, label: 'Sales' },
+        { dn: france, label: 'Sales / France' },
+      ],
+    });
+    type Hidden = {
+      choose(dn: string, label: string): Promise<void>;
+      pick(dn: string): Promise<void>;
+    };
+
+    it('should find an organization under a branch never opened', async () => {
+      const asked: string[] = [];
+      const selected: string[] = [];
+      const container = treeContainer();
+      const tree = new OrganizationTree(options(asked, selected));
+      await tree.render(container);
+      container.filter.value = 'Fra';
+      container.filter.fire();
+      await settle();
+      expect(container.list.innerHTML)
+        .to.include(`data-found="${france}"`)
+        .and.include('>Sales &#x2F; France</button>')
+        .and.not.include('data-select');
+      expect(asked).to.deep.equal([top]);
+
+      // Chosen, it is shown in the tree, opened down to it, and selected.
+      await (tree as unknown as Hidden).choose(france, 'Sales / France');
+      expect(container.filter.value).to.equal('');
+      expect(selected).to.deep.equal([france]);
+      expect(container.list.innerHTML).to.match(
+        /dc-selected[^]*?data-select="ou=France,ou=Sales,/
+      );
+    });
+
+    it('should say when no organization of the whole tree matches', async () => {
+      const container = treeContainer();
+      await new OrganizationTree(options([])).render(container);
+      container.filter.value = 'zzz';
+      container.filter.fire();
+      await settle();
+      expect(container.list.innerHTML)
+        .to.include('No organization matches “zzz”')
+        .and.not.include('among the opened branches');
+    });
+
+    it('should read the whole tree once, and again once a branch changed', async () => {
+      let reads = 0;
+      const container = treeContainer();
+      const tree = new OrganizationTree({
+        ...options([]),
+        everywhere: async () => {
+          reads++;
+          return [{ dn: sales, label: 'Sales' }];
+        },
+      });
+      await tree.render(container);
+      for (const typed of ['Sa', 'Sal', 'S', 'Sa']) {
+        container.filter.value = typed;
+        container.filter.fire();
+        await settle();
+      }
+      expect(reads).to.equal(1);
+      await tree.refresh();
+      await settle();
+      expect(reads).to.equal(2);
+    });
+
+    it('should filter the opened branches when the whole tree cannot be read', async () => {
+      const container = treeContainer();
+      await new OrganizationTree({
+        ...options([]),
+        everywhere: async () => {
+          throw new Error('refused');
+        },
+      }).render(container);
+      container.filter.value = 'Sal';
+      container.filter.fire();
+      await settle();
+      expect(container.list.innerHTML).to.include('>Sales</button>');
+    });
+
+    it('should open a node when it is selected', async () => {
+      const asked: string[] = [];
+      const selected: string[] = [];
+      const container = treeContainer();
+      const tree = new OrganizationTree(options(asked, selected));
+      await tree.render(container);
+      await (tree as unknown as Hidden).pick(sales);
+      expect(selected).to.deep.equal([sales]);
+      expect(asked).to.deep.equal([top, sales]);
+      expect(container.list.innerHTML)
+        .to.include('aria-label="Collapse Sales"')
+        .and.include('>France</button>');
+      // Selected again, it stays open.
+      await (tree as unknown as Hidden).pick(sales);
+      expect(container.list.innerHTML).to.include('>France</button>');
     });
   });
 
@@ -740,6 +883,7 @@ describe('Directory console', () => {
       });
       Object.assign(app as unknown as { entities: EntityDescriptor[] }, {
         entities: [organizations],
+        confirmAction: async () => true,
       });
       Object.assign((app as unknown as { api: object }).api, {
         organizationTop: async () => ({ dn: top, name: 'organization' }),
@@ -775,7 +919,6 @@ describe('Directory console', () => {
             location.hash = hash;
           },
         },
-        confirm: () => true,
       };
       return {
         app: app as unknown as {
@@ -1428,6 +1571,55 @@ describe('Directory console', () => {
       await state.run();
       expect(state.failures.map(failure => failure.message)).to.deep.equal([
         'Attribute "Nom" must not be empty',
+      ]);
+    });
+
+    it('should say a refused row in the interface language, as a form does', async () => {
+      const refusals = [
+        Object.assign(new Error('user: "alice@example.com" is already used'), {
+          status: 409,
+          refusal: {
+            code: 'unique',
+            attribute: 'mail',
+            value: 'alice@example.com',
+          },
+        }),
+        Object.assign(new Error('Token does not have permission'), {
+          status: 403,
+          refusal: { code: 'forbidden' },
+        }),
+        Object.assign(new Error('Attribute "cn" must not be empty'), {
+          status: 400,
+        }),
+      ];
+      const importer = new EntityImport({
+        entity: users,
+        translator: new Translator('fr'),
+        pointerOptions: () => Promise.resolve([]),
+        create: () => Promise.reject(refusals.shift()),
+        onDone: () => undefined,
+        onClose: () => undefined,
+      });
+      const state = importer as unknown as {
+        rows: {
+          line: number;
+          cells: string[];
+          values: object;
+          errors: string[];
+        }[];
+        failures: { message: string }[];
+        run(): Promise<void>;
+      };
+      state.rows = [
+        { line: 2, cells: [], values: {}, errors: [] },
+        { line: 3, cells: [], values: { cn: 'Eva Ernst' }, errors: [] },
+        { line: 4, cells: [], values: {}, errors: [] },
+      ];
+      await state.run();
+      expect(state.failures.map(failure => failure.message)).to.deep.equal([
+        'Mail « alice@example.com » : déjà utilisé par une autre entrée.',
+        'Vous n’administrez pas Eva Ernst : cette modification ne vous revient pas.',
+        'Le serveur a refusé : Attribute "Nom" must not be empty',
       ]);
     });
 
@@ -2196,37 +2388,38 @@ describe('Directory console', () => {
         organizationPath: 'twakeDepartmentPath',
       };
       const dn = 'ou=QA Lab,ou=Engineering,ou=organization,dc=example,dc=com';
+      const asked: Confirmation[] = [];
       const app = consoleIn({}) as unknown as {
+        confirmAction(question: Confirmation): Promise<boolean>;
         confirmDeleteOrganization(
           entity: EntityDescriptor,
           entry: Entry,
           dn: string
         ): Promise<void>;
       };
-      const asked: string[] = [];
-      const g = globalThis as Record<string, unknown>;
-      const original = g.window;
       // Declined: nothing is deleted, and no request is made.
-      g.window = {
-        confirm: (message: string) => {
-          asked.push(message);
-          return false;
-        },
+      app.confirmAction = async question => {
+        asked.push(question);
+        return false;
       };
-      try {
-        await app.confirmDeleteOrganization(
-          organizations,
-          { dn, ou: 'QA Lab', twakeDepartmentPath: 'Engineering / QA Lab' },
-          dn
-        );
-        // An organization with no path is named by its own name.
-        await app.confirmDeleteOrganization(organizations, { dn }, dn);
-      } finally {
-        g.window = original;
-      }
+      await app.confirmDeleteOrganization(
+        organizations,
+        { dn, ou: 'QA Lab', twakeDepartmentPath: 'Engineering / QA Lab' },
+        dn
+      );
+      // An organization with no path is named by its own name.
+      await app.confirmDeleteOrganization(organizations, { dn }, dn);
       expect(asked).to.deep.equal([
-        'Delete Engineering / QA Lab? This cannot be undone.',
-        'Delete QA Lab? This cannot be undone.',
+        {
+          title: 'Delete Engineering / QA Lab?',
+          lines: ['This cannot be undone.'],
+          action: 'Delete organization',
+        },
+        {
+          title: 'Delete QA Lab?',
+          lines: ['This cannot be undone.'],
+          action: 'Delete organization',
+        },
       ]);
     });
 
@@ -2234,6 +2427,7 @@ describe('Directory console', () => {
       const app = consoleIn({}, 'fr') as unknown as {
         openPanel(title: string): void;
         openForm(entity: EntityDescriptor, entry?: Entry): Promise<void>;
+        confirmAction(question: Confirmation): Promise<boolean>;
         confirmDelete(entity: EntityDescriptor, id: string): Promise<void>;
       };
       const titles: string[] = [];
@@ -2247,24 +2441,181 @@ describe('Directory console', () => {
       expect(titles).to.deep.equal(['Modifier — Boîte partagée']);
 
       const asked: string[] = [];
-      const g = globalThis as Record<string, unknown>;
-      const original = g.window;
-      g.window = {
-        confirm: (message: string) => {
-          asked.push(message);
-          return false;
+      app.confirmAction = async question => {
+        asked.push(`${question.title} ${question.action}`);
+        return false;
+      };
+      await app.confirmDelete(mailboxTypes, 'teamMailbox');
+      // A value the schema does not name keeps its own.
+      await app.confirmDelete(mailboxTypes, 'archive');
+      expect(asked).to.deep.equal([
+        'Supprimer Boîte partagée ? Supprimer Boîte partagée',
+        'Supprimer archive ? Supprimer archive',
+      ]);
+    });
+
+    it('should name the person, the consequences and the way out before deleting an account', async () => {
+      const staff: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            givenName: { type: 'string', role: 'givenName' },
+            memberOf: {
+              type: 'array',
+              role: 'groupMemberships',
+              items: { type: 'string' },
+            },
+          },
         },
       };
-      try {
-        await app.confirmDelete(mailboxTypes, 'teamMailbox');
-        // A value the schema does not name keeps its own.
-        await app.confirmDelete(mailboxTypes, 'archive');
-      } finally {
-        g.window = original;
-      }
+      const entry: Entry = {
+        dn: 'uid=jmartin,ou=users,dc=example,dc=com',
+        uid: 'jmartin',
+        cn: 'Jeanne Martin',
+        givenName: 'Jeanne',
+        mail: 'jmartin@example.com',
+        twakeDepartmentPath: 'Sales / France',
+        twakeAccountStatus: 'cn=active',
+        memberOf: [
+          'cn=all-staff,ou=groups,dc=example,dc=com',
+          'cn=sales-team,ou=groups,dc=example,dc=com',
+        ],
+      };
+      const asked: Confirmation[] = [];
+      const app = consoleIn({}) as unknown as {
+        confirmAction(question: Confirmation): Promise<boolean>;
+        changeState(
+          entity: EntityDescriptor,
+          id: string,
+          entry: Entry,
+          preselect?: string
+        ): Promise<void>;
+        confirmDelete(
+          entity: EntityDescriptor,
+          id: string,
+          entry?: Entry,
+          canChangeState?: boolean
+        ): Promise<void>;
+      };
+      app.confirmAction = async question => {
+        asked.push(question);
+        return false;
+      };
+      const changed: unknown[][] = [];
+      app.changeState = async (...args) => {
+        changed.push(args);
+      };
+
+      await app.confirmDelete(staff, 'jmartin', entry, true);
+      const [question] = asked;
+      expect(question.title).to.equal('Delete Jeanne Martin?');
+      expect(question.lines).to.deep.equal([
+        'Jeanne Martin · jmartin@example.com · Sales / France',
+        'This cannot be undone. Jeanne Martin will be removed from: all-staff, sales-team.',
+      ]);
+      expect(question.action).to.equal('Delete Jeanne');
+      expect(question.reversible).to.equal(undefined);
+      expect(question.alternative?.label).to.equal(
+        'To stop access without deleting, set the state to Disabled instead.'
+      );
+      // The way out opens the state change, Disabled picked, and deletes nothing.
+      question.alternative?.run();
+      expect(changed).to.deep.equal([[staff, 'jmartin', entry, 'disabled']]);
+
+      // Not offered to whom may not change it, nor to an account already disabled.
+      await app.confirmDelete(staff, 'jmartin', entry, false);
+      await app.confirmDelete(
+        staff,
+        'jmartin',
+        { ...entry, twakeAccountStatus: 'cn=disabled', memberOf: [] },
+        true
+      );
+      expect(asked[1].alternative).to.equal(undefined);
+      expect(asked[2].alternative).to.equal(undefined);
+      expect(asked[2].lines[1]).to.equal('This cannot be undone.');
+    });
+
+    it('should say a deleted group leaves its members, and name a selection', async () => {
+      const asked: Confirmation[] = [];
+      const app = consoleIn({}, 'fr') as unknown as {
+        confirmAction(question: Confirmation): Promise<boolean>;
+        confirmDelete(
+          entity: EntityDescriptor,
+          id: string,
+          entry?: Entry
+        ): Promise<void>;
+        deleteMany(entity: EntityDescriptor, ids: string[]): Promise<void>;
+      };
+      app.confirmAction = async question => {
+        asked.push(question);
+        return false;
+      };
+      await app.confirmDelete(groups, 'sales-team', {
+        dn: 'cn=sales-team,ou=groups,dc=example,dc=com',
+        cn: 'sales-team',
+        member: ['uid=a', 'uid=b', 'uid=c'],
+      });
+      await app.deleteMany(users, ['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+      await app.deleteMany(users, ['a']);
       expect(asked).to.deep.equal([
-        'Supprimer Boîte partagée ? Cette action est irréversible.',
-        'Supprimer archive ? Cette action est irréversible.',
+        {
+          title: 'Supprimer sales-team ?',
+          lines: [
+            'Ses 3 membres restent dans l’annuaire ; seul le groupe disparaît.',
+            'Cette action est irréversible.',
+          ],
+          action: 'Supprimer le groupe',
+        },
+        {
+          title: 'Supprimer 7 entrées ?',
+          lines: ['Cette action est irréversible.'],
+          items: ['a', 'b', 'c', 'd', 'e', 'et 2 de plus'],
+          action: 'Supprimer 7 entrées',
+        },
+        {
+          title: 'Supprimer 1 entrée ?',
+          lines: ['Cette action est irréversible.'],
+          items: ['a'],
+          action: 'Supprimer 1 entrée',
+        },
+      ]);
+    });
+
+    it('should name the person and the organization they leave before handing them over', async () => {
+      const asked: Confirmation[] = [];
+      const app = consoleIn({}) as unknown as {
+        scope: Scope;
+        confirmAction(question: Confirmation): Promise<boolean>;
+        handOver(
+          entity: EntityDescriptor,
+          id: string,
+          entry: Entry
+        ): Promise<void>;
+      };
+      app.scope = {
+        transit: 'ou=transit,dc=example,dc=com',
+      } as unknown as Scope;
+      app.confirmAction = async question => {
+        asked.push(question);
+        return false;
+      };
+      await app.handOver(users, 'bob', {
+        dn: 'uid=bob,ou=users,dc=example,dc=com',
+        uid: 'bob',
+        cn: 'Bob Durand',
+        twakeDepartmentPath: 'Sales',
+      });
+      expect(asked).to.deep.equal([
+        {
+          title: 'Hand Bob Durand over?',
+          lines: [
+            'Bob Durand leaves Sales for Transit.',
+            'Every administrator will see this entry and may claim it; you will no longer manage it.',
+          ],
+          action: 'Hand over',
+          reversible: true,
+        },
       ]);
     });
 
@@ -2299,35 +2650,29 @@ describe('Directory console', () => {
         deleteMany(entity: EntityDescriptor, ids: string[]): Promise<void>;
       };
       app.entities = [staff, positions];
+      Object.assign(app, { confirmAction: async () => true });
       const refusal = {
         error:
           'Cannot delete cn=Sales Manager,ou=positions,dc=example,dc=com: still referenced by another entry (title)',
       };
-      const g = globalThis as Record<string, unknown>;
-      const original = g.window;
-      g.window = { confirm: () => true };
-      try {
-        nock(baseUrl)
-          .delete('/api/v1/ldap/positions/Sales%20Manager')
-          .reply(409, refusal);
-        await app.confirmDelete(positions, 'Sales Manager');
-        expect(toast.textContent).to.equal(
-          'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord'
-        );
+      nock(baseUrl)
+        .delete('/api/v1/ldap/positions/Sales%20Manager')
+        .reply(409, refusal);
+      await app.confirmDelete(positions, 'Sales Manager');
+      expect(toast.textContent).to.equal(
+        'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord'
+      );
 
-        nock(baseUrl)
-          .delete('/api/v1/ldap/positions/Sales%20Manager')
-          .reply(409, refusal);
-        nock(baseUrl)
-          .delete('/api/v1/ldap/positions/Intern')
-          .reply(403, { error: 'Forbidden' });
-        await app.deleteMany(positions, ['Sales Manager', 'Intern']);
-        expect(toast.textContent).to.equal(
-          'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord · Intern : Forbidden'
-        );
-      } finally {
-        g.window = original;
-      }
+      nock(baseUrl)
+        .delete('/api/v1/ldap/positions/Sales%20Manager')
+        .reply(409, refusal);
+      nock(baseUrl)
+        .delete('/api/v1/ldap/positions/Intern')
+        .reply(403, { error: 'Forbidden' });
+      await app.deleteMany(positions, ['Sales Manager', 'Intern']);
+      expect(toast.textContent).to.equal(
+        'Sales Manager est encore utilisé par des entrées (Poste) : modifiez-les d’abord · Intern : Forbidden'
+      );
     });
 
     it('should explain a refused deletion of a non-empty organization', async () => {
@@ -2342,20 +2687,14 @@ describe('Directory console', () => {
           dn: string
         ): Promise<void>;
       };
-      const g = globalThis as Record<string, unknown>;
-      const original = g.window;
-      g.window = { confirm: () => true };
-      try {
-        nock(baseUrl)
-          .delete(`/api/v1/ldap/organizations/${encodeURIComponent(dn)}`)
-          .reply(409, { error: `Entry ${dn} is not empty` });
-        await call.confirmDeleteOrganization(organizations, { dn }, dn);
-        expect(toast.textContent).to.equal(
-          'QA Lab n’est pas vide : déplacez ou supprimez d’abord ses entrées'
-        );
-      } finally {
-        g.window = original;
-      }
+      Object.assign(app, { confirmAction: async () => true });
+      nock(baseUrl)
+        .delete(`/api/v1/ldap/organizations/${encodeURIComponent(dn)}`)
+        .reply(409, { error: `Entry ${dn} is not empty` });
+      await call.confirmDeleteOrganization(organizations, { dn }, dn);
+      expect(toast.textContent).to.equal(
+        'QA Lab n’est pas vide : déplacez ou supprimez d’abord ses entrées'
+      );
     });
 
     it('should keep an open panel, and what was typed, across a change of language', () => {
@@ -2772,6 +3111,151 @@ describe('Directory console', () => {
         await views.renderOrganizations(main, 0);
         expect(asked).to.include.members(['get', 'top']);
       }
+    });
+  });
+
+  describe('the overview, in names', () => {
+    const admin = 'uid=admin,ou=users,dc=example,dc=com';
+    const alice = 'uid=alice,ou=users,dc=example,dc=com';
+    const global: Scope = {
+      user: admin,
+      unrestricted: false,
+      described: true,
+      branches: [
+        { dn: 'dc=example,dc=com', read: true, write: true, delete: true },
+      ],
+      entities: [{ name: 'users', base: users.base, create: true }],
+    };
+    const nobody: Scope = { ...global, user: alice, branches: [] };
+
+    /**
+     * A console for this scope, the account read as `read` answers, and its
+     * server offering to sign out.
+     */
+    const setup = (
+      scope: Scope,
+      read: () => Promise<Entry> = async () => ({
+        dn: admin,
+        uid: 'admin',
+        cn: 'Ada Admin',
+        mail: 'admin@example.com',
+      }),
+      language = 'en'
+    ) => {
+      const main = { innerHTML: '', querySelectorAll: () => [] };
+      const app = consoleIn({ '[data-main]': main }, language);
+      const asked: string[] = [];
+      Object.assign(app as unknown as object, {
+        scope,
+        entities: [users, groups, mailboxTypes],
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        logoutPath: '/logout',
+        get: async (entity: EntityDescriptor, id: string) => {
+          asked.push(`${entity.key} ${id}`);
+          return read();
+        },
+      });
+      const inner = app as unknown as {
+        account: unknown;
+        container: { innerHTML: string };
+        readAccount(): Promise<unknown>;
+        renderDashboard(main: unknown): void;
+        drawShell(): void;
+        scopeMarkup(): string;
+      };
+      const overview = async (): Promise<string> => {
+        inner.account = await inner.readAccount();
+        inner.renderDashboard(main);
+        return main.innerHTML;
+      };
+      const shell = (): string => {
+        inner.drawShell();
+        return inner.container.innerHTML;
+      };
+      return { app: inner, asked, overview, shell };
+    };
+
+    it('should greet the account by its name and address, read as its card is', async () => {
+      // "Signed in as uid=admin,ou=users,dc=example,dc=com"
+      const { asked, overview } = setup(global);
+      const html = await overview();
+      expect(html)
+        .to.include('Signed in as Ada Admin (admin@example.com)')
+        .and.include('What you can manage')
+        .and.include('data-open="users"')
+        .and.not.include(admin);
+      expect(asked).to.deep.equal(['users admin']);
+
+      const fr = setup(global, undefined, 'fr');
+      expect(await fr.overview()).to.include(
+        'Connecté en tant que Ada Admin (admin@example.com)'
+      );
+    });
+
+    it('should fall back to the DN when the account cannot be read', async () => {
+      const { overview } = setup(global, async () => {
+        throw Object.assign(new Error('Not found'), { status: 404 });
+      });
+      expect(await overview()).to.include(`Signed in as ${admin}`);
+      // An account with no address is still named
+      const nameless = setup(global, async () => ({ dn: admin, cn: 'Ada' }));
+      expect(await nameless.overview()).to.include('Signed in as Ada<');
+    });
+
+    it('should tell an account administering nothing once, and where to turn', async () => {
+      // Three cards, each opening on "nothing to manage", and a green dot
+      const { app, asked, overview, shell } = setup(nobody);
+      const html = await overview();
+      expect(html)
+        .to.include('There is nothing for you to manage here')
+        .and.include(
+          'Your account (alice) does not administer any part of the directory.'
+        )
+        .and.match(
+          /<a class="dc-button dc-button-primary" href="[^"]+logout">Sign out<\/a>/
+        )
+        .and.include('Signed in as alice')
+        .and.not.include('What you can manage')
+        .and.not.include('dc-card')
+        .and.not.include('data-open');
+      // The server refuses such an account every read: none is asked
+      expect(asked).to.deep.equal([]);
+      expect(app.scopeMarkup()).to.include('dc-scope-empty dc-scope-none');
+      expect(shell())
+        .to.include('data-nav=""')
+        .and.not.include('data-nav="users"')
+        .and.not.include('data-nav-toggle');
+
+      const local = setup({
+        ...nobody,
+        branches: [
+          { dn: 'ou=Sales,dc=example,dc=com', read: true, write: true },
+        ],
+      });
+      expect(local.app.scopeMarkup()).to.not.include('dc-scope-none');
+      expect(local.shell())
+        .to.include('data-nav="users"')
+        .and.include('data-nav="mailboxTypes"');
+      expect(await local.overview())
+        .to.include('What you can manage')
+        .and.not.include('There is nothing for you to manage here');
+    });
+
+    it('should name each language in itself', () => {
+      const { shell } = setup(global, undefined, 'fr');
+      const options = [
+        ...shell().matchAll(
+          /<option value="(\w+)" lang="(\w+)"[^>]*>([^<]*)</g
+        ),
+      ].map(([, value, lang, text]) => [value, lang, text]);
+      expect(options).to.deep.equal([
+        ['en', 'en', 'English'],
+        ['fr', 'fr', 'Français'],
+        ['mn', 'mn', 'Монгол'],
+      ]);
+      for (const code of availableLanguages)
+        expect(languageName(code), code).to.not.equal(code);
     });
   });
 
@@ -3437,6 +3921,36 @@ describe('Directory console', () => {
         );
         expect((err as Error & { status: number }).status).to.equal(409);
       }
+    });
+
+    it('should hand on what ldap-rest says of a refusal besides its sentence', async () => {
+      nock(baseUrl).post('/api/v1/ldap/users').reply(409, {
+        error:
+          'user: "alice@example.com" is already used (mail must be unique)',
+        code: 'unique',
+        attribute: 'mail',
+        value: 'alice@example.com',
+      });
+      nock(baseUrl)
+        .post('/api/v1/ldap/users')
+        .reply(409, { error: 'Conflict' });
+
+      const client = new ConsoleApiClient(baseUrl);
+      const refusal = (err: unknown) => (err as { refusal?: unknown }).refusal;
+      const first = await client
+        .create(users, { mail: 'alice@example.com' })
+        .catch((err: unknown) => err);
+      expect(refusal(first)).to.deep.equal({
+        code: 'unique',
+        attribute: 'mail',
+        value: 'alice@example.com',
+      });
+      // An older server, or another refusal: nothing besides the sentence.
+      const second = await client
+        .create(users, { mail: 'alice@example.com' })
+        .catch((err: unknown) => err);
+      expect((second as Error).message).to.equal('Conflict');
+      expect(refusal(second)).to.equal(undefined);
     });
 
     it('should search on the chosen attribute', async () => {
@@ -5413,6 +5927,202 @@ describe('Directory console', () => {
         nameAttributes('Entry "jsmith" already exists', schema, 'en')
       ).to.equal('Entry "jsmith" already exists');
     });
+
+    describe('a refusal ldap-rest describes', () => {
+      const schema: EntitySchema = {
+        attributes: {
+          mail: {
+            type: 'string',
+            label: {
+              en: 'Email',
+              fr: 'Adresse électronique',
+              mn: 'Цахим шуудан',
+            },
+          },
+          cn: { type: 'string', label: { en: 'Name', fr: 'Nom' } },
+        },
+      };
+      /** What the API client throws for an answer. */
+      const refused = (
+        status: number,
+        message: string,
+        refusal?: Record<string, unknown>
+      ) => Object.assign(new Error(message), { status, refusal });
+      const taken = refused(
+        409,
+        'user: "alice@example.com" is already used (mail must be unique)',
+        { code: 'unique', attribute: 'mail', value: 'alice@example.com' }
+      );
+      const outside = refused(
+        409,
+        'The mail domain of "x@other.org" is not one of the authorised domains (example.com, lists.example.com)',
+        {
+          code: 'mailDomain',
+          attribute: 'mail',
+          value: 'x@other.org',
+          domains: ['example.com', 'lists.example.com'],
+        }
+      );
+      const forbidden = refused(
+        403,
+        'Token does not have permission on this branch',
+        { code: 'forbidden' }
+      );
+
+      it('should say an address already used in the interface language, naming the field', () => {
+        expect(
+          explainRefusal(taken, schema, new Translator('fr'))
+        ).to.deep.equal({
+          message:
+            'Adresse électronique « alice@example.com » : déjà utilisé par une autre entrée.',
+          attribute: 'mail',
+        });
+        expect(
+          explainRefusal(taken, schema, new Translator('en')).message
+        ).to.equal(
+          'Email “alice@example.com” is already used by another entry.'
+        );
+        expect(
+          explainRefusal(taken, schema, new Translator('mn')).message
+        ).to.equal(
+          'Цахим шуудан «alice@example.com» өөр бичлэгт ашиглагдаж байна.'
+        );
+      });
+
+      it('should say a mail domain the organization may not use, and those it may', () => {
+        expect(
+          explainRefusal(outside, schema, new Translator('en'))
+        ).to.deep.equal({
+          message:
+            'Email: other.org is not a mail domain of this organization. Allowed: example.com, lists.example.com.',
+          attribute: 'mail',
+        });
+        expect(
+          explainRefusal(outside, schema, new Translator('fr')).message
+        ).to.equal(
+          'Adresse électronique : other.org n’est pas un domaine de messagerie de cette organisation. Autorisés : example.com, lists.example.com.'
+        );
+      });
+
+      it('should name an attribute the schema does not know as the console names it', () => {
+        const other = refused(409, 'already used', {
+          code: 'unique',
+          attribute: 'employeeNumber',
+          value: 'E0010',
+        });
+        expect(
+          explainRefusal(other, schema, new Translator('en'))
+        ).to.deep.equal({
+          message: 'Employee Number “E0010” is already used by another entry.',
+          attribute: 'employeeNumber',
+        });
+      });
+
+      it('should say a refusal of the caller’s rights naming the entry, not the token', () => {
+        expect(
+          explainRefusal(forbidden, schema, new Translator('en'), 'Transit')
+        ).to.deep.equal({
+          message:
+            'You do not administer Transit: this change is not yours to make.',
+        });
+        expect(
+          explainRefusal(forbidden, schema, new Translator('fr'), 'Transit')
+            .message
+        ).to.equal(
+          'Vous n’administrez pas Transit : cette modification ne vous revient pas.'
+        );
+      });
+
+      it('should keep the server’s words for another refusal, saying they are its own', () => {
+        expect(
+          explainRefusal(
+            refused(400, 'Attribute "cn" must not be empty'),
+            schema,
+            new Translator('en')
+          )
+        ).to.deep.equal({
+          message: 'The server refused: Attribute "Name" must not be empty',
+        });
+        expect(
+          explainRefusal(
+            refused(409, 'Something else', { code: 'somethingNew' }),
+            schema,
+            new Translator('fr')
+          ).message
+        ).to.equal('Le serveur a refusé : Something else');
+        // Without the entry it is about, a refusal of rights stays the
+        // server's.
+        expect(
+          explainRefusal(forbidden, schema, new Translator('en')).message
+        ).to.equal(
+          'The server refused: Token does not have permission on this branch'
+        );
+        // A failure no server answered is not one of its refusals.
+        expect(
+          explainRefusal(
+            new TypeError('Failed to fetch'),
+            schema,
+            new Translator('en')
+          ).message
+        ).to.equal('Failed to fetch');
+      });
+
+      it('should show a refusal under the field at fault, the toast pointing there', () => {
+        const app = consoleIn({}) as unknown as {
+          toast(message: string, isError?: boolean): void;
+          refuseSave(
+            err: unknown,
+            entity: EntityDescriptor,
+            form: { refuse(attribute: string, message: string): boolean },
+            name: string
+          ): void;
+        };
+        const toasts: [string, boolean | undefined][] = [];
+        app.toast = (message, isError) => toasts.push([message, isError]);
+        const shown: [string, string][] = [];
+        const form = {
+          refuse: (attribute: string, message: string) => {
+            shown.push([attribute, message]);
+            return attribute === 'mail';
+          },
+        };
+        app.refuseSave(taken, users, form, 'Alice');
+        expect(shown).to.deep.equal([
+          [
+            'mail',
+            'Mail “alice@example.com” is already used by another entry.',
+          ],
+        ]);
+        expect(toasts).to.deep.equal([
+          ['Not saved: see the highlighted field', true],
+        ]);
+
+        // A field the form does not show: the toast says it all.
+        toasts.length = 0;
+        app.refuseSave(
+          refused(409, 'already used', {
+            code: 'unique',
+            attribute: 'employeeNumber',
+            value: 'E0010',
+          }),
+          users,
+          form,
+          'Alice'
+        );
+        expect(toasts).to.deep.equal([
+          ['Employee Number “E0010” is already used by another entry.', true],
+        ]);
+
+        toasts.length = 0;
+        app.refuseSave(forbidden, users, form, 'Transit');
+        expect(toasts).to.deep.equal([
+          [
+            'You do not administer Transit: this change is not yours to make.',
+            true,
+          ],
+        ]);
+      });
+    });
   });
 
   describe('escapeDnValue', () => {
@@ -5892,6 +6602,38 @@ describe('Directory console', () => {
         expect(controls.get('mail')!.attributes).to.deep.equal({
           'aria-describedby': 'dc-help-mail',
         });
+
+        // The server's refusal of a field is shown the same way.
+        controls.get('cn')!.focused = false;
+        expect(
+          (created as unknown as EntityForm).refuse(
+            'MAIL',
+            'Email “jane@example.com” is already used by another entry.'
+          )
+        ).to.equal(true);
+        const error = (
+          field('mail') as { querySelector(selector: string): unknown }
+        ).querySelector('[data-error]') as {
+          textContent: string;
+          hidden: boolean;
+        };
+        expect(error).to.deep.include({
+          textContent:
+            'Email “jane@example.com” is already used by another entry.',
+          hidden: false,
+        });
+        expect(controls.get('mail')!.attributes).to.deep.equal({
+          'aria-describedby': 'dc-help-mail dc-error-mail',
+          'aria-invalid': 'true',
+        });
+        expect(controls.get('mail')!.focused).to.equal(true);
+        expect(controls.get('cn')!.attributes['aria-invalid']).to.equal(
+          undefined
+        );
+        // A field the form does not hold is left to the toast.
+        expect(
+          (created as unknown as EntityForm).refuse('employeeNumber', 'Taken')
+        ).to.equal(false);
       });
     });
 

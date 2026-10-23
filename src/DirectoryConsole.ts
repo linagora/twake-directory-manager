@@ -33,7 +33,8 @@ import {
   attributeLabel,
   comparableDn,
   entryValue,
-  nameAttributes,
+  explainRefusal,
+  isDnShaped,
   parentDn as parentOf,
   ownValueLabel,
   pointerLabel,
@@ -41,7 +42,7 @@ import {
   resolveText,
   withinDn,
 } from './format';
-import { availableLanguages, Translator } from './i18n';
+import { availableLanguages, languageName, Translator } from './i18n';
 import { signInAgain } from './session';
 import type { ListView } from './components/EntityList';
 import type { PointerLookup } from './importer';
@@ -55,11 +56,36 @@ import type {
   Scope,
 } from './types';
 
+/** The signed-in account, as the overview names it. */
+interface SignedIn {
+  name: string;
+  email?: string;
+}
+
 /** Where the console currently is. */
 interface Route {
   view: 'dashboard' | 'entity' | 'organizations' | 'policies';
   entity?: string;
   id?: string;
+}
+
+/** What the console asks before an action it cannot take back. */
+export interface Confirmation {
+  /** The question, as the dialog's heading: "Delete Alice Martin?" */
+  title: string;
+  /** Paragraphs under it, as text */
+  lines: string[];
+  /** Names listed after the paragraphs: the entries of a selection */
+  items?: string[];
+  /** The button that acts, named after the action: "Delete Alice" */
+  action: string;
+  /** The action deletes nothing: its button is not the red one */
+  reversible?: boolean;
+  /**
+   * A safer way to the same end, offered as a link under the paragraphs:
+   * following it cancels the action and runs `run`
+   */
+  alternative?: { label: string; run: () => void };
 }
 
 const LANGUAGE_KEY = 'ldap-rest.console.language';
@@ -419,6 +445,8 @@ export class DirectoryConsole {
   private scopeError: string | null = null;
   /** Whether the server lets the caller read the password policies */
   private policiesReadable = false;
+  /** The signed-in account, when it could be named rather than shown as a DN */
+  private account: SignedIn | null = null;
   /**
    * Which view is the current one. Opening an entry, then another before the
    * first has answered, raced exactly the way the entity list did: whichever
@@ -501,7 +529,10 @@ export class DirectoryConsole {
       this.scope = null;
       this.scopeError = (err as Error).message;
     }
-    this.policiesReadable = await this.readsPolicies();
+    [this.policiesReadable, this.account] = await Promise.all([
+      this.readsPolicies(),
+      this.readAccount(),
+    ]);
 
     this.readRoute();
     window.addEventListener('hashchange', () => void this.followHash());
@@ -611,7 +642,11 @@ export class DirectoryConsole {
     if (!container) return;
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    const { primary, reference } = splitEntities(this.entities);
+    // An account administering nothing finds only "nothing to manage" behind
+    // each entry: the overview says it once, and the entries are not offered.
+    const { primary, reference } = this.administersNothing()
+      ? { primary: [], reference: [] }
+      : splitEntities(this.entities);
     const settings = this.settings(reference);
 
     container.innerHTML = `
@@ -670,9 +705,9 @@ export class DirectoryConsole {
                 ${availableLanguages
                   .map(
                     code =>
-                      `<option value="${code}"${
+                      `<option value="${code}" lang="${code}"${
                         code === this.translator.language ? ' selected' : ''
-                      }>${code}</option>`
+                      }>${escapeHtml(languageName(code))}</option>`
                   )
                   .join('')}
               </select>
@@ -760,8 +795,11 @@ export class DirectoryConsole {
       return `<span class="dc-scope-empty">${escapeHtml(t('scope.unrestricted'))}</span>`;
     if (this.scope.described === false)
       return `<span class="dc-scope-empty">${escapeHtml(t('scope.undescribed'))}</span>`;
+    // Grey, not the green of a scope in order: there is nothing to be had.
     if (this.scope.branches.length === 0)
-      return `<span class="dc-scope-empty">${escapeHtml(t('scope.none'))}</span>`;
+      return `<span class="dc-scope-empty dc-scope-none">${escapeHtml(
+        t('scope.none')
+      )}</span>`;
 
     return `
       <span class="dc-scope-label">${escapeHtml(t('scope.title'))}</span>
@@ -998,6 +1036,28 @@ export class DirectoryConsole {
     );
   }
 
+  /**
+   * Whether the caller may create an organization under this one.
+   *
+   * Every written branch counts here, not only the organizations among
+   * them: a branch written above the root of the tree, as an administrator
+   * of the whole directory has, covers every node. The transit branch is
+   * still no organization of theirs to grow.
+   *
+   * @param dn the organization a new one would hang from
+   */
+  private createsUnder(dn: string): boolean {
+    if (!this.canWrite()) return false;
+    if (!scopeRestricts(this.scope)) return true;
+    const transit = this.scope.transit;
+    return this.scope.branches.some(
+      branch =>
+        branch.write &&
+        !(transit && withinDn(branch.dn, transit)) &&
+        withinDn(dn, branch.dn)
+    );
+  }
+
   /** Whether the caller may write anywhere at all. */
   private canWrite(): boolean {
     if (this.scopeError) return false;
@@ -1047,6 +1107,46 @@ export class DirectoryConsole {
   }
 
   /**
+   * The signed-in account, by its name and address: the overview greeted
+   * everyone with their DN. It is read the way its card reads it, from the
+   * entity whose branch holds it. An account administering nothing is not
+   * read, since the server refuses it every read: it is named by its own
+   * identifier, the one it signed in with.
+   *
+   * @returns how to name the account, or null to show the scope's own
+   *   words for it, when the read fails or there is nothing to read
+   */
+  private async readAccount(): Promise<SignedIn | null> {
+    const dn = this.scope?.user;
+    if (!dn || !isDnShaped(dn)) return null;
+    if (this.administersNothing()) return { name: rdnValue(dn) };
+    const owner = this.entities.find(
+      entity =>
+        entity.kind === 'flat' &&
+        entity.base &&
+        comparableDn(dn) !== comparableDn(entity.base) &&
+        withinDn(dn, entity.base)
+    );
+    if (!owner) return null;
+    try {
+      const entry = await this.api.get(owner, rdnValue(dn));
+      const first = (role: string): string | undefined => {
+        const name = roleAttribute(owner.schema, role);
+        const value = name
+          ? [entryValue(entry, name) ?? []].flat()[0]
+          : undefined;
+        return value && String(value).trim() ? String(value).trim() : undefined;
+      };
+      return {
+        name: first('displayName') || rdnValue(dn),
+        email: first('primaryEmail'),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * What the reference section lists: the reference data, and the password
    * policies, set up once and rarely touched like it.
    */
@@ -1077,66 +1177,20 @@ export class DirectoryConsole {
   /**
    * The overview: the scope, and the entities with what can be done to them.
    * A page of four cards that only repeat the sidebar is decoration; this one
-   * answers "what am I allowed to do here?".
+   * answers "what am I allowed to do here?". It is a heading, a greeting and
+   * a list of sections, each drawn by its own method.
    */
   private renderDashboard(main: HTMLElement): void {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    const { primary, reference } = splitEntities(this.entities);
-    const settings = this.settings(reference);
+    const sections = this.administersNothing()
+      ? [this.noRightsMarkup()]
+      : [this.manageMarkup(), this.referenceMarkup()];
     main.innerHTML = `
       <section class="dc-dashboard">
         <h1>${escapeHtml(t('app.title'))}</h1>
-        ${
-          this.scope?.user
-            ? `<p class="dc-muted">${escapeHtml(
-                t('dashboard.welcome', { user: this.scope.user })
-              )}</p>`
-            : ''
-        }
-        <h2>${escapeHtml(t('dashboard.entities'))}</h2>
-        <ul class="dc-cards">
-          ${primary
-            .map(entity => {
-              const allowed = this.canCreate(entity);
-              return `<li class="dc-card">
-                <header class="dc-card-title">
-                  <span class="dc-entity-icon" aria-hidden="true">${escapeHtml(
-                    initial(this.plural(entity))
-                  )}</span>
-                  <h3>${escapeHtml(this.plural(entity))}</h3>
-                </header>
-                <div class="dc-card-actions">
-                  <button type="button" class="dc-button" data-open="${escapeHtml(
-                    entity.key
-                  )}">${escapeHtml(t('list.open'))}</button>
-                  ${
-                    allowed
-                      ? `<button type="button" class="dc-button dc-button-primary" data-new="${escapeHtml(
-                          entity.key
-                        )}">${escapeHtml(this.createLabel(entity))}</button>`
-                      : `<span class="dc-muted">${escapeHtml(t('dashboard.noCreate'))}</span>`
-                  }
-                </div>
-              </li>`;
-            })
-            .join('')}
-        </ul>
-        ${
-          settings.length
-            ? `<h2>${escapeHtml(t('nav.reference'))}</h2>
-              <ul class="dc-reference">
-                ${settings
-                  .map(
-                    ({ key, label }) =>
-                      `<li><button type="button" class="dc-reference-link" data-open="${escapeHtml(
-                        key
-                      )}">${escapeHtml(label)}</button></li>`
-                  )
-                  .join('')}
-              </ul>`
-            : ''
-        }
+        ${this.welcomeMarkup()}
+        ${sections.join('')}
       </section>`;
 
     for (const button of Array.from(
@@ -1152,6 +1206,101 @@ export class DirectoryConsole {
         const entity = this.entity(button.dataset.new as string);
         if (entity) void this.openForm(entity);
       });
+  }
+
+  /** Who is signed in: by name and address, else as the scope gives it. */
+  private welcomeMarkup(): string {
+    const user = this.scope?.user;
+    if (!user) return '';
+    const account = this.account;
+    const text = account?.email
+      ? this.translator.t('dashboard.welcomeNamed', {
+          name: account.name,
+          email: account.email,
+        })
+      : this.translator.t('dashboard.welcome', {
+          user: account?.name || user,
+        });
+    return `<p class="dc-muted">${escapeHtml(text)}</p>`;
+  }
+
+  /** The cards of the entities, with what can be done to them. */
+  private manageMarkup(): string {
+    const t = (key: string): string => this.translator.t(key);
+    const { primary } = splitEntities(this.entities);
+    return `
+      <h2>${escapeHtml(t('dashboard.entities'))}</h2>
+      <ul class="dc-cards">
+        ${primary
+          .map(entity => {
+            const allowed = this.canCreate(entity);
+            return `<li class="dc-card">
+              <header class="dc-card-title">
+                <span class="dc-entity-icon" aria-hidden="true">${escapeHtml(
+                  initial(this.plural(entity))
+                )}</span>
+                <h3>${escapeHtml(this.plural(entity))}</h3>
+              </header>
+              <div class="dc-card-actions">
+                <button type="button" class="dc-button" data-open="${escapeHtml(
+                  entity.key
+                )}">${escapeHtml(t('list.open'))}</button>
+                ${
+                  allowed
+                    ? `<button type="button" class="dc-button dc-button-primary" data-new="${escapeHtml(
+                        entity.key
+                      )}">${escapeHtml(this.createLabel(entity))}</button>`
+                    : `<span class="dc-muted">${escapeHtml(t('dashboard.noCreate'))}</span>`
+                }
+              </div>
+            </li>`;
+          })
+          .join('')}
+      </ul>`;
+  }
+
+  /** The links to the reference data and the password policies. */
+  private referenceMarkup(): string {
+    const settings = this.settings(splitEntities(this.entities).reference);
+    if (!settings.length) return '';
+    return `
+      <h2>${escapeHtml(this.translator.t('nav.reference'))}</h2>
+      <ul class="dc-reference">
+        ${settings
+          .map(
+            ({ key, label }) =>
+              `<li><button type="button" class="dc-reference-link" data-open="${escapeHtml(
+                key
+              )}">${escapeHtml(label)}</button></li>`
+          )
+          .join('')}
+      </ul>`;
+  }
+
+  /**
+   * The overview of an account administering nothing. Three cards, each
+   * opening on "nothing to manage", were three dead ends: this says it
+   * once, and where to turn.
+   */
+  private noRightsMarkup(): string {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    const user = this.scope?.user || '';
+    const logout = this.api.logoutUrl;
+    return `
+      <div class="dc-no-rights" data-no-rights>
+        <h2>${escapeHtml(t('dashboard.noRightsTitle'))}</h2>
+        <p>${escapeHtml(
+          t('dashboard.noRightsBody', { name: this.account?.name || user })
+        )}</p>
+        ${
+          logout
+            ? `<a class="dc-button dc-button-primary" href="${escapeHtml(
+                logout
+              )}">${escapeHtml(t('app.logout'))}</a>`
+            : ''
+        }
+      </div>`;
   }
 
   /**
@@ -1278,18 +1427,19 @@ export class DirectoryConsole {
     ]);
     if (!this.current(generation)) return;
     const transit = transitState(this.scope, entity, entry);
+    const canWrite = transit.rights?.write ?? this.canWrite();
     const detail = new EntityDetail({
       entity,
       entry,
       translator: this.translator,
-      canWrite: transit.rights?.write ?? this.canWrite(),
+      canWrite,
       canDelete: transit.rights?.delete ?? this.canDelete(),
       inTransit: transit.inTransit,
       onClaim: transit.claim
         ? (): void => void this.claim(entity, id)
         : undefined,
       onHandOver: transit.handOver
-        ? (): void => void this.handOver(entity, id)
+        ? (): void => void this.handOver(entity, id, entry)
         : undefined,
       pointerLabel: named,
       relations,
@@ -1297,7 +1447,7 @@ export class DirectoryConsole {
         void this.openForm(entity, entry);
       },
       onDelete: (): void => {
-        void this.confirmDelete(entity, id);
+        void this.confirmDelete(entity, id, entry, canWrite);
       },
       onStatus: (): void => {
         void this.changeState(entity, id, entry);
@@ -1408,16 +1558,6 @@ export class DirectoryConsole {
         </div>
       </section>`;
 
-    // Every written branch counts here, not only the organizations among
-    // them: a branch written above the root of the tree, as an administrator
-    // of the whole directory has, covers every node. The transit branch is
-    // still no organization of theirs to grow.
-    const transit = this.scope?.transit;
-    const writable = scopeRestricts(this.scope)
-      ? this.scope.branches.filter(
-          branch => branch.write && !(transit && withinDn(branch.dn, transit))
-        )
-      : undefined;
     this.tree = new OrganizationTree(
       {
         translator: this.translator,
@@ -1443,10 +1583,13 @@ export class DirectoryConsole {
                 void this.openOrganizationForm(entity, undefined, node.dn);
               }
             : undefined,
-        canCreateChild: writable
-          ? (node: OrganizationNode): boolean =>
-              writable.some(branch => withinDn(node.dn, branch.dn))
-          : undefined,
+        canCreateChild: (node: OrganizationNode): boolean =>
+          this.createsUnder(node.dn),
+        // Walked from the root the tree is drawn from: the server roots a
+        // local administrator's tree at their branch, and the filter finds
+        // what the tree can open down to, no more.
+        everywhere: (): Promise<{ dn: string; label: string }[]> =>
+          this.api.organizationOptions(),
       },
       this.tree
     );
@@ -1517,6 +1660,13 @@ export class DirectoryConsole {
       onDelete: (): void => {
         void this.confirmDeleteOrganization(entity, entry, node.dn);
       },
+      // What the tree's "+" does, said in words where the reader is looking:
+      // the "+" shows on a row only once it is pointed at or selected.
+      onCreateChild: this.createsUnder(node.dn)
+        ? (): void => {
+            void this.openOrganizationForm(entity, undefined, node.dn);
+          }
+        : undefined,
       onStatus: (): void => undefined,
       onResetPassword: (): void => undefined,
     });
@@ -1632,6 +1782,117 @@ export class DirectoryConsole {
       event.preventDefault();
       (event.shiftKey ? last : first).focus();
     }
+  }
+
+  /**
+   * Ask before an action that cannot be taken back, in the centred dialog
+   * Claim uses. The browser's own confirm() named an entry by its identifier
+   * alone, said nothing of what went with it, and spoke the browser's
+   * language with buttons in the browser's order.
+   *
+   * The focus starts on Cancel, so an Enter pressed out of habit deletes
+   * nothing, and Escape cancels. Asked over an open panel, a policy's form,
+   * the dialog gives that panel back as it was once answered.
+   *
+   * @param question what to ask
+   * @returns whether the action was confirmed
+   */
+  private confirmAction(question: Confirmation): Promise<boolean> {
+    const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
+    const heading =
+      this.container?.querySelector<HTMLElement>('[data-panel-title]');
+    const body =
+      this.container?.querySelector<HTMLElement>('[data-panel-body]');
+    const dialog = this.container?.querySelector<HTMLElement>(
+      '[data-panel-dialog]'
+    );
+    if (!panel || !heading || !body || !dialog) return Promise.resolve(false);
+    const covered = panel.hidden
+      ? undefined
+      : {
+          title: heading.textContent ?? '',
+          nodes: Array.from(body.childNodes),
+          modal: panel.classList.contains('dc-panel-modal'),
+          wide: panel.classList.contains('dc-panel-wide'),
+          guard: this.panelGuard,
+          focus: document.activeElement as HTMLElement | null,
+        };
+    return new Promise(resolve => {
+      let answered = false;
+      const answer = (confirmed: boolean): void => {
+        if (answered) return;
+        answered = true;
+        this.panelGuard = null;
+        // An alert dialog only while it asks.
+        dialog.setAttribute('role', 'dialog');
+        dialog.removeAttribute('aria-describedby');
+        if (covered) {
+          heading.textContent = covered.title;
+          panel.classList.toggle('dc-panel-modal', covered.modal);
+          panel.classList.toggle('dc-panel-wide', covered.wide);
+          body.replaceChildren(...covered.nodes);
+          this.panelGuard = covered.guard;
+          (covered.focus?.isConnected ? covered.focus : dialog).focus();
+        } else this.closePanel(true);
+        resolve(confirmed);
+      };
+      this.openPanel(
+        question.title,
+        inner => {
+          inner.innerHTML = `
+            <div class="dc-confirm" id="dc-confirm-body" data-confirm-body>
+              ${question.lines
+                .map(line => `<p>${escapeHtml(line)}</p>`)
+                .join('')}
+              ${
+                question.items?.length
+                  ? `<ul class="dc-confirm-items">${question.items
+                      .map(item => `<li>${escapeHtml(item)}</li>`)
+                      .join('')}</ul>`
+                  : ''
+              }
+            </div>
+            ${
+              question.alternative
+                ? `<p class="dc-confirm-alternative"><button type="button" class="dc-link" data-confirm-alternative>${escapeHtml(
+                    question.alternative.label
+                  )}</button></p>`
+                : ''
+            }
+            <div class="dc-form-actions">
+              <button type="button" class="dc-button" data-cancel>${escapeHtml(
+                this.translator.t('app.cancel')
+              )}</button>
+              <button type="button" class="dc-button ${
+                question.reversible
+                  ? 'dc-button-primary'
+                  : 'dc-button-destructive'
+              }" data-confirm>${escapeHtml(question.action)}</button>
+            </div>`;
+          inner
+            .querySelector('[data-cancel]')
+            ?.addEventListener('click', () => answer(false));
+          inner
+            .querySelector('[data-confirm]')
+            ?.addEventListener('click', () => answer(true));
+          inner
+            .querySelector('[data-confirm-alternative]')
+            ?.addEventListener('click', () => {
+              answer(false);
+              question.alternative?.run();
+            });
+        },
+        true
+      );
+      dialog.setAttribute('role', 'alertdialog');
+      dialog.setAttribute('aria-describedby', 'dc-confirm-body');
+      // Escape, the close button and a page left all cancel.
+      this.panelGuard = (): boolean => {
+        answer(false);
+        return false;
+      };
+      body.querySelector<HTMLElement>('[data-cancel]')?.focus();
+    });
   }
 
   /**
@@ -1782,7 +2043,15 @@ export class DirectoryConsole {
   private async deletePolicy(policy: PasswordPolicy): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    if (!window.confirm(t('policy.deleteConfirm', { name: policy.cn }))) return;
+    // Asked over the policy's form, which comes back as it was on Cancel.
+    if (
+      !(await this.confirmAction({
+        title: t('policy.deleteTitle', { name: policy.cn }),
+        lines: [t('delete.irreversible')],
+        action: t('policy.deleteButton'),
+      }))
+    )
+      return;
     try {
       await this.api.deletePasswordPolicy(policy.cn);
     } catch (err) {
@@ -1855,9 +2124,11 @@ export class DirectoryConsole {
         values: Record<string, string | string[]>,
         cleared: string[]
       ): Promise<void> => {
+        const id = entry
+          ? String(entryValue(entry, entity.mainAttribute) ?? '')
+          : createdEntryId(entity, undefined, values);
         try {
           if (entry) {
-            const id = String(entryValue(entry, entity.mainAttribute) ?? '');
             // The entry as stored: what a membership change is diffed against.
             await this.api.update(entity, id, values, cleared, entry);
             this.toast(t('save.done'));
@@ -1865,15 +2136,24 @@ export class DirectoryConsole {
             await this.renderMain();
           } else {
             const created = await this.api.create(entity, values as Entry);
-            const id = createdEntryId(entity, created, values);
-            this.toast(this.createdToast(entity, values, id));
+            const createdId = createdEntryId(entity, created, values);
+            this.toast(this.createdToast(entity, values, createdId));
             this.closePanel();
             this.go(
-              id ? `${entity.key}/${encodeURIComponent(id)}` : entity.key
+              createdId
+                ? `${entity.key}/${encodeURIComponent(createdId)}`
+                : entity.key
             );
           }
         } catch (err) {
-          this.toast(this.refusal(err, entity), true);
+          this.refuseSave(
+            err,
+            entity,
+            form,
+            entry
+              ? this.personName(entity, entry, id)
+              : this.submittedName(entity, values, id)
+          );
         }
       },
     });
@@ -1950,7 +2230,7 @@ export class DirectoryConsole {
         values: Record<string, string | string[]>,
         cleared: string[]
       ): Promise<void> =>
-        this.submitOrganization(entity, values, cleared, entry, parent()),
+        this.submitOrganization(entity, values, cleared, entry, parent(), form),
     });
 
     this.openPanel(
@@ -2045,13 +2325,42 @@ export class DirectoryConsole {
       names.get(comparableDn(dn)) ?? pointerLabel(this.entities, dn, language);
   }
 
-  /** A refused save, naming the fields the way the form does. */
-  private refusal(err: unknown, entity: EntityDescriptor): string {
-    return nameAttributes(
-      (err as Error).message,
-      entity.schema,
-      this.translator.language
-    );
+  /**
+   * A refusal in the interface's language, naming the fields the way the
+   * form does (see {@link explainRefusal}).
+   *
+   * @param err what the request threw
+   * @param entity the entity of the entry refused
+   * @param name the entry the change was about
+   */
+  private refusal(
+    err: unknown,
+    entity: EntityDescriptor,
+    name?: string
+  ): { message: string; attribute?: string } {
+    return explainRefusal(err, entity.schema, this.translator, name);
+  }
+
+  /**
+   * Say why a save was refused: under the field at fault when the form shows
+   * it, the toast then only pointing there — it disappears while the form
+   * stays open — and in the toast otherwise.
+   *
+   * @param err what the request threw
+   * @param entity the entity of the entry refused
+   * @param form the form that was saved
+   * @param name the entry the change was about
+   */
+  private refuseSave(
+    err: unknown,
+    entity: EntityDescriptor,
+    form: EntityForm | undefined,
+    name: string
+  ): void {
+    const { message, attribute } = this.refusal(err, entity, name || undefined);
+    if (attribute && form?.refuse(attribute, message))
+      this.toast(this.translator.t('refusal.seeField'), true);
+    else this.toast(message, true);
   }
 
   /**
@@ -2066,13 +2375,15 @@ export class DirectoryConsole {
    * @param cleared attributes the form emptied
    * @param entry the organization edited; none for a new one
    * @param parentDn where a new one goes; the server's default when omitted
+   * @param form the form submitted, to show a refusal under its field
    */
   private async submitOrganization(
     entity: EntityDescriptor,
     values: Record<string, string | string[]>,
     cleared: string[],
     entry?: Entry,
-    parentDn?: string
+    parentDn?: string,
+    form?: EntityForm
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
@@ -2117,7 +2428,18 @@ export class DirectoryConsole {
       }
       await this.renderMain();
     } catch (err) {
-      this.toast(this.refusal(err, entity), true);
+      // Named as the panel's title names it.
+      const id = entry
+        ? String(entryValue(entry, entity.mainAttribute) ?? '')
+        : createdEntryId(entity, undefined, values);
+      this.refuseSave(
+        err,
+        entity,
+        form,
+        entry
+          ? this.entryName(entity, id)
+          : this.submittedName(entity, values, id)
+      );
     }
   }
 
@@ -2134,7 +2456,8 @@ export class DirectoryConsole {
   private async changeState(
     entity: EntityDescriptor,
     id: string,
-    entry: Entry
+    entry: Entry,
+    preselect?: string
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
@@ -2241,6 +2564,19 @@ export class DirectoryConsole {
         if (state) void this.setStatus(entity, id, state, name, label(state));
       });
     });
+    // Asked for by name, from the deletion's tip: picked, and focused, but
+    // still written only by the button.
+    if (!preselect) return;
+    const picked = Array.from(
+      this.container?.querySelectorAll<HTMLInputElement>(
+        '[data-panel-body] input[name="dc-state"]'
+      ) ?? []
+    ).find(radio => radio.value === preselect);
+    if (picked) {
+      picked.checked = true;
+      picked.dispatchEvent(new Event('change'));
+      picked.focus();
+    }
   }
 
   /**
@@ -2330,7 +2666,7 @@ export class DirectoryConsole {
               t('app.cancel')
             )}</button>
             <button type="submit" class="dc-button dc-button-primary">${escapeHtml(
-              t('app.confirm')
+              t('password.confirmButton')
             )}</button>
           </div>
         </form>`;
@@ -2520,7 +2856,7 @@ export class DirectoryConsole {
                 t('app.cancel')
               )}</button>
               <button type="submit" class="dc-button dc-button-primary">${escapeHtml(
-                t('app.confirm')
+                t('transit.claimButton', { organization: targets[0].label })
               )}</button>
             </div>
           </form>`;
@@ -2528,6 +2864,21 @@ export class DirectoryConsole {
         body
           .querySelector('[data-cancel]')
           ?.addEventListener('click', () => this.closePanel());
+        // The button says where the entry goes, as the select changes.
+        const submit = body.querySelector<HTMLButtonElement>(
+          'button[type="submit"]'
+        );
+        body
+          .querySelector<HTMLSelectElement>('#dc-claim-target')
+          ?.addEventListener('change', event => {
+            const chosen = targets.find(
+              item => item.dn === (event.target as HTMLSelectElement).value
+            );
+            if (submit && chosen)
+              submit.textContent = t('transit.claimButton', {
+                organization: chosen.label,
+              });
+          });
         body.querySelector('form')?.addEventListener('submit', event => {
           event.preventDefault();
           const select =
@@ -2550,14 +2901,34 @@ export class DirectoryConsole {
     );
   }
 
-  /** Let an entry go into the transit branch, for another administrator. */
-  private async handOver(entity: EntityDescriptor, id: string): Promise<void> {
+  /**
+   * Let an entry go into the transit branch, for another administrator,
+   * once asked: named as a colleague would name it, with the organization
+   * it leaves.
+   */
+  private async handOver(
+    entity: EntityDescriptor,
+    id: string,
+    entry: Entry
+  ): Promise<void> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
     const transit = this.scope?.transit;
     if (!transit) return;
+    const name = this.personName(entity, entry, id);
+    const organization = this.roleValue(entity, entry, 'organizationPath');
     if (
-      !window.confirm(
-        this.translator.t('transit.handOverConfirm', { name: id })
-      )
+      !(await this.confirmAction({
+        title: t('transit.handOverTitle', { name }),
+        lines: [
+          ...(organization
+            ? [t('transit.handOverLeaves', { name, organization })]
+            : []),
+          t('transit.handOverConfirm'),
+        ],
+        action: t('transit.handOver'),
+        reversible: true,
+      }))
     )
       return;
     try {
@@ -2601,14 +2972,31 @@ export class DirectoryConsole {
     values: Record<string, string | string[]>,
     id: string
   ): string {
-    const display = roleAttribute(entity.schema, 'displayName');
-    const full = display ? values[display] : undefined;
-    const name =
-      (Array.isArray(full) ? full[0] : full)?.trim() ||
-      (id ? this.entryName(entity, id) : '');
+    const name = this.submittedName(entity, values, id);
     return name
       ? this.translator.t('create.doneNamed', { name })
       : this.translator.t('create.done');
+  }
+
+  /**
+   * A new entry named by its full name, else as its card names it.
+   *
+   * @param entity the entity the entry belongs to
+   * @param values what the form sent
+   * @param id the entry's main attribute value; empty when unknown
+   * @returns the name, empty when the form gave none
+   */
+  private submittedName(
+    entity: EntityDescriptor,
+    values: Record<string, string | string[]>,
+    id: string
+  ): string {
+    const display = roleAttribute(entity.schema, 'displayName');
+    const full = display ? values[display] : undefined;
+    return (
+      (Array.isArray(full) ? full[0] : full)?.trim() ||
+      (id ? this.entryName(entity, id) : '')
+    );
   }
 
   /*
@@ -2629,18 +3017,161 @@ export class DirectoryConsole {
       : this.entryName(entity, id);
   }
 
+  /**
+   * The first value of the attribute playing a role, trimmed.
+   *
+   * @returns the value, or undefined when the entry has none
+   */
+  private roleValue(
+    entity: EntityDescriptor,
+    entry: Entry,
+    role: string
+  ): string | undefined {
+    const attribute = roleAttribute(entity.schema, role);
+    const value = attribute
+      ? [entryValue(entry, attribute) ?? []].flat()[0]
+      : undefined;
+    return value && String(value).trim() ? String(value).trim() : undefined;
+  }
+
+  /**
+   * The groups an account belongs to, by name: from its `memberOf`, else
+   * searched among the groups, as its card finds them.
+   */
+  private async groupsOf(
+    entity: EntityDescriptor,
+    entry: Entry
+  ): Promise<string[]> {
+    for (const [name, attr] of Object.entries(entity.schema.attributes)) {
+      const roles = Array.isArray(attr.role) ? attr.role : [attr.role];
+      if (!roles.includes('groupMemberships')) continue;
+      let list = [entryValue(entry, name) ?? []].flat();
+      if (!list.length && entry.dn)
+        list = await this.api
+          .memberships(entry.dn, this.entities)
+          .catch(() => []);
+      return list.map(dn => rdnValue(String(dn)));
+    }
+    return [];
+  }
+
+  /**
+   * What to ask before deleting an entry. An account is named by its full
+   * name, email and organization, the way to tell two "jmartin" apart, with
+   * the groups it leaves and the state change offered instead. A group says
+   * its members stay. Anything else, a position or a mail domain, is named
+   * as its card names it.
+   *
+   * @param entry the entry, when its card is open
+   * @param canChangeState offer an account's state change instead
+   */
+  private async deletion(
+    entity: EntityDescriptor,
+    id: string,
+    entry?: Entry,
+    canChangeState = false
+  ): Promise<Confirmation> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    const irreversible = t('delete.irreversible');
+    const name = entry
+      ? this.personName(entity, entry, id)
+      : this.entryName(entity, id);
+    const title = t('delete.title', { name });
+    if (entry && entity.kind === 'group') {
+      const members = roleAttribute(entity.schema, 'members');
+      // groupOfNames needs a member: an empty DN stands for none.
+      const count = members
+        ? [entryValue(entry, members) ?? []]
+            .flat()
+            .filter(member => String(member).trim()).length
+        : 0;
+      return {
+        title,
+        lines: [
+          ...(count ? [t('delete.membersStay', { count })] : []),
+          irreversible,
+        ],
+        action: t('delete.groupButton'),
+      };
+    }
+    if (!entry || !roleAttribute(entity.schema, 'displayName'))
+      return {
+        title,
+        lines: [irreversible],
+        action: t('delete.button', { name }),
+      };
+
+    const groups = await this.groupsOf(entity, entry);
+    const summary = [
+      name,
+      this.roleValue(entity, entry, 'primaryEmail'),
+      this.roleValue(entity, entry, 'organizationPath'),
+    ].filter(Boolean);
+    // Offered only where Disabled is a state the account is not already in.
+    const status = entity.accountStatus;
+    const disabled = status
+      ? entity.schema.attributes[status]?.states?.disabled
+      : undefined;
+    const current = status
+      ? [entryValue(entry, status) ?? []].flat()[0]
+      : undefined;
+    const offer =
+      canChangeState &&
+      !!disabled &&
+      comparableDn(disabled) !== comparableDn(String(current ?? ''));
+    return {
+      title,
+      lines: [
+        summary.join(' · '),
+        groups.length
+          ? `${irreversible} ${t('delete.leavesGroups', {
+              name,
+              groups: groups.join(', '),
+            })}`
+          : irreversible,
+      ],
+      action: t('delete.button', {
+        name: this.roleValue(entity, entry, 'givenName') ?? name,
+      }),
+      alternative: offer
+        ? {
+            label: t('delete.preferDisable'),
+            run: (): void =>
+              void this.changeState(entity, id, entry, 'disabled'),
+          }
+        : undefined,
+    };
+  }
+
+  /**
+   * Delete an entry once asked.
+   *
+   * @param entry the entry, when its card is open
+   * @param canChangeState offer an account's state change instead
+   */
   private async confirmDelete(
     entity: EntityDescriptor,
-    id: string
+    id: string,
+    entry?: Entry,
+    canChangeState = false
   ): Promise<void> {
     const name = this.entryName(entity, id);
-    if (!window.confirm(this.translator.t('delete.confirm', { name }))) return;
+    if (
+      !(await this.confirmAction(
+        await this.deletion(entity, id, entry, canChangeState)
+      ))
+    )
+      return;
     try {
       await this.api.remove(entity, id);
       this.toast(this.translator.t('delete.done'));
       this.go(entity.key);
     } catch (err) {
-      this.toast(this.inUse(err, entity, id) ?? (err as Error).message, true);
+      this.toast(
+        this.inUse(err, entity, id) ?? this.refusal(err, entity, name).message,
+        true
+      );
     }
   }
 
@@ -2702,7 +3233,14 @@ export class DirectoryConsole {
       named(entity.organizationPath) ||
       named(entity.mainAttribute) ||
       rdnValue(dn);
-    if (!window.confirm(this.translator.t('delete.confirm', { name }))) return;
+    if (
+      !(await this.confirmAction({
+        title: this.translator.t('delete.title', { name }),
+        lines: [this.translator.t('delete.irreversible')],
+        action: this.translator.t('delete.organizationButton'),
+      }))
+    )
+      return;
     try {
       await this.api.deleteOrganization(dn);
       this.toast(this.translator.t('delete.done'));
@@ -2718,7 +3256,7 @@ export class DirectoryConsole {
       // The server's refusal names the DN, in English: say it in words.
       if ((err as { status?: number }).status === 409)
         this.toast(this.translator.t('delete.notEmpty', { name }), true);
-      else this.toast((err as Error).message, true);
+      else this.toast(this.refusal(err, entity, name).message, true);
     }
   }
 
@@ -2733,7 +3271,18 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     if (ids.length === 0) return;
-    if (!window.confirm(t('delete.confirmMany', { count: ids.length }))) return;
+    // The first few by name, enough to see the selection is the right one.
+    const named = ids.slice(0, 5).map(id => this.entryName(entity, id));
+    const more = ids.length - named.length;
+    if (
+      !(await this.confirmAction({
+        title: t('delete.manyTitle', { count: ids.length }),
+        lines: [t('delete.irreversible')],
+        items: more ? [...named, t('delete.andMore', { count: more })] : named,
+        action: t('delete.manyButton', { count: ids.length }),
+      }))
+    )
+      return;
 
     const failures: string[] = [];
     for (const id of ids) {

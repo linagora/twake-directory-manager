@@ -11,11 +11,14 @@ Browsing the tree
 - The ``▸`` arrow in front of an organization opens its sub-organizations;
   ``▾`` closes them. Once opened, an organization without sub-organizations
   shows a dot ``·`` instead.
-- A click on an organization’s name shows its card on the right. Hovering the
-  name shows its full path.
-- The :guilabel:`Filter` box hides the organizations whose name does not
-  contain the text typed. It works on the branches already opened: open the
-  branch to look in first.
+- A click on an organization’s name shows its card on the right and opens
+  its sub-organizations; only the arrow closes them again. Hovering the name
+  shows its full path.
+- The :guilabel:`Filter` box searches the whole tree from two characters on,
+  closed branches included, and lists the organizations whose path contains
+  the text typed (``Sales / France``). A click on one opens the tree down to
+  it and shows its card. A single character only hides, in the branches
+  already opened, the organizations whose name does not contain it.
 - The transit organization, when the deployment has one, is tagged
   :guilabel:`Transit` (see :doc:`transit`).
 
@@ -77,9 +80,11 @@ Creating an organization
 
 To create a sub-organization:
 
-#. In the tree, hover the parent organization and click its :guilabel:`+`
-   button (:guilabel:`New organization here`). The button shows only on the
-   organizations one administers and those under them.
+#. Select the parent organization and click :guilabel:`New organization
+   here` on its card, or the :guilabel:`+` button at the end of its row in
+   the tree, shown on the selected organization and on the one the pointer
+   is over. Both show only on the organizations one administers and those
+   under them.
 #. Fill in the form; fields marked with ``*`` are required.
 #. Click :guilabel:`Create`.
 
@@ -108,8 +113,8 @@ a multi-valued field, click the :guilabel:`×` after it.
 Deleting an organization
 ------------------------
 
-Select the organization, open :guilabel:`More`, click :guilabel:`Delete` and
-confirm.
+Select the organization, open :guilabel:`More`, click :guilabel:`Delete`,
+then :guilabel:`Delete organization`.
 
 The server refuses to delete an organization that is not empty: first delete
 or move its sub-organizations, and attach its accounts and groups elsewhere

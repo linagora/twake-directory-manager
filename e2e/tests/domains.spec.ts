@@ -1,6 +1,5 @@
-import { LoginPage } from '../pages';
+import { ConfirmDialog, LoginPage } from '../pages';
 import { ADMIN, SOPHIE } from '../support/accounts';
-import { answerNextConfirm } from '../support/confirm';
 import { DOMAINS, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
@@ -42,9 +41,8 @@ test.describe('DOMAIN mail domains', () => {
     await form.cancel();
 
     const card = await app.openEntry(`domains/${id}`);
-    const message = answerNextConfirm(page, true);
     await card.perform('Delete');
-    await message;
+    await new ConfirmDialog(page).confirm();
     await app.expectToast('Deleted');
     expect(await directory.exists(dn)).toBe(false);
     await app.open('domains');
@@ -68,9 +66,8 @@ test.describe('DOMAIN mail domains', () => {
     // the card may offer Delete (documented, as for the other reference data): the server refuses
     const card = await app.openEntry(`domains/${domain.id}`);
     if ((await card.action('Delete').count()) > 0) {
-      const message = answerNextConfirm(page, true);
       await card.perform('Delete');
-      await message;
+      await new ConfirmDialog(page).confirm();
       await expect(app.errorToast).toBeVisible();
       await expect(app.errorToast).not.toHaveText(UNREADABLE);
     }

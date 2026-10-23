@@ -11,9 +11,9 @@
  */
 
 import { parseCsv, writeCsv, type CsvTable } from '../csv';
-import { attributeLabel, nameAttributes } from '../format';
+import { attributeLabel, explainRefusal } from '../format';
 import type { Translator } from '../i18n';
-import { tooBroad } from '../api/ConsoleApiClient';
+import { roleAttribute, tooBroad } from '../api/ConsoleApiClient';
 import {
   columnValues,
   guessMapping,
@@ -477,13 +477,15 @@ export class EntityImport {
           await this.options.create(row.values);
           this.created++;
         } catch (err) {
+          // In the words a form says it in, for the table and the file
           this.failures.push({
             row,
-            message: nameAttributes(
-              (err as Error).message,
+            message: explainRefusal(
+              err,
               this.options.entity.schema,
-              this.options.translator.language
-            ),
+              this.options.translator,
+              this.rowName(row)
+            ).message,
           });
         }
         this.processed++;
@@ -498,6 +500,18 @@ export class EntityImport {
     this.step = 'done';
     this.paint();
     this.options.onDone(this.created);
+  }
+
+  /** The entry a row creates, named by its full name, else its identifier. */
+  private rowName(row: PreparedRow): string | undefined {
+    const { entity } = this.options;
+    const display = roleAttribute(entity.schema, 'displayName');
+    for (const name of [display, entity.mainAttribute]) {
+      const value = name ? row.values[name] : undefined;
+      const first = (Array.isArray(value) ? value[0] : value)?.trim();
+      if (first) return first;
+    }
+    return undefined;
   }
 
   /** Repaint the progress in place, rather than the whole step per row. */

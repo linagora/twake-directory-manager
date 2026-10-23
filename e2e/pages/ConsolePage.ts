@@ -120,6 +120,33 @@ export class ConsolePage {
     });
   }
 
+  /**
+   * The overview of an account administering nothing: one message naming it, a Sign out
+   * button, a grey dot in the banner, and nothing to open in the sidebar but the overview
+   */
+  async expectNoRights(name: string): Promise<void> {
+    const block = this.main.locator('[data-no-rights]');
+    await expect(
+      block.getByRole('heading', {
+        name: 'There is nothing for you to manage here',
+      })
+    ).toBeVisible();
+    await expect(block).toContainText(
+      `Your account (${name}) does not administer any part of the directory.`
+    );
+    await expect(block.getByRole('link', { name: 'Sign out' })).toBeVisible();
+    await expect(this.main.getByRole('heading', { level: 3 })).toHaveCount(0);
+    await expect(
+      this.main.getByRole('heading', { name: 'What you can manage' })
+    ).toHaveCount(0);
+    await expect(this.navLabels).toHaveText(['Overview']);
+    // the green of "all is well" is #1d8540, rgb(29, 133, 64)
+    const dot = await this.banner
+      .locator('.dc-scope-empty')
+      .evaluate(badge => getComputedStyle(badge, '::before').backgroundColor);
+    expect(dot).not.toBe('rgb(29, 133, 64)');
+  }
+
   /** A reference data link of the overview (Positions, Titles…) */
   referenceLink(name: string): Locator {
     return this.main.getByRole('button', { name, exact: true });

@@ -1,7 +1,6 @@
-import { LoginPage } from '../pages';
+import { ConfirmDialog, LoginPage } from '../pages';
 import { ADMIN, SOPHIE } from '../support/accounts';
 import { callApi } from '../support/api';
-import { answerNextConfirm } from '../support/confirm';
 import { DEFAULT_POLICY, POLICIES, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
@@ -126,15 +125,17 @@ test.describe('POLICY password policies', () => {
     expect(await directory.values(dn, 'pwdMinLength')).toEqual(['14']);
     expect(await directory.values(dn, 'pwdLockoutDuration')).toEqual(['900']);
 
-    let message = answerNextConfirm(page, false);
+    const confirm = new ConfirmDialog(page);
     await edit.deleteButton.click();
-    expect(await message).toBe(
-      `Delete the password policy ${cn}? This cannot be undone.`
-    );
+    await confirm.expectOpen(`Delete the password policy ${cn}?`);
+    await expect(confirm.message).toHaveText('This cannot be undone.');
+    await expect(confirm.confirmButton).toHaveText('Delete policy');
+    await confirm.cancel();
+    // the policy's form is back, as it was
+    await expect(edit.control('pwdMinLength')).toHaveValue('14');
     expect(await directory.exists(dn)).toBe(true);
-    message = answerNextConfirm(page, true);
     await edit.deleteButton.click();
-    await message;
+    await confirm.confirm();
     await app.expectToast('Password policy deleted');
     await expect(policies.row(cn)).toHaveCount(0);
     await expect(policies.row('default')).toBeVisible();
@@ -158,9 +159,8 @@ test.describe('POLICY password policies', () => {
     ]);
 
     const panel = await policies.open(policy.cn);
-    const message = answerNextConfirm(page, true);
     await panel.deleteButton.click();
-    await message;
+    await new ConfirmDialog(page).confirm();
     await expect(app.errorToast).toHaveText(
       `${policy.cn} is the default policy, or accounts still use it`
     );

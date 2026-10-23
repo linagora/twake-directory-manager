@@ -90,4 +90,5 @@ Deleting a group
 ----------------
 
 On the group’s card, open :guilabel:`More`, click :guilabel:`Delete`, then
-confirm. The member accounts are not affected.
+:guilabel:`Delete group`. The member accounts are not affected, as the
+confirmation says.

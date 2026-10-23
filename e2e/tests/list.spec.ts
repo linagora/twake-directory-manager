@@ -1,8 +1,7 @@
 import type { Locator } from '@playwright/test';
 
-import { csv, LoginPage, readDownload } from '../pages';
+import { ConfirmDialog, csv, LoginPage, readDownload } from '../pages';
 import { ADMIN, ALICE, SEEDED_UIDS, SOPHIE } from '../support/accounts';
-import { answerNextConfirm } from '../support/confirm';
 import { TEST_DOMAIN, TRANSIT, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
@@ -245,9 +244,14 @@ test.describe('LIST lists, search and bulk actions', () => {
     await expect(list.rows).toHaveCount(2);
 
     await list.selectAll.check();
-    const message = answerNextConfirm(page, true);
+    const confirm = new ConfirmDialog(page);
     await list.deleteSelectionButton.click();
-    expect(await message).toBe('Delete 2 entries? This cannot be undone.');
+    await confirm.expectOpen('Delete 2 entries?');
+    await expect(confirm.items).toHaveCount(2);
+    for (const user of users)
+      await expect(confirm.items.filter({ hasText: user.uid })).toHaveCount(1);
+    await expect(confirm.confirmButton).toHaveText('Delete 2 entries');
+    await confirm.confirm();
 
     await expect(app.toast).toBeVisible();
     await expect(list.emptyState).toHaveText('No entry matches this search');
@@ -274,9 +278,10 @@ test.describe('LIST lists, search and bulk actions', () => {
     await expect(list.rows).toHaveCount(2);
 
     await list.selectAll.check();
-    const message = answerNextConfirm(page, true);
+    const confirm = new ConfirmDialog(page);
     await list.deleteSelectionButton.click();
-    expect(await message).toBe('Delete 2 entries? This cannot be undone.');
+    await confirm.expectOpen('Delete 2 entries?');
+    await confirm.confirm();
 
     await expect(app.errorToast).toContainText(inTransit.uid);
     await expect(app.errorToast).not.toHaveText(
@@ -475,20 +480,26 @@ test.describe('LIST lists, search and bulk actions', () => {
     const list = app.list();
     const panel = app.importPanel();
 
-    /** Ticks every account of `lastName`, reads the bar, asks to delete them and says no */
+    const confirm = new ConfirmDialog(page);
+    /**
+     * Ticks every account of `lastName`, reads the bar, asks to delete them, reads the question
+     * and the button, and says no
+     */
     const askToDelete = async (
       lastName: string,
-      selected: string
-    ): Promise<string> => {
+      selected: string,
+      [question, button]: [string, string]
+    ): Promise<void> => {
       await list.search(
         lastName,
         selected.includes('sélection') ? 'Nom de famille' : 'Last name'
       );
       await list.selectAll.check();
       await expect(list.bulkBar).toContainText(selected);
-      const message = answerNextConfirm(page, false);
       await list.deleteSelectionButton.click();
-      return message;
+      await expect(confirm.title).toHaveText(question);
+      await expect(confirm.confirmButton).toHaveText(button);
+      await confirm.cancel();
     };
     /** Opens Import CSV and feeds it `count` valid rows into the tenant's organization */
     const feed = async (count: number): Promise<void> => {
@@ -518,12 +529,14 @@ test.describe('LIST lists, search and bulk actions', () => {
       await panel.feed(csv(rows));
     };
 
-    expect(await askToDelete(one.lastName, '1 selected')).toBe(
-      'Delete 1 entry? This cannot be undone.'
-    );
-    expect(await askToDelete(two.lastName, '2 selected')).toBe(
-      'Delete 2 entries? This cannot be undone.'
-    );
+    await askToDelete(one.lastName, '1 selected', [
+      'Delete 1 entry?',
+      'Delete 1 entry',
+    ]);
+    await askToDelete(two.lastName, '2 selected', [
+      'Delete 2 entries?',
+      'Delete 2 entries',
+    ]);
     await feed(1);
     await expect(panel.readLine).toHaveText('1 row read from x.csv');
     await panel.check();
@@ -533,12 +546,14 @@ test.describe('LIST lists, search and bulk actions', () => {
     await panel.closeButton.click();
 
     await app.setLanguage('fr');
-    expect(await askToDelete(one.lastName, '1 sélectionné')).toBe(
-      'Supprimer 1 entrée ? Cette action est irréversible.'
-    );
-    expect(await askToDelete(two.lastName, '2 sélectionnés')).toBe(
-      'Supprimer 2 entrées ? Cette action est irréversible.'
-    );
+    await askToDelete(one.lastName, '1 sélectionné', [
+      'Supprimer 1 entrée ?',
+      'Supprimer 1 entrée',
+    ]);
+    await askToDelete(two.lastName, '2 sélectionnés', [
+      'Supprimer 2 entrées ?',
+      'Supprimer 2 entrées',
+    ]);
     await feed(1);
     await expect(panel.readLine).toHaveText('1 ligne lue dans x.csv');
     await panel.check();

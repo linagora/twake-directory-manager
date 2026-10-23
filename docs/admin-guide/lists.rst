@@ -73,8 +73,9 @@ appears:
    with ``=``, ``+``, ``-`` or ``@``) is prefixed with an apostrophe.
 
 :guilabel:`Delete selection`
-   Offered only with the delete right. After a confirmation, the entries are
-   deleted one by one; when the server refuses some of them, the final
+   Offered only with the delete right. The confirmation lists the first five
+   entries and how many more; once confirmed, the entries are deleted one by
+   one; when the server refuses some of them, the final
    message says which and why. The others are deleted.
 
 The card of an entry

@@ -138,9 +138,9 @@ name: 'France' })` gives `France <unique>`. Nothing is created in Sales nor Engi
 - **Wording**: what the plan quotes is asserted as quoted; the console's other strings in French
   or Mongolian come from its own catalogue, `t('fr', 'state.enabled')` (`support/i18n.ts`, which
   reads `src/i18n.ts`).
-- **Native confirm dialogs** (deletions, hand-overs): `answerNextConfirm(page, accept)` before the
-  click, then `await` it for the message. One dialog at a time, never a lasting
-  `page.on('dialog')`.
+- **Confirmations** (deletions, hand-overs) are the console's own alert dialog, not the
+  browser's: `new ConfirmDialog(page)` after the click, then `confirm()` or `cancel()`. The
+  console uses no native dialog; a test never answers one with `page.on('dialog')`.
 - **Web-first assertions** (`await expect(locator).toBeVisible()`), which retry, and `expect.poll`
   for directory state. No `waitForTimeout`; `ListPage.search` waits for the server's answer to the
   search it typed (the list is debounced), `page.clock` stands in for waiting out a delay.

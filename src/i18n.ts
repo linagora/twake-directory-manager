@@ -23,9 +23,9 @@ const en: Catalogue = {
   'app.create': 'Create',
   'app.edit': 'Edit',
   'app.delete': 'Delete',
-  'app.confirm': 'Confirm',
   'app.back': 'Back',
   'app.language': 'Language',
+  'language.name': 'English',
   'app.logout': 'Sign out',
   'app.notFound': 'There is no page at this address.',
   'app.toOverview': 'Go to the Overview',
@@ -47,6 +47,10 @@ const en: Catalogue = {
   'scope.delete': 'delete',
 
   'dashboard.welcome': 'Signed in as {user}',
+  'dashboard.welcomeNamed': 'Signed in as {name} ({email})',
+  'dashboard.noRightsTitle': 'There is nothing for you to manage here',
+  'dashboard.noRightsBody':
+    'Your account ({name}) does not administer any part of the directory. If you need to manage users or groups, ask your directory administrator to make you a local administrator of your department.',
   'dashboard.entities': 'What you can manage',
   'dashboard.create': 'New {entity}',
   'dashboard.noCreate': 'Creation not allowed here',
@@ -208,8 +212,7 @@ const en: Catalogue = {
   'tree.expand': 'Expand {name}',
   'tree.collapse': 'Collapse {name}',
   'tree.leaf': '{name} has no sub-organization',
-  'tree.noMatch':
-    'No organization matches “{filter}” among the opened branches',
+  'tree.noMatch': 'No organization matches “{filter}”',
   'tree.parent': 'Parent organization',
 
   'status.title': 'Account state',
@@ -245,13 +248,28 @@ const en: Catalogue = {
   'password.done': 'Done',
   'password.leaveUncopied': 'Close without copying the password?',
   'password.set': 'Password changed',
+  'password.confirmButton': 'Reset password',
 
   'delete.notEmpty': '{name} is not empty: move or delete its entries first',
   'delete.inUse':
     '{name} is still used by entries ({field}): change them first',
-  'delete.confirm': 'Delete {name}? This cannot be undone.',
-  'delete.confirmMany.one': 'Delete {count} entry? This cannot be undone.',
-  'delete.confirmMany.other': 'Delete {count} entries? This cannot be undone.',
+  'delete.title': 'Delete {name}?',
+  'delete.irreversible': 'This cannot be undone.',
+  'delete.leavesGroups': '{name} will be removed from: {groups}.',
+  'delete.preferDisable':
+    'To stop access without deleting, set the state to Disabled instead.',
+  'delete.button': 'Delete {name}',
+  'delete.membersStay.one':
+    'Its {count} member stays in the directory; only the group goes.',
+  'delete.membersStay.other':
+    'Its {count} members stay in the directory; only the group goes.',
+  'delete.groupButton': 'Delete group',
+  'delete.organizationButton': 'Delete organization',
+  'delete.manyTitle.one': 'Delete {count} entry?',
+  'delete.manyTitle.other': 'Delete {count} entries?',
+  'delete.manyButton.one': 'Delete {count} entry',
+  'delete.manyButton.other': 'Delete {count} entries',
+  'delete.andMore': 'and {count} more',
   'delete.done': 'Deleted',
   'delete.failed': '{name}: {error}',
 
@@ -263,13 +281,24 @@ const en: Catalogue = {
   'transit.noTarget': 'You write in no organization that could take it',
   'transit.claimed': '{name} moved to {organization}',
   'transit.handOver': 'Hand over',
+  'transit.claimButton': 'Claim into {organization}',
+  'transit.handOverTitle': 'Hand {name} over?',
+  'transit.handOverLeaves': '{name} leaves {organization} for Transit.',
   'transit.handOverConfirm':
-    'Put {name} in transit? Every administrator will see this entry and may claim it, and you will no longer manage it.',
+    'Every administrator will see this entry and may claim it; you will no longer manage it.',
   'transit.handedOver': '{name} is in transit',
 
   'save.done': 'Saved',
   'create.done': 'Created',
   'create.doneNamed': '{name} created',
+
+  'refusal.unique': '{field} “{value}” is already used by another entry.',
+  'refusal.domain':
+    '{field}: {domain} is not a mail domain of this organization. Allowed: {domains}.',
+  'refusal.forbidden':
+    'You do not administer {name}: this change is not yours to make.',
+  'refusal.server': 'The server refused: {message}',
+  'refusal.seeField': 'Not saved: see the highlighted field',
 
   'nav.policies': 'Password policies',
   'policy.new': 'New policy',
@@ -312,8 +341,8 @@ const en: Catalogue = {
   'policy.created': 'Password policy created',
   'policy.saved': 'Password policy saved',
   'policy.deleted': 'Password policy deleted',
-  'policy.deleteConfirm':
-    'Delete the password policy {name}? This cannot be undone.',
+  'policy.deleteTitle': 'Delete the password policy {name}?',
+  'policy.deleteButton': 'Delete policy',
   'policy.inUse': '{name} is the default policy, or accounts still use it',
   'policy.lockoutAfter.one': 'After {count} failure',
   'policy.lockoutAfter.other': 'After {count} failures',
@@ -362,9 +391,9 @@ const fr: Catalogue = {
   'app.create': 'Créer',
   'app.edit': 'Modifier',
   'app.delete': 'Supprimer',
-  'app.confirm': 'Confirmer',
   'app.back': 'Retour',
   'app.language': 'Langue',
+  'language.name': 'Français',
   'app.logout': 'Se déconnecter',
   'app.notFound': 'Il n’y a pas de page à cette adresse.',
   'app.toOverview': 'Aller à l’accueil',
@@ -386,6 +415,10 @@ const fr: Catalogue = {
   'scope.delete': 'suppression',
 
   'dashboard.welcome': 'Connecté en tant que {user}',
+  'dashboard.welcomeNamed': 'Connecté en tant que {name} ({email})',
+  'dashboard.noRightsTitle': 'Il n’y a rien à gérer ici pour vous',
+  'dashboard.noRightsBody':
+    'Votre compte ({name}) n’administre aucune partie de l’annuaire. Pour gérer des utilisateurs ou des groupes, demandez à l’administrateur de l’annuaire de vous nommer administrateur local de votre organisation.',
   'dashboard.entities': 'Ce que vous pouvez gérer',
   'dashboard.create': 'Créer : {entity}',
   'dashboard.create.users': 'Créer un utilisateur',
@@ -570,8 +603,7 @@ const fr: Catalogue = {
   'tree.expand': 'Développer {name}',
   'tree.collapse': 'Réduire {name}',
   'tree.leaf': '{name} n’a pas de sous-organisation',
-  'tree.noMatch':
-    'Aucune organisation ne correspond à « {filter} » parmi les branches ouvertes',
+  'tree.noMatch': 'Aucune organisation ne correspond à « {filter} »',
   'tree.parent': 'Organisation parente',
 
   'status.title': 'État du compte',
@@ -606,16 +638,29 @@ const fr: Catalogue = {
   'password.done': 'Terminé',
   'password.leaveUncopied': 'Fermer sans copier le mot de passe ?',
   'password.set': 'Mot de passe modifié',
+  'password.confirmButton': 'Réinitialiser',
 
   'delete.notEmpty':
     '{name} n’est pas vide : déplacez ou supprimez d’abord ses entrées',
   'delete.inUse':
     '{name} est encore utilisé par des entrées ({field}) : modifiez-les d’abord',
-  'delete.confirm': 'Supprimer {name} ? Cette action est irréversible.',
-  'delete.confirmMany.one':
-    'Supprimer {count} entrée ? Cette action est irréversible.',
-  'delete.confirmMany.other':
-    'Supprimer {count} entrées ? Cette action est irréversible.',
+  'delete.title': 'Supprimer {name} ?',
+  'delete.irreversible': 'Cette action est irréversible.',
+  'delete.leavesGroups': '{name} sera retiré de : {groups}.',
+  'delete.preferDisable':
+    'Pour couper l’accès sans supprimer, passez plutôt l’état à Désactivé.',
+  'delete.button': 'Supprimer {name}',
+  'delete.membersStay.one':
+    'Son {count} membre reste dans l’annuaire ; seul le groupe disparaît.',
+  'delete.membersStay.other':
+    'Ses {count} membres restent dans l’annuaire ; seul le groupe disparaît.',
+  'delete.groupButton': 'Supprimer le groupe',
+  'delete.organizationButton': 'Supprimer l’organisation',
+  'delete.manyTitle.one': 'Supprimer {count} entrée ?',
+  'delete.manyTitle.other': 'Supprimer {count} entrées ?',
+  'delete.manyButton.one': 'Supprimer {count} entrée',
+  'delete.manyButton.other': 'Supprimer {count} entrées',
+  'delete.andMore': 'et {count} de plus',
   'delete.done': 'Supprimé',
   'delete.failed': '{name} : {error}',
 
@@ -628,13 +673,24 @@ const fr: Catalogue = {
     'Vous n’écrivez dans aucune organisation qui puisse l’accueillir',
   'transit.claimed': '{name} est désormais dans {organization}',
   'transit.handOver': 'Mettre en transit',
+  'transit.claimButton': 'Rattacher à {organization}',
+  'transit.handOverTitle': 'Mettre {name} en transit ?',
+  'transit.handOverLeaves': '{name} quitte {organization} pour Transit.',
   'transit.handOverConfirm':
-    'Mettre {name} en transit ? Tous les administrateurs verront cette entrée et pourront la rattacher, et vous ne la gérerez plus.',
+    'Tous les administrateurs verront cette entrée et pourront la rattacher ; vous ne la gérerez plus.',
   'transit.handedOver': '{name} est en transit',
 
   'save.done': 'Enregistré',
   'create.done': 'Créé',
   'create.doneNamed': '{name} est maintenant dans l’annuaire',
+
+  'refusal.unique': '{field} « {value} » : déjà utilisé par une autre entrée.',
+  'refusal.domain':
+    '{field} : {domain} n’est pas un domaine de messagerie de cette organisation. Autorisés : {domains}.',
+  'refusal.forbidden':
+    'Vous n’administrez pas {name} : cette modification ne vous revient pas.',
+  'refusal.server': 'Le serveur a refusé : {message}',
+  'refusal.seeField': 'Non enregistré : voir le champ signalé',
 
   'nav.policies': 'Politiques de mot de passe',
   'policy.new': 'Nouvelle politique',
@@ -677,8 +733,8 @@ const fr: Catalogue = {
   'policy.created': 'Politique de mot de passe créée',
   'policy.saved': 'Politique de mot de passe enregistrée',
   'policy.deleted': 'Politique de mot de passe supprimée',
-  'policy.deleteConfirm':
-    'Supprimer la politique de mot de passe {name} ? Cette action est irréversible.',
+  'policy.deleteTitle': 'Supprimer la politique de mot de passe {name} ?',
+  'policy.deleteButton': 'Supprimer la politique',
   'policy.inUse':
     "{name} est la politique par défaut, ou des comptes l'utilisent encore",
   'policy.lockoutAfter.one': 'Après {count} échec',
@@ -729,9 +785,9 @@ const mn: Catalogue = {
   'app.create': 'Үүсгэх',
   'app.edit': 'Засах',
   'app.delete': 'Устгах',
-  'app.confirm': 'Батлах',
   'app.back': 'Буцах',
   'app.language': 'Хэл',
+  'language.name': 'Монгол',
   'app.logout': 'Гарах',
   'app.notFound': 'Энэ хаягт хуудас алга.',
   'app.toOverview': 'Нүүр хуудас руу очих',
@@ -752,6 +808,10 @@ const mn: Catalogue = {
   'scope.delete': 'устгах',
 
   'dashboard.welcome': '{user} нэвтэрсэн',
+  'dashboard.welcomeNamed': '{name} ({email}) нэвтэрсэн',
+  'dashboard.noRightsTitle': 'Энд таны удирдах зүйл алга',
+  'dashboard.noRightsBody':
+    'Таны бүртгэл ({name}) лавлахын аль ч хэсгийг удирддаггүй. Хэрэглэгч эсвэл бүлэг удирдах шаардлагатай бол лавлахын администратортаа хандаж өөрийн байгууллагын орон нутгийн администратор болгохыг хүснэ үү.',
   'dashboard.entities': 'Таны удирдах боломжтой зүйлс',
   'dashboard.create': 'Шинэ {entity}',
   'dashboard.noCreate': 'Энд үүсгэх эрхгүй',
@@ -905,7 +965,7 @@ const mn: Catalogue = {
   'tree.expand': '{name}-г дэлгэх',
   'tree.collapse': '{name}-г хураах',
   'tree.leaf': '{name} дэд байгууллагагүй',
-  'tree.noMatch': 'Нээсэн салбаруудад «{filter}»-д тохирох байгууллага алга',
+  'tree.noMatch': '«{filter}»-д тохирох байгууллага алга',
   'tree.parent': 'Дээд байгууллага',
 
   'status.title': 'Бүртгэлийн төлөв',
@@ -941,13 +1001,25 @@ const mn: Catalogue = {
   'password.done': 'Болсон',
   'password.leaveUncopied': 'Нууц үгийг хуулалгүй хаах уу?',
   'password.set': 'Нууц үг солигдлоо',
+  'password.confirmButton': 'Дахин тохируулах',
 
   'delete.notEmpty':
     '{name} хоосон биш: эхлээд доторх бичлэгүүдийг зөөх эсвэл устгана уу',
   'delete.inUse':
     '{name} бичлэгүүдэд ашиглагдсаар байна ({field}): эхлээд тэдгээрийг өөрчилнө үү',
-  'delete.confirm': '{name}-г устгах уу? Үүнийг буцаах боломжгүй.',
-  'delete.confirmMany': '{count} бичлэг устгах уу? Үүнийг буцаах боломжгүй.',
+  'delete.title': '{name}-г устгах уу?',
+  'delete.irreversible': 'Үүнийг буцаах боломжгүй.',
+  'delete.leavesGroups': '{name}-г дараах бүлгүүдээс хасна: {groups}.',
+  'delete.preferDisable':
+    'Устгалгүйгээр хандалтыг зогсоохын тулд төлөвийг Идэвхгүй болгоно уу.',
+  'delete.button': '{name}-г устгах',
+  'delete.membersStay':
+    'Түүний {count} гишүүн лавлахад үлдэнэ; зөвхөн бүлэг устна.',
+  'delete.groupButton': 'Бүлгийг устгах',
+  'delete.organizationButton': 'Байгууллагыг устгах',
+  'delete.manyTitle': '{count} бичлэг устгах уу?',
+  'delete.manyButton': '{count} бичлэг устгах',
+  'delete.andMore': 'болон өөр {count}',
   'delete.done': 'Устгагдлаа',
   'delete.failed': '{name}: {error}',
 
@@ -959,13 +1031,25 @@ const mn: Catalogue = {
   'transit.noTarget': 'Үүнийг хүлээн авах байгууллагад танд бичих эрх алга',
   'transit.claimed': '{name}-г {organization} руу шилжүүллээ',
   'transit.handOver': 'Шилжүүлэх',
+  'transit.claimButton': '{organization} руу авах',
+  'transit.handOverTitle': '{name}-г шилжүүлэх үү?',
+  'transit.handOverLeaves':
+    '{name} {organization}-с гарч дамжуулалтад шилжинэ.',
   'transit.handOverConfirm':
-    '{name}-г дамжуулалтад оруулах уу? Бүх администратор энэ бичлэгийг харж, авах боломжтой болох бөгөөд та үүнийг цаашид удирдахгүй.',
+    'Бүх администратор энэ бичлэгийг харж, авах боломжтой болно; та үүнийг цаашид удирдахгүй.',
   'transit.handedOver': '{name} дамжуулалтад байна',
 
   'save.done': 'Хадгалагдлаа',
   'create.done': 'Үүсгэгдлээ',
   'create.doneNamed': '{name} үүсгэгдлээ',
+
+  'refusal.unique': '{field} «{value}» өөр бичлэгт ашиглагдаж байна.',
+  'refusal.domain':
+    '{field}: {domain} энэ байгууллагын шуудангийн домэйн биш. Зөвшөөрөгдсөн: {domains}.',
+  'refusal.forbidden':
+    'Та {name}-г удирддаггүй тул энэ өөрчлөлтийг хийх боломжгүй.',
+  'refusal.server': 'Сервер татгалзсан: {message}',
+  'refusal.seeField': 'Хадгалагдсангүй: тэмдэглэсэн талбарыг харна уу',
 
   'nav.policies': 'Нууц үгийн бодлого',
   'policy.new': 'Шинэ бодлого',
@@ -1009,8 +1093,8 @@ const mn: Catalogue = {
   'policy.created': 'Нууц үгийн бодлого үүсгэгдлээ',
   'policy.saved': 'Нууц үгийн бодлого хадгалагдлаа',
   'policy.deleted': 'Нууц үгийн бодлого устгагдлаа',
-  'policy.deleteConfirm':
-    '{name} нууц үгийн бодлогыг устгах уу? Үүнийг буцаах боломжгүй.',
+  'policy.deleteTitle': '{name} нууц үгийн бодлогыг устгах уу?',
+  'policy.deleteButton': 'Бодлогыг устгах',
   'policy.inUse':
     '{name} нь үндсэн бодлого, эсвэл бүртгэлүүд үүнийг ашигласаар байна',
   'policy.lockoutAfter': '{count} удаа алдсаны дараа',
@@ -1048,6 +1132,18 @@ const catalogues: Record<string, Catalogue> = { en, fr, mn };
 
 /** Languages the console ships with. */
 export const availableLanguages = Object.keys(catalogues);
+
+/**
+ * What a language is called in itself, the way a reader looks for theirs:
+ * "Монгол" says something to whoever reads it, "mn" to almost nobody. Each
+ * catalogue names its own language, so a new one brings its name with it.
+ *
+ * @param code a language the console ships with
+ * @returns its name, or the code itself when its catalogue gives none
+ */
+export function languageName(code: string): string {
+  return catalogues[code]?.['language.name'] || code;
+}
 
 export class Translator {
   private catalogue: Catalogue;

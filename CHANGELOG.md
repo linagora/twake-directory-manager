@@ -22,12 +22,38 @@ Built on ldap-rest 0.25.0.
 - The New user form shows the identifier the address will give, fills the
   common name from the full name, and Enter takes the domain the address
   completion offers; the creation message names the entry (#130)
+- An address already used, a mail domain the organization may not use and a
+  change outside the branches one administers are said in the interface's
+  language, under the field at fault when the form shows it, the toast
+  reading _Not saved: see the highlighted field_; the import's result and its
+  refused rows file say them the same way. Any other refusal reads _The
+  server refused:_ before the server's own words (#126,
+  linagora/ldap-rest#372)
 - A local administrator's page load no longer asks for the password
   policies only to be refused (403): the scope says who manages them, and
   only an ldap-rest before 0.25.0 is still asked (#138, linagora/ldap-rest#367)
 - An address naming no page, such as a mistyped or outdated link, says
   _There is no page at this address._ with a link back to the Overview,
   instead of showing the Overview as if it had worked (#137)
+- The Organizations _Filter_ searches the whole tree, not only the branches
+  opened, and lists what it finds by path (_Sales / France_); choosing one
+  opens the tree down to it and shows its card. Selecting an organization
+  also opens its branch, its card offers _New organization here_ beside
+  _Edit_, and the selected row keeps its "+" in view (#132)
+- The Overview speaks in names: _Signed in as Ada Admin (admin@example.com)_
+  rather than a DN, and the _Language_ select offers _English_, _Français_
+  and _Монгол_. An account administering nothing finds one message on it,
+  _There is nothing for you to manage here_, with a _Sign out_ button,
+  instead of three cards leading nowhere; its sidebar offers only the
+  Overview, and its banner's dot is grey, not green (#134)
+- Deleting an entry, a selection, an organization or a password policy, and
+  handing an entry over, are confirmed in a dialog of the console, in its
+  language, instead of the browser's. It names an account by its full name,
+  email and organization, lists the groups it leaves and offers to set the
+  state to _Disabled_ instead; _Cancel_ has the focus, and the button names the
+  action: _Delete Jane_, _Delete group_, _Hand over_. The Reset password and
+  Claim panels' buttons read _Reset password_ and _Claim into Sales_ rather
+  than _Confirm_ (#131)
 - An account's card is headed by the full name, with the identifier and the
   address under it, as is the browser tab. Its details are grouped under
   headings, a value said twice is said once, the empty fields wait under

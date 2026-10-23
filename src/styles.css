@@ -398,6 +398,11 @@
   background: var(--dc-danger);
 }
 
+/* No branch at all is not "all is well": a neutral dot, in either theme. */
+.dc-header > .dc-scope-empty.dc-scope-none::before {
+  background: var(--dc-muted);
+}
+
 .dc-scope-transit {
   padding: 3px 12px;
   border: 1px dashed var(--dc-line-strong);
@@ -616,6 +621,36 @@
 .dc-reference-link:focus-visible {
   outline: none;
   box-shadow: var(--dc-focus);
+}
+
+/* The overview of an account administering nothing: one message, not cards. */
+.dc-no-rights {
+  max-width: 640px;
+  margin-top: 32px;
+  padding: 24px;
+  background: var(--dc-surface);
+  border: 1px solid var(--dc-line);
+  border-radius: var(--dc-radius);
+  box-shadow: var(--dc-shadow);
+}
+
+.dc-dashboard .dc-no-rights h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 650;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--dc-ink);
+}
+
+.dc-no-rights p {
+  margin: 0 0 20px;
+  line-height: 1.5;
+  color: var(--dc-muted);
+}
+
+.dc-no-rights .dc-button {
+  text-decoration: none;
 }
 
 .dc-card-actions {
@@ -1119,7 +1154,10 @@
   transition: opacity 0.12s;
 }
 
+/* Hover is no way to find a control by touch, or without a pointer: the
+   selected organization keeps its "+" in view. */
 .dc-tree-row:hover .dc-tree-add,
+.dc-tree-node.dc-selected > .dc-tree-row .dc-tree-add,
 .dc-tree-add:focus-visible {
   opacity: 1;
 }
@@ -1844,6 +1882,36 @@ select.dc-input {
   border-color: var(--dc-danger);
 }
 
+/* The button of a confirmation that deletes: filled, unlike Delete on a card. */
+.dc-button-destructive {
+  background: var(--dc-danger);
+  border-color: var(--dc-danger);
+  color: #fff;
+}
+
+.dc-button-destructive:hover {
+  background: color-mix(in srgb, var(--dc-danger) 85%, #000);
+  border-color: color-mix(in srgb, var(--dc-danger) 85%, #000);
+}
+
+.dc-confirm p {
+  margin: 0 0 12px;
+}
+
+.dc-confirm p:first-child {
+  font-weight: 500;
+}
+
+.dc-confirm-items {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.dc-confirm-alternative {
+  margin: 0;
+  font-size: 13px;
+}
+
 .dc-icon-button {
   display: inline-flex;
   align-items: center;
@@ -2119,6 +2187,7 @@ textarea.dc-policy-text {
   }
 
   .dc-button-primary,
+  .dc-button-destructive,
   .dc-nav-item.dc-active .dc-nav-icon {
     color: #0b1a2e;
   }

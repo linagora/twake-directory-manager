@@ -99,6 +99,8 @@ export interface DetailOptions {
   onClaim?(): void;
   /** Let it go into the transit branch, when they may */
   onHandOver?(): void;
+  /** Create an organization under this one, when they may */
+  onCreateChild?(): void;
   /** Readable name of the entry a pointer lands on, when its schema has one */
   pointerLabel?(dn: string): string | undefined;
   /** Entries pointing at this one, or pointed at by it */
@@ -228,8 +230,8 @@ export class EntityDetail {
    * claimed.
    */
   private actionsMarkup(): string {
-    const { entity, translator, canWrite, canDelete, onClaim, onHandOver } =
-      this.options;
+    const { entity, translator, canWrite, canDelete } = this.options;
+    const { onClaim, onHandOver, onCreateChild } = this.options;
     const button = (data: string, key: string, primary = false): string =>
       `<button type="button" class="dc-button${
         primary ? ' dc-button-primary' : ''
@@ -245,6 +247,9 @@ export class EntityDetail {
     return [
       onClaim ? button('data-claim', 'transit.claim', true) : '',
       canWrite ? button('data-edit', 'app.edit', true) : '',
+      // An everyday action of an organization's card, not a rare one: it
+      // stays in the row, after Edit.
+      onCreateChild ? button('data-create-child', 'tree.addChild') : '',
       canWrite && entity.password
         ? button('data-password', 'password.title')
         : '',
@@ -539,6 +544,9 @@ export class EntityDetail {
         closeMenu();
         this.options.onHandOver?.();
       });
+    container
+      .querySelector('[data-create-child]')
+      ?.addEventListener('click', () => this.options.onCreateChild?.());
 
     const copy = container.querySelector<HTMLElement>('[data-copy-dn]');
     copy?.addEventListener('click', () => {
