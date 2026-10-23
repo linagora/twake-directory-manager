@@ -744,6 +744,21 @@
   font-weight: 550;
 }
 
+.dc-row-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.dc-row-link:hover {
+  text-decoration: underline;
+}
+
+.dc-row-link:focus-visible {
+  outline: none;
+  box-shadow: var(--dc-focus);
+  border-radius: 4px;
+}
+
 .dc-path {
   color: var(--dc-muted);
 }
@@ -1497,6 +1512,38 @@ select.dc-input {
   padding: 16px 24px;
   background: var(--dc-surface);
   border-top: 1px solid var(--dc-line);
+}
+
+/* A generated password, read whole beside its copy button. */
+.dc-generated {
+  display: flex;
+  gap: 8px;
+}
+
+.dc-generated-password {
+  flex: 1 1 auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Asked in place of the actions, before the password goes uncopied. */
+.dc-generated-leave {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dc-generated-leave p {
+  flex: 1 1 100%;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* A class that sets `display` outranks the user-agent rule behind [hidden]. */
+.dc-generated-leave[hidden],
+.dc-form-actions[hidden] {
+  display: none;
 }
 
 /* ------------------------------------------------------------------ import */

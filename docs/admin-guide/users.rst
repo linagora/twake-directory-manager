@@ -183,11 +183,14 @@ Resetting a password
    unless there is a reason not to.
 #. Click :guilabel:`Confirm`.
 
-A generated password is shown **only once**, in a message at the bottom of
-the screen that stays until it is clicked:
-:guilabel:`New password: … — copy it now, it will not be shown again`. Copy
-it and pass it on to the user through a safe channel before doing anything
-else: the next message of the console replaces it.
+A generated password is shown **only once**, in the same panel, now titled
+:guilabel:`New password — <identifier>`. Click :guilabel:`Copy` beside it,
+or select it by hand, and pass it on to the user through a safe channel. It
+stays until :guilabel:`Done`, :guilabel:`×` or :kbd:`Escape`; closing it
+without having clicked :guilabel:`Copy` first asks
+:guilabel:`Close without copying the password?`, answered with
+:guilabel:`Close` or :guilabel:`Back`. A typed password ends with the message
+:guilabel:`Password changed` instead.
 
 Deleting an account
 -------------------

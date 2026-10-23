@@ -1579,17 +1579,6 @@ describe('Directory console', () => {
       expect(element.hidden).to.be.true;
     });
 
-    it('should keep a sticky message shown after an earlier one', async () => {
-      // An earlier message's timer went on running and hid the generated
-      // password, which is shown once and cannot be fetched again.
-      const { element, toasts } = setup();
-      toasts.show('Status changed');
-      toasts.show('Generated password: s3cret', false, true);
-      await wait(40);
-      expect(element.hidden).to.be.false;
-      expect(element.textContent).to.equal('Generated password: s3cret');
-    });
-
     it('should be said by a screen reader, a refusal at once', () => {
       const live: string[] = [];
       const region = {
@@ -1629,6 +1618,170 @@ describe('Directory console', () => {
       expect(element.hidden, 'hidden by the first timer').to.be.false;
       await wait(20);
       expect(element.hidden).to.be.true;
+    });
+  });
+
+  describe('a generated password', () => {
+    /** An element the panel's code queries, records and fires. */
+    const control = (props: Record<string, unknown> = {}) => {
+      const listeners: Record<string, ((event: unknown) => void)[]> = {};
+      return {
+        hidden: false,
+        textContent: '',
+        value: '',
+        checked: true,
+        focused: 0,
+        selected: 0,
+        ...props,
+        addEventListener(
+          type: string,
+          listener: (event: unknown) => void
+        ): void {
+          (listeners[type] ||= []).push(listener);
+        },
+        fire(type: string): void {
+          const event = { preventDefault: () => undefined };
+          for (const listener of listeners[type] || []) listener(event);
+        },
+        focus(): void {
+          this.focused++;
+        },
+        select(): void {
+          this.selected++;
+        },
+      };
+    };
+    const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
+    /** Reset alice's password, typed or generated, through the panel. */
+    const reset = async (typed: string) => {
+      const els = {
+        form: control(),
+        password: control({ value: typed }),
+        force: control({ checked: true }),
+        field: control(),
+        copy: control(),
+        leave: control({ hidden: true }),
+        done: control(),
+        doneButton: control(),
+        back: control(),
+        close: control(),
+      };
+      const selectors: Record<string, unknown> = {
+        form: els.form,
+        '#dc-new-password': els.password,
+        '#dc-force-change': els.force,
+        '#dc-generated-password': els.field,
+        '[data-copy-password]': els.copy,
+        '[data-leave]': els.leave,
+        '[data-done-actions]': els.done,
+        '[data-done]': els.doneButton,
+        '[data-leave-back]': els.back,
+        '[data-leave-close]': els.close,
+      };
+      const body = {
+        innerHTML: '',
+        scrollTop: 0,
+        querySelector: (selector: string) => selectors[selector] ?? null,
+        querySelectorAll: () => [],
+      };
+      const panel = { hidden: true, classList: { toggle: () => undefined } };
+      const title = { textContent: '' };
+      const toast = toastElement();
+      const app = consoleIn({
+        '[data-panel]': panel,
+        '[data-panel-title]': title,
+        '[data-panel-body]': body,
+        '[data-toast]': toast,
+      }) as unknown as {
+        api: unknown;
+        resetPassword(entity: unknown, id: string): Promise<void>;
+        closePanel(): void;
+      };
+      app.api = {
+        resetPassword: () =>
+          Promise.resolve(
+            typed
+              ? { generated: false }
+              : { generated: true, password: 's3cret!<x>' }
+          ),
+      };
+      await app.resetPassword({ key: 'users' }, 'alice');
+      els.form.fire('submit');
+      await tick();
+      return { app, els, body, panel, title, toast };
+    };
+
+    it('should stay in the panel, never in a toast', async () => {
+      // In a toast, the click that began selecting it dismissed it for good.
+      const { els, body, panel, title, toast } = await reset('');
+      expect(panel.hidden).to.be.false;
+      expect(toast.textContent).to.equal('');
+      expect(title.textContent).to.equal('New password — alice');
+      expect(body.innerHTML).to.match(
+        /<input id="dc-generated-password"[^>]*readonly value="s3cret!&lt;x&gt;"/
+      );
+      expect(body.innerHTML).to.contain('data-copy-password>Copy</button>');
+      expect(body.innerHTML).to.contain(
+        'Give this password to alice. It will not be shown again. They will have to change it when they next sign in.'
+      );
+      // Focus on the field, which a screen reader reads with its help
+      expect(els.field.focused).to.equal(1);
+      els.field.fire('focus');
+      expect(els.field.selected).to.equal(1);
+    });
+
+    it('should ask once before it is closed uncopied', async () => {
+      const { app, els, panel } = await reset('');
+      // Done, × and Escape all close the panel through closePanel
+      els.doneButton.fire('click');
+      expect(panel.hidden).to.be.false;
+      expect(els.leave.hidden).to.be.false;
+      expect(els.done.hidden).to.be.true;
+      expect(els.close.focused).to.equal(1);
+      // Back keeps it, and asks again next time
+      els.back.fire('click');
+      expect(els.leave.hidden).to.be.true;
+      app.closePanel();
+      expect(panel.hidden).to.be.false;
+      // Asked: the second attempt closes
+      app.closePanel();
+      expect(panel.hidden).to.be.true;
+    });
+
+    it('should close at once once copied', async () => {
+      const g = globalThis as Record<string, unknown>;
+      const original = Object.getOwnPropertyDescriptor(g, 'navigator');
+      const written: string[] = [];
+      Object.defineProperty(g, 'navigator', {
+        configurable: true,
+        value: {
+          clipboard: {
+            writeText: (text: string) => {
+              written.push(text);
+              return Promise.resolve();
+            },
+          },
+        },
+      });
+      try {
+        const { app, els, panel } = await reset('');
+        els.copy.fire('click');
+        await tick();
+        expect(written).to.deep.equal(['s3cret!<x>']);
+        expect(els.copy.textContent).to.equal('Copied');
+        app.closePanel();
+        expect(panel.hidden).to.be.true;
+      } finally {
+        if (original) Object.defineProperty(g, 'navigator', original);
+        else delete g.navigator;
+      }
+    });
+
+    it('should still close on a typed password, with a toast', async () => {
+      const { panel, toast } = await reset('N3w-Passw0rd!');
+      expect(panel.hidden).to.be.true;
+      expect(toast.textContent).to.equal('Password changed');
     });
   });
 
@@ -4251,10 +4404,84 @@ describe('Directory console', () => {
         onDelete: () => Promise.resolve(),
         canDelete: false,
       }).render(container);
-      expect(container.innerHTML).to.include(
-        'title="teamMailbox">Boîte partagée</td>'
+      // `escapeHtml` writes a slash as an entity, which the browser reads back
+      const markup = container.innerHTML.replace(/&#x2F;/g, '/');
+      expect(markup).to.include(
+        'title="teamMailbox"><a class="dc-row-link" href="#/mailboxTypes/teamMailbox">Boîte partagée</a></td>'
       );
-      expect(container.innerHTML).to.include('title="custom">custom</td>');
+      expect(markup).to.include(
+        'title="custom"><a class="dc-row-link" href="#/mailboxTypes/custom">custom</a></td>'
+      );
+    });
+
+    it('should open each row from a link in its first column', async () => {
+      // A row with a click handler is out of reach of the keyboard: Tab
+      // passed the checkboxes and could open nothing.
+      for (const [entity, id, href] of [
+        [users, 'alice', '#/users/alice'],
+        [groups, 'sales team', '#/groups/sales%20team'],
+        [mailboxTypes, 'a/b', '#/mailboxTypes/a%2Fb'],
+      ] as const) {
+        const container = stubContainer();
+        await new EntityList({
+          entity,
+          translator: new Translator('en'),
+          load: () =>
+            Promise.resolve({
+              [id]: { [entity.mainAttribute]: id },
+            }),
+          listable: true,
+          onOpen: () => undefined,
+          onDelete: () => Promise.resolve(),
+          canDelete: false,
+        }).render(container);
+        const links = container.innerHTML
+          .replace(/&#x2F;/g, '/')
+          .match(/<a class="dc-row-link"[^>]*>/g);
+        expect(links, entity.key).to.deep.equal([
+          `<a class="dc-row-link" href="${href}">`,
+        ]);
+        expect(EntityList.entryHref(entity, id)).to.equal(href);
+      }
+    });
+
+    it('should open a row clicked outside its link and checkbox, and only there', async () => {
+      // The link follows itself, Ctrl+click into a new tab: the row opening
+      // the card too would take the current tab with it.
+      let click: ((event: { target: unknown }) => void) | undefined;
+      const row = {
+        dataset: { id: 'alice' },
+        addEventListener: (type: string, listener: typeof click) => {
+          if (type === 'click') click = listener;
+        },
+      };
+      const container = {
+        ...stubContainer(),
+        querySelectorAll: (selector: string) =>
+          (selector === 'tbody tr'
+            ? [row]
+            : []) as unknown as NodeListOf<Element>,
+      } as unknown as HTMLElement & { innerHTML: string };
+      const opened: string[] = [];
+      await new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () => Promise.resolve({ alice: { uid: 'alice' } }),
+        listable: true,
+        onOpen: id => opened.push(id),
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      }).render(container);
+      const inside = (selectors: string[]) => ({
+        closest: (selector: string) =>
+          selector.split(',').some(part => selectors.includes(part.trim()))
+            ? {}
+            : null,
+      });
+      click?.({ target: inside([]) });
+      click?.({ target: inside(['.dc-row-link']) });
+      click?.({ target: inside(['.dc-checkbox-cell']) });
+      expect(opened).to.deep.equal(['alice']);
     });
 
     it('should search every field the schema marks, not just the identifier', async () => {
