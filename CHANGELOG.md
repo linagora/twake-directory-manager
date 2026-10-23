@@ -62,7 +62,8 @@ Built on ldap-rest 0.25.1.
 - Deleting an entry, a selection, an organization or a password policy, and
   handing an entry over, are confirmed in a dialog of the console, in its
   language, instead of the browser's. It names an account by its full name,
-  email and organization, lists the groups it leaves and offers to set the
+  email and organization, lists the groups it leaves, or says they could not
+  be listed rather than nothing as if there were none, and offers to set the
   state to _Disabled_ instead; _Cancel_ has the focus, and the button names the
   action: _Delete Jane_, _Delete group_, _Hand over_. The Reset password and
   Claim panels' buttons read _Reset password_ and _Claim into Sales_ rather

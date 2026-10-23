@@ -281,6 +281,7 @@ const en: Catalogue = {
   'delete.title': 'Delete {name}?',
   'delete.irreversible': 'This cannot be undone.',
   'delete.leavesGroups': '{name} will be removed from: {groups}.',
+  'delete.groupsUnknown': 'The groups {name} belongs to could not be listed.',
   'delete.preferDisable':
     'To stop access without deleting, set the state to Disabled instead.',
   'delete.button': 'Delete {name}',
@@ -704,6 +705,7 @@ const fr: Catalogue = {
   'delete.title': 'Supprimer {name} ?',
   'delete.irreversible': 'Cette action est irréversible.',
   'delete.leavesGroups': '{name} sera retiré de : {groups}.',
+  'delete.groupsUnknown': 'Les groupes de {name} n’ont pas pu être listés.',
   'delete.preferDisable':
     'Pour couper l’accès sans supprimer, passez plutôt l’état à Désactivé.',
   'delete.button': 'Supprimer {name}',
@@ -1096,6 +1098,7 @@ const mn: Catalogue = {
   'delete.title': '{name}-г устгах уу?',
   'delete.irreversible': 'Үүнийг буцаах боломжгүй.',
   'delete.leavesGroups': '{name}-г дараах бүлгүүдээс хасна: {groups}.',
+  'delete.groupsUnknown': '{name} хэрэглэгчийн бүлгүүдийг жагсааж чадсангүй.',
   'delete.preferDisable':
     'Устгалгүйгээр хандалтыг зогсоохын тулд төлөвийг Идэвхгүй болгоно уу.',
   'delete.button': '{name}-г устгах',

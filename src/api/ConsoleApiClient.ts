@@ -931,13 +931,19 @@ export class ConsoleApiClient {
    *
    * @param dn DN of the member
    * @param entities entities the console knows: the groups among them are read
+   * @param strict fail instead, for a DN no filter can hold or a group list
+   *   that fails: the caller then knows the groups are unknown, not none
    * @returns DN of every group holding it
    */
   async memberships(
     dn: string,
-    entities: EntityDescriptor[]
+    entities: EntityDescriptor[],
+    strict = false
   ): Promise<string[]> {
-    if (!FILTER_SAFE_DN.test(dn)) return [];
+    if (!FILTER_SAFE_DN.test(dn)) {
+      if (strict) throw new Error(`No filter can hold ${dn}`);
+      return [];
+    }
     const found = await Promise.all(
       entities.map(async entity => {
         const members = roleAttribute(entity.schema, 'members');
@@ -953,7 +959,8 @@ export class ConsoleApiClient {
           return Object.values(entries)
             .filter(entry => entry.dn)
             .map(entry => String(entry.dn));
-        } catch {
+        } catch (err) {
+          if (strict) throw err;
           return [];
         }
       })

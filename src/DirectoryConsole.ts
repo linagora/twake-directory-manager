@@ -3808,19 +3808,25 @@ export class DirectoryConsole {
   /**
    * The groups an account belongs to, by name: from its `memberOf`, else
    * searched among the groups, as its card finds them.
+   *
+   * @returns their names, or undefined when the search failed or could not
+   *   be made: the account may belong to groups all the same
    */
   private async groupsOf(
     entity: EntityDescriptor,
     entry: Entry
-  ): Promise<string[]> {
+  ): Promise<string[] | undefined> {
     for (const [name, attr] of Object.entries(entity.schema.attributes)) {
       const roles = Array.isArray(attr.role) ? attr.role : [attr.role];
       if (!roles.includes('groupMemberships')) continue;
       let list = [entryValue(entry, name) ?? []].flat();
-      if (!list.length && entry.dn)
-        list = await this.api
-          .memberships(entry.dn, this.entities)
-          .catch(() => []);
+      if (!list.length && entry.dn) {
+        try {
+          list = await this.api.memberships(entry.dn, this.entities, true);
+        } catch {
+          return undefined;
+        }
+      }
       return list.map(dn => rdnValue(String(dn)));
     }
     return [];
@@ -3895,12 +3901,16 @@ export class DirectoryConsole {
       title,
       lines: [
         summary.join(' · '),
-        groups.length
-          ? `${irreversible} ${t('delete.leavesGroups', {
-              name,
-              groups: groups.join(', '),
-            })}`
-          : irreversible,
+        // Groups that could not be listed are not none: it says so, and
+        // leaves the deletion to the administrator.
+        !groups
+          ? `${irreversible} ${t('delete.groupsUnknown', { name })}`
+          : groups.length
+            ? `${irreversible} ${t('delete.leavesGroups', {
+                name,
+                groups: groups.join(', '),
+              })}`
+            : irreversible,
       ],
       action: t('delete.button', {
         name: this.roleValue(entity, entry, 'givenName') ?? name,
