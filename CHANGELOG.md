@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Built on ldap-rest 0.25.0.
+Built on ldap-rest 0.25.1.
 
 ### Bug Fixes
 
