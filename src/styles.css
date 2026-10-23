@@ -693,6 +693,13 @@
   background-position: 14px center;
 }
 
+.dc-list-imported {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .dc-search-scope {
   display: flex;
   align-items: center;
@@ -1032,6 +1039,76 @@
   border-radius: 999px;
   background: var(--dc-accent-soft);
   font-weight: 500;
+}
+
+/* A heading with its action beside it: Groups, then Add to a group…. */
+.dc-card-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 0 0 16px;
+}
+
+.dc-card-heading h3 {
+  margin: 0;
+}
+
+/* A group with its type and its ×, in one pill. */
+.dc-relation {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 4px;
+  border-radius: 999px;
+  background: var(--dc-accent-soft);
+  max-width: 100%;
+}
+
+.dc-relation .dc-link {
+  padding-right: 0;
+  background: none;
+}
+
+.dc-relation-note {
+  color: var(--dc-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.dc-relation-note:last-child {
+  padding-right: 8px;
+}
+
+.dc-relation-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  color: var(--dc-accent);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.dc-relation-remove:hover {
+  background: color-mix(in srgb, var(--dc-accent) 18%, transparent);
+}
+
+.dc-relation-remove[aria-disabled='true'] {
+  cursor: progress;
+  opacity: 0.5;
+}
+
+.dc-relation-remove:focus-visible {
+  outline: none;
+  box-shadow: var(--dc-focus);
 }
 
 /* The people and the groups of an organization: the lists' table, without
@@ -1834,16 +1911,19 @@ select.dc-input {
   color: var(--dc-danger);
 }
 
-.dc-import-problems {
+.dc-import-problems,
+.dc-import-created {
   max-height: 320px;
   overflow: auto;
 }
 
-.dc-import-problems tbody tr {
+.dc-import-problems tbody tr,
+.dc-import-created tbody tr {
   cursor: default;
 }
 
-.dc-import-problems td:first-child {
+.dc-import-problems td:first-child,
+.dc-import-created td:first-child {
   width: 64px;
   color: var(--dc-muted);
   font-variant-numeric: tabular-nums;

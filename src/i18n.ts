@@ -57,6 +57,8 @@ const en: Catalogue = {
 
   'list.open': 'Open',
   'list.listEverything': 'List without searching',
+  'list.imported': 'Just imported ({count})',
+  'list.backToSearch': 'Back to search',
   'list.search': 'Search',
   'list.searchIn': 'in',
   'list.searchAnywhere': 'Every field',
@@ -107,6 +109,17 @@ const en: Catalogue = {
   'detail.group.contact': 'Contact',
   'detail.group.mailbox': 'Mailbox',
   'detail.group.lifecycle': 'Lifecycle',
+
+  'groups.section': 'Groups',
+  'groups.add': 'Add to a group…',
+  'groups.title': 'Add {name} to groups',
+  'groups.field': 'Groups to add',
+  'groups.search.one': 'Type {count} character of the group’s name',
+  'groups.search.other': 'Type {count} characters of the group’s name',
+  'groups.confirm': 'Add',
+  'groups.added': '{name} added to {groups}',
+  'groups.removed': '{name} removed from {group}',
+  'groups.remove': 'Remove from {group}',
 
   'form.badFormat': '{value}: {pattern}',
   'form.required': 'Fields marked with * are required',
@@ -191,6 +204,9 @@ const en: Catalogue = {
   'import.refused': 'refused by the server',
   'import.notSent': 'not sent, the import was stopped',
   'import.downloadRefused': 'Download the refused rows',
+  'import.createdName': 'Name',
+  'import.moreCreated':
+    'And {count} more: close this panel to see them all in the list.',
   'import.ambiguous': '{field}: “{value}” matches several entries',
   'import.notFound': '{field}: “{value}” not found',
   'import.undecided':
@@ -443,6 +459,8 @@ const fr: Catalogue = {
 
   'list.open': 'Ouvrir',
   'list.listEverything': 'Lister sans rechercher',
+  'list.imported': 'Dernier import ({count})',
+  'list.backToSearch': 'Revenir à la recherche',
   'list.search': 'Rechercher',
   'list.searchIn': 'dans',
   'list.searchAnywhere': 'Tous les champs',
@@ -497,6 +515,17 @@ const fr: Catalogue = {
   'detail.group.contact': 'Coordonnées',
   'detail.group.mailbox': 'Boîte aux lettres',
   'detail.group.lifecycle': 'Cycle de vie',
+
+  'groups.section': 'Groupes',
+  'groups.add': 'Ajouter à un groupe…',
+  'groups.title': 'Ajouter {name} à des groupes',
+  'groups.field': 'Groupes à ajouter',
+  'groups.search.one': 'Tapez {count} caractère du nom du groupe',
+  'groups.search.other': 'Tapez {count} caractères du nom du groupe',
+  'groups.confirm': 'Ajouter',
+  'groups.added': '{name} ajouté à {groups}',
+  'groups.removed': '{name} retiré de {group}',
+  'groups.remove': 'Retirer de {group}',
 
   'form.badFormat': '{value} : {pattern}',
   'form.required': 'Les champs marqués d’une * sont obligatoires',
@@ -590,6 +619,9 @@ const fr: Catalogue = {
   'import.notSent.one': 'non envoyée, l’import a été arrêté',
   'import.notSent.other': 'non envoyées, l’import a été arrêté',
   'import.downloadRefused': 'Télécharger les lignes refusées',
+  'import.createdName': 'Nom',
+  'import.moreCreated':
+    'Et {count} de plus : fermez ce panneau pour retrouver l’ensemble dans la liste.',
   'import.ambiguous': '{field} : « {value} » correspond à plusieurs entrées',
   'import.notFound': '{field} : « {value} » introuvable',
   'import.undecided':
@@ -837,6 +869,8 @@ const mn: Catalogue = {
 
   'list.open': 'Нээх',
   'list.listEverything': 'Хайлтгүйгээр жагсаах',
+  'list.imported': 'Саяхан импортолсон ({count})',
+  'list.backToSearch': 'Хайлт руу буцах',
   'list.search': 'Хайх',
   'list.searchIn': 'Хайх талбар:',
   'list.searchAnywhere': 'Бүх талбар',
@@ -883,6 +917,16 @@ const mn: Catalogue = {
   'detail.group.contact': 'Холбоо барих',
   'detail.group.mailbox': 'Шуудангийн хайрцаг',
   'detail.group.lifecycle': 'Амьдралын мөчлөг',
+
+  'groups.section': 'Бүлгүүд',
+  'groups.add': 'Бүлэгт нэмэх…',
+  'groups.title': '{name}-г бүлгүүдэд нэмэх',
+  'groups.field': 'Нэмэх бүлгүүд',
+  'groups.search': 'Бүлгийн нэрний {count} тэмдэгт оруулна уу',
+  'groups.confirm': 'Нэмэх',
+  'groups.added': '{name}-г {groups}-д нэмлээ',
+  'groups.removed': '{name}-г {group}-ээс хаслаа',
+  'groups.remove': '{group}-ээс хасах',
 
   'form.badFormat': '{value}: {pattern}',
   'form.required': '* тэмдэгтэй талбарыг заавал бөглөнө',
@@ -963,6 +1007,9 @@ const mn: Catalogue = {
   'import.refused': 'сервер татгалзсан',
   'import.notSent': 'илгээгээгүй, импортыг зогсоосон',
   'import.downloadRefused': 'Татгалзсан мөрүүдийг татах',
+  'import.createdName': 'Нэр',
+  'import.moreCreated':
+    'Өөр {count} байна: бүгдийг жагсаалтаас харахын тулд энэ самбарыг хаана уу.',
   'import.ambiguous': '{field}: «{value}» хэд хэдэн бичлэгт тохирч байна',
   'import.notFound': '{field}: «{value}» олдсонгүй',
   'import.undecided':

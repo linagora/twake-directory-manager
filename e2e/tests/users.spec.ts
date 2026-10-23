@@ -1,7 +1,25 @@
-import { ConfirmDialog, LoginPage, ResetPasswordDialog } from '../pages';
+import {
+  AddToGroupsDialog,
+  ConfirmDialog,
+  LoginPage,
+  ResetPasswordDialog,
+} from '../pages';
 import { ADMIN, ALICE, ORG, SOPHIE } from '../support/accounts';
-import { HUMAN_RESOURCES, TEST_DOMAIN, uniquePart } from '../support/directory';
+import {
+  HUMAN_RESOURCES,
+  TEST_DOMAIN,
+  type Organization,
+  uniquePart,
+} from '../support/directory';
 import { expect, test } from '../support/fixtures';
+
+/** The seeded Sales and Engineering, for groups of the test's own */
+const SALES: Organization = { dn: ORG.sales, name: 'Sales', path: 'Sales' };
+const ENGINEERING: Organization = {
+  dn: ORG.engineering,
+  name: 'Engineering',
+  path: 'Engineering',
+};
 
 /** Today plus `days`, as a date input takes it */
 function isoDate(days: number): string {
@@ -82,16 +100,19 @@ test.describe('USER user accounts', () => {
     await expect(card.moreMenu).toBeHidden();
     await expect(card.moreButton).toHaveAttribute('aria-expanded', 'false');
     await expect(card.moreButton).toBeFocused();
-    await expect(card.relatedItems('Mailing lists')).toHaveText([
+    // Groups, each with its type, whatever the schema calls them (#129)
+    await expect(card.relatedLinks('Groups')).toHaveText([
       'all-staff',
       'sales-team',
     ]);
+    await expect(card.groupTypes()).toHaveText([
+      '· Distribution list',
+      '· Shared mailbox',
+    ]);
+    await expect(card.addToGroup()).toBeVisible();
+    await expect(card.leaveGroup('sales-team')).toBeVisible();
 
-    await card
-      .relatedItems('Mailing lists')
-      .filter({ hasText: 'sales-team' })
-      .getByRole('button')
-      .click();
+    await card.relatedLinks('Groups').filter({ hasText: 'sales-team' }).click();
     await app.entry().expectName('sales-team');
     await page.goBack();
     await card.expectName('Alice Moreau');
@@ -761,7 +782,7 @@ test.describe('USER user accounts', () => {
     const group = await directory.createGroup({ members: [user, ALICE] });
     const app = await new LoginPage(page).loginAs(ADMIN, `users/${user.uid}`);
     const card = app.entry();
-    await expect(card.relatedItems('Mailing lists')).toHaveText([group.cn]);
+    await expect(card.relatedLinks('Groups')).toHaveText([group.cn]);
 
     // named as a colleague would tell them apart, with the groups they leave
     const confirm = new ConfirmDialog(page);
@@ -1081,6 +1102,160 @@ test.describe('USER user accounts', () => {
     await expect(
       form.dialog.locator('#dc-field-twakeDeletionDate')
     ).toHaveValue('2031-01-15');
+  });
+
+  test('USER-16 add an account to groups and take it out of one, from its card', async ({
+    page,
+    directory,
+  }) => {
+    const user = await directory.createUser();
+    // A member already: the groups are the test's own, and no seeded account's card lists them
+    const colleague = await directory.createUser();
+    const prefix = `join${uniquePart()}`;
+    const shared = await directory.createGroup({
+      prefix,
+      org: SALES,
+      mailboxType: 'teamMailbox',
+      mail: `${prefix}@example.com`,
+      members: [colleague],
+    });
+    const list = await directory.createGroup({
+      prefix,
+      org: ENGINEERING,
+      mailboxType: 'mailingList',
+      members: [colleague],
+    });
+    const app = await new LoginPage(page).loginAs(ADMIN, `users/${user.uid}`);
+    const card = app.entry();
+    await expect(card.related('Groups')).toBeVisible();
+    await expect(card.relatedLinks('Groups')).toHaveCount(0);
+
+    await card.addToGroup().click();
+    const dialog = new AddToGroupsDialog(page);
+    await dialog.expectOpen(`Add ${user.displayName} to groups`);
+    await expect(dialog.search).toBeFocused();
+    await expect(dialog.hint).toHaveText(
+      'Type 3 characters of the group’s name'
+    );
+    await expect(dialog.addButton).toBeDisabled();
+    // a click picks a suggestion, which says the group's type and address
+    await dialog.search.fill(prefix);
+    await expect(dialog.option(shared.cn)).toHaveText(
+      `${shared.cn} — Shared mailbox — ${prefix}@example.com`
+    );
+    // the arrows walk the suggestions, round, the active one in view
+    await expect(dialog.options).toHaveCount(2);
+    const [first, second] = [dialog.options.nth(0), dialog.options.nth(1)];
+    await expect(first).toHaveAttribute('aria-selected', 'true');
+    await dialog.search.press('ArrowDown');
+    await expect(second).toHaveAttribute('aria-selected', 'true');
+    await expect(first).toHaveAttribute('aria-selected', 'false');
+    await expect(dialog.search).toHaveAttribute(
+      'aria-activedescendant',
+      (await second.getAttribute('id')) as string
+    );
+    await expect(second).toBeInViewport();
+    await dialog.search.press('ArrowDown');
+    await expect(first).toHaveAttribute('aria-selected', 'true');
+    await dialog.search.press('ArrowUp');
+    await expect(second).toHaveAttribute('aria-selected', 'true');
+    await expect(dialog.search).toHaveAttribute(
+      'aria-activedescendant',
+      (await second.getAttribute('id')) as string
+    );
+    await dialog.option(shared.cn).click();
+    await expect(dialog.chosen).toHaveCount(1);
+    await expect(dialog.chosen).toContainText(shared.cn);
+    // so does Enter, and Enter in the empty box adds them
+    await dialog.search.fill(list.cn);
+    await expect(dialog.option(list.cn)).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    await dialog.search.press('Enter');
+    await expect(dialog.chosen).toHaveCount(2);
+    await expect(dialog.search).toHaveValue('');
+    await dialog.search.press('Enter');
+
+    await app.expectToast(
+      `${user.displayName} added to ${shared.cn}, ${list.cn}`
+    );
+    await expect(dialog.dialog).toBeHidden();
+    await expect(card.relatedLinks('Groups')).toHaveCount(2);
+    await expect(
+      card.relatedItems('Groups').filter({ hasText: shared.cn })
+    ).toContainText('· Shared mailbox');
+    await expect(
+      card.relatedItems('Groups').filter({ hasText: list.cn })
+    ).toContainText('· Distribution list');
+    await expect(card.addToGroup()).toBeFocused();
+    expect(await directory.values(shared.dn, 'member')).toContain(user.dn);
+    expect(await directory.values(list.dn, 'member')).toContain(user.dn);
+    // what the account is in is not offered again
+    await card.addToGroup().click();
+    await dialog.search.fill(prefix);
+    await expect(dialog.note).toHaveText('No entry matches this search');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await expect(dialog.dialog).toBeHidden();
+
+    // one click on the ×, or Enter on it
+    await card.leaveGroup(list.cn).click();
+    await app.expectToast(`${user.displayName} removed from ${list.cn}`);
+    await expect(card.relatedLinks('Groups')).toHaveText([shared.cn]);
+    expect(await directory.values(list.dn, 'member')).not.toContain(user.dn);
+    await card.leaveGroup(shared.cn).focus();
+    await page.keyboard.press('Enter');
+    await app.expectToast(`${user.displayName} removed from ${shared.cn}`);
+    await expect(card.relatedLinks('Groups')).toHaveCount(0);
+    expect(await directory.values(shared.dn, 'member')).toEqual([colleague.dn]);
+
+    await app.setLanguage('fr');
+    await expect(card.related('Groupes')).toBeVisible();
+    await expect(card.addToGroup()).toHaveText('Ajouter à un groupe…');
+  });
+
+  test('USER-16 a local administrator is offered the groups of their branch only', async ({
+    page,
+    directory,
+    tenant,
+  }) => {
+    const user = await directory.createUser({ org: tenant.org });
+    const colleague = await directory.createUser({ org: tenant.org });
+    const prefix = `join${uniquePart()}`;
+    const ours = await directory.createGroup({
+      prefix,
+      org: tenant.org,
+      members: [colleague],
+    });
+    await directory.createGroup({
+      prefix,
+      org: ENGINEERING,
+      members: [colleague],
+    });
+    // Engineering's, which the account is in: listed, with no ×
+    const theirs = await directory.createGroup({
+      org: ENGINEERING,
+      members: [user],
+    });
+    const app = await new LoginPage(page).loginAs(
+      tenant.admin,
+      `users/${user.uid}`
+    );
+    const card = app.entry();
+    await expect(card.relatedLinks('Groups')).toHaveText([theirs.cn]);
+    await expect(card.leaveGroup(theirs.cn)).toHaveCount(0);
+
+    await card.addToGroup().click();
+    const dialog = new AddToGroupsDialog(page);
+    await dialog.expectOpen();
+    await dialog.search.fill(prefix);
+    await expect(dialog.options).toHaveText([`${ours.cn} — Group`]);
+    await dialog.choose(ours.cn);
+    await dialog.addButton.click();
+    await app.expectToast(`${user.displayName} added to ${ours.cn}`);
+    await expect(card.leaveGroup(ours.cn)).toBeVisible();
+    expect(await directory.values(ours.dn, 'member')).toContain(user.dn);
   });
 });
 

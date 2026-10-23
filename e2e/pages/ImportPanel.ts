@@ -34,6 +34,8 @@ export class ImportPanel {
   readonly stats: Locator;
   /** Line / Problem rows of the check or of the result */
   readonly problems: Locator;
+  /** Line / Created rows of the result: the name, linked to the card, and the identifier */
+  readonly created: Locator;
   readonly downloadInvalidButton: Locator;
   readonly runButton: Locator;
   readonly backButton: Locator;
@@ -61,6 +63,7 @@ export class ImportPanel {
     this.checkButton = this.dialog.locator('[data-import-check]');
     this.stats = this.dialog.locator('.dc-import-stat');
     this.problems = this.dialog.locator('.dc-import-problems tbody tr');
+    this.created = this.dialog.locator('.dc-import-created tbody tr');
     this.downloadInvalidButton = this.dialog.locator('[data-import-report]');
     this.runButton = this.dialog.locator('[data-import-run]');
     this.backButton = this.dialog.locator('[data-import-back]');

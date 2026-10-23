@@ -59,7 +59,7 @@ Conventions).
 
 ## User accounts
 
-- [x] USER-01 (P1) Account card: the full name as heading, the identifier and address under it, details grouped under headings, empty fields folded, the mailbox size rounded, Hand over and Delete in a More menu worked from the keyboard (#133) — `users.spec.ts`
+- [x] USER-01 (P1) Account card: the full name as heading, the identifier and address under it, details grouped under headings, empty fields folded, the mailbox size rounded, Hand over and Delete in a More menu worked from the keyboard (#133), its Groups each with its type (#129) — `users.spec.ts`
 - [x] USER-02 (P1) Create an account through the form — `users.spec.ts`
 - [x] USER-03 (P2) Form validation before sending — `users.spec.ts`
 - [x] USER-04 (P2) Server rules: unique address and allowed domain — `users.spec.ts` (each said under _Email_ in the console's words, the field invalid and focused, the toast pointing there; the taken address also in French)
@@ -74,6 +74,7 @@ Conventions).
 - [x] USER-13 (P3) An entry's DN with a Copy button, folded under Technical details (#133) — `users.spec.ts`
 - [x] USER-14 (P3) A date reads as a date in the interface language — `users.spec.ts` (also from Pacific/Honolulu)
 - [x] USER-15 (P2) The creation form writes the full name, completes the domain after "@" and folds the optional fields, opening them on a refused value — `users.spec.ts` (#105; v0.8.0 to v0.10.0, after the plan's audit; the domains offered are those the department and the organizations above it link)
+- [x] USER-16 (P2) An account's Groups, each with its type: Add to a group… joins groups chosen by search, by click or Enter, the arrows walking the suggestions, the × takes the account out of one in one click, with the keyboard too; a local administrator is offered, and gets a × on, the groups of their branch only — `users.spec.ts` (#129; not in the plan; on groups of the test's own, in Sales and Engineering, and as a `tenant` rather than sophie.martin)
 
 ## Groups
 
@@ -114,7 +115,7 @@ Conventions).
 
 - [x] IMPORT-01 (P2) Import panel and empty template — `import.spec.ts`
 - [x] IMPORT-02 (P2) Column matching — `import.spec.ts`
-- [x] IMPORT-03 (P1) Check and import valid rows — `import.spec.ts`
+- [x] IMPORT-03 (P1) Check and import valid rows — `import.spec.ts` (the result names each created account, linked to its card; once closed, the list shows them as "Just imported (2)" until Back to search)
 - [x] IMPORT-04 (P2) Rows with errors and refused rows — `import.spec.ts` (a repeated address reads "is already on line N", the plan's "repeats line N" predates it; the address the server refuses is said in the console's words, on screen and in the refused rows file)
 - [x] IMPORT-05 (P2) Import respects the scope — `import.spec.ts`
 - [x] IMPORT-06 (P3) Stop an import — `import.spec.ts` (150 rows)

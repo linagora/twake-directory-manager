@@ -17,6 +17,9 @@ export class ListPage {
   /** The "in" select next to Search */
   readonly searchIn: Locator;
   readonly listEverythingButton: Locator;
+  /** "Just imported (2)", in place of the search after an import */
+  readonly importedView: Locator;
+  readonly backToSearchButton: Locator;
   /** "Type at least 3 characters to search", with List without searching */
   readonly searchGuard: Locator;
   /** The plain message in place of the table: no match, nothing to show, refusals */
@@ -47,6 +50,8 @@ export class ListPage {
     this.searchBox = this.main.getByRole('searchbox');
     this.searchIn = this.main.locator('[data-search-attribute]');
     this.listEverythingButton = this.main.locator('[data-list-all]');
+    this.importedView = this.main.locator('[data-imported] strong');
+    this.backToSearchButton = this.main.locator('[data-leave-imported]');
     this.searchGuard = this.main.locator('p.dc-empty').filter({
       has: page.locator('[data-list-all]'),
     });

@@ -130,3 +130,60 @@ export class ConfirmDialog {
     await expect(this.dialog).toBeHidden();
   }
 }
+
+/**
+ * Add to a group…, in the side panel an account's card opens: a search over the groups the
+ * administrator writes, the groups chosen as tokens, and Add
+ */
+export class AddToGroupsDialog {
+  readonly dialog: Locator;
+  readonly title: Locator;
+  readonly search: Locator;
+  /** "Type 3 characters of the group's name", under the search */
+  readonly hint: Locator;
+  /** The suggestions: "sales-team — Shared mailbox — sales@example.com" */
+  readonly options: Locator;
+  /** What stands for the suggestions: "Searching…", "No entry matches this search" */
+  readonly note: Locator;
+  /** The groups chosen, as tokens */
+  readonly chosen: Locator;
+  /** Why a group chosen was not joined */
+  readonly error: Locator;
+  readonly addButton: Locator;
+  readonly cancelButton: Locator;
+
+  constructor(page: Page) {
+    this.dialog = page.getByRole('dialog');
+    this.title = this.dialog.getByRole('heading', { level: 2 });
+    this.search = this.dialog.getByRole('combobox');
+    this.hint = this.dialog.locator('#dc-group-hint');
+    this.options = this.dialog.getByRole('option');
+    this.note = this.dialog.locator('.dc-picker-note');
+    this.chosen = this.dialog.locator('[data-chosen] li');
+    this.error = this.dialog.locator('[data-error]');
+    this.addButton = this.dialog.locator('[data-add]');
+    this.cancelButton = this.dialog.locator('[data-cancel]');
+  }
+
+  async expectOpen(title?: string): Promise<void> {
+    await expect(this.dialog).toBeVisible();
+    await expect(this.search).toBeVisible();
+    if (title !== undefined) await expect(this.title).toHaveText(title);
+  }
+
+  /** The suggestion of a group, by its name */
+  option(group: string): Locator {
+    return this.options.filter({
+      hasText: new RegExp(
+        `^\\s*${group.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( —|\\s*$)`
+      ),
+    });
+  }
+
+  /** Searches a group by its name and picks it from the suggestions */
+  async choose(group: string): Promise<void> {
+    await this.search.fill(group);
+    await this.option(group).click();
+    await expect(this.chosen.filter({ hasText: group })).toBeVisible();
+  }
+}

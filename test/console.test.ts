@@ -26,6 +26,7 @@ import {
   scopeRestricts,
   splitEntities,
   transitState,
+  writesEntry,
 } from '../src/DirectoryConsole';
 import {
   attributeLabel,
@@ -43,11 +44,13 @@ import {
 import { EntityDetail } from '../src/components/EntityDetail';
 import { EntityForm, pointerFallback } from '../src/components/EntityForm';
 import { EntityImport } from '../src/components/EntityImport';
+import { GroupPicker } from '../src/components/GroupPicker';
 import {
   EntityList,
   LIST_LIMIT,
   csvCell,
   listFailure,
+  type ListView,
 } from '../src/components/EntityList';
 import { OrganizationTree } from '../src/components/OrganizationTree';
 import { availableLanguages, languageName, Translator } from '../src/i18n';
@@ -492,6 +495,72 @@ describe('Directory console', () => {
         write: true,
         delete: true,
       });
+    });
+
+    it('should judge whether the caller writes an entry by its organization, else by its parent', () => {
+      // sales-team is Sophie's, engineering is not: only the first is offered
+      // on an account's card, and has a × there.
+      const group = (link?: string): Entry => ({
+        dn: 'cn=team,ou=groups,dc=example,dc=com',
+        cn: 'team',
+        ...(link ? { twakeDepartmentLink: link } : {}),
+      });
+      expect(writesEntry(scope(), linkedGroups, group(`ou=EU,${sales}`))).to.be
+        .true;
+      expect(writesEntry(scope(), linkedGroups, group(`ou=Engineering,${top}`)))
+        .to.be.false;
+      expect(writesEntry(scope(), linkedGroups, group())).to.be.false;
+      const groupsAdmin = scope({
+        branches: [{ dn: 'ou=groups,dc=example,dc=com', write: true }],
+      });
+      expect(writesEntry(groupsAdmin, groups, group(sales))).to.be.true;
+      const reader = scope({ branches: [{ dn: sales, read: true }] });
+      expect(writesEntry(reader, linkedGroups, group(sales))).to.be.false;
+      expect(writesEntry(scope({ unrestricted: true }), users, account())).to.be
+        .true;
+    });
+
+    it('should judge an entry in transit as transitState does', () => {
+      // A group attached to the transit branch is nobody's until claimed.
+      const inTransit: Entry = {
+        dn: 'cn=team,ou=groups,dc=example,dc=com',
+        twakeDepartmentLink: transit,
+      };
+      expect(writesEntry(scope(), linkedGroups, inTransit)).to.be.false;
+      const keeper = scope({ branches: [{ dn: top, write: true }] });
+      expect(writesEntry(keeper, linkedGroups, inTransit)).to.be.true;
+    });
+
+    it('should take the organization or the parent when the server names no transit branch', () => {
+      // ldap-rest then may judge by the parent, `ou=groups` for every group:
+      // either is enough not to hide what the server allows.
+      const noTransit = (branch: string): Scope =>
+        scope({ transit: null, branches: [{ dn: branch, write: true }] });
+      const team: Entry = {
+        dn: 'cn=team,ou=groups,dc=example,dc=com',
+        twakeDepartmentLink: sales,
+      };
+      expect(writesEntry(noTransit(sales), linkedGroups, team)).to.be.true;
+      expect(
+        writesEntry(
+          noTransit('ou=groups,dc=example,dc=com'),
+          linkedGroups,
+          team
+        )
+      ).to.be.true;
+      expect(
+        writesEntry(noTransit(`ou=Engineering,${top}`), linkedGroups, team)
+      ).to.be.false;
+      // With one, the organization alone decides.
+      expect(
+        writesEntry(
+          scope({
+            branches: [{ dn: 'ou=groups,dc=example,dc=com', write: true }],
+          }),
+          linkedGroups,
+          team
+        )
+      ).to.be.false;
     });
 
     it('should say nothing of transit when the server names no transit branch', () => {
@@ -2145,6 +2214,53 @@ describe('Directory console', () => {
         'Vous n’administrez pas Eva Ernst : cette modification ne vous revient pas.',
         'Le serveur a refusé : Attribute "Nom" must not be empty',
       ]);
+    });
+
+    it('should name and link each entry an import created', async () => {
+      const done: string[][] = [];
+      const answers: (Entry | undefined)[] = [
+        // What ldap-rest answers a creation: the DN and the identifier,
+        // here made by the server from the address
+        { dn: 'uid=amartin,ou=users,dc=example,dc=com', uid: 'amartin' },
+        // An answer naming nothing: the row's identifier names it
+        undefined,
+      ];
+      const importer = new EntityImport({
+        entity: users,
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        create: values =>
+          Promise.resolve(createdEntryId(users, answers.shift(), values)),
+        onDone: created => done.push(created),
+        onClose: () => undefined,
+      });
+      const state = importer as unknown as {
+        rows: {
+          line: number;
+          cells: string[];
+          values: object;
+          errors: string[];
+        }[];
+        run(): Promise<void>;
+        doneMarkup(): string;
+      };
+      state.rows = [
+        {
+          line: 2,
+          cells: [],
+          values: { mail: 'alice@example.com', cn: 'Alice Martin' },
+          errors: [],
+        },
+        { line: 3, cells: [], values: { uid: 'bob' }, errors: [] },
+      ];
+      await state.run();
+      const markup = state.doneMarkup();
+      expect(markup)
+        .to.contain('href="#&#x2F;users&#x2F;amartin">Alice Martin</a>')
+        .and.contain('(amartin)')
+        // Named by its identifier alone, not twice
+        .and.contain('href="#&#x2F;users&#x2F;bob">bob</a></td>');
+      expect(done).to.deep.equal([['amartin', 'bob']]);
     });
 
     it('should create and import in natural French, the article agreeing', () => {
@@ -3826,7 +3942,7 @@ describe('Directory console', () => {
     });
   });
 
-  describe('an account’s mailing lists', () => {
+  describe('an account’s groups', () => {
     const john = 'uid=john.doe,ou=users,dc=example,dc=com';
     const accounts: EntityDescriptor = {
       ...users,
@@ -3891,7 +4007,7 @@ describe('Directory console', () => {
         });
         await render();
         expect(asked.isDone()).to.equal(true);
-        expect(detail.innerHTML).to.include('Mailing lists');
+        expect(detail.innerHTML).to.include('<h3>Groups</h3>');
         expect(detail.innerHTML).to.include(
           `data-relation="${staff.dn}">staff<`
         );
@@ -3910,12 +4026,12 @@ describe('Directory console', () => {
       expect(detail.innerHTML).to.include(`data-relation="${staff.dn}">staff<`);
     });
 
-    it('should show the card, with no mailing list, when the search is refused', async () => {
+    it('should show the card, with no group, when the search is refused', async () => {
       // ldap-rest before 0.20.1 refuses a dot in the filter.
       search().reply(400, { error: 'Invalid match query' });
       const { detail, render } = setup({ dn: john, uid: 'john.doe' });
       await render();
-      expect(detail.innerHTML).to.include('Mailing lists');
+      expect(detail.innerHTML).to.include('<h3>Groups</h3>');
       expect(detail.innerHTML).to.include('No related entry');
     });
 
@@ -3934,6 +4050,379 @@ describe('Directory console', () => {
       answer([staff.dn as string]);
       await drawn;
       expect(detail.innerHTML).to.equal('');
+    });
+
+    describe('the panel Add to a group… opens', () => {
+      /** An element enough for the picker: attributes, listeners, children. */
+      const element = () => {
+        const listeners: Record<string, ((event: unknown) => void)[]> = {};
+        const attributes: Record<string, string> = {};
+        return {
+          innerHTML: '',
+          hidden: false,
+          value: '',
+          disabled: false,
+          textContent: '',
+          children: {} as Record<string, unknown>,
+          setAttribute(name: string, value: string) {
+            attributes[name] = value;
+          },
+          getAttribute: (name: string) => attributes[name] ?? null,
+          removeAttribute(name: string) {
+            delete attributes[name];
+          },
+          addEventListener(type: string, listener: (event: unknown) => void) {
+            (listeners[type] ??= []).push(listener);
+          },
+          fire(type: string, event: Record<string, unknown> = {}) {
+            let prevented = false;
+            for (const listener of listeners[type] ?? [])
+              listener({
+                ...event,
+                preventDefault: () => {
+                  prevented = true;
+                },
+              });
+            return prevented;
+          },
+          focus: () => undefined,
+          querySelector(selector: string): unknown {
+            return this.children[selector] ?? null;
+          },
+        };
+      };
+      const groups = [
+        {
+          dn: 'cn=sales-team,ou=groups',
+          name: 'sales-team',
+          label: 'sales-team',
+        },
+        { dn: 'cn=sales-fr,ou=groups', name: 'sales-fr', label: 'sales-fr' },
+      ];
+      const open = () => {
+        const parts = {
+          form: element(),
+          '#dc-group-search': element(),
+          '#dc-group-results': element(),
+          '[data-chosen]': element(),
+          '[data-error]': element(),
+          '[data-add]': element(),
+          '[data-cancel]': element(),
+        };
+        const scrolled: string[] = [];
+        // What the list shows of the active option, once drawn.
+        parts['#dc-group-results'].querySelector = (selector: string) => ({
+          scrollIntoView: () => scrolled.push(selector),
+        });
+        const container = element();
+        container.children = parts;
+        new GroupPicker({
+          translator: new Translator('en'),
+          search: async query =>
+            groups.filter(group => group.name.startsWith(query)),
+          onAdd: async () => ({ left: [] }),
+          onCancel: () => undefined,
+        }).render(container as unknown as HTMLElement);
+        const input = parts['#dc-group-search'];
+        const type = async (text: string): Promise<void> => {
+          input.value = text;
+          input.fire('input');
+        };
+        const answered = (): Promise<void> =>
+          new Promise(resolve => setTimeout(resolve, 300));
+        return {
+          input,
+          results: parts['#dc-group-results'],
+          parts,
+          type,
+          answered,
+          scrolled,
+        };
+      };
+
+      it('should offer no suggestion of the text typed before while searching the new one', async () => {
+        const { input, results, parts, type, answered } = open();
+        await type('sales-t');
+        await answered();
+        expect(results.innerHTML).to.include('sales-team');
+        expect(input.getAttribute('aria-activedescendant')).to.equal(
+          'dc-group-option-0'
+        );
+        // Typed on: sales-team is no longer what the box names.
+        await type('sales-f');
+        expect(results.innerHTML)
+          .to.include('Searching…')
+          .and.not.include('sales-team');
+        expect(input.getAttribute('aria-activedescendant')).to.equal(null);
+        expect(input.fire('keydown', { key: 'Enter' })).to.equal(true);
+        expect(parts['[data-chosen]'].innerHTML).to.equal('');
+        await answered();
+        input.fire('keydown', { key: 'Enter' });
+        expect(parts['[data-chosen]'].innerHTML)
+          .to.include('sales-fr')
+          .and.not.include('sales-team');
+      });
+
+      it('should walk the suggestions with the arrows, round, and bring the active one into view', async () => {
+        const { input, results, type, answered, scrolled } = open();
+        await type('sales');
+        await answered();
+        const active = (): string | null =>
+          input.getAttribute('aria-activedescendant');
+        expect(active()).to.equal('dc-group-option-0');
+        input.fire('keydown', { key: 'ArrowDown' });
+        expect(active()).to.equal('dc-group-option-1');
+        expect(results.innerHTML).to.match(
+          /id="dc-group-option-1"[^>]*aria-selected="true"/
+        );
+        input.fire('keydown', { key: 'ArrowDown' });
+        expect(active()).to.equal('dc-group-option-0');
+        input.fire('keydown', { key: 'ArrowUp' });
+        expect(active()).to.equal('dc-group-option-1');
+        expect(scrolled[scrolled.length - 1]).to.equal('#dc-group-option-1');
+      });
+    });
+
+    describe('managed from the card', () => {
+      const top = 'ou=organization,dc=example,dc=com';
+      const sales = `ou=Sales,${top}`;
+      const engineering = `ou=Engineering,${top}`;
+      const typedGroups: EntityDescriptor = {
+        ...twakeGroups,
+        schema: {
+          attributes: {
+            ...twakeGroups.schema.attributes,
+            mail: { type: 'string', role: 'primaryEmail' },
+            twakeMailboxType: {
+              type: 'pointer',
+              role: 'mailboxType',
+              branch: [mailboxTypes.base as string],
+            },
+          },
+        },
+      };
+      const group = (cn: string, link: string, type = 'group'): Entry => ({
+        dn: `cn=${cn},ou=groups,dc=example,dc=com`,
+        cn,
+        mail: `${cn}@example.com`,
+        twakeMailboxType: `cn=${type},${mailboxTypes.base}`,
+        twakeDepartmentLink: link,
+      });
+      const salesTeam = group('sales-team', sales, 'teamMailbox');
+      const engineers = group('engineering', engineering);
+      /** Sophie, local administrator of Sales. */
+      const sophie: Scope = {
+        user: 'uid=sophie.martin,ou=users,dc=example,dc=com',
+        unrestricted: false,
+        described: true,
+        branches: [{ dn: sales, read: true, write: true, delete: true }],
+        entities: [],
+      };
+      const card = (scope: Scope | null, link = sales) => {
+        const { app, detail, render } = setup({
+          dn: john,
+          uid: 'john.doe',
+          twakeDepartmentLink: link,
+          memberOf: [salesTeam.dn as string, engineers.dn as string],
+        });
+        Object.assign(app as unknown as object, {
+          scope,
+          entities: [accounts, typedGroups, mailboxTypes],
+        });
+        const account = (
+          app as unknown as {
+            api: { get(entity: EntityDescriptor, id: string): unknown };
+          }
+        ).api;
+        const read = account.get;
+        account.get = async (entity: EntityDescriptor, id: string) =>
+          entity === typedGroups
+            ? [salesTeam, engineers].find(item => item.cn === id)
+            : read(entity, id);
+        return { app, detail, render };
+      };
+
+      it('should say each group’s type, and offer Add to a group… and a × on each', async () => {
+        const { detail, render } = card(null);
+        await render();
+        expect(detail.innerHTML)
+          .to.include('<h3>Groups</h3>')
+          .and.include('data-add-groups>Add to a group…</button>')
+          .and.include(
+            `data-relation="${salesTeam.dn}">sales-team</button><span class="dc-relation-note">· Shared mailbox</span>`
+          )
+          .and.include('aria-label="Remove from sales-team"')
+          .and.include('aria-label="Remove from engineering"');
+        // memberOf is the section, not a field of Details as well.
+        expect(detail.innerHTML).to.not.include('<dt>Mailing lists</dt>');
+      });
+
+      it('should offer a × only on the groups a local administrator writes', async () => {
+        const { detail, render } = card(sophie);
+        await render();
+        expect(detail.innerHTML)
+          .to.include('data-add-groups')
+          .and.include('aria-label="Remove from sales-team"')
+          .and.not.include('aria-label="Remove from engineering"');
+        // Still listed, with its type: only the × goes.
+        expect(detail.innerHTML).to.include(
+          `data-relation="${engineers.dn}">engineering</button><span class="dc-relation-note">· Group</span></li>`
+        );
+      });
+
+      it('should not offer Add to a group… on an account the caller does not write', async () => {
+        const { detail, render } = card(sophie, engineering);
+        await render();
+        expect(detail.innerHTML).to.not.include('data-add-groups');
+      });
+
+      it('should offer only the groups the caller writes and the account is not in', async () => {
+        const { app } = card(sophie);
+        const other = group('sales-fr', `ou=France,${sales}`);
+        nock(baseUrl)
+          .get('/api/v1/ldap/groups')
+          .query(true)
+          .reply(200, {
+            // More groups Sophie may not write than are offered, answered
+            // first: left out before the answer is cut, not after.
+            ...Object.fromEntries(
+              Array.from({ length: 25 }, (_, index) => [
+                `eng-${index}`,
+                group(`eng-${index}`, engineering),
+              ])
+            ),
+            'sales-team': salesTeam,
+            'sales-fr': other,
+            engineering: engineers,
+          });
+        let picker: { options: { search(query: string): Promise<unknown> } } =
+          undefined as never;
+        Object.assign(app as unknown as object, {
+          openPanel: (_title: string, build: (body: unknown) => void) => {
+            const body = stubContainer();
+            build(body);
+          },
+        });
+        const original = GroupPicker.prototype.render;
+        GroupPicker.prototype.render = function (this: GroupPicker) {
+          picker = this as unknown as typeof picker;
+        };
+        try {
+          (
+            app as unknown as {
+              addToGroups(entry: Entry, name: string, held: string[]): void;
+            }
+          ).addToGroups({ dn: john }, 'John Doe', [salesTeam.dn as string]);
+        } finally {
+          GroupPicker.prototype.render = original;
+        }
+        expect(await picker.options.search('sal')).to.deep.equal([
+          {
+            dn: other.dn,
+            name: 'sales-fr',
+            label: 'sales-fr — Group — sales-fr@example.com',
+          },
+        ]);
+      });
+
+      it('should add the account to each group chosen, and keep a refused one with why', async () => {
+        const toast = toastElement();
+        const { app } = card(sophie);
+        Object.assign(app as unknown as object, {
+          container: {
+            querySelector: (selector: string) =>
+              selector === '[data-toast]' ? toast : null,
+            querySelectorAll: () => [],
+          },
+          renderMain: async () => undefined,
+        });
+        let picker: {
+          options: {
+            search(query: string): Promise<unknown>;
+            onAdd(
+              groups: { dn: string; name: string; label: string }[]
+            ): Promise<{ left: unknown[]; error?: string }>;
+          };
+        } = undefined as never;
+        const original = GroupPicker.prototype.render;
+        GroupPicker.prototype.render = function (this: GroupPicker) {
+          picker = this as unknown as typeof picker;
+        };
+        Object.assign(app as unknown as object, {
+          openPanel: (_title: string, build: (body: unknown) => void) =>
+            build(stubContainer()),
+        });
+        const fr = group('sales-fr', `ou=France,${sales}`);
+        const de = group('sales-de', `ou=Germany,${sales}`);
+        const uk = group('sales-uk', `ou=UK,${sales}`);
+        try {
+          (
+            app as unknown as {
+              addToGroups(entry: Entry, name: string, held: string[]): void;
+            }
+          ).addToGroups({ dn: john }, 'John Doe', []);
+        } finally {
+          GroupPicker.prototype.render = original;
+        }
+        nock(baseUrl)
+          .get('/api/v1/ldap/groups')
+          .query(true)
+          .reply(200, { 'sales-fr': fr, 'sales-de': de, 'sales-uk': uk });
+        const offered = (await picker.options.search('sales')) as {
+          dn: string;
+          name: string;
+          label: string;
+        }[];
+        const added = nock(baseUrl)
+          .post('/api/v1/ldap/groups/sales-fr/members', { member: [john] })
+          .reply(200, {});
+        for (const refused of ['sales-de', 'sales-uk'])
+          nock(baseUrl)
+            .post(`/api/v1/ldap/groups/${refused}/members`)
+            .reply(403, {
+              error: 'Token does not have permission on this branch',
+              code: 'forbidden',
+            });
+        const result = await picker.options.onAdd(offered);
+        expect(added.isDone()).to.equal(true);
+        expect(toast.textContent).to.equal('John Doe added to sales-fr');
+        expect(result.left).to.deep.equal([offered[1], offered[2]]);
+        // Each refusal said with its group, when there are several.
+        expect(result.error).to.equal(
+          'sales-de: You do not administer sales-de: this change is not yours to make. ' +
+            'sales-uk: You do not administer sales-uk: this change is not yours to make.'
+        );
+
+        // A group joined is not offered again: the server would refuse it.
+        nock(baseUrl)
+          .get('/api/v1/ldap/groups')
+          .query(true)
+          .reply(200, { 'sales-fr': fr, 'sales-de': de, 'sales-uk': uk });
+        expect(
+          ((await picker.options.search('sales')) as { name: string }[]).map(
+            found => found.name
+          )
+        ).to.deep.equal(['sales-de', 'sales-uk']);
+      });
+
+      it('should take the account out of a group in one click, and say so', async () => {
+        const toast = toastElement();
+        const app = consoleIn({ '[data-toast]': toast }) as unknown as {
+          entities: EntityDescriptor[];
+          renderMain(): Promise<void>;
+          leaveGroup(entry: Entry, name: string, dn: string): Promise<void>;
+        };
+        app.entities = [accounts, typedGroups];
+        app.renderMain = async () => undefined;
+        const removed = nock(baseUrl)
+          .delete(
+            `/api/v1/ldap/groups/sales-team/members/${encodeURIComponent(john)}`
+          )
+          .reply(200, {});
+        await app.leaveGroup({ dn: john }, 'John Doe', salesTeam.dn as string);
+        expect(removed.isDone()).to.equal(true);
+        expect(toast.textContent).to.equal('John Doe removed from sales-team');
+      });
     });
   });
 
@@ -6149,6 +6638,147 @@ describe('Directory console', () => {
       expect(selected.size).to.equal(0);
       expect(headerTag()).to.not.contain('checked');
       expect(header.indeterminate).to.be.false;
+    });
+
+    it('should show the entries just imported without a search', async () => {
+      // Closing the import's result left a large branch asking for three
+      // characters, and each new account took a search of its own to check.
+      const searched: string[] = [];
+      const read: string[] = [];
+      const stored: Record<string, Entry> = {
+        amartin: { uid: 'amartin', cn: 'Alice Martin', mail: 'a@example.com' },
+        bob: { uid: 'bob', cn: 'Bob Brown', mail: 'b@example.com' },
+        carol: { uid: 'carol', cn: 'Carol Chen', mail: 'c@example.com' },
+      };
+      const refusal = (status: number) =>
+        Promise.reject(Object.assign(new Error('no'), { status }));
+      let answer = (id: string): Promise<Entry> => Promise.resolve(stored[id]);
+      const view: ListView = {
+        search: 'ali',
+        page: 3,
+        imported: { ids: ['bob', 'carol', 'amartin'] },
+      };
+      const options = {
+        entity: users,
+        translator: new Translator('en'),
+        load: (search: string) => {
+          searched.push(search);
+          return Promise.resolve({});
+        },
+        read: (id: string) => {
+          read.push(id);
+          return answer(id);
+        },
+        listable: false,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+        view,
+      };
+      const container = stubContainer();
+      await new EntityList(options).render(container);
+      // Each read whole: the creation answered little more than its name
+      expect(read).to.have.members(['amartin', 'bob', 'carol']);
+      expect(searched).to.deep.equal([]);
+      expect(container.innerHTML)
+        .to.contain('Just imported (3)')
+        .and.contain('Back to search')
+        .and.contain('href="#&#x2F;users&#x2F;amartin"')
+        .and.contain('Bob Brown')
+        .and.contain('c@example.com')
+        .and.not.contain('data-search ');
+      expect(container.innerHTML.indexOf('amartin')).to.be.below(
+        container.innerHTML.indexOf('bob')
+      );
+      // The search keeps its page
+      expect(view.page).to.equal(3);
+
+      // Back from a card: one deleted, one out of reach since, left out.
+      answer = id =>
+        id === 'bob'
+          ? refusal(404)
+          : id === 'carol'
+            ? refusal(403)
+            : Promise.resolve(stored[id]);
+      const again = stubContainer();
+      await new EntityList(options).render(again);
+      expect(again.innerHTML)
+        .to.contain('Just imported (1)')
+        .and.contain('Alice Martin')
+        .and.not.contain('Bob Brown')
+        .and.not.contain('Carol Chen');
+      expect(view.imported?.ids).to.deep.equal(['amartin']);
+
+      // A real failure is said, the count kept
+      answer = () => refusal(500);
+      const failing = stubContainer();
+      await new EntityList(options).render(failing);
+      expect(failing.innerHTML)
+        .to.contain('Just imported (1)')
+        .and.contain('dc-error-block');
+
+      // Back to search: the search left typed is run again, on its page.
+      answer = id => Promise.resolve(stored[id]);
+      const list = new EntityList(options);
+      await list.render(stubContainer());
+      await (
+        list as unknown as { leaveImported(): Promise<void> }
+      ).leaveImported();
+      expect(view.imported).to.equal(undefined);
+      expect(searched).to.deep.equal(['ali']);
+    });
+
+    it('should read only the page shown of a large import', async () => {
+      // Two thousand rows read whole on every draw, to show 25 of them
+      const ids = Array.from(
+        { length: 60 },
+        (_, i) => `u${String(i).padStart(2, '0')}`
+      );
+      const read: string[] = [];
+      const gone = new Set(['u03', 'u30']);
+      const view: ListView = { imported: { ids: [...ids].reverse() } };
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () => Promise.resolve({}),
+        read: (id: string) => {
+          read.push(id);
+          return gone.has(id)
+            ? Promise.reject(Object.assign(new Error('gone'), { status: 404 }))
+            : Promise.resolve({ uid: id, cn: `Name ${id}` });
+        },
+        listable: false,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+        view,
+      });
+      const container = stubContainer();
+      await list.render(container);
+      // The first page, by identifier, refilled past the one found gone
+      expect(read).to.have.length(26);
+      expect(read).to.include.members(['u00', 'u03', 'u25']);
+      expect(container.innerHTML)
+        .to.contain('Name u25')
+        // Counted from the identifiers: the pages not shown are not checked
+        .and.contain('Just imported (59)')
+        .and.contain('1–25 of 59')
+        .and.not.contain('Name u03')
+        .and.not.contain('Name u26');
+
+      // The next page reads its own entries, and only those
+      read.length = 0;
+      const state = list as unknown as { page: number; turnPage(): void };
+      state.page = 1;
+      state.turnPage();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(read).to.have.length(26);
+      expect(read).to.include.members(['u26', 'u30', 'u51']);
+      expect(container.innerHTML)
+        .to.contain('Name u51')
+        .and.contain('26–50 of 58')
+        .and.not.contain('Name u25');
+      expect(view.imported?.ids).to.have.length(58);
     });
   });
 

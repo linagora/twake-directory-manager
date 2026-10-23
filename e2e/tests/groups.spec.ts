@@ -149,7 +149,7 @@ test.describe('GROUP groups', () => {
       .click();
     await app.entry().expectName('Dave Okafor');
     await expect(
-      app.entry().relatedItems('Mailing lists').filter({ hasText: group.cn })
+      app.entry().relatedLinks('Groups').filter({ hasText: group.cn })
     ).toBeVisible();
   });
 

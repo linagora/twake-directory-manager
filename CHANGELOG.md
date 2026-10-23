@@ -60,12 +60,23 @@ Built on ldap-rest 0.25.0.
   _Show empty fields (N)_ and the DN under _Technical details_; a mailbox
   size no unit says exactly reads _1.07 GB_, the bytes in its tooltip. _Edit_
   comes first, and _Hand over_ and _Delete_ moved to a _More_ menu (#133)
+- A CSV import's result lists each entry it created, by full name and
+  identifier, linked to its card; once the result is closed, the list shows
+  them as _Just imported (2)_ until _Back to search_, rather than asking for
+  a search to find each one (#136)
 - An organization's card lists its _People_ (full name, email, position,
   status) and its _Groups_ (name, email, group type) in two tables, each
   counted and each row opening the entry's card, instead of a row of
   identifiers. _New user here_ and _New group here_ open the creation form
   with the department already set, where the administrator may create, and
   the new entry joins the table (#128)
+- An account's groups are managed from its card. The section reads _Groups_
+  rather than _Mailing lists_, and says each group's type: _sales-team ·
+  Shared mailbox_. _Add to a group…_ opens a panel searching the groups the
+  administrator may write, by name, type and address; the groups chosen are
+  joined at once, a refused one staying in the panel with why. A × on each
+  group the administrator may write takes the account out of it in one click
+  (#129)
 - An administrator is told what waits in transit: the Overview opens on
   _Waiting in transit (N)_, each entry with _Claim…_, and the banner's link
   reads _Transit (N)_. The Transit organization's card no longer offers a
