@@ -1823,9 +1823,9 @@ export class DirectoryConsole {
             await this.renderMain();
           } else {
             const created = await this.api.create(entity, values as Entry);
-            this.toast(t('create.done'));
-            this.closePanel();
             const id = createdEntryId(entity, created, values);
+            this.toast(this.createdToast(entity, values, id));
+            this.closePanel();
             this.go(
               id ? `${entity.key}/${encodeURIComponent(id)}` : entity.key
             );
@@ -2047,7 +2047,13 @@ export class DirectoryConsole {
         if (parent) await this.tree?.refresh(parent).catch(() => []);
       } else {
         await this.api.createOrganization(values, parentDn);
-        this.toast(t('create.done'));
+        this.toast(
+          this.createdToast(
+            entity,
+            values,
+            createdEntryId(entity, undefined, values)
+          )
+        );
         this.closePanel();
         // The new organization is found among its parent's children by the
         // name it was given, since the server answers no DN. From the tree,
@@ -2541,6 +2547,29 @@ export class DirectoryConsole {
   }
 
   /**
+   * What says an entry was created: named by its full name, else as its
+   * card names it. "Created" alone did not say what.
+   *
+   * @param entity the entity the entry belongs to
+   * @param values what the form sent
+   * @param id the entry's main attribute value; empty when unknown
+   */
+  private createdToast(
+    entity: EntityDescriptor,
+    values: Record<string, string | string[]>,
+    id: string
+  ): string {
+    const display = roleAttribute(entity.schema, 'displayName');
+    const full = display ? values[display] : undefined;
+    const name =
+      (Array.isArray(full) ? full[0] : full)?.trim() ||
+      (id ? this.entryName(entity, id) : '');
+    return name
+      ? this.translator.t('create.doneNamed', { name })
+      : this.translator.t('create.done');
+  }
+
+  /*
    * A person as a colleague names them: their full name, else the name
    * {@link entryName} gives.
    */

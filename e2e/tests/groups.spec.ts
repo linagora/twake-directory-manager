@@ -72,7 +72,7 @@ test.describe('GROUP groups', () => {
     await form.select('Group type', 'Distribution list');
     await form.submit();
 
-    await app.expectToast('Created');
+    await app.expectToast(`${cn} created`);
     const card = app.entry();
     await card.expectName(cn);
     await expect(card.detail('Description')).toHaveText('QA');
@@ -206,7 +206,7 @@ test.describe('GROUP groups', () => {
     await form.pick('Department', 'Fra', france.path);
     await form.submit();
 
-    await app.expectToast('Created');
+    await app.expectToast(`${cn} created`);
     await app.entry().expectName(cn);
     await app.navItem('Groups').click();
     await app.list().search(cn);

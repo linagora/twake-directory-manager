@@ -136,7 +136,7 @@ test.describe('ORG organizations', () => {
     await form.fill('Description', 'Test');
     await form.addValue('Phone', '+33 1 00 00 00 00');
     await form.submit();
-    await app.expectToast('Created');
+    await app.expectToast(`${name} created`);
 
     const card = organizations.card;
     await expect(card.heading).toHaveText(name);
@@ -266,7 +266,7 @@ test.describe('ORG organizations', () => {
     await form.expectOpen('New organization');
     await form.fill('Name', spain);
     await form.submit();
-    await app.expectToast('Created');
+    await app.expectToast(`${spain} created`);
     await expect(organizations.card.heading).toHaveText(spain);
 
     await organizations.card.action('Edit').click();
@@ -361,7 +361,7 @@ test.describe('ORG organizations', () => {
     await organizations.addButton(tenant.org.name).click();
     await form.fill('Name', temporary);
     await form.submit();
-    await app.expectToast('Created');
+    await app.expectToast(`${temporary} created`);
     await expect(organizations.card.heading).toHaveText(temporary);
     await expect(organizations.selected).toHaveText(temporary);
     const message = answerNextConfirm(page, true);

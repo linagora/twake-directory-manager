@@ -43,7 +43,9 @@ With the default Twake schemas:
        written otherwise; emptied, it follows them again. Whether the first
        name or the last comes first is the deployment’s choice.
    * - :guilabel:`Common name`
-     - Technical name of the entry; optional.
+     - Technical name of the entry; optional. On a new account it follows
+       the full name, until it is written otherwise: the members of a
+       group are found by it.
    * - :guilabel:`Title`, :guilabel:`Position`
      - Picked from the matching reference data.
    * - :guilabel:`Comment`
@@ -75,7 +77,8 @@ Filled automatically, and shown on the card only:
 
 - the :guilabel:`Identifier`, derived from the email address (the part before
   ``@``, in lower case, with a suffix when it is already taken). It is the
-  sign-in name and **cannot be changed afterwards**;
+  sign-in name and **cannot be changed afterwards**. The form shows it under
+  the :guilabel:`Email` field as soon as the address is complete;
 - the :guilabel:`Department path`;
 - the :guilabel:`Status`, ``Active`` on creation;
 - the :guilabel:`Mailing lists` the account belongs to: read from
@@ -108,8 +111,11 @@ The server checks two rules each time an entry is saved:
 
 Once you type ``@`` in an address or an alias, the form lists the domains
 allowed for the entry's department (and, for a group, the directory's
-subdomains of those); :kbd:`↓` then :kbd:`Enter` completes the address.
-Typing the address whole works as before.
+subdomains of those). The first one is selected: :kbd:`Enter` completes
+the address with it, :kbd:`↓` and :kbd:`↑` choose another, :kbd:`Esc` closes
+the list. Typing the address whole works as before.
+
+Once created, a message names the account.
 
 A refusal shows with the server’s message; the form stays open for the
 correction.

@@ -19,6 +19,9 @@ Built on ldap-rest 0.25.0.
   pressed: an arrow key on the former select changed the state at once. The
   states read _Active_ and _To delete_ everywhere in English, and the message
   names the account: _Ada Lovelace is now Disabled_ (#125)
+- The New user form shows the identifier the address will give, fills the
+  common name from the full name, and Enter takes the domain the address
+  completion offers; the creation message names the entry (#130)
 
 ## v0.10.2 (2026-10-23)
 

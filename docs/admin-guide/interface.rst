@@ -114,7 +114,7 @@ Messages
 --------
 
 The outcome of each action shows in a short message at the bottom of the
-screen (:guilabel:`Saved`, :guilabel:`Created`, :guilabel:`Deleted`…). A
+screen (:guilabel:`Saved`, :guilabel:`Jane Doe created`, :guilabel:`Deleted`…). A
 refusal from the server shows the same way, in red, with the reason the
 server gave.
 

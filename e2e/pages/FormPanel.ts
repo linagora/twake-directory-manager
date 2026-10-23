@@ -101,7 +101,14 @@ export class FormPanel {
 
   /** The grey hint under a field */
   hint(label: string): Locator {
-    return this.container(label).locator('p.dc-hint:not([data-error])');
+    return this.container(label).locator(
+      'p.dc-hint:not([data-error]):not([data-identifier])'
+    );
+  }
+
+  /** The identifier a new entry will get, under the field it comes from */
+  identifier(label: string): Locator {
+    return this.container(label).locator('[data-identifier]');
   }
 
   async fill(label: string, value: string): Promise<void> {

@@ -73,6 +73,8 @@ export interface SchemaAttribute {
     attribute: string;
     extract?: string;
     lowercase?: boolean;
+    /** Characters taken out, after `extract` and `lowercase` */
+    strip?: string;
     onCollision?: 'error' | 'suffix';
     regenerateOnChange?: boolean;
   };
