@@ -33,6 +33,12 @@ Built on ldap-rest 0.25.0.
   opens the tree down to it and shows its card. Selecting an organization
   also opens its branch, its card offers _New organization here_ beside
   _Edit_, and the selected row keeps its "+" in view (#132)
+- The Overview speaks in names: _Signed in as Ada Admin (admin@example.com)_
+  rather than a DN, and the _Language_ select offers _English_, _Français_
+  and _Монгол_. An account administering nothing finds one message on it,
+  _There is nothing for you to manage here_, with a _Sign out_ button,
+  instead of three cards leading nowhere; its sidebar offers only the
+  Overview, and its banner's dot is grey, not green (#134)
 
 ## v0.10.2 (2026-10-23)
 

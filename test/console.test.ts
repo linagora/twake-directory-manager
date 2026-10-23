@@ -45,7 +45,7 @@ import {
   listFailure,
 } from '../src/components/EntityList';
 import { OrganizationTree } from '../src/components/OrganizationTree';
-import { availableLanguages, Translator } from '../src/i18n';
+import { availableLanguages, languageName, Translator } from '../src/i18n';
 import {
   beforeToday,
   formatByteSize,
@@ -2912,6 +2912,151 @@ describe('Directory console', () => {
         await views.renderOrganizations(main, 0);
         expect(asked).to.include.members(['get', 'top']);
       }
+    });
+  });
+
+  describe('the overview, in names', () => {
+    const admin = 'uid=admin,ou=users,dc=example,dc=com';
+    const alice = 'uid=alice,ou=users,dc=example,dc=com';
+    const global: Scope = {
+      user: admin,
+      unrestricted: false,
+      described: true,
+      branches: [
+        { dn: 'dc=example,dc=com', read: true, write: true, delete: true },
+      ],
+      entities: [{ name: 'users', base: users.base, create: true }],
+    };
+    const nobody: Scope = { ...global, user: alice, branches: [] };
+
+    /**
+     * A console for this scope, the account read as `read` answers, and its
+     * server offering to sign out.
+     */
+    const setup = (
+      scope: Scope,
+      read: () => Promise<Entry> = async () => ({
+        dn: admin,
+        uid: 'admin',
+        cn: 'Ada Admin',
+        mail: 'admin@example.com',
+      }),
+      language = 'en'
+    ) => {
+      const main = { innerHTML: '', querySelectorAll: () => [] };
+      const app = consoleIn({ '[data-main]': main }, language);
+      const asked: string[] = [];
+      Object.assign(app as unknown as object, {
+        scope,
+        entities: [users, groups, mailboxTypes],
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        logoutPath: '/logout',
+        get: async (entity: EntityDescriptor, id: string) => {
+          asked.push(`${entity.key} ${id}`);
+          return read();
+        },
+      });
+      const inner = app as unknown as {
+        account: unknown;
+        container: { innerHTML: string };
+        readAccount(): Promise<unknown>;
+        renderDashboard(main: unknown): void;
+        drawShell(): void;
+        scopeMarkup(): string;
+      };
+      const overview = async (): Promise<string> => {
+        inner.account = await inner.readAccount();
+        inner.renderDashboard(main);
+        return main.innerHTML;
+      };
+      const shell = (): string => {
+        inner.drawShell();
+        return inner.container.innerHTML;
+      };
+      return { app: inner, asked, overview, shell };
+    };
+
+    it('should greet the account by its name and address, read as its card is', async () => {
+      // "Signed in as uid=admin,ou=users,dc=example,dc=com"
+      const { asked, overview } = setup(global);
+      const html = await overview();
+      expect(html)
+        .to.include('Signed in as Ada Admin (admin@example.com)')
+        .and.include('What you can manage')
+        .and.include('data-open="users"')
+        .and.not.include(admin);
+      expect(asked).to.deep.equal(['users admin']);
+
+      const fr = setup(global, undefined, 'fr');
+      expect(await fr.overview()).to.include(
+        'Connecté en tant que Ada Admin (admin@example.com)'
+      );
+    });
+
+    it('should fall back to the DN when the account cannot be read', async () => {
+      const { overview } = setup(global, async () => {
+        throw Object.assign(new Error('Not found'), { status: 404 });
+      });
+      expect(await overview()).to.include(`Signed in as ${admin}`);
+      // An account with no address is still named
+      const nameless = setup(global, async () => ({ dn: admin, cn: 'Ada' }));
+      expect(await nameless.overview()).to.include('Signed in as Ada<');
+    });
+
+    it('should tell an account administering nothing once, and where to turn', async () => {
+      // Three cards, each opening on "nothing to manage", and a green dot
+      const { app, asked, overview, shell } = setup(nobody);
+      const html = await overview();
+      expect(html)
+        .to.include('There is nothing for you to manage here')
+        .and.include(
+          'Your account (alice) does not administer any part of the directory.'
+        )
+        .and.match(
+          /<a class="dc-button dc-button-primary" href="[^"]+logout">Sign out<\/a>/
+        )
+        .and.include('Signed in as alice')
+        .and.not.include('What you can manage')
+        .and.not.include('dc-card')
+        .and.not.include('data-open');
+      // The server refuses such an account every read: none is asked
+      expect(asked).to.deep.equal([]);
+      expect(app.scopeMarkup()).to.include('dc-scope-empty dc-scope-none');
+      expect(shell())
+        .to.include('data-nav=""')
+        .and.not.include('data-nav="users"')
+        .and.not.include('data-nav-toggle');
+
+      const local = setup({
+        ...nobody,
+        branches: [
+          { dn: 'ou=Sales,dc=example,dc=com', read: true, write: true },
+        ],
+      });
+      expect(local.app.scopeMarkup()).to.not.include('dc-scope-none');
+      expect(local.shell())
+        .to.include('data-nav="users"')
+        .and.include('data-nav="mailboxTypes"');
+      expect(await local.overview())
+        .to.include('What you can manage')
+        .and.not.include('There is nothing for you to manage here');
+    });
+
+    it('should name each language in itself', () => {
+      const { shell } = setup(global, undefined, 'fr');
+      const options = [
+        ...shell().matchAll(
+          /<option value="(\w+)" lang="(\w+)"[^>]*>([^<]*)</g
+        ),
+      ].map(([, value, lang, text]) => [value, lang, text]);
+      expect(options).to.deep.equal([
+        ['en', 'en', 'English'],
+        ['fr', 'fr', 'Français'],
+        ['mn', 'mn', 'Монгол'],
+      ]);
+      for (const code of availableLanguages)
+        expect(languageName(code), code).to.not.equal(code);
     });
   });
 

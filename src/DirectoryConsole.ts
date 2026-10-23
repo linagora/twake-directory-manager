@@ -33,6 +33,7 @@ import {
   attributeLabel,
   comparableDn,
   entryValue,
+  isDnShaped,
   nameAttributes,
   parentDn as parentOf,
   ownValueLabel,
@@ -41,7 +42,7 @@ import {
   resolveText,
   withinDn,
 } from './format';
-import { availableLanguages, Translator } from './i18n';
+import { availableLanguages, languageName, Translator } from './i18n';
 import { signInAgain } from './session';
 import type { ListView } from './components/EntityList';
 import type { PointerLookup } from './importer';
@@ -54,6 +55,12 @@ import type {
   PasswordPolicy,
   Scope,
 } from './types';
+
+/** The signed-in account, as the overview names it. */
+interface SignedIn {
+  name: string;
+  email?: string;
+}
 
 /** Where the console currently is. */
 interface Route {
@@ -419,6 +426,8 @@ export class DirectoryConsole {
   private scopeError: string | null = null;
   /** Whether the server lets the caller read the password policies */
   private policiesReadable = false;
+  /** The signed-in account, when it could be named rather than shown as a DN */
+  private account: SignedIn | null = null;
   /**
    * Which view is the current one. Opening an entry, then another before the
    * first has answered, raced exactly the way the entity list did: whichever
@@ -498,7 +507,10 @@ export class DirectoryConsole {
       this.scope = null;
       this.scopeError = (err as Error).message;
     }
-    this.policiesReadable = await this.readsPolicies();
+    [this.policiesReadable, this.account] = await Promise.all([
+      this.readsPolicies(),
+      this.readAccount(),
+    ]);
 
     this.readRoute();
     window.addEventListener('hashchange', () => void this.followHash());
@@ -608,7 +620,11 @@ export class DirectoryConsole {
     if (!container) return;
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    const { primary, reference } = splitEntities(this.entities);
+    // An account administering nothing finds only "nothing to manage" behind
+    // each entry: the overview says it once, and the entries are not offered.
+    const { primary, reference } = this.administersNothing()
+      ? { primary: [], reference: [] }
+      : splitEntities(this.entities);
     const settings = this.settings(reference);
 
     container.innerHTML = `
@@ -667,9 +683,9 @@ export class DirectoryConsole {
                 ${availableLanguages
                   .map(
                     code =>
-                      `<option value="${code}"${
+                      `<option value="${code}" lang="${code}"${
                         code === this.translator.language ? ' selected' : ''
-                      }>${code}</option>`
+                      }>${escapeHtml(languageName(code))}</option>`
                   )
                   .join('')}
               </select>
@@ -757,8 +773,11 @@ export class DirectoryConsole {
       return `<span class="dc-scope-empty">${escapeHtml(t('scope.unrestricted'))}</span>`;
     if (this.scope.described === false)
       return `<span class="dc-scope-empty">${escapeHtml(t('scope.undescribed'))}</span>`;
+    // Grey, not the green of a scope in order: there is nothing to be had.
     if (this.scope.branches.length === 0)
-      return `<span class="dc-scope-empty">${escapeHtml(t('scope.none'))}</span>`;
+      return `<span class="dc-scope-empty dc-scope-none">${escapeHtml(
+        t('scope.none')
+      )}</span>`;
 
     return `
       <span class="dc-scope-label">${escapeHtml(t('scope.title'))}</span>
@@ -1065,6 +1084,46 @@ export class DirectoryConsole {
   }
 
   /**
+   * The signed-in account, by its name and address: the overview greeted
+   * everyone with their DN. It is read the way its card reads it, from the
+   * entity whose branch holds it. An account administering nothing is not
+   * read, since the server refuses it every read: it is named by its own
+   * identifier, the one it signed in with.
+   *
+   * @returns how to name the account, or null to show the scope's own
+   *   words for it, when the read fails or there is nothing to read
+   */
+  private async readAccount(): Promise<SignedIn | null> {
+    const dn = this.scope?.user;
+    if (!dn || !isDnShaped(dn)) return null;
+    if (this.administersNothing()) return { name: rdnValue(dn) };
+    const owner = this.entities.find(
+      entity =>
+        entity.kind === 'flat' &&
+        entity.base &&
+        comparableDn(dn) !== comparableDn(entity.base) &&
+        withinDn(dn, entity.base)
+    );
+    if (!owner) return null;
+    try {
+      const entry = await this.api.get(owner, rdnValue(dn));
+      const first = (role: string): string | undefined => {
+        const name = roleAttribute(owner.schema, role);
+        const value = name
+          ? [entryValue(entry, name) ?? []].flat()[0]
+          : undefined;
+        return value && String(value).trim() ? String(value).trim() : undefined;
+      };
+      return {
+        name: first('displayName') || rdnValue(dn),
+        email: first('primaryEmail'),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * What the reference section lists: the reference data, and the password
    * policies, set up once and rarely touched like it.
    */
@@ -1095,66 +1154,20 @@ export class DirectoryConsole {
   /**
    * The overview: the scope, and the entities with what can be done to them.
    * A page of four cards that only repeat the sidebar is decoration; this one
-   * answers "what am I allowed to do here?".
+   * answers "what am I allowed to do here?". It is a heading, a greeting and
+   * a list of sections, each drawn by its own method.
    */
   private renderDashboard(main: HTMLElement): void {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    const { primary, reference } = splitEntities(this.entities);
-    const settings = this.settings(reference);
+    const sections = this.administersNothing()
+      ? [this.noRightsMarkup()]
+      : [this.manageMarkup(), this.referenceMarkup()];
     main.innerHTML = `
       <section class="dc-dashboard">
         <h1>${escapeHtml(t('app.title'))}</h1>
-        ${
-          this.scope?.user
-            ? `<p class="dc-muted">${escapeHtml(
-                t('dashboard.welcome', { user: this.scope.user })
-              )}</p>`
-            : ''
-        }
-        <h2>${escapeHtml(t('dashboard.entities'))}</h2>
-        <ul class="dc-cards">
-          ${primary
-            .map(entity => {
-              const allowed = this.canCreate(entity);
-              return `<li class="dc-card">
-                <header class="dc-card-title">
-                  <span class="dc-entity-icon" aria-hidden="true">${escapeHtml(
-                    initial(this.plural(entity))
-                  )}</span>
-                  <h3>${escapeHtml(this.plural(entity))}</h3>
-                </header>
-                <div class="dc-card-actions">
-                  <button type="button" class="dc-button" data-open="${escapeHtml(
-                    entity.key
-                  )}">${escapeHtml(t('list.open'))}</button>
-                  ${
-                    allowed
-                      ? `<button type="button" class="dc-button dc-button-primary" data-new="${escapeHtml(
-                          entity.key
-                        )}">${escapeHtml(this.createLabel(entity))}</button>`
-                      : `<span class="dc-muted">${escapeHtml(t('dashboard.noCreate'))}</span>`
-                  }
-                </div>
-              </li>`;
-            })
-            .join('')}
-        </ul>
-        ${
-          settings.length
-            ? `<h2>${escapeHtml(t('nav.reference'))}</h2>
-              <ul class="dc-reference">
-                ${settings
-                  .map(
-                    ({ key, label }) =>
-                      `<li><button type="button" class="dc-reference-link" data-open="${escapeHtml(
-                        key
-                      )}">${escapeHtml(label)}</button></li>`
-                  )
-                  .join('')}
-              </ul>`
-            : ''
-        }
+        ${this.welcomeMarkup()}
+        ${sections.join('')}
       </section>`;
 
     for (const button of Array.from(
@@ -1170,6 +1183,101 @@ export class DirectoryConsole {
         const entity = this.entity(button.dataset.new as string);
         if (entity) void this.openForm(entity);
       });
+  }
+
+  /** Who is signed in: by name and address, else as the scope gives it. */
+  private welcomeMarkup(): string {
+    const user = this.scope?.user;
+    if (!user) return '';
+    const account = this.account;
+    const text = account?.email
+      ? this.translator.t('dashboard.welcomeNamed', {
+          name: account.name,
+          email: account.email,
+        })
+      : this.translator.t('dashboard.welcome', {
+          user: account?.name || user,
+        });
+    return `<p class="dc-muted">${escapeHtml(text)}</p>`;
+  }
+
+  /** The cards of the entities, with what can be done to them. */
+  private manageMarkup(): string {
+    const t = (key: string): string => this.translator.t(key);
+    const { primary } = splitEntities(this.entities);
+    return `
+      <h2>${escapeHtml(t('dashboard.entities'))}</h2>
+      <ul class="dc-cards">
+        ${primary
+          .map(entity => {
+            const allowed = this.canCreate(entity);
+            return `<li class="dc-card">
+              <header class="dc-card-title">
+                <span class="dc-entity-icon" aria-hidden="true">${escapeHtml(
+                  initial(this.plural(entity))
+                )}</span>
+                <h3>${escapeHtml(this.plural(entity))}</h3>
+              </header>
+              <div class="dc-card-actions">
+                <button type="button" class="dc-button" data-open="${escapeHtml(
+                  entity.key
+                )}">${escapeHtml(t('list.open'))}</button>
+                ${
+                  allowed
+                    ? `<button type="button" class="dc-button dc-button-primary" data-new="${escapeHtml(
+                        entity.key
+                      )}">${escapeHtml(this.createLabel(entity))}</button>`
+                    : `<span class="dc-muted">${escapeHtml(t('dashboard.noCreate'))}</span>`
+                }
+              </div>
+            </li>`;
+          })
+          .join('')}
+      </ul>`;
+  }
+
+  /** The links to the reference data and the password policies. */
+  private referenceMarkup(): string {
+    const settings = this.settings(splitEntities(this.entities).reference);
+    if (!settings.length) return '';
+    return `
+      <h2>${escapeHtml(this.translator.t('nav.reference'))}</h2>
+      <ul class="dc-reference">
+        ${settings
+          .map(
+            ({ key, label }) =>
+              `<li><button type="button" class="dc-reference-link" data-open="${escapeHtml(
+                key
+              )}">${escapeHtml(label)}</button></li>`
+          )
+          .join('')}
+      </ul>`;
+  }
+
+  /**
+   * The overview of an account administering nothing. Three cards, each
+   * opening on "nothing to manage", were three dead ends: this says it
+   * once, and where to turn.
+   */
+  private noRightsMarkup(): string {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    const user = this.scope?.user || '';
+    const logout = this.api.logoutUrl;
+    return `
+      <div class="dc-no-rights" data-no-rights>
+        <h2>${escapeHtml(t('dashboard.noRightsTitle'))}</h2>
+        <p>${escapeHtml(
+          t('dashboard.noRightsBody', { name: this.account?.name || user })
+        )}</p>
+        ${
+          logout
+            ? `<a class="dc-button dc-button-primary" href="${escapeHtml(
+                logout
+              )}">${escapeHtml(t('app.logout'))}</a>`
+            : ''
+        }
+      </div>`;
   }
 
   /**
