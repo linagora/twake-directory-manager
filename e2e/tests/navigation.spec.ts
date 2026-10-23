@@ -513,4 +513,55 @@ test.describe('NAV layout, navigation and language', () => {
       await directory.values('uid=carol,ou=users,dc=example,dc=com', 'l')
     ).toEqual([]);
   });
+
+  test('NAV-10 an unknown address says there is no page there', async ({
+    page,
+  }) => {
+    const app = await new LoginPage(page).loginAs(ADMIN, 'passwordPolicies');
+    const notFound = app.main.getByText('There is no page at this address.', {
+      exact: true,
+    });
+    const toOverview = app.main.getByRole('link', {
+      name: 'Go to the Overview',
+      exact: true,
+    });
+
+    await expect(notFound).toBeVisible();
+    await expect(toOverview).toBeVisible();
+    await expect(app.main.locator('.dc-dashboard')).toHaveCount(0);
+    await expect(app.nav.locator('[aria-current]')).toHaveCount(0);
+
+    for (const code of ['fr', 'mn'] as const) {
+      await app.setLanguage(code);
+      await expect(
+        app.main.getByText(t(code, 'app.notFound'), { exact: true })
+      ).toBeVisible();
+      await expect(
+        app.main.getByRole('link', { name: t(code, 'app.toOverview') })
+      ).toBeVisible();
+    }
+    await app.setLanguage('en');
+
+    await toOverview.click();
+    await expect(app.mainHeading).toHaveText('Twake Directory Manager');
+    await expect(app.navItem('Overview')).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+
+    await app.open('accountStates');
+    await expect(notFound).toBeVisible();
+    for (const [hash, heading] of [
+      ['', 'Twake Directory Manager'],
+      ['accountStatuses', 'Account states'],
+      ['password-policies', 'Password policies'],
+    ]) {
+      await app.open(hash);
+      await expect(app.mainHeading).toHaveText(heading);
+      await expect(notFound).toHaveCount(0);
+    }
+    await page.goto(CONSOLE_PATH);
+    await app.expectLoaded();
+    await expect(app.mainHeading).toHaveText('Twake Directory Manager');
+  });
 });

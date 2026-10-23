@@ -22,6 +22,12 @@ Built on ldap-rest 0.25.0.
 - The New user form shows the identifier the address will give, fills the
   common name from the full name, and Enter takes the domain the address
   completion offers; the creation message names the entry (#130)
+- A local administrator's page load no longer asks for the password
+  policies only to be refused (403): the scope says who manages them, and
+  only an ldap-rest before 0.25.0 is still asked (#138, linagora/ldap-rest#367)
+- An address naming no page, such as a mistyped or outdated link, says
+  _There is no page at this address._ with a link back to the Overview,
+  instead of showing the Overview as if it had worked (#137)
 - An account's card is headed by the full name, with the identifier and the
   address under it, as is the browser tab. Its details are grouped under
   headings, a value said twice is said once, the empty fields wait under
