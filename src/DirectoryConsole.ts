@@ -1250,15 +1250,22 @@ export class DirectoryConsole {
    * everyone with their DN. It is read the way its card reads it, from the
    * entity whose branch holds it. An account administering nothing is not
    * read, since the server refuses it every read: it is named by its own
-   * identifier, the one it signed in with.
+   * identifier, the one it signed in with. So is an account the read fails
+   * for, or no entity holds: authz-linid1 hides an account attached to an
+   * organization outside the caller's branches, a department head's own one
+   * attached to the organization above, which was greeted by its DN. The
+   * scope cannot tell that refusal beforehand: the account's link to its
+   * organization decides it, not where its DN lies, and only the read gives
+   * the link.
    *
    * @returns how to name the account, or null to show the scope's own
-   *   words for it, when the read fails or there is nothing to read
+   *   words for it, when they are no DN
    */
   private async readAccount(): Promise<SignedIn | null> {
     const dn = this.scope?.user;
     if (!dn || !isDnShaped(dn)) return null;
-    if (this.administersNothing()) return { name: rdnValue(dn) };
+    const identifier = { name: rdnValue(dn) };
+    if (this.administersNothing()) return identifier;
     const owner = this.entities.find(
       entity =>
         entity.kind === 'flat' &&
@@ -1266,7 +1273,7 @@ export class DirectoryConsole {
         comparableDn(dn) !== comparableDn(entity.base) &&
         withinDn(dn, entity.base)
     );
-    if (!owner) return null;
+    if (!owner) return identifier;
     try {
       const entry = await this.api.get(owner, rdnValue(dn));
       const first = (role: string): string | undefined => {
@@ -1281,7 +1288,7 @@ export class DirectoryConsole {
         email: first('primaryEmail'),
       };
     } catch {
-      return null;
+      return identifier;
     }
   }
 

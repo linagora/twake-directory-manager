@@ -4297,11 +4297,39 @@ describe('Directory console', () => {
       );
     });
 
-    it('should fall back to the DN when the account cannot be read', async () => {
-      const { overview } = setup(global, async () => {
+    it('should fall back to the identifier when the account cannot be read', async () => {
+      // A department head's own account, attached to the organization above
+      // the one they administer: authz-linid1 hides it from them (#157).
+      const local: Scope = {
+        ...global,
+        branches: [
+          {
+            dn: 'ou=sales,ou=organization,dc=example,dc=com',
+            read: true,
+            write: true,
+            delete: true,
+          },
+        ],
+      };
+      const { asked, overview } = setup(local, async () => {
         throw Object.assign(new Error('Not found'), { status: 404 });
       });
-      expect(await overview()).to.include(`Signed in as ${admin}`);
+      expect(await overview())
+        .to.include('Signed in as admin<')
+        .and.not.include(admin);
+      // Its link decides, which the scope does not give: it is still asked
+      expect(asked).to.deep.equal(['users admin']);
+      // Nor is a DN no entity holds greeted whole
+      const outside = setup({ ...global, user: 'cn=root,dc=example,dc=com' });
+      expect(await outside.overview())
+        .to.include('Signed in as root<')
+        .and.not.include('cn=root');
+      expect(outside.asked).to.deep.equal([]);
+      // A user the scope names otherwise than by a DN is shown as it comes
+      const plain = setup({ ...global, user: 'admin@example.com' });
+      expect(await plain.overview()).to.include(
+        'Signed in as admin@example.com<'
+      );
       // An account with no address is still named
       const nameless = setup(global, async () => ({ dn: admin, cn: 'Ada' }));
       expect(await nameless.overview()).to.include('Signed in as Ada<');
