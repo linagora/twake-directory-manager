@@ -31,13 +31,38 @@ export interface TreeOptions {
    */
   canCreateChild?(node: OrganizationNode): boolean;
   /**
-   * Every organization the filter may find, labelled by its path. The tree
-   * reads only the branches opened, and a filter limited to them found
-   * nothing of a department under a closed one: this is what a filter of
+   * Every organization the filter may find, labelled by its path, and
+   * whether the walk stopped before the end of the tree. The tree reads only
+   * the branches opened, and a filter limited to them found nothing of a
+   * department under a closed one: this is what a filter of
    * {@link FILTER_EVERYWHERE} characters or more searches instead. Asked
    * the first time a filter needs it, then kept until the tree is read again
    */
-  everywhere?(): Promise<{ dn: string; label: string }[]>;
+  everywhere?(): Promise<OrganizationIndex>;
+  /**
+   * The organizations under the root of the tree whose name or path holds a
+   * text, as the server searches them in one request. Asked instead of
+   * {@link everywhere} when given: walking a wide tree costs a request per
+   * organization, and stops before the end of it
+   */
+  search?(
+    query: string,
+    root: string
+  ): Promise<{ dn: string; label: string }[]>;
+}
+
+/** The organizations a walk of the tree found, labelled by their path. */
+export interface OrganizationIndex {
+  organizations: { dn: string; label: string }[];
+  /** Whether the walk stopped before reading the whole tree */
+  partial: boolean;
+}
+
+/** What the whole tree answers a filter: what matches, and how sure it is. */
+interface WholeTreeMatches {
+  found: { dn: string; label: string }[];
+  /** Whether organizations were left unread, a match among them unknown */
+  partial: boolean;
 }
 
 /**
@@ -45,6 +70,14 @@ export interface TreeOptions {
  * branches opened: one letter is in most names, and lists most of the tree.
  */
 export const FILTER_EVERYWHERE = 2;
+
+/** Pause in the typing after which the server is asked, as a list's search is. */
+const SEARCH_DELAY = 250;
+
+/** Whether a node is known to hold no sub-organization. */
+function isLeaf(node: OrganizationNode): boolean {
+  return !!node.loaded && (node.children?.length ?? 0) === 0;
+}
 
 export class OrganizationTree {
   private readonly options: TreeOptions;
@@ -57,9 +90,22 @@ export class OrganizationTree {
   /**
    * What {@link TreeOptions.everywhere} answered: undefined until asked, null
    * when it failed, the filter then searching the opened branches as before
+   * until the tree is drawn again
    */
-  private index: { dn: string; label: string }[] | null | undefined;
+  private index: OrganizationIndex | null | undefined;
   private indexing: Promise<void> | null = null;
+  /**
+   * What {@link TreeOptions.search} last answered, and for which text: null
+   * when it failed, the filter then searching the opened branches
+   */
+  private searched:
+    | { query: string; found: { dn: string; label: string }[] | null }
+    | undefined;
+  /** The text a search is waiting for, or under way for */
+  private searching: string | null = null;
+  private searchTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Bumped by each search dropped, for its answer to be ignored */
+  private searchTicket = 0;
 
   /**
    * @param options what the tree reads, and whom it tells
@@ -74,7 +120,9 @@ export class OrganizationTree {
       this.tree = previous.tree;
       this.expanded = previous.expanded;
       this.filter = previous.filter;
-      this.index = previous.index;
+      // A whole tree that could not be read is asked again: a failure once
+      // is no reason to filter the opened branches only for the session.
+      if (previous.index) this.index = previous.index;
     }
   }
 
@@ -167,6 +215,8 @@ export class OrganizationTree {
     // under its new name, or no longer: it is searched afresh next time.
     this.index = undefined;
     this.indexing = null;
+    this.searched = undefined;
+    this.cancelSearch();
     if (!node) return [];
     await this.load(node);
     this.draw();
@@ -190,6 +240,17 @@ export class OrganizationTree {
       if (found) return found;
     }
     return null;
+  }
+
+  /**
+   * What the tree calls an organization it holds: its path, else its name.
+   *
+   * @param dn organization to name, in any spelling of its DN
+   * @returns its name, or undefined when the tree does not hold it
+   */
+  nameOf(dn: string): string | undefined {
+    const node = this.find(dn);
+    return node ? node.path || node.name : undefined;
   }
 
   /**
@@ -253,26 +314,28 @@ export class OrganizationTree {
     const loading = `<p class="dc-empty">${escapeHtml(
       translator.t('app.loading')
     )}</p>`;
-    const none = `<p class="dc-empty">${escapeHtml(
-      translator.t('tree.noMatch', { filter: this.filter })
-    )}</p>`;
+    const none = (key: string): string =>
+      `<p class="dc-empty">${escapeHtml(
+        translator.t(key, { filter: this.filter })
+      )}</p>`;
+    const everywhere = this.searchesEverywhere();
+    if (!everywhere) this.cancelSearch();
+    const whole = everywhere && this.tree ? this.wholeTree() : null;
     if (this.error)
       list.innerHTML = `<p class="dc-empty dc-error-block">${escapeHtml(
         this.error
       )}</p>`;
     else if (!this.tree) list.innerHTML = loading;
-    else if (this.searchesEverywhere()) {
-      // The whole tree, read once: until it is, saying "no match" would be
-      // saying it of the branches opened only.
-      if (this.index === undefined) {
-        void this.loadIndex();
-        list.innerHTML = loading;
-      } else {
-        const found = this.found();
-        list.innerHTML = found.length
-          ? `<ul class="dc-tree-list dc-tree-found">${found
-              .map(
-                option => `
+    else if (whole === undefined) {
+      // The whole tree, being searched: until it is, saying "no match" would
+      // be saying it of the branches opened only.
+      list.innerHTML = loading;
+    } else if (whole) {
+      const { found } = whole;
+      list.innerHTML = found.length
+        ? `<ul class="dc-tree-list dc-tree-found">${found
+            .map(
+              option => `
             <li class="dc-tree-result" style="--depth:0">
               <div class="dc-tree-row">
                 <button type="button" class="dc-tree-label" data-found="${escapeHtml(
@@ -282,16 +345,18 @@ export class OrganizationTree {
                 )}</button>
               </div>
             </li>`
-              )
-              .join('')}</ul>`
-          : none;
-      }
+            )
+            .join('')}</ul>`
+        : // Organizations left unread may hold one: absence is not proven.
+          none(whole.partial ? 'tree.noMatchOpened' : 'tree.noMatch');
     } else {
       // A short filter, or a tree that could not be searched whole, matches
       // the branches opened; matching none of them, it says so rather than
-      // leave a blank where the tree was.
+      // leave a blank where the tree was, and says of which.
       const nodes = this.nodeMarkup(this.tree, 0);
-      list.innerHTML = nodes ? `<ul class="dc-tree-list">${nodes}</ul>` : none;
+      list.innerHTML = nodes
+        ? `<ul class="dc-tree-list">${nodes}</ul>`
+        : none('tree.noMatchOpened');
     }
     this.bind(list);
   }
@@ -299,10 +364,90 @@ export class OrganizationTree {
   /** Whether the filter searches the whole tree rather than the opened branches. */
   private searchesEverywhere(): boolean {
     return (
-      !!this.options.everywhere &&
-      this.filter.length >= FILTER_EVERYWHERE &&
-      this.index !== null
+      !!(this.options.search || this.options.everywhere) &&
+      this.filter.length >= FILTER_EVERYWHERE
     );
+  }
+
+  /**
+   * What the whole tree holds that matches the filter: undefined while it
+   * is being searched, null when it could not be, the filter then left to
+   * the opened branches.
+   *
+   * The server's search answers for the whole tree. A walk stopped at its
+   * bound does not, and the branches opened, which it may not have reached,
+   * are searched with it.
+   */
+  private wholeTree(): WholeTreeMatches | null | undefined {
+    if (this.options.search) {
+      if (this.searched?.query !== this.filter) {
+        this.requestSearch();
+        return undefined;
+      }
+      const { found } = this.searched;
+      return found ? { found: this.sorted(found), partial: false } : null;
+    }
+    if (this.index === undefined) {
+      void this.loadIndex();
+      return undefined;
+    }
+    if (this.index === null) return null;
+    const { organizations, partial } = this.index;
+    if (!partial) return { found: this.matching(organizations), partial };
+    const known = new Map(
+      organizations.map(option => [comparableDn(option.dn), option])
+    );
+    const opened = (node: OrganizationNode): void => {
+      const key = comparableDn(node.dn);
+      if (!known.has(key))
+        known.set(key, { dn: node.dn, label: node.path || node.name });
+      for (const child of node.children || []) opened(child);
+    };
+    if (this.tree) opened(this.tree);
+    return { found: this.matching([...known.values()]), partial };
+  }
+
+  /**
+   * Ask the server for the filter once the typing pauses. Asked again for
+   * the same text, it waits for the one already asked.
+   */
+  private requestSearch(): void {
+    const query = this.filter;
+    const root = this.tree?.dn;
+    if (!root || this.searching === query) return;
+    this.cancelSearch();
+    this.searching = query;
+    const ticket = this.searchTicket;
+    this.searchTimer = setTimeout(() => {
+      this.searchTimer = undefined;
+      void this.runSearch(query, root, ticket);
+    }, SEARCH_DELAY);
+  }
+
+  private async runSearch(
+    query: string,
+    root: string,
+    ticket: number
+  ): Promise<void> {
+    let found: { dn: string; label: string }[] | null;
+    try {
+      found = (await this.options.search?.(query, root)) ?? [];
+    } catch {
+      found = null;
+    }
+    // Typed on, or cleared, meanwhile: the answer is for another text.
+    if (ticket !== this.searchTicket) return;
+    this.searching = null;
+    this.searched = { query, found };
+    this.drawList();
+  }
+
+  /** Drop the search waiting or under way: its answer is no longer wanted. */
+  private cancelSearch(): void {
+    if (this.searchTimer !== undefined) clearTimeout(this.searchTimer);
+    this.searchTimer = undefined;
+    if (this.searching !== null) this.searchTicket++;
+    this.searching = null;
   }
 
   /**
@@ -322,7 +467,7 @@ export class OrganizationTree {
     return indexing;
   }
 
-  private async readIndex(): Promise<{ dn: string; label: string }[] | null> {
+  private async readIndex(): Promise<OrganizationIndex | null> {
     try {
       return (await this.options.everywhere?.()) ?? null;
     } catch {
@@ -331,16 +476,27 @@ export class OrganizationTree {
   }
 
   /** The organizations whose path holds the filter, in reading order. */
-  private found(): { dn: string; label: string }[] {
+  private matching(
+    organizations: { dn: string; label: string }[]
+  ): { dn: string; label: string }[] {
     const needle = this.filter.toLowerCase();
-    return (this.index || [])
-      .filter(option => option.label.toLowerCase().includes(needle))
-      .sort((a, b) =>
-        a.label.localeCompare(b.label, undefined, {
-          sensitivity: 'base',
-          numeric: true,
-        })
-      );
+    return this.sorted(
+      organizations.filter(option =>
+        option.label.toLowerCase().includes(needle)
+      )
+    );
+  }
+
+  /** Organizations in reading order. */
+  private sorted(
+    organizations: { dn: string; label: string }[]
+  ): { dn: string; label: string }[] {
+    return [...organizations].sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, {
+        sensitivity: 'base',
+        numeric: true,
+      })
+    );
   }
 
   /** One node and, when it is open, its children. */
@@ -365,7 +521,12 @@ export class OrganizationTree {
           style="--depth:${depth}">
         <div class="dc-tree-row">
           <button type="button" class="dc-tree-toggle" data-toggle="${escapeHtml(node.dn)}"
-            ${hasChildren ? '' : 'disabled'} aria-expanded="${open ? 'true' : 'false'}"
+            ${
+              // A node known to hold nothing is neither open nor closed.
+              hasChildren
+                ? `aria-expanded="${open ? 'true' : 'false'}"`
+                : 'disabled'
+            }
             aria-label="${escapeHtml(toggleName)}">
             ${hasChildren ? (open ? '▾' : '▸') : '·'}
           </button>
@@ -463,7 +624,8 @@ export class OrganizationTree {
     this.selectedDn = dn;
     this.draw();
     this.options.onSelect(node);
-    if (!this.expanded.has(node.dn)) await this.toggle(node.dn);
+    if (!this.expanded.has(node.dn) && !isLeaf(node))
+      await this.toggle(node.dn);
     this.focusSelected();
   }
 
@@ -482,7 +644,8 @@ export class OrganizationTree {
     await this.reveal(dn);
     const node = this.find(dn);
     this.options.onSelect(node ?? { dn, name: label });
-    if (node && !this.expanded.has(node.dn)) await this.toggle(node.dn);
+    if (node && !this.expanded.has(node.dn) && !isLeaf(node))
+      await this.toggle(node.dn);
     this.focusSelected();
   }
 
@@ -514,10 +677,12 @@ export class OrganizationTree {
     if (!node.loaded) {
       try {
         node.children = await this.options.children(dn);
+        node.loaded = true;
       } catch {
-        node.children = [];
+        // Left unread and closed, not taken for a leaf: opening it again
+        // asks again.
+        this.expanded.delete(dn);
       }
-      node.loaded = true;
     }
     this.draw();
   }

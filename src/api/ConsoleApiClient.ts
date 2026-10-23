@@ -477,6 +477,14 @@ export class ConsoleApiClient {
     return this.nameFormat;
   }
 
+  /**
+   * Whether the server searches the organization tree in one request, for
+   * {@link organizationSearch}.
+   */
+  get searchesOrganizations(): boolean {
+    return this.organizationSearchable;
+  }
+
   /** Whether the server lets password policies be managed. */
   get servesPasswordPolicies(): boolean {
     return !!this.policiesPath;
@@ -1139,9 +1147,27 @@ export class ConsoleApiClient {
    * and mapped like an entry it would draw a node whose DN answers nothing.
    */
   async organizationChildren(dn: string): Promise<OrganizationNode[]> {
-    return (await this.subnodes(dn, ORGANIZATION_CLASS))
-      .filter(entry => !isMoreIndicator(entry))
-      .map(entry => this.toNode(entry));
+    return (await this.organizationChildrenRead(dn)).nodes;
+  }
+
+  /**
+   * {@link organizationChildren}, saying whether the server cut its answer:
+   * the indicator row is dropped either way, and a walk that goes on as if
+   * it had read every child would take the ones left out for absent.
+   *
+   * @param dn organization to read
+   * @returns its child organizations, and whether some were left out
+   */
+  private async organizationChildrenRead(
+    dn: string
+  ): Promise<{ nodes: OrganizationNode[]; truncated: boolean }> {
+    const entries = await this.subnodes(dn, ORGANIZATION_CLASS);
+    return {
+      nodes: entries
+        .filter(entry => !isMoreIndicator(entry))
+        .map(entry => this.toNode(entry)),
+      truncated: entries.some(isMoreIndicator),
+    };
   }
 
   /**
@@ -1764,11 +1790,29 @@ export class ConsoleApiClient {
   async organizationOptions(
     from?: OrganizationNode[]
   ): Promise<{ dn: string; label: string }[]> {
+    return (await this.organizationWalk(from)).organizations;
+  }
+
+  /**
+   * {@link organizationOptions}, saying whether the walk stopped at its
+   * bound before the end of the tree: what it did not reach may hold what
+   * is looked for.
+   *
+   * @param from subtrees to walk instead of the whole tree
+   * @returns the organizations found, and whether some were left unread
+   */
+  async organizationWalk(from?: OrganizationNode[]): Promise<{
+    organizations: { dn: string; label: string }[];
+    partial: boolean;
+  }> {
     const roots = from ?? [await this.organizationTop()];
     const options: { dn: string; label: string }[] = [];
     const queue = roots.filter((node): node is OrganizationNode => !!node);
     const seen = new Set<string>();
     let visited = 0;
+    // Whether every branch reached was read whole: one the server cut, or
+    // could not read, may hold organizations the walk never saw.
+    let complete = true;
     while (queue.length > 0 && visited < ORGANIZATION_OPTION_LIMIT) {
       const node = queue.shift() as OrganizationNode;
       const key = comparableDn(node.dn);
@@ -1777,12 +1821,22 @@ export class ConsoleApiClient {
       visited++;
       options.push({ dn: node.dn, label: node.path || node.name });
       try {
-        queue.push(...(await this.organizationChildren(node.dn)));
-      } catch {
-        // A branch the caller may not read is simply not offered.
+        const { nodes, truncated } = await this.organizationChildrenRead(
+          node.dn
+        );
+        queue.push(...nodes);
+        if (truncated) complete = false;
+      } catch (err) {
+        // A branch the caller may not read is simply not offered; one that
+        // failed otherwise is unknown, not empty.
+        if ((err as { status?: number }).status !== 403) complete = false;
       }
     }
-    return options;
+    return {
+      organizations: options,
+      partial:
+        !complete || queue.some(node => !seen.has(comparableDn(node.dn))),
+    };
   }
 
   /**
@@ -1796,11 +1850,14 @@ export class ConsoleApiClient {
    *
    * @param query text to look for
    * @param from organization whose subtree is searched; the top by default
+   * @param limit most matches kept: few for a list of suggestions, every
+   *   one the server answered for the tree's filter
    * @returns DN and label of each match, in reading order
    */
   async organizationSearch(
     query: string,
-    from = this.topOrganization
+    from = this.topOrganization,
+    limit = POINTER_SEARCH_LIMIT
   ): Promise<{ dn: string; label: string }[]> {
     if (!from) return [];
     const found = await this.call<Entry[]>(
@@ -1817,7 +1874,7 @@ export class ConsoleApiClient {
           numeric: true,
         })
       )
-      .slice(0, POINTER_SEARCH_LIMIT);
+      .slice(0, limit);
   }
 
   /** Turn an organization entry into a tree node. */

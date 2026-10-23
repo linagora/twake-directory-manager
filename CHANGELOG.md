@@ -26,8 +26,13 @@ Built on ldap-rest 0.25.1.
   change outside the branches one administers are said in the interface's
   language, under the field at fault when the form shows it, the toast
   reading _Not saved: see the highlighted field_; the import's result and its
-  refused rows file say them the same way. Any other refusal reads _The
-  server refused:_ before the server's own words (#126,
+  refused rows file say them the same way. A creation, an import row or a
+  change of organization refused for want of rights names the organization
+  at fault, under the organization field, not the entry. A state change, a
+  hand-over, a claim, a selection's deletion and a password policy's save or
+  deletion say their refusals the same way. Any other refusal reads _The
+  server refused:_ before the server's own words; a server failing reads
+  _Something went wrong_, with its words when they say more (#126,
   linagora/ldap-rest#372)
 - A local administrator's page load no longer asks for the password
   policies only to be refused (403): the scope says who manages them, and
@@ -37,9 +42,14 @@ Built on ldap-rest 0.25.1.
   instead of showing the Overview as if it had worked (#137)
 - The Organizations _Filter_ searches the whole tree, not only the branches
   opened, and lists what it finds by path (_Sales / France_); choosing one
-  opens the tree down to it and shows its card. Selecting an organization
-  also opens its branch, its card offers _New organization here_ beside
-  _Edit_, and the selected row keeps its "+" in view (#132)
+  opens the tree down to it and shows its card. A server that searches the
+  tree is asked once per filter; otherwise, where the tree is too wide to be
+  read whole, or could not be read, the filter says it found nothing _among
+  the opened branches_. Selecting an organization also opens its branch, its
+  card offers _New organization here_ beside _Edit_, and the selected row
+  keeps its "+" in view. An organization with no sub-organization is not
+  announced as expanded, and a branch whose sub-organizations could not be
+  read can be opened again (#132)
 - The Overview speaks in names: _Signed in as Ada Admin (admin@example.com)_
   rather than a DN, and the _Language_ select offers _English_, _Français_
   and _Монгол_. An account administering nothing finds one message on it,
@@ -53,13 +63,16 @@ Built on ldap-rest 0.25.1.
   state to _Disabled_ instead; _Cancel_ has the focus, and the button names the
   action: _Delete Jane_, _Delete group_, _Hand over_. The Reset password and
   Claim panels' buttons read _Reset password_ and _Claim into Sales_ rather
-  than _Confirm_ (#131)
+  than _Confirm_. Cancelling a selection's deletion leaves the list, its
+  selection and the focus as they were (#131)
 - An account's card is headed by the full name, with the identifier and the
   address under it, as is the browser tab. Its details are grouped under
   headings, a value said twice is said once, the empty fields wait under
   _Show empty fields (N)_ and the DN under _Technical details_; a mailbox
-  size no unit says exactly reads _1.07 GB_, the bytes in its tooltip. _Edit_
-  comes first, and _Hand over_ and _Delete_ moved to a _More_ menu (#133)
+  size no unit says exactly reads _1.07 GB_, the bytes in its tooltip, and
+  _1 GB_ rather than _1000 MB_ just below it. _Edit_ comes first, and _Hand
+  over_ and _Delete_ moved to a _More_ menu. The tab no longer keeps the name
+  of the organization shown before one whose card fails to load (#133)
 - A CSV import's result lists each entry it created, by full name and
   identifier, linked to its card; once the result is closed, the list shows
   them as _Just imported (2)_ until _Back to search_, rather than asking for

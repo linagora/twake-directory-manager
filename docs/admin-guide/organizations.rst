@@ -18,7 +18,11 @@ Browsing the tree
   closed branches included, and lists the organizations whose path contains
   the text typed (``Sales / France``). A click on one opens the tree down to
   it and shows its card. A single character only hides, in the branches
-  already opened, the organizations whose name does not contain it.
+  already opened, the organizations whose name does not contain it. When the
+  whole tree cannot be searched (an ldap-rest without organization search
+  whose tree is too wide to read whole, or a failure), the filter also
+  searches the branches already opened and says it found nothing *among the
+  opened branches*: another branch may still hold a match.
 - The transit organization, when the deployment has one, is tagged
   :guilabel:`Transit` (see :doc:`transit`).
 

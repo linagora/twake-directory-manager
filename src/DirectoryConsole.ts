@@ -53,6 +53,7 @@ import {
 import { availableLanguages, languageName, Translator } from './i18n';
 import { signInAgain } from './session';
 import type { ListView } from './components/EntityList';
+import type { OrganizationIndex } from './components/OrganizationTree';
 import type { PointerLookup } from './importer';
 import type {
   AttachedEntries,
@@ -1566,7 +1567,8 @@ export class DirectoryConsole {
       read: (id: string): Promise<Entry> => this.api.get(entity, id),
       onOpen: (id: string): void =>
         this.go(`${entity.key}/${encodeURIComponent(id)}`),
-      onDelete: (ids: string[]): Promise<void> => this.deleteMany(entity, ids),
+      onDelete: (ids: string[]): Promise<boolean> =>
+        this.deleteMany(entity, ids),
     });
     await list.render(holder);
   }
@@ -2011,11 +2013,20 @@ export class DirectoryConsole {
             : undefined,
         canCreateChild: (node: OrganizationNode): boolean =>
           this.createsUnder(node.dn),
-        // Walked from the root the tree is drawn from: the server roots a
-        // local administrator's tree at their branch, and the filter finds
-        // what the tree can open down to, no more.
-        everywhere: (): Promise<{ dn: string; label: string }[]> =>
-          this.api.organizationOptions(),
+        // Walked, or searched, from the root the tree is drawn from: the
+        // server roots a local administrator's tree at their branch, and the
+        // filter finds what the tree can open down to, no more. A server
+        // that searches the tree is asked once per filter rather than walked
+        // an organization at a time, up to a bound a wide tree goes past.
+        everywhere: (): Promise<OrganizationIndex> =>
+          this.api.organizationWalk(),
+        search: this.api.searchesOrganizations
+          ? (
+              query: string,
+              root: string
+            ): Promise<{ dn: string; label: string }[]> =>
+              this.api.organizationSearch(query, root, Infinity)
+          : undefined,
       },
       this.tree
     );
@@ -2039,6 +2050,9 @@ export class DirectoryConsole {
     // Clicking through a tree is navigation like any other: the node asked
     // for last is the node whose card should end up on screen.
     const generation = ++this.viewGeneration;
+    // Until its card is drawn, the tab no longer names the organization
+    // shown before: a card that fails to load leaves it named after none.
+    this.titlePage();
 
     let entry: Entry;
     try {
@@ -2638,7 +2652,7 @@ export class DirectoryConsole {
               if (policy) await this.api.updatePasswordPolicy(cn, values);
               else await this.api.createPasswordPolicy(cn, values);
             } catch (err) {
-              this.toast((err as Error).message, true);
+              this.toast(this.policyRefusal(err, cn), true);
               return;
             }
             this.closePanel();
@@ -2673,7 +2687,7 @@ export class DirectoryConsole {
       this.toast(
         (err as { status?: number }).status === 409
           ? t('policy.inUse', { name: policy.cn })
-          : (err as Error).message,
+          : this.policyRefusal(err, policy.cn),
         true
       );
       return;
@@ -2681,6 +2695,19 @@ export class DirectoryConsole {
     this.closePanel();
     this.toast(t('policy.deleted'));
     await this.renderMain();
+  }
+
+  /**
+   * A refusal of a password policy in the interface's language, as an
+   * entry's is said (see {@link explainRefusal}). A policy has no schema
+   * the console reads: the server's words name its attributes themselves.
+   *
+   * @param err what the request threw
+   * @param name the policy
+   */
+  private policyRefusal(err: unknown, name: string): string {
+    return explainRefusal(err, { attributes: {} }, this.translator, name)
+      .message;
   }
 
   /**
@@ -2773,13 +2800,23 @@ export class DirectoryConsole {
               );
           }
         } catch (err) {
+          // Refused the rights to the organization it goes to, that is the
+          // one named; refused them to the entry itself, the entry.
+          const organization = this.organizationRefused(
+            entity,
+            values,
+            entry,
+            form
+          );
           this.refuseSave(
             err,
             entity,
             form,
-            entry
-              ? this.personName(entity, entry, id)
-              : this.submittedName(entity, values, id)
+            organization?.name ??
+              (entry
+                ? this.personName(entity, entry, id)
+                : this.submittedName(entity, values, id)),
+            organization?.attribute
           );
         }
       },
@@ -2958,14 +2995,65 @@ export class DirectoryConsole {
    *
    * @param err what the request threw
    * @param entity the entity of the entry refused
-   * @param name the entry the change was about
+   * @param name what a refusal of rights is about: the entry, or the
+   *   organization it goes to
+   * @param field the attribute naming that organization
    */
   private refusal(
     err: unknown,
     entity: EntityDescriptor,
-    name?: string
+    name?: string,
+    field?: string
   ): { message: string; attribute?: string } {
-    return explainRefusal(err, entity.schema, this.translator, name);
+    return explainRefusal(err, entity.schema, this.translator, name, field);
+  }
+
+  /**
+   * The organization a refusal of the caller's rights is about, when the
+   * write puts an entry in one.
+   *
+   * ldap-rest judges a new entry on the organization it is attached to, not
+   * on the entry: "You do not administer Alice Martin" said of an account
+   * that does not exist yet. A change of organization is judged on both
+   * ends — reading where the entry is, writing where it goes — and the scope
+   * says which the caller lacks; where it says nothing, the destination is
+   * the one asked more of. Any other change is judged on the entry, and
+   * none is returned.
+   *
+   * @param entity the entity of the entry written
+   * @param values what the form sent
+   * @param entry the entry as stored; none for a new one
+   * @param form the form, which names the organizations it offered
+   * @returns the organization by its path, and the field naming it
+   */
+  private organizationRefused(
+    entity: EntityDescriptor,
+    values: Record<string, string | string[]>,
+    entry?: Entry,
+    form?: EntityForm
+  ): { name: string; attribute: string } | undefined {
+    const link = entity.organizationLink;
+    const sent = link ? [values[link] ?? []].flat()[0]?.trim() : undefined;
+    if (!link || !sent) return undefined;
+    const named = (dn: string): string =>
+      form?.pointerName(dn) ??
+      pointerLabel(this.entities, dn, this.translator.language) ??
+      rdnValue(dn);
+    const stored = entry
+      ? String([entryValue(entry, link) ?? []].flat()[0] ?? '').trim()
+      : '';
+    if (!stored || !scopeRestricts(this.scope))
+      return { name: named(sent), attribute: link };
+    const writes = this.scope.branches.some(
+      branch => branch.write && withinDn(sent, branch.dn)
+    );
+    return {
+      name: writes
+        ? (this.roleValue(entity, entry as Entry, 'organizationPath') ??
+          named(stored))
+        : named(sent),
+      attribute: link,
+    };
   }
 
   /**
@@ -2976,15 +3064,23 @@ export class DirectoryConsole {
    * @param err what the request threw
    * @param entity the entity of the entry refused
    * @param form the form that was saved
-   * @param name the entry the change was about
+   * @param name what a refusal of rights is about: the entry, or the
+   *   organization it goes to
+   * @param field the attribute naming that organization
    */
   private refuseSave(
     err: unknown,
     entity: EntityDescriptor,
     form: EntityForm | undefined,
-    name: string
+    name: string,
+    field?: string
   ): void {
-    const { message, attribute } = this.refusal(err, entity, name || undefined);
+    const { message, attribute } = this.refusal(
+      err,
+      entity,
+      name || undefined,
+      field
+    );
     if (attribute && form?.refuse(attribute, message))
       this.toast(this.translator.t('refusal.seeField'), true);
     else this.toast(message, true);
@@ -3055,19 +3151,40 @@ export class DirectoryConsole {
       }
       await this.renderMain();
     } catch (err) {
-      // Named as the panel's title names it.
+      // Named as the panel's title names it. A new one is judged on the
+      // organization it goes under, which is the one named then.
       const id = entry
         ? String(entryValue(entry, entity.mainAttribute) ?? '')
         : createdEntryId(entity, undefined, values);
+      const parent = parentDn ?? this.api.organizationRoot;
       this.refuseSave(
         err,
         entity,
         form,
         entry
           ? this.entryName(entity, id)
-          : this.submittedName(entity, values, id)
+          : parent
+            ? this.organizationName(entity, parent)
+            : this.submittedName(entity, values, id)
       );
     }
+  }
+
+  /**
+   * An organization by the name the console gives it elsewhere: its path,
+   * as the parent picker and the banner say it, else its name in the tree.
+   *
+   * @param entity the organizations
+   * @param dn the organization
+   */
+  private organizationName(entity: EntityDescriptor, dn: string): string {
+    return (
+      this.creationParents(entity).find(
+        item => comparableDn(item.dn) === comparableDn(dn)
+      )?.label ??
+      this.tree?.nameOf(dn) ??
+      rdnValue(dn)
+    );
   }
 
   /* --------------------------------------------------------------- actions */
@@ -3260,7 +3377,7 @@ export class DirectoryConsole {
       );
       await this.renderMain();
     } catch (err) {
-      this.toast((err as Error).message, true);
+      this.toast(this.refusal(err, entity, name).message, true);
     }
   }
 
@@ -3521,7 +3638,10 @@ export class DirectoryConsole {
               );
               await this.afterTransitMove();
             })
-            .catch((err: Error) => this.toast(err.message, true));
+            // Claiming is judged on the organization chosen alone.
+            .catch((err: unknown) =>
+              this.toast(this.refusal(err, entity, target.label).message, true)
+            );
         });
       },
       true
@@ -3578,7 +3698,8 @@ export class DirectoryConsole {
       );
       await this.afterTransitMove();
     } catch (err) {
-      this.toast((err as Error).message, true);
+      // Handing over is judged on the organization the entry leaves.
+      this.toast(this.refusal(err, entity, organization ?? name).message, true);
     }
   }
 
@@ -3798,7 +3919,10 @@ export class DirectoryConsole {
     entry?: Entry,
     canChangeState = false
   ): Promise<void> {
-    const name = this.entryName(entity, id);
+    // Named as the dialog names it.
+    const name = entry
+      ? this.personName(entity, entry, id)
+      : this.entryName(entity, id);
     if (
       !(await this.confirmAction(
         await this.deletion(entity, id, entry, canChangeState)
@@ -3905,14 +4029,17 @@ export class DirectoryConsole {
   /**
    * Delete a selection, reporting each refusal on its own: a bulk action that
    * stops at the first error leaves the operator guessing which entries went.
+   *
+   * @returns whether any entry was deleted: none on Cancel, and the list
+   *   then stays as it was, selection and focus with it
    */
   private async deleteMany(
     entity: EntityDescriptor,
     ids: string[]
-  ): Promise<void> {
+  ): Promise<boolean> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    if (ids.length === 0) return;
+    if (ids.length === 0) return false;
     // The first few by name, enough to see the selection is the right one.
     const named = ids.slice(0, 5).map(id => this.entryName(entity, id));
     const more = ids.length - named.length;
@@ -3924,19 +4051,25 @@ export class DirectoryConsole {
         action: t('delete.manyButton', { count: ids.length }),
       }))
     )
-      return;
+      return false;
 
     const failures: string[] = [];
+    let deleted = 0;
     for (const id of ids) {
       try {
         await this.api.remove(entity, id);
+        deleted++;
       } catch (err) {
+        const name = this.entryName(entity, id);
+        const { refusal } = err as { refusal?: { code?: string } };
+        const said = this.refusal(err, entity, name).message;
+        // A refusal of rights names the entry itself; any other is said
+        // after its name.
         failures.push(
           this.inUse(err, entity, id) ??
-            t('delete.failed', {
-              name: this.entryName(entity, id),
-              error: (err as Error).message,
-            })
+            (refusal?.code === 'forbidden'
+              ? said
+              : t('delete.failed', { name, error: said }))
         );
       }
     }
@@ -3944,6 +4077,7 @@ export class DirectoryConsole {
       failures.length === 0 ? t('delete.done') : failures.join(' · '),
       failures.length > 0
     );
+    return deleted > 0;
   }
 
   /** Show a short message. */

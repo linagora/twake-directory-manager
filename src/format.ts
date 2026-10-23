@@ -226,12 +226,18 @@ export function readableByteSize(value: string): {
     !Number.isSafeInteger(bytes)
   )
     return { text: exact, exact: true };
-  for (const [unit, size] of SIZE_UNITS) {
+  for (const [index, [unit, size]] of SIZE_UNITS.entries()) {
     if (bytes < size) continue;
-    return {
-      text: `${Number((bytes / size).toPrecision(3))} ${unit}`,
-      exact: false,
-    };
+    const quantity = Number((bytes / size).toPrecision(3));
+    // Rounded up to a thousand, it reads in the unit above: 999999999 is
+    // 1 GB, not 1000 MB.
+    const above = SIZE_UNITS[index - 1];
+    if (quantity >= 1000 && above)
+      return {
+        text: `${Number((bytes / above[1]).toPrecision(3))} ${above[0]}`,
+        exact: false,
+      };
+    return { text: `${quantity} ${unit}`, exact: false };
   }
   return { text: exact, exact: true };
 }
@@ -328,6 +334,10 @@ export function nameAttributes(
   );
 }
 
+/** What a server says on a `500` when it says nothing about the cause. */
+export const GENERIC_FAILURE =
+  /^(?:\d{3}\s*)?(?:Internal Server Error|An error occurred)?\.?$/i;
+
 /**
  * The label of an attribute the server names, spelt as the directory spells
  * it: the schema's own key may differ in case.
@@ -357,23 +367,30 @@ function schemaLabel(
  * {@link Refusal}): a value already used, an address outside the mail domains
  * of its organization, a change outside the caller's branches. Those are said
  * here in the console's words, the field named by its label; the attribute is
- * handed back for a form to show the message under it. Any other refusal is
- * the server's own sentence, fields named by their labels, said to be the
- * server's: its words are not the console's. A failure no server answered —
- * the network, say — is left as it is.
+ * handed back for a form to show the message under it. Any other refusal — a
+ * `4xx` but `401` — is the server's own sentence, fields named by their
+ * labels, said to be the server's: its words are not the console's. What is
+ * no refusal — a server failing, a session ended, an answer nobody could
+ * read — is said to have gone wrong, with the server's words when they say
+ * more than its status. A failure no server answered — the network, say — is
+ * left as it is.
  *
  * @param err what the request threw
  * @param schema schema of the entry refused
  * @param translator interface language
- * @param name the entry the change was about, for a refusal of the caller's
- *   rights; without it, that refusal is said as the server worded it
+ * @param name what a refusal of the caller's rights is about: the entry
+ *   changed, or the organization a new or moved entry goes to, the one the
+ *   server judged; without it, that refusal is said as the server worded it
+ * @param field the attribute naming that organization, for a form to show
+ *   the refusal of rights under it
  * @returns the message, and the attribute it is about when it is about one
  */
 export function explainRefusal(
   err: unknown,
   schema: EntitySchema,
   translator: Translator,
-  name?: string
+  name?: string,
+  field?: string
 ): { message: string; attribute?: string } {
   const { message, status, refusal } = (err ?? {}) as {
     message?: string;
@@ -382,33 +399,39 @@ export function explainRefusal(
   };
   const { language } = translator;
   const { code, attribute, value, domains } = refusal ?? { code: '' };
-  const field =
+  const label =
     attribute === undefined
       ? undefined
       : (schemaLabel(attribute, schema, language) ??
         attributeLabel(attribute, undefined, language));
-  if (code === 'unique' && field !== undefined && value !== undefined)
+  if (code === 'unique' && label !== undefined && value !== undefined)
     return {
-      message: translator.t('refusal.unique', { field, value }),
+      message: translator.t('refusal.unique', { field: label, value }),
       attribute,
     };
-  if (code === 'mailDomain' && field !== undefined && value && domains)
+  if (code === 'mailDomain' && label !== undefined && value && domains)
     return {
       message: translator.t('refusal.domain', {
-        field,
+        field: label,
         domain: value.slice(value.lastIndexOf('@') + 1),
         domains: domains.join(', '),
       }),
       attribute,
     };
   if (code === 'forbidden' && name)
-    return { message: translator.t('refusal.forbidden', { name }) };
+    return {
+      message: translator.t('refusal.forbidden', { name }),
+      ...(field ? { attribute: field } : {}),
+    };
   const named = nameAttributes(String(message ?? ''), schema, language);
+  if (typeof status !== 'number') return { message: named };
+  if (status >= 400 && status < 500 && status !== 401)
+    return { message: translator.t('refusal.server', { message: named }) };
+  const cause = named.trim();
   return {
-    message:
-      typeof status === 'number'
-        ? translator.t('refusal.server', { message: named })
-        : named,
+    message: GENERIC_FAILURE.test(cause)
+      ? translator.t('app.error')
+      : `${translator.t('app.error')} (${cause})`,
   };
 }
 
