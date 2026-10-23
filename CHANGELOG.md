@@ -2,8 +2,15 @@
 
 ## Unreleased
 
+Built on ldap-rest 0.25.0.
+
 ### Bug Fixes
 
+- On OpenLDAP 2.4, a password policy no longer offers _Maximum length_,
+  _Account unused for_ or the delays after a failure, now that ldap-rest
+  lists the settings the directory defines (#118, linagora/ldap-rest#366)
+- The keyboard opens an entry from the Users, Groups and reference lists: the
+  first column of each row is a link, which also opens in a new tab (#135)
 - A generated password stays in the Reset password panel, with a _Copy_
   button, until it is closed on purpose; closing it uncopied asks first. In a
   toast, the click that began selecting it dismissed it for good (#124)

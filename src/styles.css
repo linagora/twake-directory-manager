@@ -744,6 +744,21 @@
   font-weight: 550;
 }
 
+.dc-row-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.dc-row-link:hover {
+  text-decoration: underline;
+}
+
+.dc-row-link:focus-visible {
+  outline: none;
+  box-shadow: var(--dc-focus);
+  border-radius: 4px;
+}
+
 .dc-path {
   color: var(--dc-muted);
 }

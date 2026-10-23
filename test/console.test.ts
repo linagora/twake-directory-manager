@@ -4262,10 +4262,84 @@ describe('Directory console', () => {
         onDelete: () => Promise.resolve(),
         canDelete: false,
       }).render(container);
-      expect(container.innerHTML).to.include(
-        'title="teamMailbox">Boîte partagée</td>'
+      // `escapeHtml` writes a slash as an entity, which the browser reads back
+      const markup = container.innerHTML.replace(/&#x2F;/g, '/');
+      expect(markup).to.include(
+        'title="teamMailbox"><a class="dc-row-link" href="#/mailboxTypes/teamMailbox">Boîte partagée</a></td>'
       );
-      expect(container.innerHTML).to.include('title="custom">custom</td>');
+      expect(markup).to.include(
+        'title="custom"><a class="dc-row-link" href="#/mailboxTypes/custom">custom</a></td>'
+      );
+    });
+
+    it('should open each row from a link in its first column', async () => {
+      // A row with a click handler is out of reach of the keyboard: Tab
+      // passed the checkboxes and could open nothing.
+      for (const [entity, id, href] of [
+        [users, 'alice', '#/users/alice'],
+        [groups, 'sales team', '#/groups/sales%20team'],
+        [mailboxTypes, 'a/b', '#/mailboxTypes/a%2Fb'],
+      ] as const) {
+        const container = stubContainer();
+        await new EntityList({
+          entity,
+          translator: new Translator('en'),
+          load: () =>
+            Promise.resolve({
+              [id]: { [entity.mainAttribute]: id },
+            }),
+          listable: true,
+          onOpen: () => undefined,
+          onDelete: () => Promise.resolve(),
+          canDelete: false,
+        }).render(container);
+        const links = container.innerHTML
+          .replace(/&#x2F;/g, '/')
+          .match(/<a class="dc-row-link"[^>]*>/g);
+        expect(links, entity.key).to.deep.equal([
+          `<a class="dc-row-link" href="${href}">`,
+        ]);
+        expect(EntityList.entryHref(entity, id)).to.equal(href);
+      }
+    });
+
+    it('should open a row clicked outside its link and checkbox, and only there', async () => {
+      // The link follows itself, Ctrl+click into a new tab: the row opening
+      // the card too would take the current tab with it.
+      let click: ((event: { target: unknown }) => void) | undefined;
+      const row = {
+        dataset: { id: 'alice' },
+        addEventListener: (type: string, listener: typeof click) => {
+          if (type === 'click') click = listener;
+        },
+      };
+      const container = {
+        ...stubContainer(),
+        querySelectorAll: (selector: string) =>
+          (selector === 'tbody tr'
+            ? [row]
+            : []) as unknown as NodeListOf<Element>,
+      } as unknown as HTMLElement & { innerHTML: string };
+      const opened: string[] = [];
+      await new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () => Promise.resolve({ alice: { uid: 'alice' } }),
+        listable: true,
+        onOpen: id => opened.push(id),
+        onDelete: () => Promise.resolve(),
+        canDelete: false,
+      }).render(container);
+      const inside = (selectors: string[]) => ({
+        closest: (selector: string) =>
+          selector.split(',').some(part => selectors.includes(part.trim()))
+            ? {}
+            : null,
+      });
+      click?.({ target: inside([]) });
+      click?.({ target: inside(['.dc-row-link']) });
+      click?.({ target: inside(['.dc-checkbox-cell']) });
+      expect(opened).to.deep.equal(['alice']);
     });
 
     it('should search every field the schema marks, not just the identifier', async () => {

@@ -1,3 +1,5 @@
+import type { Locator } from '@playwright/test';
+
 import { csv, LoginPage, readDownload } from '../pages';
 import { ADMIN, ALICE, SEEDED_UIDS, SOPHIE } from '../support/accounts';
 import { answerNextConfirm } from '../support/confirm';
@@ -417,6 +419,49 @@ test.describe('LIST lists, search and bulk actions', () => {
     await app.entry().backButton.click();
     await expect(list.searchBox).toHaveValue('eng');
     await expect(list.row('engineering')).toBeVisible();
+  });
+
+  test('LIST-12 a keyboard user opens an entry from a list', async ({
+    page,
+  }) => {
+    const app = await new LoginPage(page).loginAs(ADMIN, 'users');
+    const list = app.list();
+
+    /** Tabs from the search box to a row's link, past the controls and rows before it */
+    const tabTo = async (row: Locator): Promise<void> => {
+      const link = row.getByRole('link');
+      await list.searchBox.focus();
+      for (let i = 0; i < 40; i++) {
+        await page.keyboard.press('Tab');
+        if (await link.evaluate(el => el === document.activeElement)) break;
+      }
+      await expect(link).toBeFocused();
+    };
+
+    await list.search('Moreau', 'Last name');
+    await expect(list.row('alice').getByRole('link')).toHaveAttribute(
+      'href',
+      '#/users/alice'
+    );
+    await tabTo(list.row('alice'));
+    await page.keyboard.press('Enter');
+    await app.entry().expectName('alice');
+    await app.entry().backButton.click();
+    await expect(list.searchBox).toHaveValue('Moreau');
+    await expect(list.ids()).toHaveText(['alice']);
+
+    await app.navItem('Groups').click();
+    await list.search('eng');
+    await tabTo(list.row('engineering'));
+    await page.keyboard.press('Enter');
+    await app.entry().expectName('engineering');
+
+    await app.open('accountStatuses');
+    await expect(list.rows.first()).toBeVisible();
+    await tabTo(list.rows.first());
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/#\/accountStatuses\/[^/]+$/);
+    await expect(app.entry().heading).toBeVisible();
   });
 
   test('LIST-11 a count of one reads in the singular', async ({
