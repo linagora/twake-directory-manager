@@ -199,8 +199,7 @@ const en: Catalogue = {
   'tree.expand': 'Expand {name}',
   'tree.collapse': 'Collapse {name}',
   'tree.leaf': '{name} has no sub-organization',
-  'tree.noMatch':
-    'No organization matches “{filter}” among the opened branches',
+  'tree.noMatch': 'No organization matches “{filter}”',
   'tree.parent': 'Parent organization',
 
   'status.title': 'Account state',
@@ -552,8 +551,7 @@ const fr: Catalogue = {
   'tree.expand': 'Développer {name}',
   'tree.collapse': 'Réduire {name}',
   'tree.leaf': '{name} n’a pas de sous-organisation',
-  'tree.noMatch':
-    'Aucune organisation ne correspond à « {filter} » parmi les branches ouvertes',
+  'tree.noMatch': 'Aucune organisation ne correspond à « {filter} »',
   'tree.parent': 'Organisation parente',
 
   'status.title': 'État du compte',
@@ -878,7 +876,7 @@ const mn: Catalogue = {
   'tree.expand': '{name}-г дэлгэх',
   'tree.collapse': '{name}-г хураах',
   'tree.leaf': '{name} дэд байгууллагагүй',
-  'tree.noMatch': 'Нээсэн салбаруудад «{filter}»-д тохирох байгууллага алга',
+  'tree.noMatch': '«{filter}»-д тохирох байгууллага алга',
   'tree.parent': 'Дээд байгууллага',
 
   'status.title': 'Бүртгэлийн төлөв',

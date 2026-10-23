@@ -548,6 +548,29 @@ describe('Directory console', () => {
       expect(asked).to.deep.equal([sales, eu]);
     });
 
+    it('should offer a new organization under one only when it may be created', () => {
+      const render = (onCreateChild?: () => void): string => {
+        const container = stubContainer();
+        new EntityDetail({
+          entity: linkedGroups,
+          entry: account(sales),
+          translator: new Translator('en'),
+          canWrite: true,
+          canDelete: false,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          onStatus: () => undefined,
+          onResetPassword: () => undefined,
+          onCreateChild,
+        }).render(container);
+        return container.innerHTML;
+      };
+      expect(render(() => undefined)).to.match(
+        /data-edit>Edit<\/button>\s*<button type="button" class="dc-button" data-create-child>New organization here</
+      );
+      expect(render()).not.to.include('data-create-child');
+    });
+
     it('should mark an entry in transit and offer its moves', () => {
       const render = (options: {
         inTransit?: boolean;
@@ -668,12 +691,130 @@ describe('Directory console', () => {
       container.filter.value = 'zzz';
       container.filter.fire();
       expect(container.list.innerHTML)
-        .to.include('No organization matches “zzz” among the opened branches')
+        .to.include('No organization matches “zzz”')
         .and.not.include('dc-tree-list');
       // Cleared, the tree is back.
       container.filter.value = '';
       container.filter.fire();
       expect(container.list.innerHTML).to.include('>Sales</button>');
+    });
+  });
+
+  describe('OrganizationTree, searching the whole tree', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const sales = `ou=Sales,${top}`;
+    const france = `ou=France,${sales}`;
+    const settle = (): Promise<void> =>
+      new Promise(resolve => setImmediate(resolve));
+    const options = (asked: string[], selected: string[] = []) => ({
+      translator: new Translator('en'),
+      root: async () => ({ dn: top, name: 'organization' }),
+      children: async (dn: string) => {
+        asked.push(dn);
+        if (dn === top) return [{ dn: sales, name: 'Sales' }];
+        if (dn === sales) return [{ dn: france, name: 'France' }];
+        return [];
+      },
+      onSelect: (node: { dn: string }) => {
+        selected.push(node.dn);
+      },
+      everywhere: async () => [
+        { dn: top, label: 'organization' },
+        { dn: sales, label: 'Sales' },
+        { dn: france, label: 'Sales / France' },
+      ],
+    });
+    type Hidden = {
+      choose(dn: string, label: string): Promise<void>;
+      pick(dn: string): Promise<void>;
+    };
+
+    it('should find an organization under a branch never opened', async () => {
+      const asked: string[] = [];
+      const selected: string[] = [];
+      const container = treeContainer();
+      const tree = new OrganizationTree(options(asked, selected));
+      await tree.render(container);
+      container.filter.value = 'Fra';
+      container.filter.fire();
+      await settle();
+      expect(container.list.innerHTML)
+        .to.include(`data-found="${france}"`)
+        .and.include('>Sales &#x2F; France</button>')
+        .and.not.include('data-select');
+      expect(asked).to.deep.equal([top]);
+
+      // Chosen, it is shown in the tree, opened down to it, and selected.
+      await (tree as unknown as Hidden).choose(france, 'Sales / France');
+      expect(container.filter.value).to.equal('');
+      expect(selected).to.deep.equal([france]);
+      expect(container.list.innerHTML).to.match(
+        /dc-selected[^]*?data-select="ou=France,ou=Sales,/
+      );
+    });
+
+    it('should say when no organization of the whole tree matches', async () => {
+      const container = treeContainer();
+      await new OrganizationTree(options([])).render(container);
+      container.filter.value = 'zzz';
+      container.filter.fire();
+      await settle();
+      expect(container.list.innerHTML)
+        .to.include('No organization matches “zzz”')
+        .and.not.include('among the opened branches');
+    });
+
+    it('should read the whole tree once, and again once a branch changed', async () => {
+      let reads = 0;
+      const container = treeContainer();
+      const tree = new OrganizationTree({
+        ...options([]),
+        everywhere: async () => {
+          reads++;
+          return [{ dn: sales, label: 'Sales' }];
+        },
+      });
+      await tree.render(container);
+      for (const typed of ['Sa', 'Sal', 'S', 'Sa']) {
+        container.filter.value = typed;
+        container.filter.fire();
+        await settle();
+      }
+      expect(reads).to.equal(1);
+      await tree.refresh();
+      await settle();
+      expect(reads).to.equal(2);
+    });
+
+    it('should filter the opened branches when the whole tree cannot be read', async () => {
+      const container = treeContainer();
+      await new OrganizationTree({
+        ...options([]),
+        everywhere: async () => {
+          throw new Error('refused');
+        },
+      }).render(container);
+      container.filter.value = 'Sal';
+      container.filter.fire();
+      await settle();
+      expect(container.list.innerHTML).to.include('>Sales</button>');
+    });
+
+    it('should open a node when it is selected', async () => {
+      const asked: string[] = [];
+      const selected: string[] = [];
+      const container = treeContainer();
+      const tree = new OrganizationTree(options(asked, selected));
+      await tree.render(container);
+      await (tree as unknown as Hidden).pick(sales);
+      expect(selected).to.deep.equal([sales]);
+      expect(asked).to.deep.equal([top, sales]);
+      expect(container.list.innerHTML)
+        .to.include('aria-label="Collapse Sales"')
+        .and.include('>France</button>');
+      // Selected again, it stays open.
+      await (tree as unknown as Hidden).pick(sales);
+      expect(container.list.innerHTML).to.include('>France</button>');
     });
   });
 

@@ -39,6 +39,8 @@ export interface DetailOptions {
   onClaim?(): void;
   /** Let it go into the transit branch, when they may */
   onHandOver?(): void;
+  /** Create an organization under this one, when they may */
+  onCreateChild?(): void;
   /** Readable name of the entry a pointer lands on, when its schema has one */
   pointerLabel?(dn: string): string | undefined;
   /** Entries pointing at this one, or pointed at by it */
@@ -88,7 +90,7 @@ export class EntityDetail {
    */
   render(container: HTMLElement): void {
     const { entity, entry, translator, canWrite, canDelete } = this.options;
-    const { inTransit, onClaim, onHandOver } = this.options;
+    const { inTransit, onClaim, onHandOver, onCreateChild } = this.options;
     const id = values(entryValue(entry, entity.mainAttribute))[0] || '';
     const title =
       ownValueLabel(entity, entity.mainAttribute, id, translator.language) ||
@@ -123,6 +125,13 @@ export class EntityDetail {
               canWrite
                 ? `<button type="button" class="dc-button dc-button-primary" data-edit>${escapeHtml(
                     translator.t('app.edit')
+                  )}</button>`
+                : ''
+            }
+            ${
+              onCreateChild
+                ? `<button type="button" class="dc-button" data-create-child>${escapeHtml(
+                    translator.t('tree.addChild')
                   )}</button>`
                 : ''
             }
@@ -319,6 +328,9 @@ export class EntityDetail {
     container
       .querySelector('[data-hand-over]')
       ?.addEventListener('click', () => this.options.onHandOver?.());
+    container
+      .querySelector('[data-create-child]')
+      ?.addEventListener('click', () => this.options.onCreateChild?.());
 
     const copy = container.querySelector<HTMLElement>('[data-copy-dn]');
     copy?.addEventListener('click', () => {
