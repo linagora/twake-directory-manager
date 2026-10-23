@@ -40,7 +40,7 @@ test.describe('TRANSIT hand over and claim', () => {
     const card = app.entry();
 
     const message = answerNextConfirm(page, true);
-    await card.action('Hand over').click();
+    await card.perform('Hand over');
     expect(await message).toBe(
       `Put ${user.uid} in transit? Every administrator will see this entry and may claim it, and you will no longer manage it.`
     );
@@ -109,8 +109,9 @@ test.describe('TRANSIT hand over and claim', () => {
     await expect(card.actions()).toContainText([
       'Edit',
       'Reset password',
-      'Delete',
+      'More',
     ]);
+    await expect(card.moreActions()).toContainText(['Delete']);
     await expect(card.changeState).toBeVisible();
     await app.openList('Users');
     await app.list().search(user.uid);
@@ -129,10 +130,11 @@ test.describe('TRANSIT hand over and claim', () => {
     await expect(card.actions()).toHaveText([
       'Claim…',
       'Edit',
-      'Change state…',
       'Reset password',
-      'Delete',
+      'Change state…',
+      'More',
     ]);
+    await expect(card.moreActions()).toHaveText(['Delete']);
     await expect(card.changeState).toBeVisible();
 
     await card.action('Claim…').click();
@@ -174,7 +176,7 @@ test.describe('TRANSIT hand over and claim', () => {
     );
 
     const message = answerNextConfirm(page, true);
-    await app.entry().action('Hand over').click();
+    await app.entry().perform('Hand over');
     await message;
     await app.expectToast(`${group.cn} is in transit`);
     expect(await directory.values(group.dn, 'twakeDepartmentLink')).toEqual([

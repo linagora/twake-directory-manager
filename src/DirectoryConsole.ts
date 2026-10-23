@@ -427,6 +427,8 @@ export class DirectoryConsole {
    * asked for.
    */
   private viewGeneration = 0;
+  /** The page's own title, which a card puts the entry's name before */
+  private pageTitle = '';
   private route: Route = { view: 'dashboard' };
   private readonly toasts = new ToastController(() =>
     this.container?.querySelector<HTMLElement>('[data-toast]')
@@ -474,6 +476,7 @@ export class DirectoryConsole {
     this.container = document.getElementById(this.options.containerId);
     if (!this.container)
       throw new Error(`Container #${this.options.containerId} not found`);
+    this.pageTitle = document.title || '';
 
     this.container.innerHTML = `<p class="dc-empty">${escapeHtml(
       this.translator.t('app.loading')
@@ -829,6 +832,7 @@ export class DirectoryConsole {
     const main = this.main();
     if (!main) return;
     const generation = ++this.viewGeneration;
+    this.titlePage();
 
     for (const button of Array.from(
       this.container?.querySelectorAll<HTMLElement>('[data-nav]') || []
@@ -1283,6 +1287,19 @@ export class DirectoryConsole {
     detail.render(
       main.querySelector<HTMLElement>('[data-detail]') as HTMLElement
     );
+    this.titlePage(detail.heading());
+  }
+
+  /**
+   * Title the browser tab after the card on screen — "Alice Moreau — Twake
+   * Directory Manager" — so that the tabs of several open accounts, and the
+   * history, say whose they are.
+   *
+   * @param name the entry's name, or none for a page that is no card
+   */
+  private titlePage(name?: string): void {
+    if (typeof document === 'undefined' || !this.pageTitle) return;
+    document.title = name ? `${name} — ${this.pageTitle}` : this.pageTitle;
   }
 
   /**
@@ -1454,7 +1471,7 @@ export class DirectoryConsole {
     ]);
     if (!this.current(generation)) return;
 
-    new EntityDetail({
+    const card = new EntityDetail({
       entity,
       entry,
       translator: this.translator,
@@ -1479,7 +1496,9 @@ export class DirectoryConsole {
       },
       onStatus: (): void => undefined,
       onResetPassword: (): void => undefined,
-    }).render(holder);
+    });
+    card.render(holder);
+    this.titlePage(card.heading());
   }
 
   /* ------------------------------------------------------------ side panel */

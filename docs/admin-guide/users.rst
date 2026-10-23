@@ -201,8 +201,8 @@ without having clicked :guilabel:`Copy` first asks
 Deleting an account
 -------------------
 
-On the card, click :guilabel:`Delete`, then confirm. Several accounts are
-deleted at once from the list (see :doc:`lists`).
+On the card, open :guilabel:`More`, click :guilabel:`Delete`, then confirm.
+Several accounts are deleted at once from the list (see :doc:`lists`).
 
 The account also leaves what named it: the organizations it managed or
 administered, the mailboxes delegated to it, the groups and shared mailboxes

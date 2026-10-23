@@ -22,6 +22,12 @@ Built on ldap-rest 0.25.0.
 - The New user form shows the identifier the address will give, fills the
   common name from the full name, and Enter takes the domain the address
   completion offers; the creation message names the entry (#130)
+- An account's card is headed by the full name, with the identifier and the
+  address under it, as is the browser tab. Its details are grouped under
+  headings, a value said twice is said once, the empty fields wait under
+  _Show empty fields (N)_ and the DN under _Technical details_; a mailbox
+  size no unit says exactly reads _1.07 GB_, the bytes in its tooltip. _Edit_
+  comes first, and _Hand over_ and _Delete_ moved to a _More_ menu (#133)
 
 ## v0.10.2 (2026-10-23)
 

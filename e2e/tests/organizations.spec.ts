@@ -221,7 +221,7 @@ test.describe('ORG organizations', () => {
     await expect(organizations.card.heading).toHaveText(lab.name);
 
     let message = answerNextConfirm(page, true);
-    await organizations.card.action('Delete').click();
+    await organizations.card.perform('Delete');
     expect(await message).toBe(`Delete ${lab.path}? This cannot be undone.`);
     await app.expectToast('Deleted');
     await expect(organizations.label(lab.name)).toHaveCount(0);
@@ -232,7 +232,7 @@ test.describe('ORG organizations', () => {
 
     await organizations.select(germany.name);
     message = answerNextConfirm(page, true);
-    await organizations.card.action('Delete').click();
+    await organizations.card.perform('Delete');
     await message;
     await app.expectToast(
       `${germany.path} is not empty: move or delete its entries first`,
@@ -242,7 +242,7 @@ test.describe('ORG organizations', () => {
 
     await app.setLanguage('fr');
     message = answerNextConfirm(page, true);
-    await organizations.card.actions().filter({ hasText: 'Supprimer' }).click();
+    await organizations.card.perform('Supprimer');
     await message;
     await app.expectToast(
       `${germany.path} n’est pas vide : déplacez ou supprimez d’abord ses entrées`,
@@ -277,7 +277,7 @@ test.describe('ORG organizations', () => {
     await expect(organizations.card.detail('Description')).toHaveText('Ventas');
 
     const message = answerNextConfirm(page, true);
-    await organizations.card.action('Delete').click();
+    await organizations.card.perform('Delete');
     await message;
     await app.expectToast('Deleted');
     await expect(organizations.label(spain)).toHaveCount(0);
@@ -365,7 +365,7 @@ test.describe('ORG organizations', () => {
     await expect(organizations.card.heading).toHaveText(temporary);
     await expect(organizations.selected).toHaveText(temporary);
     const message = answerNextConfirm(page, true);
-    await organizations.card.action('Delete').click();
+    await organizations.card.perform('Delete');
     await message;
     await app.expectToast('Deleted');
     await expect(organizations.selected).toHaveText(tenant.org.name);

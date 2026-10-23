@@ -43,7 +43,7 @@ test.describe('DOMAIN mail domains', () => {
 
     const card = await app.openEntry(`domains/${id}`);
     const message = answerNextConfirm(page, true);
-    await card.action('Delete').click();
+    await card.perform('Delete');
     await message;
     await app.expectToast('Deleted');
     expect(await directory.exists(dn)).toBe(false);
@@ -69,7 +69,7 @@ test.describe('DOMAIN mail domains', () => {
     const card = await app.openEntry(`domains/${domain.id}`);
     if ((await card.action('Delete').count()) > 0) {
       const message = answerNextConfirm(page, true);
-      await card.action('Delete').click();
+      await card.perform('Delete');
       await message;
       await expect(app.errorToast).toBeVisible();
       await expect(app.errorToast).not.toHaveText(UNREADABLE);

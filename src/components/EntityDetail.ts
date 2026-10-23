@@ -6,6 +6,12 @@
  * number is the defect this replaces. Lifecycle actions sit next to the data
  * they change, and related entries are listed underneath.
  *
+ * Every attribute is there, not every attribute in the reader's way: the card
+ * is headed by the person's name, not by the identifier; the values are
+ * grouped the way the form groups them; the empty ones, which were most of a
+ * new account's card, are folded away; and the DN, which few administrators
+ * need, waits under _Technical details_.
+ *
  * @module browser/directory-console/components/EntityDetail
  */
 
@@ -17,10 +23,64 @@ import {
   isDnShaped,
   ownValueLabel,
   rdnValue,
+  readableByteSize,
+  resolveText,
 } from '../format';
-import { hasRole } from '../api/ConsoleApiClient';
+import { hasRole, roleAttribute } from '../api/ConsoleApiClient';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
+
+/**
+ * The headings a field the schema puts in no group is shown under, in the
+ * order the card shows them. A group the schema names goes between Contact
+ * and Mailbox.
+ */
+const HEAD_GROUPS = ['identity', 'organization', 'contact'];
+const TAIL_GROUPS = ['mailbox', 'lifecycle'];
+
+/** Where a field without a group of its own goes, by the role it carries. */
+const ROLE_GROUPS: Record<string, string> = {
+  identifier: 'identity',
+  displayName: 'identity',
+  givenName: 'identity',
+  surname: 'identity',
+  employeeId: 'identity',
+  position: 'identity',
+  accountStatus: 'identity',
+  organizationLink: 'organization',
+  organizationPath: 'organization',
+  owners: 'organization',
+  members: 'organization',
+  managers: 'organization',
+  localAdmins: 'organization',
+  domainLink: 'organization',
+  primaryEmail: 'contact',
+  emailAliases: 'contact',
+  emailQuota: 'mailbox',
+  emailQuotaSize: 'mailbox',
+  mailboxType: 'mailbox',
+  writePolicy: 'mailbox',
+  accountExpiry: 'lifecycle',
+};
+
+/**
+ * Where a field carrying no role goes, for the standard LDAP attributes
+ * (RFC 4519) that say how to reach someone, in lower case. Anything else
+ * without a role or a group of its own is shown under Identity.
+ */
+const ATTRIBUTE_GROUPS: Record<string, string> = {
+  telephonenumber: 'contact',
+  mobile: 'contact',
+  homephone: 'contact',
+  pager: 'contact',
+  facsimiletelephonenumber: 'contact',
+  postaladdress: 'contact',
+  postalcode: 'contact',
+  postofficebox: 'contact',
+  street: 'contact',
+  l: 'contact',
+  st: 'contact',
+};
 
 export interface DetailOptions {
   entity: EntityDescriptor;
@@ -87,66 +147,35 @@ export class EntityDetail {
    * @param container element to fill
    */
   render(container: HTMLElement): void {
-    const { entity, entry, translator, canWrite, canDelete } = this.options;
-    const { inTransit, onClaim, onHandOver } = this.options;
-    const id = values(entryValue(entry, entity.mainAttribute))[0] || '';
-    const title =
-      ownValueLabel(entity, entity.mainAttribute, id, translator.language) ||
-      id;
+    const { translator, inTransit } = this.options;
+    const { title, subtitle } = this.naming();
 
     container.innerHTML = `
       <article class="dc-detail">
         <header class="dc-detail-header">
-          <h2>${escapeHtml(title)}${
-            inTransit
-              ? ` <span class="dc-tag dc-tag-transit">${escapeHtml(
-                  translator.t('transit.badge')
-                )}</span>`
-              : ''
-          }</h2>
-          <div class="dc-detail-actions">
-            ${
-              onClaim
-                ? `<button type="button" class="dc-button dc-button-primary" data-claim>${escapeHtml(
-                    translator.t('transit.claim')
-                  )}</button>`
+          <div class="dc-detail-title">
+            <h2>${escapeHtml(title)}${
+              inTransit
+                ? ` <span class="dc-tag dc-tag-transit">${escapeHtml(
+                    translator.t('transit.badge')
+                  )}</span>`
                 : ''
-            }
+            }</h2>
             ${
-              onHandOver
-                ? `<button type="button" class="dc-button" data-hand-over>${escapeHtml(
-                    translator.t('transit.handOver')
-                  )}</button>`
-                : ''
-            }
-            ${
-              canWrite
-                ? `<button type="button" class="dc-button dc-button-primary" data-edit>${escapeHtml(
-                    translator.t('app.edit')
-                  )}</button>`
-                : ''
-            }
-            ${this.statusMarkup()}
-            ${
-              canWrite && entity.password
-                ? `<button type="button" class="dc-button" data-password>${escapeHtml(
-                    translator.t('password.title')
-                  )}</button>`
-                : ''
-            }
-            ${
-              canDelete
-                ? `<button type="button" class="dc-button dc-button-danger" data-delete>${escapeHtml(
-                    translator.t('app.delete')
-                  )}</button>`
+              subtitle.length
+                ? `<p class="dc-detail-subtitle" data-subtitle>${subtitle
+                    .map(part => escapeHtml(part))
+                    .join(' · ')}</p>`
                 : ''
             }
           </div>
+          <div class="dc-detail-actions">${this.actionsMarkup()}</div>
         </header>
 
         <section class="dc-card">
           <h3>${escapeHtml(translator.t('detail.attributes'))}</h3>
-          <dl class="dc-attributes">${this.dnMarkup()}${this.attributesMarkup()}</dl>
+          ${this.fieldsMarkup()}
+          ${this.dnMarkup()}
         </section>
 
         ${this.relationsMarkup()}
@@ -156,28 +185,132 @@ export class EntityDetail {
   }
 
   /**
+   * What the card is headed with — and the page titled with, by the caller.
+   *
+   * @returns the entry's name
+   */
+  heading(): string {
+    return this.naming().title;
+  }
+
+  /**
+   * The name the card is headed with, and what is written under it.
+   *
+   * A person is called by their name, not by the identifier their account
+   * signs in with: the full name heads the card, the identifier and the
+   * address stand under it. An entry with no full name — a group, an
+   * organization, an account created without one — is headed with its own
+   * name, as it always was.
+   */
+  private naming(): { title: string; byName: boolean; subtitle: string[] } {
+    const { entity, entry, translator } = this.options;
+    const first = (name: string | undefined): string =>
+      name ? values(entryValue(entry, name))[0] || '' : '';
+    const id = first(entity.mainAttribute);
+    const name = first(roleAttribute(entity.schema, 'displayName'));
+    const title =
+      name ||
+      ownValueLabel(entity, entity.mainAttribute, id, translator.language) ||
+      id;
+    const mail = first(roleAttribute(entity.schema, 'primaryEmail'));
+    return {
+      title,
+      byName: Boolean(name),
+      subtitle: [title === id ? '' : id, mail].filter(Boolean),
+    };
+  }
+
+  /**
+   * The actions, by how often they are used and how much they risk: Edit
+   * first, then Reset password and Change state…, then a More menu holding
+   * Hand over, rarely used, and Delete, last and red, away from the
+   * everyday buttons. Claim… stays first: an entry in transit is opened to be
+   * claimed.
+   */
+  private actionsMarkup(): string {
+    const { entity, translator, canWrite, canDelete, onClaim, onHandOver } =
+      this.options;
+    const button = (data: string, key: string, primary = false): string =>
+      `<button type="button" class="dc-button${
+        primary ? ' dc-button-primary' : ''
+      }" ${data}>${escapeHtml(translator.t(key))}</button>`;
+    const item = (data: string, key: string, danger = false): string =>
+      `<button type="button" role="menuitem" class="dc-menu-item${
+        danger ? ' dc-menu-item-danger' : ''
+      }" ${data}>${escapeHtml(translator.t(key))}</button>`;
+    const more = [
+      onHandOver ? item('data-hand-over', 'transit.handOver') : '',
+      canDelete ? item('data-delete', 'app.delete', true) : '',
+    ].filter(Boolean);
+    return [
+      onClaim ? button('data-claim', 'transit.claim', true) : '',
+      canWrite ? button('data-edit', 'app.edit', true) : '',
+      canWrite && entity.password
+        ? button('data-password', 'password.title')
+        : '',
+      this.statusMarkup(),
+      more.length
+        ? `<div class="dc-menu">
+              <button type="button" class="dc-button" data-more aria-haspopup="menu"
+                aria-expanded="false" aria-controls="dc-more-actions">${escapeHtml(
+                  translator.t('detail.moreActions')
+                )}</button>
+              <div class="dc-menu-list" role="menu" id="dc-more-actions" data-more-menu hidden>${more.join(
+                ''
+              )}</div>
+            </div>`
+        : '',
+    ]
+      .filter(Boolean)
+      .join('\n            ');
+  }
+
+  /**
    * The entry's DN, which no attribute carries: the name a group's members
    * and owners are written with, and the one an administrator is asked for
    * elsewhere. Copied in one click rather than read off the address bar.
+   *
+   * Few administrators need it, and it stood first on the card, where the
+   * name should: it waits, folded, under _Technical details_.
    */
   private dnMarkup(): string {
     const { entry, translator } = this.options;
     const dn = entry.dn ? String(entry.dn) : '';
     if (!dn) return '';
     return `
-        <div class="dc-attribute dc-attribute-dn">
-          <dt>${escapeHtml(translator.t('detail.dn'))}</dt>
-          <dd><code class="dc-dn">${escapeHtml(dn)}</code>
-            <button type="button" class="dc-button" data-copy-dn>${escapeHtml(
-              translator.t('detail.copy')
-            )}</button></dd>
-        </div>`;
+          <details class="dc-detail-fold" data-technical>
+            <summary>${escapeHtml(translator.t('detail.technical'))}</summary>
+            <dl class="dc-attributes">
+              <div class="dc-attribute dc-attribute-dn">
+                <dt>${escapeHtml(translator.t('detail.dn'))}</dt>
+                <dd><code class="dc-dn">${escapeHtml(dn)}</code>
+                  <button type="button" class="dc-button" data-copy-dn>${escapeHtml(
+                    translator.t('detail.copy')
+                  )}</button></dd>
+              </div>
+            </dl>
+          </details>`;
   }
 
-  /** Every attribute the schema knows, in schema order, empty ones included. */
-  private attributesMarkup(): string {
+  /**
+   * Every attribute the schema knows, grouped under headings: those holding
+   * a value first, the empty ones folded under _Show empty fields_ — on a
+   * new account they were most of the card.
+   *
+   * A value said twice is said once: the name and the identifier the heading
+   * already shows, the department beside its path (the path names it, and
+   * leads to it), a common name that is the full name again.
+   */
+  private fieldsMarkup(): string {
     const { entity, entry, translator } = this.options;
-    const rows: string[] = [];
+    const { title, byName } = this.naming();
+    const display = roleAttribute(entity.schema, 'displayName');
+    const hasPath =
+      !!entity.organizationPath &&
+      values(entryValue(entry, entity.organizationPath)).length > 0;
+    const shown = this.groups();
+    const empty = this.groups();
+    let count = 0;
     for (const [name, attr] of Object.entries(entity.schema.attributes)) {
       // The same on every entry of the entity: it says nothing about this one
       if (name === 'objectClass' || attr.fixed) continue;
@@ -185,18 +318,94 @@ export class EntityDetail {
       if (attr.neverReturn) continue;
       // The related-entries section below shows this one in full.
       if (name === this.options.relations?.attribute) continue;
+      if (byName && (name === display || name === entity.mainAttribute))
+        continue;
+      if (name === entity.organizationLink && hasPath) continue;
       const list = values(entryValue(entry, name));
-      rows.push(`
-        <div class="dc-attribute">
-          <dt>${escapeHtml(this.label(name, attr))}</dt>
-          <dd>${
-            list.length === 0
-              ? `<span class="dc-muted">${escapeHtml(translator.t('form.none'))}</span>`
-              : list.map(value => this.valueMarkup(name, value)).join('')
-          }</dd>
-        </div>`);
+      if (
+        byName &&
+        name.toLowerCase() === 'cn' &&
+        list.length === 1 &&
+        list[0] === title
+      )
+        continue;
+      const row = `
+              <div class="dc-attribute">
+                <dt>${escapeHtml(this.label(name, attr))}</dt>
+                <dd>${
+                  list.length === 0
+                    ? `<span class="dc-muted">${escapeHtml(translator.t('form.none'))}</span>`
+                    : list.map(value => this.valueMarkup(name, value)).join('')
+                }</dd>
+              </div>`;
+      const heading = this.groupOf(name, attr);
+      if (list.length) shown.get(heading)?.push(row);
+      else {
+        empty.get(heading)?.push(row);
+        count++;
+      }
     }
-    return rows.join('');
+    return `${this.groupsMarkup(shown)}${
+      count
+        ? `
+          <details class="dc-detail-fold" data-empty>
+            <summary>${escapeHtml(translator.t('detail.showEmpty', { count }))}</summary>
+            ${this.groupsMarkup(empty)}
+          </details>`
+        : ''
+    }`;
+  }
+
+  /**
+   * The headings of the card, each with no field yet, in the order they are
+   * shown: those of the form's groups between Contact and Mailbox.
+   */
+  private groups(): Map<string, string[]> {
+    const { entity, translator } = this.options;
+    const named = (keys: string[]): string[] =>
+      keys.map(key => translator.t(`detail.group.${key}`));
+    const own = Object.values(entity.schema.attributes)
+      .map(attr => resolveText(attr.group, translator.language))
+      .filter((group): group is string => !!group);
+    return new Map(
+      [...named(HEAD_GROUPS), ...own, ...named(TAIL_GROUPS)].map(heading => [
+        heading,
+        [],
+      ])
+    );
+  }
+
+  /**
+   * The heading a field is shown under: the group the form puts it in, or
+   * the one its role or its LDAP name points to.
+   */
+  private groupOf(name: string, attr: SchemaAttribute): string {
+    const { translator } = this.options;
+    const own = resolveText(attr.group, translator.language);
+    if (own) return own;
+    const roles = Array.isArray(attr.role)
+      ? attr.role
+      : attr.role
+        ? [attr.role]
+        : [];
+    const key =
+      roles.map(role => ROLE_GROUPS[role]).find(Boolean) ||
+      ATTRIBUTE_GROUPS[name.toLowerCase()] ||
+      'identity';
+    return translator.t(`detail.group.${key}`);
+  }
+
+  private groupsMarkup(groups: Map<string, string[]>): string {
+    return [...groups]
+      .filter(([, rows]) => rows.length)
+      .map(
+        ([heading, rows]) => `
+            <div class="dc-detail-group">
+              <h4>${escapeHtml(heading)}</h4>
+              <dl class="dc-attributes">${rows.join('')}</dl>
+            </div>`
+      )
+      .join('');
   }
 
   private label(name: string, attr: SchemaAttribute): string {
@@ -246,6 +455,12 @@ export class EntityDetail {
         this.options.pointerLabel?.(value) || rdnValue(value)
       )}</button>`;
     const { language } = this.options.translator;
+    // 1073741824 is 1 GiB, which no decimal unit says exactly: the card
+    // rounds it, and leaves the exact count in the tooltip.
+    if (attr?.normalize === 'byteSize' && /^\d+$/.test(value.trim()))
+      return `<span class="dc-value" title="${escapeHtml(
+        this.options.translator.t('detail.bytes', { count: value.trim() })
+      )}">${escapeHtml(readableByteSize(value).text)}</span>`;
     const shown =
       ownValueLabel(entity, name, value, language) ||
       displayValue(attr, value, this.options.pointerLabel, language);
@@ -304,12 +519,14 @@ export class EntityDetail {
   }
 
   private bind(container: HTMLElement): void {
+    const closeMenu = this.bindMenu(container);
     container
       .querySelector('[data-edit]')
       ?.addEventListener('click', () => this.options.onEdit());
-    container
-      .querySelector('[data-delete]')
-      ?.addEventListener('click', () => this.options.onDelete());
+    container.querySelector('[data-delete]')?.addEventListener('click', () => {
+      closeMenu();
+      this.options.onDelete();
+    });
     container
       .querySelector('[data-password]')
       ?.addEventListener('click', () => this.options.onResetPassword());
@@ -318,7 +535,10 @@ export class EntityDetail {
       ?.addEventListener('click', () => this.options.onClaim?.());
     container
       .querySelector('[data-hand-over]')
-      ?.addEventListener('click', () => this.options.onHandOver?.());
+      ?.addEventListener('click', () => {
+        closeMenu();
+        this.options.onHandOver?.();
+      });
 
     const copy = container.querySelector<HTMLElement>('[data-copy-dn]');
     copy?.addEventListener('click', () => {
@@ -349,5 +569,81 @@ export class EntityDetail {
         this.options.onOpenRelation?.(button.dataset.relation as string);
       });
     }
+  }
+
+  /**
+   * The More menu, worked from the keyboard as well as the mouse: the button
+   * says whether it is open; the arrows, Home and End walk its items, which
+   * Tab reaches too; Escape closes it and gives the focus back to the button,
+   * and so does leaving it.
+   *
+   * @param container element the card is drawn in
+   * @returns what closes the menu, giving the focus back to its button
+   */
+  private bindMenu(container: HTMLElement): () => void {
+    const toggle = container.querySelector<HTMLElement>('[data-more]');
+    const menu = container.querySelector<HTMLElement>('[data-more-menu]');
+    const holder = toggle?.parentElement;
+    if (!toggle || !menu || !holder) return () => undefined;
+    const items = (): HTMLElement[] =>
+      Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+    // A click elsewhere closes it. Not on the focus leaving it: a browser
+    // that does not focus a button it clicks (Safari) would close the menu
+    // under the pointer before the click reached the item.
+    const outside = (event: Event): void => {
+      if (!holder.contains(event.target as Node)) close(false);
+    };
+    const open = (last = false): void => {
+      menu.hidden = false;
+      toggle.setAttribute('aria-expanded', 'true');
+      document.addEventListener('pointerdown', outside);
+      const list = items();
+      list[last ? list.length - 1 : 0]?.focus();
+    };
+    const close = (refocus: boolean): void => {
+      document.removeEventListener('pointerdown', outside);
+      if (menu.hidden) return;
+      menu.hidden = true;
+      toggle.setAttribute('aria-expanded', 'false');
+      if (refocus) toggle.focus();
+    };
+    toggle.addEventListener('click', () =>
+      menu.hidden ? open() : close(false)
+    );
+    toggle.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !menu.hidden) {
+        event.preventDefault();
+        event.stopPropagation();
+        close(true);
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        open(event.key === 'ArrowUp');
+      }
+    });
+    menu.addEventListener('keydown', event => {
+      const list = items();
+      const at = list.indexOf(document.activeElement as HTMLElement);
+      const next: Record<string, number> = {
+        ArrowDown: (at + 1) % list.length,
+        ArrowUp: (at - 1 + list.length) % list.length,
+        Home: 0,
+        End: list.length - 1,
+      };
+      if (event.key === 'Escape') {
+        // The menu closes, not the page or the panel behind it.
+        event.preventDefault();
+        event.stopPropagation();
+        close(true);
+      } else if (event.key in next) {
+        event.preventDefault();
+        list[next[event.key]]?.focus();
+      }
+    });
+    // Tab past its last item, or back before the button, closes it too.
+    holder.addEventListener('focusout', event => {
+      const target = event.relatedTarget as Node | null;
+      if (target && !holder.contains(target)) close(false);
+    });
+    return () => close(true);
   }
 }

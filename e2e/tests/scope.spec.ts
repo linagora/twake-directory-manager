@@ -122,7 +122,7 @@ test.describe('SCOPE scope banner and authorization', () => {
 
     if ((await entry.action('Delete').count()) > 0) {
       const message = answerNextConfirm(page, true);
-      await entry.action('Delete').click();
+      await entry.perform('Delete');
       await message;
       await expect(app.errorToast).toBeVisible();
       await expect(app.errorToast).not.toHaveText(UNREADABLE);
@@ -142,7 +142,7 @@ test.describe('SCOPE scope banner and authorization', () => {
     await entry.expectName('Sales Manager');
     if ((await entry.action('Delete').count()) > 0) {
       const message = answerNextConfirm(page, true);
-      await entry.action('Delete').click();
+      await entry.perform('Delete');
       await message;
       await expect(app.errorToast).toBeVisible();
       await expect(app.errorToast).not.toContainText(

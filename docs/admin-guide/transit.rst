@@ -22,7 +22,7 @@ Handing an entry over
 ---------------------
 
 #. Open the card of the account or the group.
-#. Click :guilabel:`Hand over`.
+#. Open :guilabel:`More`, then click :guilabel:`Hand over`.
 #. Confirm. The confirmation reminds that every administrator will see the
    entry and may claim it, and that one will no longer manage it.
 

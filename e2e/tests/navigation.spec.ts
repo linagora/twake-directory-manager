@@ -153,7 +153,7 @@ test.describe('NAV layout, navigation and language', () => {
     const list = app.list();
     await list.listEverything();
     await list.open('alice');
-    await app.entry().expectName('alice');
+    await app.entry().expectName('Alice Moreau');
 
     await app.setLanguage('fr');
 
@@ -390,7 +390,7 @@ test.describe('NAV layout, navigation and language', () => {
     await expect(app.main).not.toContainText(RAW_TEXT);
     await app.list().open('alice');
     const entry = app.entry();
-    await entry.expectName('alice');
+    await entry.expectName('Alice Moreau');
     await expect(app.main).not.toContainText(RAW_TEXT);
     await entry.actions().filter({ hasText: 'Засах' }).click();
     const form = app.form();

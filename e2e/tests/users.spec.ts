@@ -19,29 +19,70 @@ test.describe('USER user accounts', () => {
     await list.open('alice');
 
     const card = app.entry();
-    await card.expectName('alice');
+    await card.expectName('Alice Moreau');
+    await expect(card.subtitle).toHaveText('alice · alice@example.com');
+    await expect(page).toHaveTitle('Alice Moreau — Twake Directory Manager');
     await expect(card.actions()).toHaveText([
-      'Hand over',
       'Edit',
-      'Change state…',
       'Reset password',
-      'Delete',
+      'Change state…',
+      'More',
     ]);
+    await expect(card.moreActions()).toHaveText(['Hand over', 'Delete']);
+    await expect(card.moreMenu).toBeHidden();
     await expect(card.changeState).toBeVisible();
-    await expect(card.detailLabels().first()).toHaveText(
-      'Distinguished name (DN)'
-    );
-    await expect(card.dn).toHaveText('uid=alice,ou=users,dc=example,dc=com');
+
+    await expect(card.detailGroups()).toHaveText([
+      'Identity',
+      'Organization',
+      'Contact',
+      'Mailbox Settings',
+    ]);
     await expect(card.detail('Title')).toHaveText('Mrs');
     await expect(card.detail('Position')).toHaveText('Sales Representative');
     await expect(card.detail('Status')).toHaveText('Active');
-    await expect(card.detail('Department')).toHaveText('France');
+    // The path names the department, which is not said a second time
+    await expect(card.detail('Department')).toHaveCount(0);
+    await expect(card.detail('Department path')).toHaveText('Sales / France');
+    // Said in the heading: neither the identifier nor the full name, nor the
+    // common name that repeats it
+    for (const said of ['Identifier', 'Full name', 'Common name'])
+      await expect(card.detail(said)).toHaveCount(0);
     await expect(card.detail('Email aliases')).toHaveText(
       'alice.moreau@example.com'
     );
+    await expect(card.detail('Mailbox size')).toHaveText('1.07 GB');
+    await expect(card.detail('Mailbox size').locator('span')).toHaveAttribute(
+      'title',
+      '1073741824 bytes'
+    );
+    await expect(card.detail('Comment')).toBeHidden();
+    await expect(card.emptyFields.locator('summary')).toHaveText(
+      /^Show empty fields \(\d+\)$/
+    );
+    await card.showEmptyFields();
     await expect(card.detail('Comment')).toHaveText('—');
     for (const hidden of ['Delivery mode', 'Other mailboxes', 'Password'])
       await expect(card.detail(hidden)).toHaveCount(0);
+
+    // The DN waits under Technical details
+    await expect(card.dn).toBeHidden();
+    await card.showTechnicalDetails();
+    await expect(card.dn).toHaveText('uid=alice,ou=users,dc=example,dc=com');
+
+    // More, from the keyboard
+    await card.moreButton.focus();
+    await page.keyboard.press('Enter');
+    await expect(card.moreButton).toHaveAttribute('aria-expanded', 'true');
+    await expect(card.action('Hand over')).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(card.action('Delete')).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(card.action('Hand over')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(card.moreMenu).toBeHidden();
+    await expect(card.moreButton).toHaveAttribute('aria-expanded', 'false');
+    await expect(card.moreButton).toBeFocused();
     await expect(card.relatedItems('Mailing lists')).toHaveText([
       'all-staff',
       'sales-team',
@@ -54,7 +95,7 @@ test.describe('USER user accounts', () => {
       .click();
     await app.entry().expectName('sales-team');
     await page.goBack();
-    await card.expectName('alice');
+    await card.expectName('Alice Moreau');
 
     await card
       .detail('Department path')
@@ -64,7 +105,7 @@ test.describe('USER user accounts', () => {
     await expect(organizations.card.heading).toHaveText('France');
     await expect(organizations.selected).toHaveText('France');
     await page.goBack();
-    await card.expectName('alice');
+    await card.expectName('Alice Moreau');
     await card.backButton.click();
     await expect(list.heading).toHaveText('Users');
     await expect(list.row('alice')).toBeVisible();
@@ -108,8 +149,8 @@ test.describe('USER user accounts', () => {
     await app.expectToast('Tom Tester created');
     await form.expectClosed();
     const card = app.entry();
-    await card.expectName(uid);
-    await expect(card.detail('Identifier')).toHaveText(uid);
+    await card.expectName('Tom Tester');
+    await card.expectIdentifier(uid);
     await expect(card.detail('Status')).toHaveText('Active');
     await expect(card.detail('Department path')).toHaveText(backend.path);
     await expect(card.detail('Email aliases')).toHaveText(
@@ -394,7 +435,7 @@ test.describe('USER user accounts', () => {
     await form.removeToken('Email aliases', alias);
     await form.submit();
     await app.expectToast('Saved');
-    await expect(card.detail('Email aliases')).toHaveText('—');
+    await expect(card.emptyField('Email aliases')).toHaveCount(1);
     expect(await directory.values(user.dn, 'mailAlternateAddress')).toEqual([]);
 
     // Cancel and × close without saving
@@ -453,7 +494,7 @@ test.describe('USER user accounts', () => {
     await expect(card.detail('Email')).toHaveText(renamed);
     await expect(card.detail('Email aliases')).toHaveText(alias);
     // the identifier comes from the address at creation only
-    await expect(card.detail('Identifier')).toHaveText(user.uid);
+    await card.expectIdentifier(user.uid);
     expect(await directory.values(user.dn, 'mail')).toEqual([renamed]);
     expect(await directory.values(user.dn, 'mailAlternateAddress')).toEqual([
       alias,
@@ -679,13 +720,13 @@ test.describe('USER user accounts', () => {
     await expect(card.relatedItems('Mailing lists')).toHaveText([group.cn]);
 
     let message = answerNextConfirm(page, false);
-    await card.action('Delete').click();
+    await card.perform('Delete');
     expect(await message).toBe(`Delete ${user.uid}? This cannot be undone.`);
-    await card.expectName(user.uid);
+    await card.expectName(user.displayName);
     expect(await directory.exists(user.dn)).toBe(true);
 
     message = answerNextConfirm(page, true);
-    await card.action('Delete').click();
+    await card.perform('Delete');
     await message;
     await app.expectToast('Deleted');
     await expect(app.mainHeading).toHaveText('Users');
@@ -748,7 +789,7 @@ test.describe('USER user accounts', () => {
     await expect(owner.banner).toContainText('You administer no branch');
 
     const message = answerNextConfirm(page, true);
-    await card.action('Delete').click();
+    await card.perform('Delete');
     expect(await message).toBe(`Delete ${user.uid}? This cannot be undone.`);
     await app.expectToast('Deleted');
     await expect(app.mainHeading).toHaveText('Users');
@@ -768,7 +809,7 @@ test.describe('USER user accounts', () => {
     const app = await new LoginPage(page).loginAs(ADMIN, `users/${leaver.uid}`);
 
     const message = answerNextConfirm(page, true);
-    await app.entry().action('Delete').click();
+    await app.entry().perform('Delete');
     await message;
     await app.expectToast('Deleted');
 
@@ -794,7 +835,7 @@ test.describe('USER user accounts', () => {
     const app = await new LoginPage(page).loginAs(ADMIN, `users/${leaver.uid}`);
 
     const message = answerNextConfirm(page, true);
-    await app.entry().action('Delete').click();
+    await app.entry().perform('Delete');
     await message;
     await app.expectToast('Deleted');
 
@@ -810,12 +851,12 @@ test.describe('USER user accounts', () => {
       .toEqual([]);
 
     const organizations = await app.openOrganizations(org.dn);
-    await expect(organizations.card.detail('Local administrators')).toHaveText(
-      '—'
-    );
-    await expect(organizations.card.detail('Managers')).toHaveText('—');
+    await expect(
+      organizations.card.emptyField('Local administrators')
+    ).toHaveCount(1);
+    await expect(organizations.card.emptyField('Managers')).toHaveCount(1);
     const card = await app.openEntry(`users/${colleague.uid}`);
-    await expect(card.detail('Delegates')).toHaveText('—');
+    await expect(card.emptyField('Delegates')).toHaveCount(1);
 
     // the uid comes from the address: a new account given it gets the same DN
     const successor = await directory.createUser({ uid: leaver.uid });
@@ -885,7 +926,7 @@ test.describe('USER user accounts', () => {
     await form.pick('Department', 'Front', frontend.path);
     await form.submit();
     await app.expectToast('Front Dev created');
-    await app.entry().expectName(uid);
+    await app.entry().expectName('Front Dev');
 
     await app.openList('Users');
     await app.list().search(uid);
@@ -914,6 +955,12 @@ test.describe('USER user accounts', () => {
       const card = hash.startsWith('organizations')
         ? app.organizations().card
         : app.entry();
+      // Folded under Technical details, one click away
+      await expect(card.technical.locator('summary')).toHaveText(
+        'Technical details'
+      );
+      await expect(card.dn).toBeHidden();
+      await card.showTechnicalDetails();
       await expect(card.dn).toHaveText(dn);
       await expect(card.dn).toHaveCSS('font-family', /mono/i);
       await expect(card.copyButton).toHaveText('Copy');
@@ -928,7 +975,13 @@ test.describe('USER user accounts', () => {
     await app.setLanguage('fr');
     await app.open('users/alice');
     const card = app.entry();
-    await expect(card.detailLabels().first()).toHaveText('Nom distinctif (DN)');
+    await expect(card.technical.locator('summary')).toHaveText(
+      'Détails techniques'
+    );
+    await card.showTechnicalDetails();
+    await expect(card.technical.getByRole('term')).toHaveText(
+      'Nom distinctif (DN)'
+    );
     await expect(card.copyButton).toHaveText('Copier');
     await card.copyButton.click();
     await expect(card.copyButton).toHaveText('Copié');
