@@ -3579,6 +3579,105 @@ describe('Directory console', () => {
       expect(asked[2].lines[1]).to.equal('This cannot be undone.');
     });
 
+    it('should say when an account’s groups could not be listed, and still delete it', async () => {
+      // Without `memberOf`, they are searched among the groups: a refusal
+      // read as none said nothing about groups (#157).
+      const staff: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            memberOf: {
+              type: 'array',
+              role: 'groupMemberships',
+              items: { type: 'string' },
+            },
+          },
+        },
+      };
+      const entry: Entry = {
+        dn: 'uid=jmartin,ou=users,dc=example,dc=com',
+        uid: 'jmartin',
+        cn: 'Jeanne Martin',
+        memberOf: [],
+      };
+      const setup = (
+        found: () => Promise<string[]>,
+        language = 'en'
+      ): {
+        asked: Confirmation[];
+        strict: unknown[];
+        removed: string[];
+        confirmDelete(
+          entity: EntityDescriptor,
+          id: string,
+          entry?: Entry
+        ): Promise<void>;
+      } => {
+        const asked: Confirmation[] = [];
+        const strict: unknown[] = [];
+        const removed: string[] = [];
+        const app = consoleIn({}, language) as unknown as {
+          api: object;
+          confirmAction(question: Confirmation): Promise<boolean>;
+          toast(message: string): void;
+          go(key: string): void;
+          confirmDelete(
+            entity: EntityDescriptor,
+            id: string,
+            entry?: Entry
+          ): Promise<void>;
+        };
+        Object.assign(app.api, {
+          memberships: async (_dn: string, _e: unknown, s?: boolean) => {
+            strict.push(s);
+            return found();
+          },
+          remove: async (_entity: EntityDescriptor, id: string) => {
+            removed.push(id);
+          },
+        });
+        app.confirmAction = async question => {
+          asked.push(question);
+          return true;
+        };
+        app.toast = (): void => undefined;
+        app.go = (): void => undefined;
+        return {
+          asked,
+          strict,
+          removed,
+          confirmDelete: app.confirmDelete.bind(app),
+        };
+      };
+
+      for (const status of [403, 500]) {
+        const refused = setup(async () => {
+          throw Object.assign(new Error('Refused'), { status });
+        });
+        await refused.confirmDelete(staff, 'jmartin', entry);
+        expect(refused.strict).to.deep.equal([true]);
+        expect(refused.asked[0].lines[1]).to.equal(
+          'This cannot be undone. The groups Jeanne Martin belongs to could not be listed.'
+        );
+        expect(refused.asked[0].action).to.equal('Delete Jeanne Martin');
+        expect(refused.removed).to.deep.equal(['jmartin']);
+      }
+      const fr = setup(async () => {
+        throw new Error('No filter can hold it');
+      }, 'fr');
+      await fr.confirmDelete(staff, 'jmartin', entry);
+      expect(fr.asked[0].lines[1]).to.include(
+        'Les groupes de Jeanne Martin n’ont pas pu être listés.'
+      );
+
+      // None found is none: nothing said about groups
+      const none = setup(async () => []);
+      await none.confirmDelete(staff, 'jmartin', entry);
+      expect(none.asked[0].lines[1]).to.equal('This cannot be undone.');
+      expect(none.removed).to.deep.equal(['jmartin']);
+    });
+
     it('should say a deleted group leaves its members, and name a selection', async () => {
       const asked: Confirmation[] = [];
       const app = consoleIn({}, 'fr') as unknown as {
@@ -4297,11 +4396,39 @@ describe('Directory console', () => {
       );
     });
 
-    it('should fall back to the DN when the account cannot be read', async () => {
-      const { overview } = setup(global, async () => {
+    it('should fall back to the identifier when the account cannot be read', async () => {
+      // A department head's own account, attached to the organization above
+      // the one they administer: authz-linid1 hides it from them (#157).
+      const local: Scope = {
+        ...global,
+        branches: [
+          {
+            dn: 'ou=sales,ou=organization,dc=example,dc=com',
+            read: true,
+            write: true,
+            delete: true,
+          },
+        ],
+      };
+      const { asked, overview } = setup(local, async () => {
         throw Object.assign(new Error('Not found'), { status: 404 });
       });
-      expect(await overview()).to.include(`Signed in as ${admin}`);
+      expect(await overview())
+        .to.include('Signed in as admin<')
+        .and.not.include(admin);
+      // Its link decides, which the scope does not give: it is still asked
+      expect(asked).to.deep.equal(['users admin']);
+      // Nor is a DN no entity holds greeted whole
+      const outside = setup({ ...global, user: 'cn=root,dc=example,dc=com' });
+      expect(await outside.overview())
+        .to.include('Signed in as root<')
+        .and.not.include('cn=root');
+      expect(outside.asked).to.deep.equal([]);
+      // A user the scope names otherwise than by a DN is shown as it comes
+      const plain = setup({ ...global, user: 'admin@example.com' });
+      expect(await plain.overview()).to.include(
+        'Signed in as admin@example.com<'
+      );
       // An account with no address is still named
       const nameless = setup(global, async () => ({ dn: admin, cn: 'Ada' }));
       expect(await nameless.overview()).to.include('Signed in as Ada<');
@@ -5154,6 +5281,35 @@ describe('Directory console', () => {
         ])
           expect(await client.memberships(dn, [twakeGroups])).to.deep.equal([]);
         expect(groupList.isDone()).to.equal(false);
+      });
+
+      it('should fail, when asked to, where the groups cannot be searched', async () => {
+        // The deletion dialog tells groups it could not list from none (#157).
+        const client = new ConsoleApiClient(baseUrl);
+        const refusedDn = 'cn=Smith\\, John,ou=users,dc=example,dc=com';
+        const failure = async (search: Promise<unknown>): Promise<unknown> =>
+          search.then(
+            () => undefined,
+            (err: unknown) => err
+          );
+        expect(
+          await failure(client.memberships(refusedDn, [twakeGroups], true))
+        ).to.be.instanceOf(Error);
+        for (const status of [403, 500]) {
+          nock(baseUrl)
+            .get('/api/v1/ldap/groups')
+            .query(true)
+            .reply(status, { error: 'No' });
+          const err = await failure(
+            client.memberships(john, [users, twakeGroups], true)
+          );
+          expect(err).to.have.property('status', status);
+        }
+        // Found none is not a failure
+        nock(baseUrl).get('/api/v1/ldap/groups').query(true).reply(200, {});
+        expect(
+          await client.memberships(john, [twakeGroups], true)
+        ).to.deep.equal([]);
       });
 
       it('should search a DN holding an apostrophe', async () => {

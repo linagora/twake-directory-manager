@@ -52,7 +52,9 @@ Built on ldap-rest 0.25.1.
   announced as expanded, and a branch whose sub-organizations could not be
   read can be opened again (#132)
 - The Overview speaks in names: _Signed in as Ada Admin (admin@example.com)_
-  rather than a DN, and the _Language_ select offers _English_, _Français_
+  rather than a DN, or by the identifier, _Signed in as admin_, where the
+  account cannot be read, as an administrator's own account attached outside
+  the branches they administer; the _Language_ select offers _English_, _Français_
   and _Монгол_. An account administering nothing finds one message on it,
   _There is nothing for you to manage here_, with a _Sign out_ button,
   instead of three cards leading nowhere; its sidebar offers only the
@@ -60,7 +62,8 @@ Built on ldap-rest 0.25.1.
 - Deleting an entry, a selection, an organization or a password policy, and
   handing an entry over, are confirmed in a dialog of the console, in its
   language, instead of the browser's. It names an account by its full name,
-  email and organization, lists the groups it leaves and offers to set the
+  email and organization, lists the groups it leaves, or says they could not
+  be listed rather than nothing as if there were none, and offers to set the
   state to _Disabled_ instead; _Cancel_ has the focus, and the button names the
   action: _Delete Jane_, _Delete group_, _Hand over_. The Reset password and
   Claim panels' buttons read _Reset password_ and _Claim into Sales_ rather
