@@ -1019,14 +1019,21 @@ export class DirectoryConsole {
   }
 
   /**
-   * Whether the caller manages the password policies. Asked of the server
-   * rather than read from the scope: who holds them is its rule
-   * (`--authz-global-branches`), and the scope names no branch outside the
-   * tree. A refusal hides the page; any other failure shows it, with the
-   * failure on it.
+   * Whether the caller manages the password policies. Who holds them is the
+   * server's rule (`--authz-global-branches`), outside the tree the scope's
+   * branches name, so the scope says it in `passwordPolicies`. Only a server
+   * that predates it is asked for the policies themselves: every page load
+   * of a local administrator then logged a refusal. An undescribed scope
+   * answers `false` for want of a model, and the console asks there too, as
+   * it leaves the server to answer whatever else such a scope cannot say. A
+   * refusal hides the page; any other failure shows it, with the failure on
+   * it.
    */
   private async readsPolicies(): Promise<boolean> {
     if (!this.api.servesPasswordPolicies) return false;
+    const told = this.scope?.passwordPolicies;
+    if (typeof told === 'boolean' && this.scope?.described !== false)
+      return told;
     try {
       await this.api.passwordPolicies();
       return true;
