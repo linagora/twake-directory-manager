@@ -574,4 +574,47 @@ test.describe('LIST lists, search and bulk actions', () => {
     );
     await expect(panel.runButton).toHaveText('Importer 2 entrées');
   });
+
+  test('LIST-13 the LINAGORA badge covers no row', async ({ page }) => {
+    // Fixed in the corner, it hid the Status cell of the row under it and
+    // took its clicks.
+    const app = await new LoginPage(page).loginAs(ADMIN, 'users');
+    const list = app.list();
+    const badge = page.locator('a.dc-powered');
+    // A short page still ends with it, at the bottom of the window.
+    await expect(list.listEverythingButton).toBeVisible();
+    await expect(badge).toBeVisible();
+    const bottom = await badge.evaluate(
+      element => window.innerHeight - element.getBoundingClientRect().bottom
+    );
+    expect(bottom).toBeGreaterThanOrEqual(0);
+    expect(bottom).toBeLessThanOrEqual(24);
+
+    // A short window puts rows where it was.
+    await page.setViewportSize({ width: 1280, height: 480 });
+    await list.listEverything();
+    await expect(list.rows.first()).toBeVisible();
+    /** The rows the badge overlaps, all measured in one frame */
+    const covered = (): Promise<string[]> =>
+      badge.evaluate(element => {
+        const logo = element.getBoundingClientRect();
+        return Array.from(document.querySelectorAll('tbody tr'))
+          .filter(row => {
+            const box = row.getBoundingClientRect();
+            return (
+              box.left < logo.right &&
+              logo.left < box.right &&
+              box.top < logo.bottom &&
+              logo.top < box.bottom
+            );
+          })
+          .map(row => row.textContent ?? '');
+      });
+    expect(await covered()).toEqual([]);
+    await page.evaluate(() =>
+      window.scrollTo({ top: document.documentElement.scrollHeight })
+    );
+    await expect(badge).toBeInViewport({ ratio: 1 });
+    expect(await covered()).toEqual([]);
+  });
 });

@@ -13,6 +13,8 @@ Built on ldap-rest 1.0.1.
   duration (#177)
 - A mailbox size reads the interface's way on the account card and in the
   lists: _1,07 Go_ in French, not _1.07 GB_ (#178)
+- The LINAGORA badge closes the page instead of staying in the corner over
+  the rows scrolling under it, hiding them and taking their clicks (#180)
 
 ## v0.11.0 (2026-10-23)
 
