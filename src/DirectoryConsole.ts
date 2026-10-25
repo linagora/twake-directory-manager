@@ -1663,7 +1663,7 @@ export class DirectoryConsole {
       onResetPassword: (): void => {
         void this.resetPassword(entity, id);
       },
-      onOpenRelation: (target: string): void => this.openRelation(target),
+      relationHref: (dn: string): string | undefined => this.relationHref(dn),
       onAddToGroups:
         groups && joins
           ? (): void =>
@@ -1831,18 +1831,18 @@ export class DirectoryConsole {
     return this.canWrite() && writesEntry(this.scope, entity, entry);
   }
 
-  /** Follow a relation to whichever entity owns the DN. */
-  private openRelation(dn: string): void {
+  /** The card of a related entry, in whichever entity owns its DN. */
+  private relationHref(dn: string): string | undefined {
     const owner = this.entities.find(
       entity =>
         entity.base &&
         dn.toLowerCase().endsWith(`,${entity.base.toLowerCase()}`)
     );
-    if (!owner) return;
+    if (!owner) return undefined;
     // `rdnValue`, not a split on the first comma: `cn=Smith\, John,…` holds
     // one, and the truncated id it produced answered "no longer exists".
     const id = rdnValue(dn);
-    this.go(`${owner.key}/${encodeURIComponent(id)}`);
+    return `#/${owner.key}/${encodeURIComponent(id)}`;
   }
 
   /**
@@ -2131,7 +2131,7 @@ export class DirectoryConsole {
           window.location.hash = href;
         },
       }),
-      onOpenRelation: (target: string): void => this.openRelation(target),
+      relationHref: (dn: string): string | undefined => this.relationHref(dn),
       onEdit: (): void => {
         void this.openOrganizationForm(entity, entry);
       },

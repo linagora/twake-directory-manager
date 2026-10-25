@@ -112,6 +112,10 @@ test.describe('USER user accounts', () => {
     await expect(card.addToGroup()).toBeVisible();
     await expect(card.leaveGroup('sales-team')).toBeVisible();
 
+    // Links, which a middle click opens in a new tab (#174)
+    await expect(
+      card.related('Groups').getByRole('link', { name: 'sales-team' })
+    ).toHaveAttribute('href', '#/groups/sales-team');
     await card.relatedLinks('Groups').filter({ hasText: 'sales-team' }).click();
     await app.entry().expectName('sales-team');
     await page.goBack();

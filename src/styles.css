@@ -1064,7 +1064,10 @@
   gap: 8px;
 }
 
-.dc-relations .dc-link {
+.dc-relations .dc-link,
+.dc-relations .dc-value {
+  /* A link now, inline: its padding would spill over the next row. */
+  display: inline-block;
   padding: 4px 12px;
   border-radius: 999px;
   background: var(--dc-accent-soft);

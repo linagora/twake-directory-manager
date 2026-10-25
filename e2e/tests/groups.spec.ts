@@ -37,7 +37,7 @@ test.describe('GROUP groups', () => {
     await card
       .relatedItems('Members')
       .filter({ hasText: 'bob' })
-      .getByRole('button')
+      .getByRole('link')
       .click();
     await app.entry().expectName('Bob Schneider');
   });
@@ -145,7 +145,7 @@ test.describe('GROUP groups', () => {
     await card
       .relatedItems('Members')
       .filter({ hasText: 'dave' })
-      .getByRole('button')
+      .getByRole('link')
       .click();
     await app.entry().expectName('Dave Okafor');
     await expect(
@@ -235,7 +235,7 @@ test.describe('GROUP groups', () => {
 
     const owner = card
       .detail('Owners')
-      .getByRole('button', { name: 'eric.dubois' });
+      .getByRole('link', { name: 'eric.dubois' });
     await expect(owner).toBeVisible();
     await expect(owner).toHaveAttribute('title', ERIC.dn);
     await owner.click();
