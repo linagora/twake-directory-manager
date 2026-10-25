@@ -2533,6 +2533,32 @@ describe('Directory console', () => {
       );
     });
 
+    it('should draw no more once its panel is closed', () => {
+      // Its panel closed while it ran, an import filled the hidden panel
+      // again row after row, or wrote over the form opened next.
+      const importer = new EntityImport({
+        entity: users,
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        create: () => Promise.resolve(),
+        onDone: () => undefined,
+        onClose: () => undefined,
+      });
+      const view = { isConnected: true };
+      const root = {
+        innerHTML: '',
+        querySelector: (selector: string) =>
+          selector === '.dc-import' ? view : null,
+        querySelectorAll: () => [],
+      };
+      importer.render(root as unknown as HTMLElement);
+      expect(root.innerHTML).to.contain('class="dc-import"');
+      view.isConnected = false;
+      root.innerHTML = '';
+      (importer as unknown as { paint(): void }).paint();
+      expect(root.innerHTML).to.equal('');
+    });
+
     it('should say the import counts of one in the singular', () => {
       const importer = new EntityImport({
         entity: users,
@@ -2938,8 +2964,10 @@ describe('Directory console', () => {
         textContent: '',
         value: '',
         checked: true,
+        disabled: false,
         focused: 0,
         selected: 0,
+        isConnected: true,
         ...props,
         addEventListener(
           type: string,
@@ -2961,10 +2989,30 @@ describe('Directory console', () => {
     };
     const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
-    /** Reset alice's password, typed or generated, through the panel. */
-    const reset = async (typed: string) => {
+    /**
+     * Reset alice's password, typed or generated, through the panel.
+     *
+     * @param typed the password typed, or none to have one generated
+     * @param meanwhile what happens before the server answers
+     * @param refusal what the server answers instead of a password
+     */
+    const reset = async (
+      typed: string,
+      meanwhile?: (sent: {
+        app: {
+          closePanel(force?: boolean): void;
+          openPanel(title: string, build: (body: unknown) => void): void;
+          panelGuard: (() => boolean) | null;
+        };
+        els: Record<string, ReturnType<typeof control>>;
+        panel: { hidden: boolean };
+      }) => void,
+      refusal?: Error
+    ) => {
       const els = {
         form: control(),
+        send: control(),
+        cancel: control(),
         password: control({ value: typed }),
         force: control({ checked: true }),
         field: control(),
@@ -2977,6 +3025,8 @@ describe('Directory console', () => {
       };
       const selectors: Record<string, unknown> = {
         form: els.form,
+        'button[type="submit"]': els.send,
+        '[data-cancel]': els.cancel,
         '#dc-new-password': els.password,
         '#dc-force-change': els.force,
         '#dc-generated-password': els.field,
@@ -3004,20 +3054,27 @@ describe('Directory console', () => {
       }) as unknown as {
         api: unknown;
         resetPassword(entity: unknown, id: string): Promise<void>;
-        closePanel(): void;
+        closePanel(force?: boolean): void;
+        openPanel(title: string, build: (body: unknown) => void): void;
+        panelGuard: (() => boolean) | null;
       };
+      let calls = 0;
       app.api = {
-        resetPassword: () =>
-          Promise.resolve(
+        resetPassword: () => {
+          calls++;
+          if (refusal) return Promise.reject(refusal);
+          return Promise.resolve(
             typed
               ? { generated: false }
               : { generated: true, password: 's3cret!<x>' }
-          ),
+          );
+        },
       };
       await app.resetPassword({ key: 'users' }, 'alice');
       els.form.fire('submit');
+      meanwhile?.({ app, els, panel });
       await tick();
-      return { app, els, body, panel, title, toast };
+      return { app, els, body, panel, title, toast, calls: () => calls };
     };
 
     it('should stay in the panel, never in a toast', async () => {
@@ -3090,6 +3147,99 @@ describe('Directory console', () => {
       const { panel, toast } = await reset('N3w-Passw0rd!');
       expect(panel.hidden).to.be.true;
       expect(toast.textContent).to.equal('Password changed');
+    });
+
+    it('should leave no password in the page once closed', async () => {
+      // Hidden, the panel kept the field and its value, for any script or
+      // open developer tools to read on the next page.
+      const generated = await reset('');
+      generated.app.closePanel();
+      generated.app.closePanel();
+      expect(generated.panel.hidden).to.be.true;
+      expect(generated.body.innerHTML).to.equal('');
+      const typed = await reset('N3w-Passw0rd!');
+      expect(typed.panel.hidden).to.be.true;
+      expect(typed.body.innerHTML).to.equal('');
+    });
+
+    it('should be sent once, and stay while the server answers', async () => {
+      // Closed in the meantime, it had the password shown over whatever
+      // opened next; sent twice, the one shown might not be the one kept.
+      let guard: (() => boolean) | null = null;
+      const { panel, body, calls } = await reset('', ({ app, els, panel }) => {
+        expect(els.send.disabled).to.be.true;
+        app.closePanel();
+        expect(panel.hidden).to.be.false;
+        els.form.fire('submit');
+        guard = app.panelGuard;
+      });
+      expect(calls()).to.equal(1);
+      expect(panel.hidden).to.be.false;
+      expect(body.innerHTML).to.contain('id="dc-generated-password"');
+      // Given back by a confirmation answered after the server, the guard
+      // no longer holds the panel.
+      expect((guard as unknown as () => boolean)()).to.be.true;
+    });
+
+    it('should close on Cancel even while the server answers', async () => {
+      // A server that never answers would otherwise hold the panel for good.
+      const { panel, title } = await reset('', ({ els, panel }) => {
+        els.cancel.fire('click');
+        expect(panel.hidden).to.be.true;
+        els.form.isConnected = false;
+      });
+      // The password generated all the same gets a panel of its own.
+      expect(panel.hidden).to.be.false;
+      expect(title.textContent).to.equal('New password — alice');
+    });
+
+    it('should wait for the panel opened meanwhile to close', async () => {
+      // Replaced, that panel lost what it held: another password perhaps.
+      const { app, panel, title, body } = await reset('', ({ app, els }) => {
+        els.cancel.fire('click');
+        els.form.isConnected = false;
+        app.openPanel('Edit bob', inner => {
+          (inner as { innerHTML: string }).innerHTML = 'bob’s form';
+        });
+      });
+      expect(title.textContent).to.equal('Edit bob');
+      expect(body.innerHTML).to.equal('bob’s form');
+      app.closePanel();
+      expect(panel.hidden).to.be.false;
+      expect(title.textContent).to.equal('New password — alice');
+      expect(body.innerHTML).to.contain('id="dc-generated-password"');
+    });
+
+    it('should be sent again after the server refused it', async () => {
+      const { app, els, panel, toast, calls } = await reset(
+        'N3w-Passw0rd!',
+        undefined,
+        new Error('Password fails quality checking policy')
+      );
+      expect(toast.textContent).to.equal(
+        'Password fails quality checking policy'
+      );
+      expect(els.send.disabled).to.be.false;
+      expect(panel.hidden).to.be.false;
+      els.form.fire('submit');
+      await tick();
+      expect(calls()).to.equal(2);
+      app.closePanel();
+      expect(panel.hidden).to.be.true;
+    });
+
+    it('should show a password generated after its panel was shut by force', async () => {
+      // The only copy there is: in a panel of its own, not a hidden one.
+      const { panel, body, title } = await reset('', ({ app, els, panel }) => {
+        app.closePanel(true);
+        expect(panel.hidden).to.be.true;
+        els.form.isConnected = false;
+      });
+      expect(panel.hidden).to.be.false;
+      expect(title.textContent).to.equal('New password — alice');
+      expect(body.innerHTML).to.match(
+        /<input id="dc-generated-password"[^>]*readonly value="s3cret!&lt;x&gt;"/
+      );
     });
   });
 
