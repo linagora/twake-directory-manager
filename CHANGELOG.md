@@ -8,6 +8,9 @@ Built on ldap-rest 1.0.1.
 
 - The French password policy labels and hints use the typographic apostrophe,
   as the rest of the console does (#179)
+- The password policy form marks the fields it refuses for assistive
+  technology and takes the focus to the first, and names each unit after its
+  duration (#177)
 - A mailbox size reads the interface's way on the account card and in the
   lists: _1,07 Go_ in French, not _1.07 GB_ (#178)
 

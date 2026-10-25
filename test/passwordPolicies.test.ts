@@ -49,9 +49,28 @@ function policyConfig(): nock.Scope {
     });
 }
 
-/** A form control the form reads its value from. */
-function control(value: string): { value: string } {
-  return { value };
+/**
+ * A form control the form reads its value from, marks and focuses.
+ *
+ * @param value its value
+ * @param attributes its attributes
+ */
+function control(value: string, attributes: Record<string, string> = {}) {
+  return {
+    value,
+    attributes,
+    focused: 0,
+    getAttribute: (name: string): string | null => attributes[name] ?? null,
+    setAttribute: (name: string, text: string): void => {
+      attributes[name] = text;
+    },
+    removeAttribute: (name: string): void => {
+      delete attributes[name];
+    },
+    focus(): void {
+      this.focused++;
+    },
+  };
 }
 
 /** An error slot, which records what the form says in it. */
@@ -216,6 +235,54 @@ describe('Password policies', () => {
       expect(error.textContent).to.equal('A whole number, 0 or more');
     });
 
+    it('should mark the refused fields and focus the first', async () => {
+      // As in the entry forms: the messages alone left the keyboard on Create.
+      const saved: { cn: string; values: Record<string, unknown> }[] = [];
+      const name = control('');
+      const age = control('-1', {
+        'aria-describedby': 'dc-policy-pwdMaxAge-hint',
+      });
+      const length = control('-1');
+      const form = formWith(
+        {
+          '#dc-policy-cn': name,
+          '[data-field="cn"] [data-error]': errorSlot(),
+          '#dc-policy-pwdMaxAge': age,
+          '[data-field="pwdMaxAge"] [data-unit]': control('days'),
+          '[data-field="pwdMaxAge"] [data-error]': errorSlot(),
+          '#dc-policy-pwdMinLength': length,
+          '[data-field="pwdMinLength"] [data-error]': errorSlot(),
+        },
+        saved,
+        null
+      );
+      await submit(form);
+      expect(saved).to.deep.equal([]);
+      expect(name.attributes).to.deep.equal({
+        'aria-invalid': 'true',
+        'aria-describedby': 'dc-policy-cn-error',
+      });
+      expect(age.attributes).to.deep.equal({
+        'aria-invalid': 'true',
+        'aria-describedby':
+          'dc-policy-pwdMaxAge-hint dc-policy-pwdMaxAge-error',
+      });
+      expect([name.focused, age.focused, length.focused]).to.deep.equal([
+        1, 0, 0,
+      ]);
+      // Put right, a field loses its mark and keeps its hint.
+      name.value = 'software';
+      age.value = '30';
+      await submit(form);
+      expect(name.attributes).to.deep.equal({});
+      expect(age.attributes).to.deep.equal({
+        'aria-describedby': 'dc-policy-pwdMaxAge-hint',
+      });
+      expect(length.attributes['aria-invalid']).to.equal('true');
+      expect(length.focused).to.equal(1);
+      expect(saved).to.deep.equal([]);
+    });
+
     it('should create a policy with the fields filled in', async () => {
       const saved: { cn: string; values: Record<string, unknown> }[] = [];
       await submit(
@@ -266,6 +333,9 @@ describe('Password policies', () => {
       };
       const offered = markup(defined);
       expect(offered).to.include('id="dc-policy-pwdMinLength"');
+      // Each unit is named after its duration, not five times "Unit".
+      expect(offered).to.include('aria-label="Password expires after — unit"');
+      expect(offered).to.include('aria-describedby="dc-policy-pwdMaxAge-hint"');
       for (const name of ['pwdMaxLength', 'pwdMaxIdle', 'pwdMinDelay'])
         expect(offered).not.to.include(`id="dc-policy-${name}"`);
       // A group left with no field is not shown at all
@@ -536,6 +606,7 @@ describe('Password policies', () => {
         ),
         'policy.attr.pwdAttribute',
         'policy.attr.pwdCheckModule',
+        'policy.unitOf',
       ];
       for (const language of availableLanguages) {
         const translator = new Translator(language);
