@@ -66,6 +66,8 @@ const en: Catalogue = {
   'list.searchGuard.other': 'Type at least {count} characters to search',
   'list.empty': 'Nothing to show',
   'list.noMatch': 'No entry matches this search',
+  'list.cutTruncated':
+    'The directory answered only its first matches: some of {path} may be missing',
   'list.truncated.one':
     'Only {count} entry is shown; there are more. Search to find the others.',
   'list.truncated.other':
@@ -226,6 +228,7 @@ const en: Catalogue = {
   'tree.addChild': 'New organization here',
   'org.people': 'People ({count})',
   'org.groups': 'Groups ({count})',
+  'org.listEveryone': 'List everyone in {name}, sub-organizations included',
   'org.newUserHere': 'New user here',
   'org.newGroupHere': 'New group here',
   'org.nobody': 'No one is attached to {name}.',
@@ -484,6 +487,8 @@ const fr: Catalogue = {
     'Saisissez au moins {count} caractères pour rechercher',
   'list.empty': 'Rien à afficher',
   'list.noMatch': 'Aucune entrée ne correspond',
+  'list.cutTruncated':
+    'L’annuaire n’a renvoyé que ses premières correspondances : une partie de {path} peut manquer',
   'list.truncated.one':
     'Seule {count} entrée est affichée ; il y en a d’autres. Utilisez la recherche pour les trouver.',
   'list.truncated.other':
@@ -656,6 +661,7 @@ const fr: Catalogue = {
   'tree.addChild': 'Nouvelle organisation ici',
   'org.people': 'Personnes ({count})',
   'org.groups': 'Groupes ({count})',
+  'org.listEveryone': 'Lister tout {name}, sous-organisations comprises',
   'org.newUserHere': 'Nouvel utilisateur ici',
   'org.newGroupHere': 'Nouveau groupe ici',
   'org.nobody': 'Personne n’est rattaché à {name}.',
@@ -907,6 +913,8 @@ const mn: Catalogue = {
   'list.searchGuard': 'Хайхын тулд дор хаяж {count} тэмдэгт оруулна уу',
   'list.empty': 'Харуулах зүйл алга',
   'list.noMatch': 'Энэ хайлтад тохирох бичлэг алга',
+  'list.cutTruncated':
+    'Лавлах зөвхөн эхний таарцуудыг буцаасан: {path}-ийн зарим нь дутуу байж болно',
   'list.truncated':
     'Зөвхөн {count} бичлэг харагдаж байна; бусад нь бас бий. Тэдгээрийг олохын тулд хайна уу.',
   'list.tooMany':
@@ -1059,6 +1067,8 @@ const mn: Catalogue = {
   'tree.addChild': 'Энд шинэ байгууллага',
   'org.people': 'Хүмүүс ({count})',
   'org.groups': 'Бүлгүүд ({count})',
+  'org.listEveryone':
+    '{name}-ийн бүх хүнийг, дэд байгууллагуудыг оруулан жагсаах',
   'org.newUserHere': 'Энд шинэ хэрэглэгч',
   'org.newGroupHere': 'Энд шинэ бүлэг',
   'org.nobody': '{name}-д хэн ч хавсаргагдаагүй.',

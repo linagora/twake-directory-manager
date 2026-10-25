@@ -431,9 +431,11 @@ export function organizationParents(
 export function listLoader(
   api: ConsoleApiClient,
   entity: EntityDescriptor
-): (search: string, attribute: string) => Promise<EntryList> {
-  return (search, attribute) =>
-    search.length >= SEARCH_MINIMUM
+): (search: string, attribute: string, cut?: boolean) => Promise<EntryList> {
+  // A department's path is searched whatever its length: "IT" listed the
+  // whole directory, bounded, and cut it in the browser.
+  return (search, attribute, cut) =>
+    search.length >= SEARCH_MINIMUM || (cut && search)
       ? api.listBounded(entity, search, attribute, LIST_LIMIT)
       : api.listBounded(entity, undefined, undefined, LIST_LIMIT);
 }
@@ -1608,6 +1610,7 @@ export class DirectoryConsole {
       translator: this.translator,
       listable: !isLarge(entity),
       load: listLoader(this.api, entity),
+      pathSeparator: this.api.organizationPathSeparator,
       canDelete: this.canDelete() && !readOnly,
       pointerLabel: named,
       read: (id: string): Promise<Entry> => this.api.get(entity, id),
@@ -2101,6 +2104,56 @@ export class DirectoryConsole {
     await this.showOrganization(top);
   }
 
+  /**
+   * Whether an organization holds others, read from the tree when it has
+   * read it: its People table lists only those attached to it directly.
+   */
+  private async holdsOthers(dn: string): Promise<boolean> {
+    const known = this.tree?.hasChildren(dn);
+    if (known !== undefined) return known;
+    try {
+      return (await this.api.organizationChildren(dn)).length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * The Users list cut to an organization and what lies under it: who is in
+   * Sales was a question only reading the whole directory answered. It is
+   * searched by department path, and cut to the path itself and those under
+   * it, which a search by substring is not.
+   *
+   * @returns what the People table's button does, or nothing when no
+   *   entity lists the people with a path
+   */
+  private listEveryone(
+    entity: EntityDescriptor,
+    entry: Entry,
+    dn: string
+  ): (() => void) | undefined {
+    // The top of the tree is in no path: its children's start with their
+    // own name. Listed by its path, it gave the people attached to it alone.
+    if (comparableDn(dn) === comparableDn(entity.base)) return undefined;
+    const people = attachedEntity(this.entities, 'people');
+    const field = people?.organizationPath;
+    const stored = entity.organizationPath
+      ? entryValue(entry, entity.organizationPath)
+      : undefined;
+    const path =
+      String((Array.isArray(stored) ? stored[0] : stored) ?? '') ||
+      this.tree?.nameOf(dn);
+    if (!people || !field || !path) return undefined;
+    return (): void => {
+      this.listViews.set(people.key, {
+        search: path,
+        searchAttribute: field,
+        under: path,
+      });
+      this.go(people.key);
+    };
+  }
+
   /** Show one organization in the right-hand pane, tree still visible. */
   private async showOrganization(node: OrganizationNode): Promise<void> {
     const entity = this.entities.find(item => item.kind === 'organization');
@@ -2139,7 +2192,8 @@ export class DirectoryConsole {
     // "Who is in this department?" is the question an organization card is
     // opened to answer, and the tree deliberately does not show accounts.
     let failure: string | undefined;
-    const [members, named, attachedNames] = await Promise.all([
+    const listEveryone = this.listEveryone(entity, entry, node.dn);
+    const [members, named, attachedNames, holdsOthers] = await Promise.all([
       // A failure is said where the entries would be: an empty table read
       // as an empty department.
       this.readMembers(node.dn).catch((err: unknown) => {
@@ -2148,6 +2202,7 @@ export class DirectoryConsole {
       }),
       this.pointerNames(entity),
       this.attachedNames(),
+      listEveryone ? this.holdsOthers(node.dn) : false,
     ]);
     if (!this.current(generation)) return;
 
@@ -2188,6 +2243,12 @@ export class DirectoryConsole {
         name,
         pointerLabel: attachedNames,
         onCreate: this.createsHere(entity, entry, node),
+        onListEveryone:
+          holdsOthers ||
+          (('cut' in members ? members.cut?.people?.truncated : undefined) ??
+            members.truncated)
+            ? listEveryone
+            : undefined,
         // The transit branch's card is where its link leads: what waits
         // there is claimed from it as from the Overview.
         rowAction:

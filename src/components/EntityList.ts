@@ -143,6 +143,11 @@ export interface ListView {
   page?: number;
   /** The entries of the last import, when the list shows them */
   imported?: ImportedView;
+  /**
+   * The department path the list is cut to, itself and what lies under it:
+   * a search of the path matches a substring, and "Sales" found Presales
+   */
+  under?: string;
 }
 
 export interface ListOptions {
@@ -155,8 +160,11 @@ export interface ListOptions {
    */
   load(
     search: string,
-    attribute: string
+    attribute: string,
+    cut?: boolean
   ): Promise<Record<string, Entry> | EntryList>;
+  /** What separates the organizations of a department path: ` / ` */
+  pathSeparator?: string;
   /** Whether the branch is small enough to show without a search */
   listable: boolean;
   onOpen(id: string): void;
@@ -226,6 +234,8 @@ export class EntityList {
   private listEverything = false;
   /** The entries of the last import, shown in place of a search */
   private imported: ImportedView | undefined;
+  /** See {@link ListView.under} */
+  private under: string | undefined;
   /** The page the search was on, while the import's entries are shown */
   private searchPage = 0;
   /** The entries of the import read since this list was drawn */
@@ -254,6 +264,7 @@ export class EntityList {
     this.search = options.view?.search ?? '';
     this.listEverything = options.view?.listEverything ?? false;
     this.page = options.view?.page ?? 0;
+    this.under = options.view?.under;
     this.imported = options.view?.imported;
     if (this.imported) {
       this.searchPage = this.page;
@@ -318,14 +329,31 @@ export class EntityList {
    */
   private get searchScope(): string {
     if (this.searchAttribute !== SEARCH_ANYWHERE) return this.searchAttribute;
+    // A name typed in every field is no department: "Sales" found its staff.
+    const path = this.options.entity.organizationPath;
     return this.searchableAttributes()
       .map(([name]) => name)
+      .filter(name => name !== path)
       .join(',');
   }
 
-  /** The attributes offered in the scope selector, and searched together. */
+  /** The attributes searched together, under "Every field". */
   private searchableAttributes(): [string, SchemaAttribute][] {
     return searchableAttributes(this.options.entity);
+  }
+
+  /**
+   * The attributes offered in the scope selector: those, and the department
+   * path, which a list shows and a name search should not match — "Sales"
+   * in every field found every account of the department.
+   */
+  private scopeAttributes(): [string, SchemaAttribute][] {
+    const offered = this.searchableAttributes();
+    const path = this.options.entity.organizationPath;
+    const attr = path ? this.options.entity.schema.attributes[path] : undefined;
+    return path && attr && !offered.some(([name]) => name === path)
+      ? [...offered, [path, attr]]
+      : offered;
   }
 
   /**
@@ -340,6 +368,7 @@ export class EntityList {
     if (
       (this.imported ||
         this.listable() ||
+        this.under !== undefined ||
         this.query.length >= SEARCH_MINIMUM) &&
       !this.loaded
     )
@@ -360,7 +389,11 @@ export class EntityList {
   private async reload(keepPage = false): Promise<void> {
     const generation = ++this.generation;
     if (this.imported) return this.reloadImported(generation, keepPage);
-    if (!this.listable() && this.query.length < SEARCH_MINIMUM) {
+    if (
+      !this.listable() &&
+      this.under === undefined &&
+      this.query.length < SEARCH_MINIMUM
+    ) {
       this.entries = [];
       this.truncated = false;
       this.loaded = false;
@@ -372,12 +405,18 @@ export class EntityList {
     this.draw();
     try {
       const list = asEntryList(
-        await this.options.load(this.query, this.searchScope)
+        await this.options.load(
+          this.query,
+          this.searchScope,
+          this.under !== undefined
+        )
       );
       if (generation !== this.generation) return;
-      this.entries = Object.entries(list.entries).sort(([a], [b]) =>
-        a.localeCompare(b, undefined, { sensitivity: 'base' })
-      );
+      this.entries = Object.entries(list.entries)
+        .filter(([, entry]) => this.holds(entry))
+        .sort(([a], [b]) =>
+          a.localeCompare(b, undefined, { sensitivity: 'base' })
+        );
       this.truncated = list.truncated;
       this.loaded = true;
       const last = Math.max(
@@ -397,6 +436,22 @@ export class EntityList {
         this.draw();
       }
     }
+  }
+
+  /**
+   * Whether an entry lies in the department the list is cut to, if any,
+   * without regard to case, as the directory compares a path.
+   */
+  private holds(entry: Entry): boolean {
+    const path = this.options.entity.organizationPath;
+    if (this.under === undefined || !path) return true;
+    const value = entryValue(entry, path);
+    const stored = String(
+      (Array.isArray(value) ? value[0] : value) ?? ''
+    ).toLowerCase();
+    const under = this.under.toLowerCase();
+    const separator = this.options.pathSeparator ?? ' / ';
+    return stored === under || stored.startsWith(`${under}${separator}`);
   }
 
   /**
@@ -602,7 +657,7 @@ export class EntityList {
             <option value="${SEARCH_ANYWHERE}"${
               this.searchAttribute === SEARCH_ANYWHERE ? ' selected' : ''
             }>${escapeHtml(translator.t('list.searchAnywhere'))}</option>
-            ${this.searchableAttributes()
+            ${this.scopeAttributes()
               .map(
                 ([name, attr]) =>
                   `<option value="${escapeHtml(name)}"${
@@ -625,6 +680,7 @@ export class EntityList {
       searchAttribute: this.searchAttribute,
       listEverything: this.listEverything,
       page: this.imported ? this.searchPage : this.page,
+      under: this.under,
     });
     if (this.imported) this.imported.page = this.page;
   }
@@ -679,6 +735,7 @@ export class EntityList {
     if (
       !this.imported &&
       !this.listable() &&
+      this.under === undefined &&
       this.query.length < SEARCH_MINIMUM
     )
       return `<p class="dc-empty">${escapeHtml(
@@ -688,7 +745,11 @@ export class EntityList {
       )}</button></p>`;
     if (this.entries.length === 0)
       return `<p class="dc-empty">${escapeHtml(
-        translator.t(this.query ? 'list.noMatch' : 'list.empty')
+        // Nobody of the department in what the server kept is no proof
+        // that nobody is in it.
+        this.under !== undefined && this.truncated
+          ? translator.t('list.cutTruncated', { path: this.under })
+          : translator.t(this.query ? 'list.noMatch' : 'list.empty')
       )}</p>`;
 
     const attributes = this.options.entity.schema.attributes;
@@ -701,8 +762,14 @@ export class EntityList {
         this.truncated
           ? `<p class="dc-list-notice" role="status">${escapeHtml(
               // What was received, not what was asked: a server may cap
-              // lower than the console asked.
-              translator.t('list.truncated', { count: this.entries.length })
+              // lower than the console asked. Cut to a department, what is
+              // shown is no longer what was received, and a search typed
+              // finds no more of it.
+              this.under !== undefined
+                ? translator.t('list.cutTruncated', { path: this.under })
+                : translator.t('list.truncated', {
+                    count: this.entries.length,
+                  })
             )}</p>`
           : ''
       }
@@ -864,6 +931,8 @@ export class EntityList {
     const search = root.querySelector<HTMLInputElement>('[data-search]');
     search?.addEventListener('input', () => {
       this.search = search.value;
+      // A search typed is a substring again, not the department's cut.
+      this.under = undefined;
       this.remember();
       if (this.searchTimer) clearTimeout(this.searchTimer);
       this.searchTimer = setTimeout(() => void this.reload(), 250);
@@ -873,6 +942,8 @@ export class EntityList {
       .querySelector<HTMLSelectElement>('[data-search-attribute]')
       ?.addEventListener('change', event => {
         this.searchAttribute = (event.target as HTMLSelectElement).value;
+        this.under = undefined;
+        this.remember();
         void this.reload();
       });
 

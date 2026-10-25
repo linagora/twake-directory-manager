@@ -56,6 +56,11 @@ export interface AttachedOptions {
    * the button stands in the table's heading
    */
   onCreate?: Partial<Record<AttachedKind, () => void>>;
+  /**
+   * List everyone in the organization, its sub-organizations included, when
+   * the table cannot: it holds only the people attached here directly
+   */
+  onListEveryone?(): void;
   /** Open a card, given the address `EntityList.entryHref` gives it */
   onOpen(href: string): void;
   /**
@@ -277,6 +282,13 @@ export class AttachedTables {
             })
           )}</h3>
           ${
+            kind === 'people' && this.options.onListEveryone
+              ? `<button type="button" class="dc-button" data-list-everyone>${escapeHtml(
+                  translator.t('org.listEveryone', { name })
+                )}</button>`
+              : ''
+          }
+          ${
             create
               ? `<button type="button" class="dc-button" data-create-attached="${kind}">${escapeHtml(
                   translator.t(
@@ -427,6 +439,9 @@ export class AttachedTables {
         if (window.getSelection?.()?.toString()) return;
         this.options.onOpen(row.dataset.href as string);
       });
+    container
+      .querySelector('[data-list-everyone]')
+      ?.addEventListener('click', () => this.options.onListEveryone?.());
     for (const button of Array.from(
       container.querySelectorAll<HTMLElement>('[data-create-attached]')
     ))

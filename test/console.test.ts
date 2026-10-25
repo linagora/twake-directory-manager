@@ -2151,6 +2151,95 @@ describe('Directory console', () => {
       );
     });
 
+    it('should list everyone in an organization holding others, not on the top', async () => {
+      // Who is in Sales was a question only reading the whole directory
+      // answered (#166). The top is in no path: listed by its own, it gave
+      // the people attached to it alone.
+      const shown = async (dn: string, children: unknown[]) => {
+        const holder = stubContainer();
+        const app = consoleIn({ '[data-org-detail]': holder });
+        Object.assign(app as unknown as object, {
+          entities: [organizations, people],
+        });
+        Object.assign((app as unknown as { api: object }).api, {
+          organization: async () => ({
+            dn,
+            ou: rdnValue(dn),
+            twakeDepartmentPath: dn === top ? 'organization' : 'Sales',
+          }),
+          organizationMembers: async () => ({ entries: [], truncated: false }),
+          organizationChildren: async () => children,
+          pointerOptions: async () => [],
+        });
+        await (
+          app as unknown as {
+            showOrganization(node: { dn: string; name: string }): Promise<void>;
+          }
+        ).showOrganization({ dn, name: rdnValue(dn) });
+        return { html: holder.innerHTML, app };
+      };
+      const { html, app } = await shown(sales, [
+        { dn: france, name: 'France' },
+      ]);
+      expect(html).to.include('data-list-everyone');
+      expect((await shown(france, [])).html).to.not.include(
+        'data-list-everyone'
+      );
+      expect(
+        (await shown(top, [{ dn: sales, name: 'Sales' }])).html
+      ).to.not.include('data-list-everyone');
+      // It opens the accounts searched by path, cut to Sales and below.
+      const g = globalThis as Record<string, unknown>;
+      const original = g.window;
+      const location = { hash: '' };
+      g.window = { location };
+      try {
+        (
+          app as unknown as {
+            listEveryone(
+              entity: EntityDescriptor,
+              entry: Entry,
+              dn: string
+            ): () => void;
+          }
+        ).listEveryone(
+          organizations,
+          { dn: sales, ou: 'Sales', twakeDepartmentPath: 'Sales' },
+          sales
+        )();
+      } finally {
+        g.window = original;
+      }
+      expect(location.hash).to.equal(`#/${people.key}`);
+      expect(
+        (app as unknown as { listViews: Map<string, unknown> }).listViews.get(
+          people.key
+        )
+      ).to.deep.equal({
+        search: 'Sales',
+        searchAttribute: 'twakeDepartmentPath',
+        under: 'Sales',
+      });
+    });
+
+    it('should offer to list everyone in it when it holds more than its table', () => {
+      const html = new AttachedTables({
+        entities,
+        members: {
+          entries: [attachedEntry(sophie, entities)],
+          truncated: false,
+        },
+        translator: new Translator('en'),
+        name: 'Sales',
+        onListEveryone: () => undefined,
+        onOpen: () => undefined,
+      }).markup();
+      expect(html).to.include(
+        '<button type="button" class="dc-button" data-list-everyone>List everyone in Sales, sub-organizations included</button>'
+      );
+      expect(tables([sophie])).to.not.include('data-list-everyone');
+    });
+
     it('should carry New user here and New group here when offered', () => {
       const offered = tables([sophie], {}, { people: () => undefined });
       expect(offered).to.include('>New user here<');
@@ -7292,6 +7381,105 @@ describe('Directory console', () => {
       expect(EntityList.shortenPath('<A> / B / <D>')).to.equal(
         '&lt;A&gt; / … / &lt;D&gt;'
       );
+    });
+
+    it('should search the department path apart, never under Every field', async () => {
+      // "Sales" in every field found nobody, and the path was not offered;
+      // offered under Every field, a name search would match departments.
+      const asked: string[] = [];
+      const container = stubContainer();
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        view: { search: 'Sales', searchAttribute: 'twakeDepartmentPath' },
+        load: (_search, attribute) => {
+          asked.push(attribute);
+          return Promise.resolve({});
+        },
+        listable: false,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(false),
+        canDelete: false,
+      });
+      await list.render(container);
+      expect(container.innerHTML).to.include('value="twakeDepartmentPath"');
+      expect(asked).to.deep.equal(['twakeDepartmentPath']);
+      const everywhere = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        view: { search: 'Sales' },
+        load: (_search, attribute) => {
+          asked.push(attribute);
+          return Promise.resolve({});
+        },
+        listable: false,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(false),
+        canDelete: false,
+      });
+      await everywhere.render(stubContainer());
+      expect(asked[1].split(',')).to.not.include('twakeDepartmentPath');
+    });
+
+    it('should list a department of a short name, and say a cut answer is', async () => {
+      // "IT" drew the three-character guard, and asked without a search.
+      const asked: unknown[] = [];
+      const container = stubContainer();
+      await new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        view: {
+          search: 'IT',
+          searchAttribute: 'twakeDepartmentPath',
+          under: 'IT',
+        },
+        load: (search, attribute, cut) => {
+          asked.push([search, attribute, cut]);
+          return Promise.resolve({
+            entries: { ann: { uid: 'ann', twakeDepartmentPath: 'it / Ops' } },
+            truncated: true,
+          });
+        },
+        listable: false,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(false),
+        canDelete: false,
+      }).render(container);
+      expect(asked).to.deep.equal([['IT', 'twakeDepartmentPath', true]]);
+      expect(container.innerHTML).to.include('<tr data-id="ann"');
+      expect(container.innerHTML).to.not.include('data-list-all');
+      expect(container.innerHTML).to.include(
+        'The directory answered only its first matches: some of IT may be missing'
+      );
+    });
+
+    it('should cut a department’s list to it and what lies under it', async () => {
+      // A search of the path matches a substring: "Sales" found Presales.
+      const container = stubContainer();
+      await new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        view: {
+          search: 'Sales',
+          searchAttribute: 'twakeDepartmentPath',
+          under: 'Sales',
+        },
+        load: () =>
+          Promise.resolve({
+            sophie: { uid: 'sophie', twakeDepartmentPath: 'Sales' },
+            alice: { uid: 'alice', twakeDepartmentPath: 'Sales / France' },
+            pat: { uid: 'pat', twakeDepartmentPath: 'Presales' },
+            sam: { uid: 'sam', twakeDepartmentPath: 'Engineering / Sales' },
+          }),
+        listable: false,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(false),
+        canDelete: false,
+      }).render(container);
+      const ids = [
+        ...container.innerHTML.matchAll(/<tr data-id="([^"]+)"/g),
+      ].map(match => match[1]);
+      expect(ids).to.deep.equal(['alice', 'sophie']);
     });
 
     it('should show an account’s state as a badge when it is an exception', async () => {
