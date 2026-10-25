@@ -438,9 +438,11 @@
 .dc-main {
   width: 100%;
   max-width: 1320px;
-  /* The bottom leaves room for the badge in the corner. */
+  /* The bottom leaves room for the badge, pulled up into it. Grown to the
+     window's height, a short page still has it at the bottom. */
   padding: 28px 32px 72px;
   min-width: 0;
+  flex-grow: 1;
 }
 
 .dc-view-header {
@@ -2107,12 +2109,11 @@ select.dc-input {
 
 /* ---------------------------------------------------------------- powered */
 
-/* Sits under the side panel and the toast, which both belong to the task. */
+/* Closes the page, in the room the main area leaves at its bottom: fixed in
+   the corner, it covered the rows scrolling under it and took their clicks. */
 .dc-powered {
-  position: fixed;
-  right: 20px;
-  bottom: 16px;
-  z-index: 5;
+  align-self: flex-end;
+  margin: -56px 20px 16px 0;
   display: flex;
   padding: 6px;
   border-radius: 8px;
@@ -2282,12 +2283,8 @@ textarea.dc-policy-text {
     padding: 0;
   }
 
-  /* No corner to spare on a phone: the badge closes the page instead. */
   .dc-powered {
-    position: static;
-    grid-column: 1 / -1;
-    justify-self: end;
-    margin: -56px 12px 16px 0;
+    margin-right: 12px;
   }
 
   .dc-panel-inner {

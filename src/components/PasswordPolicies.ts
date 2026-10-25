@@ -271,7 +271,7 @@ export class PolicyForm {
             : `<div class="dc-field" data-field="cn">
                 <label for="dc-policy-cn">${escapeHtml(t('policy.name'))} <span class="dc-required">*</span></label>
                 <input id="dc-policy-cn" class="dc-input" type="text" autocomplete="off" />
-                <p class="dc-error" data-error hidden></p>
+                <p class="dc-error" id="dc-policy-cn-error" data-error hidden></p>
               </div>`
         }
         ${groups
@@ -333,32 +333,35 @@ export class PolicyForm {
       translator.t(key, values);
     const id = `dc-policy-${field.name}`;
     const current = policy?.[field.name];
-    const hint = HINTED.includes(field.name)
-      ? `<p class="dc-hint">${escapeHtml(t(`policy.hint.${field.name}`))}</p>`
+    const hinted = HINTED.includes(field.name);
+    const hint = hinted
+      ? `<p class="dc-hint" id="${id}-hint">${escapeHtml(t(`policy.hint.${field.name}`))}</p>`
       : '';
     return `
       <div class="dc-field" data-field="${escapeHtml(field.name)}">
         <label for="${id}">${escapeHtml(t(`policy.attr.${field.name}`))}
           <code class="dc-policy-attribute">${escapeHtml(field.name)}</code></label>
-        ${this.controlMarkup(field, id, current)}
+        ${this.controlMarkup(field, id, current, hinted ? `${id}-hint` : undefined)}
         ${hint}
-        <p class="dc-error" data-error hidden></p>
+        <p class="dc-error" id="${id}-error" data-error hidden></p>
       </div>`;
   }
 
   private controlMarkup(
     field: PolicyField,
     id: string,
-    current: unknown
+    current: unknown,
+    hint?: string
   ): string {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.options.translator.t(key, values);
+    const described = hint ? ` aria-describedby="${hint}"` : '';
     const option = (value: string, label: string, selected: boolean): string =>
       `<option value="${value}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
 
     switch (field.kind) {
       case 'boolean':
-        return `<select id="${id}" class="dc-input">
+        return `<select id="${id}" class="dc-input"${described}>
           ${option(
             '',
             t('policy.boolean.unset', {
@@ -372,7 +375,7 @@ export class PolicyForm {
           ${option('FALSE', t('policy.boolean.no'), current === false)}
         </select>`;
       case 'quality':
-        return `<select id="${id}" class="dc-input">
+        return `<select id="${id}" class="dc-input"${described}>
           ${option('', t('policy.quality.unset'), current === undefined)}
           ${[0, 1, 2]
             .map(level =>
@@ -386,7 +389,7 @@ export class PolicyForm {
         </select>`;
       case 'text':
         return `<textarea id="${id}" class="dc-input dc-policy-text" rows="6"
-          spellcheck="false">${escapeHtml(
+          spellcheck="false"${described}>${escapeHtml(
             typeof current === 'string' ? current : ''
           )}</textarea>`;
       case 'duration': {
@@ -396,9 +399,11 @@ export class PolicyForm {
             : undefined;
         return `<div class="dc-policy-duration">
           <input id="${id}" class="dc-input" type="number" min="0" step="1"
-            inputmode="numeric" value="${split ? split.amount : ''}" />
+            inputmode="numeric" value="${split ? split.amount : ''}"${described} />
           <select class="dc-input" data-unit
-            aria-label="${escapeHtml(t('policy.unit'))}">
+            aria-label="${escapeHtml(
+              t('policy.unitOf', { field: t(`policy.attr.${field.name}`) })
+            )}">
             ${UNITS.map(([unit]) =>
               option(
                 unit,
@@ -413,30 +418,36 @@ export class PolicyForm {
         return `<input id="${id}" class="dc-input" type="number" min="0" step="1"
           inputmode="numeric" value="${
             typeof current === 'number' ? current : ''
-          }" />`;
+          }"${described} />`;
     }
   }
 
-  /** Read the form, or show what is wrong in it and read nothing. */
+  /**
+   * Read the form, or show what is wrong in it and read nothing.
+   *
+   * A refused field says so to assistive technology as well as on screen,
+   * and the first one takes the focus, as in the entry forms: the messages
+   * alone left a keyboard or screen reader user on the Create button.
+   */
   private read(): { cn: string; wanted: Record<string, unknown> } | null {
     const container = this.container;
     if (!container) return null;
     const t = (key: string): string => this.options.translator.t(key);
     let valid = true;
+    const refused: (HTMLElement | null)[] = [];
     const fail = (name: string, message: string): void => {
       valid = false;
-      const error = container.querySelector<HTMLElement>(
-        `[data-field="${name}"] [data-error]`
-      );
-      if (error) {
-        error.textContent = message;
-        error.hidden = false;
-      }
+      refused.push(this.showError(name, message));
     };
     for (const error of Array.from(
       container.querySelectorAll<HTMLElement>('[data-error]')
     ))
       error.hidden = true;
+    for (const name of [
+      'cn',
+      ...POLICY_GROUPS.flatMap(group => group.fields.map(field => field.name)),
+    ])
+      this.markInvalid(name, false);
 
     const cn = this.options.policy
       ? this.options.policy.cn
@@ -460,7 +471,64 @@ export class PolicyForm {
         if (value === undefined) fail(field.name, t('policy.error.integer'));
         else wanted[field.name] = value;
       }
-    return valid ? { cn, wanted } : null;
+    if (valid) return { cn, wanted };
+    refused.find(control => control)?.focus();
+    return null;
+  }
+
+  /**
+   * Say under a field why the server refused it, as the form says its own
+   * refusals: a name already taken belongs under Name, in the reader's
+   * words, not in a toast quoting the server's English and the other
+   * policy's DN.
+   *
+   * @param name the field
+   * @param message the refusal
+   */
+  refuse(name: string, message: string): void {
+    this.showError(name, message)?.focus();
+  }
+
+  /**
+   * Show a field's error under it and mark its control.
+   *
+   * @returns its control, when the form shows the field
+   */
+  private showError(name: string, message: string): HTMLElement | null {
+    const error = this.container?.querySelector<HTMLElement>(
+      `[data-field="${name}"] [data-error]`
+    );
+    if (error) {
+      error.textContent = message;
+      error.hidden = false;
+    }
+    return this.markInvalid(name, true);
+  }
+
+  /**
+   * Mark a field's control invalid, described by its error besides its hint,
+   * or clear that mark.
+   *
+   * @param name the field
+   * @param invalid whether it was refused
+   * @returns its control, when the form shows the field
+   */
+  private markInvalid(name: string, invalid: boolean): HTMLElement | null {
+    const control =
+      this.container?.querySelector<HTMLElement>(`#dc-policy-${name}`) ?? null;
+    if (!control) return null;
+    const error = `dc-policy-${name}-error`;
+    const described = (control.getAttribute('aria-describedby') || '')
+      .split(/\s+/)
+      .filter(id => id && id !== error);
+    if (invalid) {
+      control.setAttribute('aria-invalid', 'true');
+      described.push(error);
+    } else control.removeAttribute('aria-invalid');
+    if (described.length)
+      control.setAttribute('aria-describedby', described.join(' '));
+    else control.removeAttribute('aria-describedby');
+    return control;
   }
 
   private async submit(): Promise<void> {

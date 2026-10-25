@@ -8,11 +8,19 @@ Built on ldap-rest 1.0.1.
 
 - The French password policy labels and hints use the typographic apostrophe,
   as the rest of the console does (#179)
+- The password policy form marks the fields it refuses for assistive
+  technology and takes the focus to the first, and names each unit after its
+  duration (#177)
 - A mailbox size reads the interface's way on the account card and in the
   lists: _1,07 Go_ in French, not _1.07 GB_ (#178)
 - An organization address that names no DN, `#/organizations/zzz`, says the
   entry does not exist, as any other unknown entry does, instead of the
   server's English refusal in red (#175)
+- A new password policy under a name already taken says so under Name, in
+  the interface's language, instead of a toast quoting the server's English
+  and the other policy's DN (#176)
+- The LINAGORA badge closes the page instead of staying in the corner over
+  the rows scrolling under it, hiding them and taking their clicks (#180)
 
 ## v0.11.0 (2026-10-23)
 

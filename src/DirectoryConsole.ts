@@ -782,6 +782,10 @@ export class DirectoryConsole {
         <div class="dc-content">
           <header class="dc-header">${this.scopeMarkup()}${this.logoutMarkup()}</header>
           <main class="dc-main" data-main></main>
+          <a class="dc-powered" href="https://linagora.com" target="_blank"
+            rel="noopener noreferrer">
+            <img src="${LINAGORA_LOGO}" alt="LINAGORA" width="100" height="21" />
+          </a>
         </div>
         <div class="dc-panel" data-panel hidden>
           <div class="dc-panel-inner" data-panel-dialog role="dialog"
@@ -797,10 +801,6 @@ export class DirectoryConsole {
         <div data-toast-region role="status" aria-live="polite" aria-atomic="true">
           <div class="dc-toast" data-toast hidden></div>
         </div>
-        <a class="dc-powered" href="https://linagora.com" target="_blank"
-          rel="noopener noreferrer">
-          <img src="${LINAGORA_LOGO}" alt="LINAGORA" width="100" height="21" />
-        </a>
       </div>`;
 
     for (const button of Array.from(
@@ -2658,8 +2658,8 @@ export class DirectoryConsole {
       policy
         ? t('policy.title.edit', { name: policy.cn })
         : t('policy.title.new'),
-      body =>
-        new PolicyForm({
+      body => {
+        const form: PolicyForm = new PolicyForm({
           translator: this.translator,
           policy,
           attributes,
@@ -2669,7 +2669,10 @@ export class DirectoryConsole {
               if (policy) await this.api.updatePasswordPolicy(cn, values);
               else await this.api.createPasswordPolicy(cn, values);
             } catch (err) {
-              this.toast(this.policyRefusal(err, cn), true);
+              // A new policy conflicts with nothing but one of its name.
+              if (!policy && (err as { status?: number }).status === 409)
+                form.refuse('cn', t('policy.error.taken', { name: cn }));
+              else this.toast(this.policyRefusal(err, cn), true);
               return;
             }
             this.closePanel();
@@ -2679,7 +2682,9 @@ export class DirectoryConsole {
           onDelete: (): void =>
             void this.deletePolicy(policy as PasswordPolicy),
           onCancel: (): void => this.closePanel(),
-        }).render(body),
+        });
+        form.render(body);
+      },
       false,
       true
     );
