@@ -55,12 +55,14 @@ import {
 import { OrganizationTree } from '../src/components/OrganizationTree';
 import { availableLanguages, languageName, Translator } from '../src/i18n';
 import {
+  accountState,
   beforeToday,
   explainRefusal,
   formatByteSize,
   nameAttributes,
   parseByteSize,
   readableByteSize,
+  stateMarkup,
 } from '../src/format';
 import type { Confirmation } from '../src/DirectoryConsole';
 import type {
@@ -2033,6 +2035,22 @@ describe('Directory console', () => {
         onCreate,
         onOpen: () => undefined,
       }).markup();
+
+    it('should show a person’s state as the lists do', () => {
+      // The People and transit tables read "Disabled" like "Active" (#172).
+      const frank: Entry = {
+        ...sophie,
+        dn: 'uid=frank,ou=users,dc=example,dc=com',
+        uid: 'frank',
+        displayName: 'Frank',
+        twakeAccountStatus: 'cn=disabled',
+      };
+      const html = tables([sophie, frank]);
+      expect(html).to.match(
+        /<span class="dc-state dc-state-disabled">[^<]+<\/span><\/td>/
+      );
+      expect(html.match(/class="dc-state /g)).to.have.length(1);
+    });
 
     it('should list the people and the groups apart, each row leading to its card', () => {
       const html = tables([sophie, salesTeam]);
@@ -6915,6 +6933,75 @@ describe('Directory console', () => {
       expect(EntityList.shortenPath('<A> / B / <D>')).to.equal(
         '&lt;A&gt; / … / &lt;D&gt;'
       );
+    });
+
+    it('should show an account’s state as a badge when it is an exception', async () => {
+      // "Disabled" read like the "Active" around it: a scan down the column
+      // missed it (#172). The text stays; Active stays plain.
+      const container = stubContainer();
+      await new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () =>
+          Promise.resolve({
+            alice: { uid: 'alice', twakeAccountStatus: 'cn=active' },
+            frank: { uid: 'frank', twakeAccountStatus: 'CN=Disabled' },
+          }),
+        listable: true,
+        pointerLabel: dn =>
+          dn.toLowerCase() === 'cn=active' ? 'Active' : 'Disabled',
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(false),
+        canDelete: false,
+      }).render(container);
+      expect(container.innerHTML)
+        .to.include(
+          'title="CN=Disabled"><span class="dc-state dc-state-disabled">Disabled</span></td>'
+        )
+        .and.include('title="cn=active">Active</td>');
+    });
+
+    it('should show an account’s state on its card as the list does', () => {
+      const container = stubContainer();
+      new EntityDetail({
+        entity: users,
+        entry: { uid: 'frank', twakeAccountStatus: 'cn=disabled' },
+        translator: new Translator('en'),
+        canWrite: false,
+        canDelete: false,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        onStatus: () => undefined,
+        onResetPassword: () => undefined,
+        pointerLabel: () => 'Disabled',
+      }).render(container);
+      expect(container.innerHTML).to.include(
+        '<span class="dc-value" title="cn=disabled"><span class="dc-state dc-state-disabled">Disabled</span></span>'
+      );
+    });
+
+    it('should name an account’s state by its key, and badge only the exceptions', () => {
+      expect(accountState(users, 'twakeAccountStatus', 'CN=disabled')).to.equal(
+        'disabled'
+      );
+      expect(accountState(users, 'twakeAccountStatus', 'cn=active')).to.equal(
+        'enabled'
+      );
+      // Another attribute, or a state the schema does not declare
+      expect(accountState(users, 'cn', 'cn=disabled')).to.equal(undefined);
+      expect(accountState(users, 'twakeAccountStatus', 'cn=gone')).to.equal(
+        undefined
+      );
+      expect(stateMarkup('enabled', 'Active')).to.equal('Active');
+      expect(stateMarkup('noAccess', 'Sans accès')).to.equal(
+        '<span class="dc-state dc-state-noAccess">Sans accès</span>'
+      );
+      expect(stateMarkup('toDelete', '<b>')).to.equal(
+        '<span class="dc-state dc-state-toDelete">&lt;b&gt;</span>'
+      );
+      // A deployment's own state is said as it stands.
+      expect(stateMarkup('seconded', 'Seconded')).to.equal('Seconded');
+      expect(stateMarkup(undefined, 'Disabled')).to.equal('Disabled');
     });
 
     it('should name a nomenclature’s values, and keep the others as stored', async () => {

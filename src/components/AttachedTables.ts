@@ -16,7 +16,13 @@
  */
 
 import { escapeHtml } from '../shared/dom';
-import { attributeLabel, displayValue, ownValueLabel } from '../format';
+import {
+  accountState,
+  attributeLabel,
+  displayValue,
+  ownValueLabel,
+  stateMarkup,
+} from '../format';
 import { hasRole, roleAttribute } from '../api/ConsoleApiClient';
 import { EntityList } from './EntityList';
 import type { Translator } from '../i18n';
@@ -338,12 +344,17 @@ export class AttachedTables {
     const cells = roles.map((role, index) => {
       const shown =
         index === 0 ? name : this.value(entity, role, entry.values?.[role]);
+      const stored = entry.values?.[role];
+      const state =
+        entity && stored !== undefined
+          ? accountState(entity, this.attribute(entity, role), stored)
+          : undefined;
       const content =
         index === 0 && href
           ? `<a class="dc-row-link" href="${escapeHtml(href)}">${escapeHtml(
               shown
             )}</a>`
-          : escapeHtml(shown);
+          : stateMarkup(state, shown);
       return `<td title="${escapeHtml(shown)}">${content}</td>`;
     });
     const action = this.options.rowAction;

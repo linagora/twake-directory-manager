@@ -17,6 +17,7 @@
 
 import { escapeHtml } from '../shared/dom';
 import {
+  accountState,
   attributeLabel,
   displayValue,
   entryValue,
@@ -25,6 +26,7 @@ import {
   rdnValue,
   readableByteSize,
   resolveText,
+  stateMarkup,
 } from '../format';
 import { hasRole, roleAttribute } from '../api/ConsoleApiClient';
 import type { AttachedTables } from './AttachedTables';
@@ -489,7 +491,10 @@ export class EntityDetail {
     const shown =
       ownValueLabel(entity, name, value, language) ||
       displayValue(attr, value, this.options.pointerLabel, language);
-    return `<span class="dc-value" title="${escapeHtml(value)}">${escapeHtml(shown)}</span>`;
+    return `<span class="dc-value" title="${escapeHtml(value)}">${stateMarkup(
+      accountState(entity, name, value),
+      shown
+    )}</span>`;
   }
 
   /**

@@ -19,11 +19,13 @@ import type { Translator } from '../i18n';
 import { hasRole, tooBroad } from '../api/ConsoleApiClient';
 import {
   GENERIC_FAILURE,
+  accountState,
   attributeLabel,
   displayValue,
   entryValue,
   ownValueLabel,
   searchableAttributes,
+  stateMarkup,
 } from '../format';
 import type {
   EntityDescriptor,
@@ -767,9 +769,13 @@ export class EntityList {
                 )
             );
             const isPath = name === entity.organizationPath;
+            const state =
+              typeof value === 'string'
+                ? accountState(entity, name, value)
+                : undefined;
             const content = isPath
               ? EntityList.shortenPath(shown)
-              : escapeHtml(shown);
+              : stateMarkup(state, shown);
             // The first column opens the entry: a link Tab reaches and Enter
             // follows, which the browser also opens in a new tab. The rest of
             // the row only stands in for it, for the mouse.
