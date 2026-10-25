@@ -2,8 +2,9 @@
 # Compose DM_PLUGINS from its three parts, then run the command.
 #
 # The console is an administration interface: it creates accounts, resets
-# passwords and deletes organizations. Started without an authentication
-# plugin, ldap-rest lets every request through, so an image run with its
+# passwords and deletes organizations. ldap-rest refuses to start with an
+# authorization plugin but no authentication plugin; started with neither, it
+# lets every request through, so an image run with its
 # defaults overridden carelessly would publish all of that to whoever reaches
 # the port. It refuses to start that way unless told to.
 set -e

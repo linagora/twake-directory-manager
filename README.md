@@ -60,8 +60,9 @@ passes `DM_CONSOLE_HIDDEN_ATTRIBUTES` on to the console; without it, nothing
 is hidden.
 
 **The container refuses to start with `DM_AUTH_PLUGINS` empty.** ldap-rest
-without an authentication plugin serves every request, and this interface
-creates accounts, resets passwords and deletes organizations. Set
+refuses to start with an authorization plugin but no authentication plugin,
+and with neither it serves every request; this interface creates accounts,
+resets passwords and deletes organizations. Set
 `DM_ALLOW_ANONYMOUS=true` for a test instance that nobody else can reach.
 
 ### Password policies

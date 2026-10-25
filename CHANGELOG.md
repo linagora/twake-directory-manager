@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+Built on ldap-rest 1.0.1.
+
 ## v0.11.0 (2026-10-23)
 
 Built on ldap-rest 0.25.1.
