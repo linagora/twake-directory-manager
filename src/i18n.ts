@@ -276,6 +276,9 @@ const en: Catalogue = {
   'password.copyFailed': 'Select the password to copy it',
   'password.done': 'Done',
   'password.leaveUncopied': 'Close without copying the password?',
+  'form.discardQuestion': 'Discard what you typed?',
+  'form.keepEditing': 'Keep editing',
+  'form.discard': 'Discard',
   'password.set': 'Password changed',
   'password.confirmButton': 'Reset password',
 
@@ -708,6 +711,9 @@ const fr: Catalogue = {
   'password.copyFailed': 'Sélectionnez le mot de passe pour le copier',
   'password.done': 'Terminé',
   'password.leaveUncopied': 'Fermer sans copier le mot de passe ?',
+  'form.discardQuestion': 'Abandonner votre saisie ?',
+  'form.keepEditing': 'Continuer la saisie',
+  'form.discard': 'Abandonner',
   'password.set': 'Mot de passe modifié',
   'password.confirmButton': 'Réinitialiser',
 
@@ -1111,6 +1117,9 @@ const mn: Catalogue = {
   'password.copyFailed': 'Нууц үгийг сонгоод хуулна уу',
   'password.done': 'Болсон',
   'password.leaveUncopied': 'Нууц үгийг хуулалгүй хаах уу?',
+  'form.discardQuestion': 'Оруулсан мэдээллээ хаях уу?',
+  'form.keepEditing': 'Үргэлжлүүлэх',
+  'form.discard': 'Хаях',
   'password.set': 'Нууц үг солигдлоо',
   'password.confirmButton': 'Дахин тохируулах',
 

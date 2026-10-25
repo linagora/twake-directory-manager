@@ -35,7 +35,7 @@ test.describe('DOMAIN mail domains', () => {
     await expect(
       form.options('Email').filter({ hasText: `someone@${name}` })
     ).toHaveCount(1);
-    await form.cancel();
+    await form.discard();
 
     const card = await app.openEntry(`domains/${id}`);
     await card.perform('Delete');

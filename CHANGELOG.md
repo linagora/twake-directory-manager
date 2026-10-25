@@ -25,6 +25,9 @@ Built on ldap-rest 1.0.1.
 - The Users and Groups searches offer the department path, which Every field
   no longer searches, and an organization's card lists everyone in it,
   sub-organizations included, when its table cannot (#166)
+- A changed create or edit form asks _Discard what you typed?_ before Escape,
+  its × or Cancel close it, and the browser asks before a reload loses it
+  (#169)
 
 ### Bug Fixes
 
