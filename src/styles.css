@@ -24,7 +24,13 @@
   --dc-radius-small: 10px;
   --dc-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 1px 1px rgb(0 0 0 / 2%);
   --dc-shadow-raised: 0 12px 40px rgb(0 0 0 / 14%), 0 2px 8px rgb(0 0 0 / 6%);
-  --dc-focus: 0 0 0 3px rgb(11 99 214 / 28%);
+  /* Two rings: the surface's colour, then the accent's. A pale halo was lost
+     on white and vanished around a blue button; the inner ring sets the
+     outer one apart from whatever it surrounds. */
+  --dc-focus: 0 0 0 2px var(--dc-surface), 0 0 0 4px var(--dc-accent);
+  /* The same, drawn inside an element whose edges a scroll would clip. */
+  --dc-focus-inset:
+    inset 0 0 0 2px var(--dc-accent), inset 0 0 0 4px var(--dc-surface);
 
   /* A bare `1fr` track grows to its widest content, a table included, and the
      page then scrolls sideways: `minmax(0, 1fr)` keeps that to the table. */
@@ -853,6 +859,11 @@
   vertical-align: middle;
 }
 
+.dc-app input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: var(--dc-focus);
+}
+
 .dc-list-notice {
   margin: 0 0 12px;
   padding: 10px 14px;
@@ -970,6 +981,11 @@
 .dc-menu-item:focus-visible {
   background: var(--dc-hover);
   outline: none;
+}
+
+/* The background alone told the keyboard little: the ring as well. */
+.dc-menu-item:focus-visible {
+  box-shadow: var(--dc-focus);
 }
 
 .dc-menu-item-danger {
@@ -1114,12 +1130,15 @@
   padding-right: 8px;
 }
 
+/* 24 px at least, a target a finger or a shaky hand finds: the glyph stays
+   as it was, the button around it grows. */
 .dc-relation-remove {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -1716,7 +1735,8 @@ select.dc-input {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 4px 3px 12px;
+  /* The × is 24 px high: the pill keeps the height it had around 20. */
+  padding: 1px 4px 1px 12px;
   background: var(--dc-accent-soft);
   color: var(--dc-accent);
   font-weight: 500;
@@ -1732,10 +1752,12 @@ select.dc-input {
 
 .dc-token button {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  /* 24 px at least: the glyph stays as it was, the target grows. */
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -1748,6 +1770,11 @@ select.dc-input {
 
 .dc-token button:hover {
   background: color-mix(in srgb, var(--dc-accent) 18%, transparent);
+}
+
+.dc-token button:focus-visible {
+  outline: none;
+  box-shadow: var(--dc-focus);
 }
 
 /* A pointer chosen by searching: its suggestions open under the box. */
@@ -2189,7 +2216,7 @@ select.dc-input {
 
 .dc-policy-table tbody tr:focus-visible {
   outline: none;
-  box-shadow: inset var(--dc-focus);
+  box-shadow: var(--dc-focus-inset);
 }
 
 .dc-policy-attribute {
@@ -2349,7 +2376,6 @@ textarea.dc-policy-text {
     --dc-danger-soft: rgb(255 105 97 / 14%);
     --dc-shadow: none;
     --dc-shadow-raised: 0 16px 48px rgb(0 0 0 / 55%);
-    --dc-focus: 0 0 0 3px rgb(75 157 255 / 35%);
   }
 
   .dc-button-primary,
@@ -2432,5 +2458,14 @@ textarea.dc-policy-text {
 
   .dc-search input[type='search'] {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23a1a1a6' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3.5 3.5'/%3E%3C/svg%3E");
+  }
+}
+
+/* Forced colours draw no shadow, and every ring above is one: an outline
+   there instead, in the system's own colour. */
+@media (forced-colors: active) {
+  .dc-app :focus-visible {
+    outline: 2px solid CanvasText !important;
+    outline-offset: 2px;
   }
 }

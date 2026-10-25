@@ -12,6 +12,9 @@ Built on ldap-rest 1.0.1.
 - An account that is disabled, has no access or is to be deleted shows its
   state as a badge in the lists, the organization and transit tables and on
   its card; an active one reads as before (#172)
+- The keyboard focus is a solid ring on every control, clear on white and
+  around a blue button, and the × that removes a group or a value is 24 px at
+  least (#184)
 
 ### Bug Fixes
 
