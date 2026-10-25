@@ -887,7 +887,14 @@ export class DirectoryConsole {
       </ul>
       ${
         this.scope.transit
-          ? `<span class="dc-scope-label">${escapeHtml(t('transit.branch'))}</span>
+          ? `${
+              // "Transit Transit (1)" said its name twice: the label goes
+              // when the branch's name is that word already.
+              rdnValue(this.scope.transit).toLowerCase() ===
+              t('transit.branch').toLowerCase()
+                ? ''
+                : `<span class="dc-scope-label">${escapeHtml(t('transit.branch'))}</span>`
+            }
             <a class="dc-scope-transit" data-transit-link href="#/organizations/${encodeURIComponent(
               this.scope.transit
             )}" title="${escapeHtml(

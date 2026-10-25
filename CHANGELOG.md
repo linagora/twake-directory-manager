@@ -4,6 +4,12 @@
 
 Built on ldap-rest 1.0.1.
 
+### Features
+
+- The form hints speak the administrator's words: _A size such as 4 GB, 500
+  MB or 100 KB_ under a size, nothing about DNs under a search by name, and
+  the banner says _Transit_ once (#171)
+
 ### Bug Fixes
 
 - The French password policy labels and hints use the typographic apostrophe,

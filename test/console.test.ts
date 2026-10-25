@@ -4006,6 +4006,15 @@ describe('Directory console', () => {
       const markup = app.scopeMarkup();
       expect(markup).to.contain('title="Transit">Transit</a>');
       expect(markup).to.not.contain('title="ou=Transit');
+      // "Transit Transit (1)" said it twice: the label goes (#171), and
+      // stays before a branch named otherwise.
+      expect(markup).to.not.contain(
+        '<span class="dc-scope-label">Transit</span>'
+      );
+      app.scope.transit = 'ou=Mobility,ou=organization,dc=example,dc=com';
+      expect(app.scopeMarkup())
+        .to.contain('<span class="dc-scope-label">Transit</span>')
+        .and.contain('title="Mobility">Mobility</a>');
     });
   });
 
@@ -8203,6 +8212,66 @@ describe('Directory console', () => {
         onSubmit: () => Promise.resolve(),
         onCancel: () => undefined,
       });
+
+    it('should hint a size in the console’s words, and no DN under a search', async () => {
+      // "xGB, xMB, xKB" is a notation, not an example, and the members are
+      // searched by name: nobody is asked to type a DN (#171).
+      const render = async (
+        entity: EntityDescriptor,
+        language: string,
+        memberSearch?: () => Promise<{ dn: string; label: string }[]>
+      ): Promise<string> => {
+        const container = stubContainer();
+        await new EntityForm({
+          entity,
+          translator: new Translator(language),
+          pointerOptions: () => Promise.resolve([]),
+          memberSearch: memberSearch && (() => memberSearch),
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        }).render(container);
+        return container.innerHTML;
+      };
+      const sized: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            mailQuotaSize: {
+              type: 'number',
+              normalize: 'byteSize',
+              hint: {
+                en: 'Expected pattern xGB, xMB, xKB or a number of bytes',
+                fr: "Format attendu : xGB, xMB, xKB ou un nombre d'octets",
+              },
+            },
+          },
+        },
+      };
+      expect(await render(sized, 'en'))
+        .to.include(
+          '<p class="dc-hint" data-hint>A size such as 4 GB, 500 MB or 100 KB</p>'
+        )
+        .and.not.include('xGB');
+      expect(await render(sized, 'fr')).to.include(
+        'Une taille telle que 4 GB, 500 MB ou 100 KB'
+      );
+      const hinted: EntityDescriptor = {
+        ...groups,
+        schema: {
+          attributes: {
+            ...groups.schema.attributes,
+            member: {
+              ...groups.schema.attributes.member,
+              hint: 'Expected the DN of an entry of this directory',
+            },
+          },
+        },
+      };
+      const searched = await render(hinted, 'en', () => Promise.resolve([]));
+      expect(searched).to.include('data-picker="member"');
+      expect(searched).to.not.include('Expected the DN');
+    });
 
     it('should refuse a size and a past expiry before sending, both at once', async () => {
       // Neither carries a pattern: their rules are the server's, which

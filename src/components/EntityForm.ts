@@ -602,7 +602,17 @@ export class EntityForm {
   /** What a field holds: redrawn alone when a select turns into a search. */
   private fieldContent(name: string, attr: SchemaAttribute): string {
     const id = `dc-field-${name}`;
-    const hint = attributeHint(attr, this.options.translator.language);
+    const { translator } = this.options;
+    // The schema's hints speak of storage: "xGB, xMB, xKB", a notation and
+    // no example, and "the DN of an entry" under a search by name, which a
+    // reader is never asked to type. A size gets the console's own words,
+    // a search none: its placeholder says what to type.
+    const hint =
+      attr.normalize === 'byteSize'
+        ? translator.t('form.sizeHint')
+        : this.searches.has(name)
+          ? undefined
+          : attributeHint(attr, translator.language);
     const required = attr.required ? ' <span class="dc-required">*</span>' : '';
     const control = this.searches.has(name)
       ? this.pickerMarkup(name)
@@ -1740,7 +1750,9 @@ export class EntityForm {
       const bad = list.find(value => !regex.test(value));
       if (bad !== undefined)
         this.errors[name] =
-          attributeHint(attr, this.options.translator.language) ||
+          (attr.normalize === 'byteSize'
+            ? this.options.translator.t('form.notSize')
+            : attributeHint(attr, this.options.translator.language)) ||
           this.options.translator.t('form.badFormat', {
             value: bad,
             pattern: String(pattern),
