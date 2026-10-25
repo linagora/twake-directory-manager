@@ -98,6 +98,9 @@ export class ConfirmDialog {
   readonly items: Locator;
   /** The safer way offered instead: set the state to Disabled */
   readonly alternative: Locator;
+  /** What to do along with the action: the groups a hand-over leaves */
+  readonly choices: Locator;
+  readonly choicesLegend: Locator;
   readonly confirmButton: Locator;
   readonly cancelButton: Locator;
 
@@ -108,6 +111,8 @@ export class ConfirmDialog {
     this.paragraphs = this.message.locator('p');
     this.items = this.message.getByRole('listitem');
     this.alternative = this.dialog.locator('[data-confirm-alternative]');
+    this.choices = this.dialog.getByRole('checkbox');
+    this.choicesLegend = this.dialog.locator('.dc-confirm-choices legend');
     this.confirmButton = this.dialog.locator('[data-confirm]');
     this.cancelButton = this.dialog.locator('[data-cancel]');
   }
