@@ -22,6 +22,9 @@ Built on ldap-rest 1.0.1.
   organization is judged by its parent, as the server does, and reference
   data kept outside the console offers neither; a line says why where they
   would be (#167)
+- A changed create or edit form asks _Discard what you typed?_ before Escape,
+  its × or Cancel close it, and the browser asks before a reload loses it
+  (#169)
 
 ### Bug Fixes
 

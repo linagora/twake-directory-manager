@@ -1855,8 +1855,20 @@ select.dc-input {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-/* Asked in place of the actions, before the password goes uncopied. */
-.dc-generated-leave {
+/* Asked in place of a changed form's actions, sticky as they are. */
+.dc-form-leave {
+  position: sticky;
+  bottom: 0;
+  margin: 8px -24px 0;
+  padding: 16px 24px;
+  background: var(--dc-surface);
+  border-top: 1px solid var(--dc-line);
+}
+
+/* Asked in place of the actions, before the password goes uncopied or the
+   form discarded. */
+.dc-generated-leave,
+.dc-form-leave {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1864,7 +1876,8 @@ select.dc-input {
   gap: 8px;
 }
 
-.dc-generated-leave p {
+.dc-generated-leave p,
+.dc-form-leave p {
   flex: 1 1 100%;
   margin: 0;
   font-weight: 500;

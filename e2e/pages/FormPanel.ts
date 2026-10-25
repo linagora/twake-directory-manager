@@ -27,6 +27,10 @@ export class FormPanel {
   /** "Fields marked with * are required", above the fields */
   readonly requiredLegend: Locator;
   readonly optionalFold: Locator;
+  /** "Discard what you typed?", in place of the actions of a changed form */
+  readonly discardPrompt: Locator;
+  readonly keepEditingButton: Locator;
+  readonly discardButton: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -37,6 +41,9 @@ export class FormPanel {
     this.submitButton = this.dialog.locator('form button[type=submit]');
     this.requiredLegend = this.dialog.locator('.dc-form-required');
     this.optionalFold = this.dialog.locator('details[data-optional]');
+    this.discardPrompt = this.dialog.locator('[data-discard]');
+    this.keepEditingButton = this.dialog.locator('[data-discard-keep]');
+    this.discardButton = this.dialog.locator('[data-discard-confirm]');
   }
 
   async expectOpen(title: string | RegExp): Promise<void> {
@@ -209,8 +216,17 @@ export class FormPanel {
     await this.submitButton.click();
   }
 
+  /** Cancels a form nothing was changed in: it closes at once */
   async cancel(): Promise<void> {
     await this.cancelButton.click();
+    await this.expectClosed();
+  }
+
+  /** Cancels a changed form, which asks first, and discards what it holds */
+  async discard(): Promise<void> {
+    await this.cancelButton.click();
+    await expect(this.discardPrompt).toContainText('Discard what you typed?');
+    await this.discardButton.click();
     await this.expectClosed();
   }
 }

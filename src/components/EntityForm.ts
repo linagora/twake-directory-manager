@@ -207,6 +207,13 @@ export class EntityForm {
   private readonly options: FormOptions;
   private readonly fields: [string, SchemaAttribute][];
   private values: Values = {};
+  /** The values the form opened with, to tell a change from none */
+  private initial = '';
+  /**
+   * Something was typed in a field since the form opened, stored or not. A
+   * pick counts through the values; what a picker's search holds does not.
+   */
+  private typed = false;
   private root: HTMLElement | null = null;
   private errors: Record<string, string> = {};
   /** Pointer fields chosen by searching, with their search */
@@ -272,6 +279,17 @@ export class EntityForm {
       )
         this.addresses.add(name);
     }
+    this.initial = JSON.stringify(this.values);
+  }
+
+  /**
+   * Whether closing the form would lose something: a value changed, or
+   * typing not yet stored, which the field keeps until it is left. A search
+   * typed in a picker is no value of the form, nor is a list of suggestions
+   * opened and closed.
+   */
+  isDirty(): boolean {
+    return this.typed || JSON.stringify(this.values) !== this.initial;
   }
 
   /**
@@ -522,6 +540,10 @@ export class EntityForm {
         </div>
       </form>`;
 
+    container.querySelector('form')?.addEventListener('input', event => {
+      const target = event.target as Element | null;
+      if (!target?.closest?.('[data-picker]')) this.typed = true;
+    });
     this.bind();
     await this.fillPointers();
   }
