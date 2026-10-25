@@ -367,6 +367,7 @@ const en: Catalogue = {
   'policy.hint.pwdCheckModuleArg':
     'Read by the check module slapd loads, ppm for instance: one setting per line',
   'policy.error.name': 'A name is required',
+  'policy.error.taken': 'A password policy is already named {name}',
   'policy.error.integer': 'A whole number, 0 or more',
   'policy.created': 'Password policy created',
   'policy.saved': 'Password policy saved',
@@ -792,6 +793,7 @@ const fr: Catalogue = {
   'policy.hint.pwdCheckModuleArg':
     'Lue par le module de contrôle chargé par slapd, ppm par exemple : un réglage par ligne',
   'policy.error.name': 'Un nom est requis',
+  'policy.error.taken': 'Une politique de mot de passe s’appelle déjà {name}',
   'policy.error.integer': 'Un nombre entier, 0 ou plus',
   'policy.created': 'Politique de mot de passe créée',
   'policy.saved': 'Politique de mot de passe enregistrée',
@@ -1182,6 +1184,7 @@ const mn: Catalogue = {
   'policy.hint.pwdCheckModuleArg':
     'slapd-ийн ачаалсан шалгах модуль (жишээ нь ppm) уншина: мөр бүрт нэг тохиргоо',
   'policy.error.name': 'Нэр шаардлагатай',
+  'policy.error.taken': '{name} нэртэй нууц үгийн бодлого аль хэдийн байна',
   'policy.error.integer': '0 буюу түүнээс их бүхэл тоо',
   'policy.created': 'Нууц үгийн бодлого үүсгэгдлээ',
   'policy.saved': 'Нууц үгийн бодлого хадгалагдлаа',
