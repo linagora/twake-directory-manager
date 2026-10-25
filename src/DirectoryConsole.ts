@@ -4675,6 +4675,22 @@ export class DirectoryConsole {
   }
 
   /**
+   * The last segment of an organization path: the organization's own name,
+   * for a place that has the whole path next to it.
+   *
+   * @param path full path, as the directory writes it
+   * @returns its last non-empty segment, or the path itself when it has none
+   */
+  private pathLeaf(path: string): string {
+    const separator = this.api.organizationPathSeparator.trim() || '/';
+    const segments = path
+      .split(separator)
+      .map(segment => segment.trim())
+      .filter(Boolean);
+    return segments[segments.length - 1] ?? path;
+  }
+
+  /**
    * Claim an entry in transit into one of the caller's organizations. Only
    * those are offered: the server asks for write on the destination and
    * nothing else, so any other choice would be refused.
@@ -4726,7 +4742,9 @@ export class DirectoryConsole {
                 t('app.cancel')
               )}</button>
               <button type="submit" class="dc-button dc-button-primary">${escapeHtml(
-                t('transit.claimButton', { organization: targets[0].label })
+                t('transit.claimButton', {
+                  organization: this.pathLeaf(targets[0].label),
+                })
               )}</button>
             </div>
           </form>`;
@@ -4734,7 +4752,9 @@ export class DirectoryConsole {
         body
           .querySelector('[data-cancel]')
           ?.addEventListener('click', () => this.closePanel());
-        // The button says where the entry goes, as the select changes.
+        // The button says where the entry goes, as the select changes: by
+        // the organization's own name, the select above it showing the whole
+        // path, which repeated on the button ran over three lines.
         const submit = body.querySelector<HTMLButtonElement>(
           'button[type="submit"]'
         );
@@ -4746,7 +4766,7 @@ export class DirectoryConsole {
             );
             if (submit && chosen)
               submit.textContent = t('transit.claimButton', {
-                organization: chosen.label,
+                organization: this.pathLeaf(chosen.label),
               });
           });
         body.querySelector('form')?.addEventListener('submit', event => {

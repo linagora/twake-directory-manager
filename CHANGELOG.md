@@ -43,6 +43,9 @@ Built on ldap-rest 1.0.1.
 
 ### Bug Fixes
 
+- The claim dialog's button names the organization alone, _Claim into
+  Backend_, instead of repeating the whole path the select above it shows,
+  which ran over three lines
 - The French password policy labels and hints use the typographic apostrophe,
   as the rest of the console does (#179)
 - The password policy form marks the fields it refuses for assistive
