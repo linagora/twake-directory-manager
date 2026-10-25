@@ -31,6 +31,9 @@ Built on ldap-rest 1.0.1.
 - An account created without a password is given one, generated and shown
   in the form's panel before its card opens, and an import says how many
   accounts it created without one (#164)
+- A group's card counts its members and, for whoever may write the group,
+  offers a × on each and _Add members…_; the member search says it finds a
+  name, an email address or an employee ID (#168)
 
 ### Bug Fixes
 

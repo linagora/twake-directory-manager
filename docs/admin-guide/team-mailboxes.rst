@@ -26,4 +26,7 @@ Creating a team mailbox
 #. Click :guilabel:`Create`.
 
 Twake Mail creates the mailbox and gives its members access to it. Adding or
-removing a member later changes who opens it.
+removing a member later, with :guilabel:`Edit`, changes who opens it. Listed
+under :guilabel:`Team mailboxes`, its card offers no :guilabel:`×` nor
+:guilabel:`Add members…`, its members being saved together; a group of type
+:guilabel:`Shared mailbox` offers both (see :doc:`groups`).

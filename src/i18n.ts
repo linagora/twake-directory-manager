@@ -114,6 +114,11 @@ const en: Catalogue = {
 
   'groups.section': 'Groups',
   'groups.add': 'Add to a group…',
+  'members.add': 'Add members…',
+  'members.title': 'Add members to {group}',
+  'members.field': 'Members to add',
+  'members.added': '{names} added to {group}',
+  'members.remove': 'Remove {member} from {group}',
   'groups.title': 'Add {name} to groups',
   'groups.field': 'Groups to add',
   'groups.search.one': 'Type {count} character of the group’s name',
@@ -137,9 +142,9 @@ const en: Catalogue = {
   'form.searchPointer.one': 'Type {count} character to search',
   'form.searchPointer.other': 'Type {count} characters to search',
   'form.searchMember.one':
-    'Type {count} character of an email address, or a full DN',
+    'Type {count} character of a name, an email address or an employee ID',
   'form.searchMember.other':
-    'Type {count} characters of an email address, or a full DN',
+    'Type {count} characters of a name, an email address or an employee ID',
   'form.addDn': 'Press Enter to add this DN',
   'form.addExternal': 'Add {address} as an external member',
   'form.managedDomain':
@@ -545,6 +550,11 @@ const fr: Catalogue = {
 
   'groups.section': 'Groupes',
   'groups.add': 'Ajouter à un groupe…',
+  'members.add': 'Ajouter des membres…',
+  'members.title': 'Ajouter des membres à {group}',
+  'members.field': 'Membres à ajouter',
+  'members.added': 'Ajout à {group} : {names}',
+  'members.remove': 'Retirer {member} de {group}',
   'groups.title': 'Ajouter {name} à des groupes',
   'groups.field': 'Groupes à ajouter',
   'groups.search.one': 'Tapez {count} caractère du nom du groupe',
@@ -568,9 +578,9 @@ const fr: Catalogue = {
   'form.searchPointer.one': 'Tapez {count} caractère pour chercher',
   'form.searchPointer.other': 'Tapez {count} caractères pour chercher',
   'form.searchMember.one':
-    'Tapez {count} caractère d’une adresse électronique, ou un DN complet',
+    'Tapez {count} caractère d’un nom, d’une adresse électronique ou d’un matricule',
   'form.searchMember.other':
-    'Tapez {count} caractères d’une adresse électronique, ou un DN complet',
+    'Tapez {count} caractères d’un nom, d’une adresse électronique ou d’un matricule',
   'form.addDn': 'Appuyez sur Entrée pour ajouter ce DN',
   'form.addExternal': 'Ajouter {address} comme membre externe',
   'form.managedDomain':
@@ -974,6 +984,11 @@ const mn: Catalogue = {
 
   'groups.section': 'Бүлгүүд',
   'groups.add': 'Бүлэгт нэмэх…',
+  'members.add': 'Гишүүд нэмэх…',
+  'members.title': '{group}-д гишүүд нэмэх',
+  'members.field': 'Нэмэх гишүүд',
+  'members.added': '{names} {group}-д нэмэгдлээ',
+  'members.remove': '{member}-г {group}-ээс хасах',
   'groups.title': '{name}-г бүлгүүдэд нэмэх',
   'groups.field': 'Нэмэх бүлгүүд',
   'groups.search': 'Бүлгийн нэрний {count} тэмдэгт оруулна уу',
@@ -995,7 +1010,7 @@ const mn: Catalogue = {
   'form.choose': 'Сонгох…',
   'form.searchPointer': 'Хайхын тулд {count} тэмдэгт оруулна уу',
   'form.searchMember':
-    'И-мэйл хаягийн {count} тэмдэгт, эсвэл бүтэн DN оруулна уу',
+    'Нэр, и-мэйл хаяг эсвэл ажилтны дугаарын {count} тэмдэгт бичнэ үү',
   'form.addDn': 'Энэ DN-ийг нэмэхийн тулд Enter дарна уу',
   'form.addExternal': '{address} хаягийг гадны гишүүнээр нэмэх',
   'form.managedDomain':

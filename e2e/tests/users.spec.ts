@@ -850,7 +850,7 @@ test.describe('USER user accounts', () => {
     expect(await directory.exists(user.dn)).toBe(false);
 
     await app.open(`groups/${group.cn}`);
-    await expect(app.entry().relatedItems('Members')).toHaveText(['alice']);
+    await expect(app.entry().relatedLinks('Members')).toHaveText(['alice']);
     expect(await directory.values(group.dn, 'member')).not.toContain(user.dn);
   });
 
@@ -934,7 +934,7 @@ test.describe('USER user accounts', () => {
     expect(await directory.values(group.dn, 'owner')).toEqual([colleague.dn]);
     expect(await directory.values(group.dn, 'member')).toEqual([colleague.dn]);
     const card = await app.openEntry(`groups/${group.cn}`);
-    await expect(card.relatedItems('Members')).toHaveText([colleague.uid]);
+    await expect(card.relatedLinks('Members')).toHaveText([colleague.uid]);
     await expect(card.detail('Owners')).not.toContainText(leaver.uid);
   });
 
