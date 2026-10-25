@@ -1,6 +1,12 @@
 import type { Locator } from '@playwright/test';
 
-import { ConfirmDialog, csv, LoginPage, readDownload } from '../pages';
+import {
+  AddToGroupsDialog,
+  ConfirmDialog,
+  csv,
+  LoginPage,
+  readDownload,
+} from '../pages';
 import { ADMIN, ALICE, SEEDED_UIDS, SOPHIE } from '../support/accounts';
 import { TEST_DOMAIN, TRANSIT, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
@@ -625,5 +631,52 @@ test.describe('LIST lists, search and bulk actions', () => {
     );
     await expect(badge).toBeInViewport({ ratio: 1 });
     expect(await covered()).toEqual([]);
+  });
+
+  test('LIST-14 the selection joins a group, and changes state, in one action', async ({
+    page,
+    directory,
+    tenant,
+  }) => {
+    // One visit to each card, forty after an import of forty (#170)
+    const { lastName, users } = await directory.createUsers(2, {
+      org: tenant.org,
+    });
+    const group = await directory.createGroup({ org: tenant.org });
+    const app = await new LoginPage(page).loginAs(tenant.admin, 'users');
+    const list = app.list();
+    await list.search(lastName, 'Last name');
+    await expect(list.rows).toHaveCount(2);
+    await list.selectAll.check();
+    await expect(list.bulkBar.getByRole('button')).toHaveText([
+      'Export selection',
+      'Add to a group…',
+      'Change state…',
+      'Delete selection',
+    ]);
+
+    await list.bulkBar.getByRole('button', { name: 'Add to a group…' }).click();
+    const groups = new AddToGroupsDialog(page);
+    await groups.expectOpen('Add 2 accounts to groups');
+    await groups.choose(group.cn);
+    await groups.addButton.click();
+    await app.expectToast(`2 accounts added to ${group.cn}`);
+    for (const user of users)
+      expect(await directory.values(group.dn, 'member')).toContain(user.dn);
+    await expect(list.bulkBar).toBeHidden();
+
+    await list.selectAll.check();
+    await list.bulkBar.getByRole('button', { name: 'Change state…' }).click();
+    const panel = page.getByRole('dialog');
+    await expect(panel.getByRole('heading', { level: 2 })).toHaveText(
+      'Change state — 2 accounts'
+    );
+    await panel.getByRole('radio', { name: 'Disabled', exact: true }).check();
+    await panel.locator('button[type=submit]').click();
+    await app.expectToast('2 accounts are now Disabled');
+    await expect(panel).toBeHidden();
+    await expect(list.bulkBar).toBeHidden();
+    for (const user of users)
+      await expect(list.cells(user.uid).nth(5)).toHaveText('Disabled');
   });
 });

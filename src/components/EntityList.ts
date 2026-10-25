@@ -171,6 +171,15 @@ export interface ListOptions {
   /** Delete the selection once asked; resolves to whether any entry went */
   onDelete(ids: string[]): Promise<boolean>;
   canDelete: boolean;
+  /**
+   * What the selection may be given at once besides an export and a
+   * deletion: Add to a group…, Change state…. Each resolves to whether it
+   * changed anything, the list then read again and the selection cleared.
+   */
+  bulkActions?: {
+    label: string;
+    run(selected: [string, Entry][]): Promise<boolean>;
+  }[];
   /** Readable name of the entry a pointer lands on, when its schema has one */
   pointerLabel?(dn: string): string | undefined;
   /**
@@ -221,6 +230,8 @@ export class EntityList {
   private root: HTMLElement | null = null;
   private entries: [string, Entry][] = [];
   private selected = new Set<string>();
+  /** A bulk action open: another is not started over it */
+  private bulkRunning = false;
   private search = '';
   private searchAttribute: string;
   private page = 0;
@@ -620,6 +631,14 @@ export class EntityList {
             <button type="button" class="dc-button" data-export>${escapeHtml(
               translator.t('list.export')
             )}</button>
+            ${(this.options.bulkActions ?? [])
+              .map(
+                (action, index) =>
+                  `<button type="button" class="dc-button" data-bulk-action="${index}">${escapeHtml(
+                    action.label
+                  )}</button>`
+              )
+              .join('')}
             ${
               this.options.canDelete
                 ? `<button type="button" class="dc-button dc-button-danger" data-delete-selected>${escapeHtml(
@@ -1021,6 +1040,30 @@ export class EntityList {
     root.querySelector('[data-export]')?.addEventListener('click', () => {
       this.exportSelection();
     });
+
+    for (const button of Array.from(
+      root.querySelectorAll<HTMLElement>('[data-bulk-action]')
+    ))
+      button.addEventListener('click', () => {
+        const action =
+          this.options.bulkActions?.[Number(button.dataset.bulkAction)];
+        // One at a time: a second, clicked while the first read what it
+        // offers, opened over it.
+        if (!action || this.bulkRunning) return;
+        const selected = this.entries.filter(([id]) => this.selected.has(id));
+        this.bulkRunning = true;
+        void action
+          .run(selected)
+          .finally(() => (this.bulkRunning = false))
+          .then(changed => {
+            // Nor read again once another page replaced the list.
+            if (!changed || root.isConnected === false) return;
+            this.selected.clear();
+            void this.reload(true);
+          })
+          // An action says its own failures; nothing is left to tell.
+          .catch(() => undefined);
+      });
 
     root
       .querySelector('[data-delete-selected]')

@@ -72,6 +72,23 @@ appears:
    As a safety measure, a cell a spreadsheet would read as a formula (starting
    with ``=``, ``+``, ``-`` or ``@``) is prefixed with an apostrophe.
 
+:guilabel:`Add to a group…` (accounts list)
+   Opens a search among the groups you administer. Choose one or more, then
+   click :guilabel:`Add`: each selected account joins each group, one already
+   in it being left as it is. A group that refuses stays chosen in the panel,
+   with the reason; the others are joined.
+
+:guilabel:`Change state…` (accounts list)
+   Offers the states an account can take. Once one is chosen and applied, the
+   accounts change state one after the other, the panel counting them; those
+   the server refuses are then listed with the reason.
+
+   Both are offered to whoever administers accounts. Selected accounts that
+   you do not administer, such as those waiting in transit, are left out, and
+   the panel says how many. Once the panel is closed, the list is read again
+   and the selection cleared, unless every account or group was refused: the
+   selection then stays, to try again.
+
 :guilabel:`Delete selection`
    Offered only with the delete right. The confirmation lists the first five
    entries and how many more; once confirmed, the entries are deleted one by

@@ -34,6 +34,9 @@ Built on ldap-rest 1.0.1.
 - A group's card counts its members and, for whoever may write the group,
   offers a × on each and _Add members…_; the member search says it finds a
   name, an email address or an employee ID (#168)
+- The accounts selected in the Users list join groups, or change state, in
+  one action: _Add to a group…_ and _Change state…_ beside Export and Delete
+  (#170)
 
 ### Bug Fixes
 

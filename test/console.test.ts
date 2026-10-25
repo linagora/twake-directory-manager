@@ -5420,6 +5420,373 @@ describe('Directory console', () => {
     });
   });
 
+  describe('actions on a selection of accounts', () => {
+    const actions = (scope: Scope | null, entity: EntityDescriptor = users) => {
+      const app = consoleIn({});
+      Object.assign(app as unknown as object, {
+        scope,
+        entities: [users, groups],
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        groupSearch: () => async () => [],
+      });
+      return (
+        app as unknown as {
+          bulkActions(entity: EntityDescriptor): { label: string }[];
+        }
+      )
+        .bulkActions(entity)
+        .map(action => action.label);
+    };
+
+    it('should offer Add to a group… and Change state… on accounts to whoever writes', () => {
+      expect(actions(null)).to.deep.equal(['Add to a group…', 'Change state…']);
+      // Nor to someone who administers nothing, nor on another list.
+      const nobody: Scope = {
+        user: 'alice',
+        unrestricted: false,
+        described: true,
+        branches: [],
+        entities: [],
+      };
+      expect(actions(nobody)).to.deep.equal([]);
+      expect(actions(null, groups)).to.deep.equal([]);
+    });
+
+    const alice = 'uid=alice,ou=users,dc=example,dc=com';
+    const bob = 'uid=bob,ou=users,dc=example,dc=com';
+    /** A console whose panel draws what a bulk action opens */
+    const bench = (language = 'en') => {
+      const toast = toastElement();
+      const holder = stubContainer();
+      const radios = Object.keys(
+        usersSchema.attributes.twakeAccountStatus?.states ?? {}
+      ).map(value => {
+        const radio = {
+          value,
+          checked: false,
+          listener: undefined as (() => void) | undefined,
+          addEventListener: (_type: string, callback: () => void) => {
+            radio.listener = callback;
+          },
+        };
+        return radio;
+      });
+      const submit = { disabled: true, textContent: '' };
+      const cancel = { disabled: false, addEventListener: () => undefined };
+      const progress = {
+        hidden: true,
+        line: { textContent: '' },
+        querySelector(selector: string): unknown {
+          return selector === '[role="status"]' ? this.line : null;
+        },
+      };
+      let send: ((event: unknown) => void) | undefined;
+      const form = {
+        addEventListener: (
+          _type: string,
+          callback: (event: unknown) => void
+        ) => {
+          send = callback;
+        },
+      };
+      const body = {
+        innerHTML: '',
+        scrollTop: 0,
+        querySelector: (selector: string): unknown =>
+          ({
+            '[data-bulk-picker]': holder,
+            'button[type="submit"]': submit,
+            '[data-cancel]': cancel,
+            '[data-bulk-progress]': progress,
+            form,
+            'input[name="dc-state"]:checked':
+              radios.find(radio => radio.checked) ?? null,
+          })[selector] ?? null,
+        querySelectorAll: (selector: string) =>
+          selector === 'input[name="dc-state"]' ? radios : [],
+      };
+      const title = { textContent: '' };
+      const panel = { hidden: true, classList: { toggle: () => undefined } };
+      const app = consoleIn(
+        {
+          '[data-panel]': panel,
+          '[data-panel-title]': title,
+          '[data-panel-body]': body,
+          '[data-toast]': toast,
+        },
+        language
+      ) as unknown as {
+        scope: Scope | null;
+        entities: EntityDescriptor[];
+        api: object;
+        stateDescriptions(): Promise<Record<string, string>>;
+        bulkAddToGroups(
+          entity: EntityDescriptor,
+          selected: [string, Entry][]
+        ): Promise<boolean>;
+        bulkChangeState(
+          entity: EntityDescriptor,
+          selected: [string, Entry][]
+        ): Promise<boolean>;
+        closePanel(force?: boolean): void;
+        openPanel(title: string, build: (body: unknown) => void): void;
+      };
+      app.scope = null;
+      app.entities = [users, groups];
+      app.stateDescriptions = async () => ({});
+      const pick = (value: string): void => {
+        for (const radio of radios) radio.checked = radio.value === value;
+        radios.find(radio => radio.value === value)?.listener?.();
+      };
+      const press = (): void => send?.({ preventDefault: () => undefined });
+      return {
+        app,
+        toast,
+        body,
+        title,
+        panel,
+        submit,
+        cancel,
+        progress,
+        pick,
+        press,
+      };
+    };
+    const settled = (promise: Promise<boolean>) => {
+      let value: boolean | undefined;
+      void promise.then(result => (value = result));
+      return async (): Promise<boolean | undefined> => {
+        await new Promise(resolve => setTimeout(resolve, 0));
+        return value;
+      };
+    };
+    /** The group picker the action draws, caught as it renders */
+    const picked = async (start: () => Promise<boolean>) => {
+      let picker: {
+        options: {
+          search(query: string): Promise<unknown>;
+          onAdd(
+            groups: { dn: string; name: string; label: string }[]
+          ): Promise<{ left: { name: string }[]; error?: string }>;
+        };
+      } = undefined as never;
+      const original = GroupPicker.prototype.render;
+      GroupPicker.prototype.render = function (this: GroupPicker) {
+        picker = this as unknown as typeof picker;
+      };
+      let outcome: Promise<boolean>;
+      try {
+        outcome = start();
+      } finally {
+        GroupPicker.prototype.render = original;
+      }
+      return { picker, outcome };
+    };
+
+    it('should add the accounts to each group, sending none it holds, and keep a refused one', async () => {
+      // One member sent again failed the whole request, the others with it.
+      const { app, toast, body, title, panel } = bench();
+      const found = (cn: string, member: string[]) => ({
+        entity: groups,
+        dn: `cn=${cn},ou=groups,dc=example,dc=com`,
+        entry: { dn: `cn=${cn},ou=groups,dc=example,dc=com`, cn, member },
+      });
+      const sent: [string, string[]][] = [];
+      Object.assign(app.api, {
+        groupSearch: () => async () => [
+          found('all-staff', [alice]),
+          found('sales-team', ['']),
+          found('locked', []),
+          found('everyone', [alice, bob]),
+        ],
+        addMembers: async (_entity: unknown, id: string, members: string[]) => {
+          sent.push([id, members]);
+          if (id === 'locked') throw new Error('Forbidden');
+        },
+      });
+      const { picker, outcome } = await picked(() =>
+        app.bulkAddToGroups(users, [
+          ['alice', { dn: alice, uid: 'alice' }],
+          ['bob', { dn: bob, uid: 'bob' }],
+          ['ghost', { uid: 'ghost' }],
+        ])
+      );
+      const done = settled(outcome);
+      expect(title.textContent).to.equal('Add 2 accounts to groups');
+      expect(body.innerHTML).to.include(
+        '1 account you do not administer is left out.'
+      );
+      const choices = (await picker.options.search('a')) as {
+        dn: string;
+        name: string;
+        label: string;
+      }[];
+      const answer = await picker.options.onAdd(choices);
+      expect(sent).to.deep.equal([
+        ['all-staff', [bob]],
+        ['sales-team', [alice, bob]],
+        ['locked', [alice, bob]],
+      ]);
+      // One already in a group is not said to be added to it.
+      expect(toast.textContent).to.equal(
+        '1 account added to all-staff. 2 accounts added to sales-team. 2 accounts were in everyone already.'
+      );
+      // The refused one stays, named with why, and the panel with it.
+      expect(answer.left.map(group => group.name)).to.deep.equal(['locked']);
+      expect(answer.error).to.match(/^locked: /);
+      expect(panel.hidden).to.equal(false);
+      expect(await done()).to.equal(undefined);
+      app.closePanel();
+      expect(await done()).to.equal(true);
+    });
+
+    it('should be done with accounts already in every group chosen', async () => {
+      const { app, toast, panel } = bench();
+      const sent: unknown[] = [];
+      Object.assign(app.api, {
+        groupSearch: () => async () => [
+          {
+            entity: groups,
+            dn: 'cn=everyone,ou=groups,dc=example,dc=com',
+            entry: {
+              dn: 'cn=everyone,ou=groups,dc=example,dc=com',
+              cn: 'everyone',
+              member: [alice, bob],
+            },
+          },
+        ],
+        addMembers: async (...args: unknown[]) => sent.push(args),
+      });
+      const { picker, outcome } = await picked(() =>
+        app.bulkAddToGroups(users, [
+          ['alice', { dn: alice, uid: 'alice' }],
+          ['bob', { dn: bob, uid: 'bob' }],
+        ])
+      );
+      const done = settled(outcome);
+      const choices = (await picker.options.search('every')) as {
+        dn: string;
+        name: string;
+        label: string;
+      }[];
+      await picker.options.onAdd(choices);
+      expect(sent).to.deep.equal([]);
+      expect(toast.textContent).to.equal(
+        '2 accounts were in everyone already.'
+      );
+      // The selection goes, as after any action done.
+      expect(panel.hidden).to.equal(true);
+      expect(await done()).to.equal(true);
+    });
+
+    it('should settle nothing changed once its panel is replaced unused', async () => {
+      const { app } = bench();
+      Object.assign(app.api, { groupSearch: () => async () => [] });
+      const { outcome } = await picked(() =>
+        app.bulkAddToGroups(users, [['alice', { dn: alice, uid: 'alice' }]])
+      );
+      const done = settled(outcome);
+      app.openPanel('Edit — alice', () => undefined);
+      expect(await done()).to.equal(false);
+    });
+
+    it('should move each account to the state, list those refused, and hold its panel meanwhile', async () => {
+      const {
+        app,
+        toast,
+        body,
+        panel,
+        title,
+        submit,
+        cancel,
+        progress,
+        pick,
+        press,
+      } = bench();
+      const asked: string[] = [];
+      let release = (): void => undefined;
+      Object.assign(app.api, {
+        setStatus: async (_entity: unknown, id: string, state: string) => {
+          asked.push(`${id} ${state}`);
+          if (id === 'alice')
+            await new Promise<void>(resolve => (release = resolve));
+          if (id === 'carol') throw new Error('Forbidden');
+        },
+      });
+      const done = settled(
+        app.bulkChangeState(users, [
+          ['alice', { dn: alice, uid: 'alice', cn: 'Alice Martin' }],
+          ['bob', { dn: bob, uid: 'bob', cn: 'Bob Durand' }],
+          [
+            'carol',
+            {
+              dn: 'uid=carol,ou=users,dc=example,dc=com',
+              uid: 'carol',
+              cn: 'Carol <b>Diaz</b>',
+            },
+          ],
+          ['ghost', { uid: 'ghost' }],
+        ])
+      );
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(title.textContent).to.equal('Change state — 3 accounts');
+      pick('disabled');
+      press();
+      // A second press, or another state picked, sends nothing more.
+      pick('enabled');
+      press();
+      expect(submit.disabled).to.equal(true);
+      expect(cancel.disabled).to.equal(true);
+      expect(progress.line.textContent).to.equal('0 of 3 accounts');
+      // Escape while it runs: the panel stays, the work going on in it.
+      app.closePanel();
+      expect(panel.hidden).to.equal(false);
+      release();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(asked).to.deep.equal([
+        'alice disabled',
+        'bob disabled',
+        'carol disabled',
+      ]);
+      expect(toast.textContent).to.equal('2 accounts are now Disabled');
+      expect(body.innerHTML).to.include('1 account was refused:');
+      // The one left out is still said beside them.
+      expect(body.innerHTML).to.include(
+        '1 account you do not administer is left out.'
+      );
+      expect(body.innerHTML).to.include(
+        '<li>Carol &lt;b&gt;Diaz&lt;&#x2F;b&gt;: Forbidden</li>'
+      );
+      expect(await done()).to.equal(undefined);
+      app.closePanel(true);
+      expect(await done()).to.equal(true);
+    });
+
+    it('should count one account in the singular, and not write over a panel opened since', async () => {
+      const { app, toast, title, progress, pick, press } = bench('fr');
+      let release = (): void => undefined;
+      Object.assign(app.api, {
+        setStatus: () => new Promise<void>(resolve => (release = resolve)),
+      });
+      const done = settled(
+        app.bulkChangeState(users, [['alice', { dn: alice, uid: 'alice' }]])
+      );
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(title.textContent).to.equal('Changer l’état — 1 compte');
+      pick('disabled');
+      press();
+      expect(progress.line.textContent).to.equal('0 sur 1 compte');
+      // A page left closes it by force: the work ends, then settles it.
+      app.closePanel(true);
+      app.openPanel('Nouvel utilisateur', () => undefined);
+      expect(await done()).to.equal(undefined);
+      release();
+      expect(await done()).to.equal(true);
+      expect(toast.textContent).to.match(/^1 compte est maintenant /);
+    });
+  });
+
   describe('the overview, in names', () => {
     const admin = 'uid=admin,ou=users,dc=example,dc=com';
     const alice = 'uid=alice,ou=users,dc=example,dc=com';
@@ -7923,6 +8290,35 @@ describe('Directory console', () => {
         ...container.innerHTML.matchAll(/<tr data-id="([^"]+)"/g),
       ].map(match => match[1]);
       expect(ids).to.deep.equal(['alice', 'sophie']);
+    });
+
+    it('should offer the selection’s own actions between Export and Delete', async () => {
+      // Forty accounts imported took forty visits to join a group (#170).
+      const container = stubContainer();
+      const list = new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () => Promise.resolve({ alice: { uid: 'alice' } }),
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(false),
+        canDelete: true,
+        bulkActions: [
+          { label: 'Add to a group…', run: async () => false },
+          { label: 'Change state…', run: async () => false },
+        ],
+      });
+      await list.render(container);
+      const html = container.innerHTML;
+      const order = [
+        'data-export',
+        'data-bulk-action="0"',
+        'data-bulk-action="1"',
+        'data-delete-selected',
+      ].map(marker => html.indexOf(marker));
+      expect(order.every(index => index >= 0)).to.equal(true);
+      expect([...order].sort((a, b) => a - b)).to.deep.equal(order);
+      expect(html).to.include('data-bulk-action="1">Change state…</button>');
     });
 
     it('should show an account’s state as a badge when it is an exception', async () => {
