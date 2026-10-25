@@ -3,9 +3,6 @@ import { ADMIN, SOPHIE } from '../support/accounts';
 import { DOMAINS, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
-/** What a refusal must never read like */
-const UNREADABLE = /Internal Server Error|check logs|^\s*\{|"error"/;
-
 test.describe('DOMAIN mail domains', () => {
   test('DOMAIN-01 a global administrator adds a mail domain, offered at once, and deletes it', async ({
     page,
@@ -63,14 +60,10 @@ test.describe('DOMAIN mail domains', () => {
     );
     await expect(list.importButton).toHaveCount(0);
 
-    // the card may offer Delete (documented, as for the other reference data): the server refuses
+    // neither Edit nor Delete, as for the other reference data (#167)
     const card = await app.openEntry(`domains/${domain.id}`);
-    if ((await card.action('Delete').count()) > 0) {
-      await card.perform('Delete');
-      await new ConfirmDialog(page).confirm();
-      await expect(app.errorToast).toBeVisible();
-      await expect(app.errorToast).not.toHaveText(UNREADABLE);
-    }
+    await expect(card.action('Edit')).toHaveCount(0);
+    await expect(card.action('Delete')).toHaveCount(0);
     expect(await directory.exists(domain.dn)).toBe(true);
   });
 });

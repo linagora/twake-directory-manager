@@ -44,15 +44,17 @@ What a local administrator sees
   and deletes the sub-organizations of their organization, but not the
   organization they are appointed on — that belongs to the administrators
   above it. Likewise, the root organization cannot be edited from the
-  console at all.
+  console, unless the server grants a branch above it.
 - To hand an entry over to an organization they do not manage, they go
   through the transit organization (see :doc:`transit`).
 
 The console does not offer what the scope forbids: no creation button without
-the write right, no :guilabel:`Delete` button without the delete right. The
-server checks every operation anyway: should an action be offered on an entry
-outside the scope — the card of one’s own organization, reference data —
-the server refuses it and the console shows the reason.
+the write right, no :guilabel:`Delete` button without the delete right. It
+judges an organization as the server does, by its parent: the card of one’s
+own organization offers no :guilabel:`Edit` nor :guilabel:`Delete`, and,
+below the root, says that it is changed by the administrator above, while
+:guilabel:`New organization here` stays. The server checks every operation
+anyway, and the console shows the reason of what it refuses.
 
 Reading the scope banner
 ------------------------

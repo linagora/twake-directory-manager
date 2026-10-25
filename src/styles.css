@@ -915,6 +915,12 @@
   margin-bottom: 20px;
 }
 
+/* Why Edit is not offered, where it would be: under the heading. */
+.dc-detail-notice,
+.dc-view-notice {
+  margin: -8px 0 20px;
+}
+
 .dc-detail-header h2 {
   margin: 0;
   font-size: 26px;

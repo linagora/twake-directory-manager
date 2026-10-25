@@ -1,34 +1,36 @@
-import { ConsolePage, LoginPage } from '../pages';
-import { ADMIN, ORG, SOPHIE } from '../support/accounts';
+import { ConfirmDialog, ConsolePage, LoginPage } from '../pages';
+import { ADMIN } from '../support/accounts';
 import { expect, test } from '../support/fixtures';
 
 test.describe('MSG messages and error handling', () => {
   test('MSG-01 a server refusal shows as a red toast with the reason', async ({
     page,
     directory,
+    tenant,
   }) => {
-    const app = await new LoginPage(page).loginAs(SOPHIE);
-    const organizations = await app.openOrganizations(ORG.sales);
-    await expect(organizations.card.heading).toHaveText('Sales');
+    // an organization still holding an account: offered to delete, refused
+    const team = await directory.createOrganization({
+      parent: tenant.org.dn,
+      name: 'Team',
+    });
+    await directory.createUser({ org: team });
+    const app = await new LoginPage(page).loginAs(tenant.admin);
+    const organizations = await app.openOrganizations(team.dn);
+    await expect(organizations.card.heading).toHaveText(team.name);
 
-    await organizations.card.action('Edit').click();
-    const form = app.form();
-    await form.expectOpen('Edit — Sales');
-    await form.fill('Locality', 'Lille');
-    await form.submit();
+    await organizations.card.perform('Delete');
+    await new ConfirmDialog(page).confirm();
 
-    await expect(app.errorToast).toBeVisible();
-    await expect(app.errorToast).toHaveCSS('position', /fixed|absolute|sticky/);
-    await expect(app.errorToast).not.toHaveText(
-      /Internal Server Error|check logs|^\s*[{[]/
+    await expect(app.errorToast).toHaveText(
+      `${team.path} is not empty: move or delete its entries first`
     );
-    expect(await directory.values(ORG.sales, 'l')).toEqual(['Paris']);
+    await expect(app.errorToast).toHaveCSS('position', /fixed|absolute|sticky/);
+    expect(await directory.exists(team.dn)).toBe(true);
 
     // the console stays usable
-    await form.cancel();
     await app.navItem('Users').click();
     await app.list().listEverything();
-    await expect(app.list().row('alice')).toBeVisible();
+    await expect(app.list().rows.first()).toBeVisible();
   });
 
   test('MSG-02 a session ended elsewhere signs in again', async ({

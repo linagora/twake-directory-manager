@@ -37,9 +37,13 @@ Who maintains them
 Every administrator can read the reference data. It is stored outside the
 organization tree, and rights are granted on the tree: in the usual
 deployment, **no administrator — global ones included — can change it from
-the console**. There is no :guilabel:`New` or :guilabel:`Import CSV` button
-on these lists, and :guilabel:`Edit` or :guilabel:`Delete`, when shown, are
-refused by the server.
+the console**. To an administrator the server does not let write a list,
+there is no :guilabel:`New` or :guilabel:`Import CSV` button on it, nor
+:guilabel:`Edit` or :guilabel:`Delete` on its entries, and a line above the
+list and on each card says that the reference data is kept outside the
+console. A list the server lets the administrator write — the mail domains,
+in a deployment that opens them to its global administrators — offers them
+all, without the line.
 
 The reference data is maintained by the operations team. To have a value
 added — a new position, a new mail domain — ask them.

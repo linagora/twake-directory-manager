@@ -15,6 +15,10 @@ Built on ldap-rest 1.0.1.
 - The keyboard focus is a solid ring on every control, clear on white and
   around a blue button, and the × that removes a group or a value is 24 px at
   least (#184)
+- Edit and Delete are offered only where the server allows them: an
+  organization is judged by its parent, as the server does, and reference
+  data kept outside the console offers neither; a line says why where they
+  would be (#167)
 
 ### Bug Fixes
 

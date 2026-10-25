@@ -1534,6 +1534,7 @@ export class DirectoryConsole {
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
+    const readOnly = this.readsReferenceOnly(entity);
     main.innerHTML = `
       <section class="dc-view">
         <header class="dc-view-header">
@@ -1555,6 +1556,13 @@ export class DirectoryConsole {
               : ''
           }
         </header>
+        ${
+          readOnly && this.isReference(entity) && !this.administersNothing()
+            ? `<p class="dc-muted dc-view-notice" data-read-only>${escapeHtml(
+                t('reference.readOnly')
+              )}</p>`
+            : ''
+        }
         <div data-list></div>
       </section>`;
 
@@ -1581,7 +1589,7 @@ export class DirectoryConsole {
       translator: this.translator,
       listable: !isLarge(entity),
       load: listLoader(this.api, entity),
-      canDelete: this.canDelete(),
+      canDelete: this.canDelete() && !readOnly,
       pointerLabel: named,
       read: (id: string): Promise<Entry> => this.api.get(entity, id),
       onOpen: (id: string): void =>
@@ -1637,7 +1645,8 @@ export class DirectoryConsole {
     ]);
     if (!this.current(generation)) return;
     const transit = transitState(this.scope, entity, entry);
-    const canWrite = transit.rights?.write ?? this.canWrite();
+    const readOnly = this.readsReferenceOnly(entity);
+    const canWrite = !readOnly && (transit.rights?.write ?? this.canWrite());
     const groups = relations?.groups && entry.dn ? relations.items : undefined;
     const joins =
       !!groups &&
@@ -1648,7 +1657,11 @@ export class DirectoryConsole {
       entry,
       translator: this.translator,
       canWrite,
-      canDelete: transit.rights?.delete ?? this.canDelete(),
+      canDelete: !readOnly && (transit.rights?.delete ?? this.canDelete()),
+      notice:
+        readOnly && this.isReference(entity)
+          ? this.translator.t('reference.readOnly')
+          : undefined,
       inTransit: transit.inTransit,
       onClaim: transit.claim
         ? (): void => void this.claim(entity, id)
@@ -2110,20 +2123,39 @@ export class DirectoryConsole {
 
     const rights = this.organizationRights(node.dn);
     const transit = this.scope?.transit;
+    const name =
+      [entryValue(entry, entity.mainAttribute) ?? []].flat()[0] ||
+      rdnValue(node.dn);
+    // Said where Edit would be, on the organization the caller administers:
+    // the banner names it as theirs, and Save was refused at the end. Not
+    // on the top of the tree, which nobody above changes from the console,
+    // nor on the transit branch, which every administrator writes.
+    const above = parentOf(node.dn);
+    const changedAbove =
+      !rights.write &&
+      scopeRestricts(this.scope) &&
+      !!above &&
+      withinDn(above, entity.base) &&
+      !(transit && withinDn(node.dn, transit)) &&
+      this.scope.branches.some(
+        branch =>
+          branch.write && comparableDn(branch.dn) === comparableDn(node.dn)
+      );
     const card = new EntityDetail({
       entity,
       entry,
       translator: this.translator,
       canWrite: rights.write,
       canDelete: rights.delete,
+      notice: changedAbove
+        ? this.translator.t('org.changedAbove', { name })
+        : undefined,
       pointerLabel: named,
       attached: new AttachedTables({
         entities: this.entities,
         members,
         translator: this.translator,
-        name:
-          [entryValue(entry, entity.mainAttribute) ?? []].flat()[0] ||
-          rdnValue(node.dn),
+        name,
         pointerLabel: attachedNames,
         onCreate: this.createsHere(entity, entry, node),
         // The transit branch's card is where its link leads: what waits
@@ -2160,7 +2192,11 @@ export class DirectoryConsole {
   }
 
   /**
-   * What the caller may do to an organization itself.
+   * What the caller may do to an organization itself, judged as the server
+   * judges it: by its parent, on the most specific branch holding it, a
+   * branch naming the organization itself granting the right as well, and
+   * for Delete every branch at or below it. The administrator of Sales
+   * changes what Sales holds, not Sales itself.
    *
    * Writing anywhere was enough to be offered Edit and Delete on any card,
    * the transit branch's included. Every administrator writes the transit
@@ -2174,18 +2210,76 @@ export class DirectoryConsole {
    */
   private organizationRights(dn: string): { write: boolean; delete: boolean } {
     const scope = this.scope;
-    const transit = scopeRestricts(scope) ? scope.transit : undefined;
-    if (!scopeRestricts(scope) || !transit || !withinDn(dn, transit))
+    if (!scopeRestricts(scope))
       return { write: this.canWrite(), delete: this.canDelete() };
-    const above = (right: 'write' | 'delete'): boolean =>
+    const transit = scope.transit;
+    if (transit && withinDn(dn, transit)) {
+      const above = (right: 'write' | 'delete'): boolean =>
+        !this.scopeError &&
+        scope.branches.some(
+          branch =>
+            branch[right] &&
+            withinDn(dn, branch.dn) &&
+            !withinDn(branch.dn, transit)
+        );
+      return { write: above('write'), delete: above('delete') };
+    }
+    // Offered on Sales to its administrator, Edit ended in "You do not
+    // administer Sales" once the form was typed in.
+    const parent = parentOf(dn);
+    // RDNs, by the commas no backslash escapes.
+    const depth = (branch: string): number =>
+      (comparableDn(branch).match(/(?:^|[^\\]),/g) ?? []).length + 1;
+    const holding = parent
+      ? scope.branches
+          .filter(branch => withinDn(parent, branch.dn))
+          .sort((a, b) => depth(b.dn) - depth(a.dn))[0]
+      : undefined;
+    const judged = (right: 'write' | 'delete'): boolean =>
       !this.scopeError &&
-      scope.branches.some(
+      !!holding?.[right] &&
+      !scope.branches.some(
         branch =>
-          branch[right] &&
-          withinDn(dn, branch.dn) &&
-          !withinDn(branch.dn, transit)
+          !branch[right] &&
+          (comparableDn(branch.dn) === comparableDn(dn) ||
+            (right === 'delete' && withinDn(branch.dn, dn)))
       );
-    return { write: above('write'), delete: above('delete') };
+    return { write: judged('write'), delete: judged('delete') };
+  }
+
+  /**
+   * Whether an entity is shown as reference data: what the sentence saying
+   * it is kept outside the console is about. A directory with no tree puts
+   * every collection forward, and its accounts are no reference data.
+   */
+  private isReference(entity: EntityDescriptor): boolean {
+    return splitEntities(this.entities).reference.includes(entity);
+  }
+
+  /**
+   * Whether the caller only reads the entries of a reference entity:
+   * positions, states, mail domains. They lie outside every department, and
+   * the server judges them on their branch, which a local administrator does
+   * not administer; the scope says so of each entity in `create`. A scope
+   * that restricts nothing leaves it to the server.
+   */
+  private readsReferenceOnly(entity: EntityDescriptor): boolean {
+    // A scope the console could not read withholds every action already,
+    // and the banner says why: this is no reason to give.
+    if (this.scopeError) return false;
+    return !isPrimaryEntity(entity) && !this.changesReference(entity);
+  }
+
+  /**
+   * Whether the scope lets the caller write a reference entity. It says
+   * so in `create`, the right to write its branch; it names no right to
+   * delete there, and the same answer stands for Delete.
+   */
+  private changesReference(entity: EntityDescriptor): boolean {
+    if (this.scopeError) return false;
+    if (!scopeRestricts(this.scope)) return true;
+    return !!this.scope.entities.find(item => item.name === entity.pluralName)
+      ?.create;
   }
 
   /**
