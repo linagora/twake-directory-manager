@@ -43,6 +43,11 @@ test.describe('LIST lists, search and bulk actions', () => {
       expect(row, uid).toBeDefined();
       expect(row?.Status, uid).toBe(uid === 'frank' ? 'Disabled' : 'Active');
     }
+    // An exception shows as a badge, the norm as text (#172)
+    await expect(list.cells('frank').locator('.dc-state-disabled')).toHaveText(
+      'Disabled'
+    );
+    await expect(list.cells('alice').locator('.dc-state')).toHaveCount(0);
     await expect(list.cells('alice')).toHaveText([
       'alice',
       'E0010',

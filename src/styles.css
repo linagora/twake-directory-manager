@@ -433,6 +433,34 @@
   color: var(--dc-accent);
 }
 
+/* An account's state when it is an exception, caught by a scan down the
+   Status column: its text stays, so the colour is never the only cue. */
+.dc-state {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--dc-state-ink);
+  background: var(--dc-state-ground);
+}
+
+.dc-state-disabled {
+  --dc-state-ink: #3a3a3f;
+  --dc-state-ground: #e8e8ed;
+}
+
+.dc-state-noAccess {
+  --dc-state-ink: #6b4500;
+  --dc-state-ground: #fdefd2;
+}
+
+.dc-state-toDelete {
+  --dc-state-ink: #8a1820;
+  --dc-state-ground: var(--dc-danger-soft);
+}
+
 /* -------------------------------------------------------------------- main */
 
 .dc-main {
@@ -2325,6 +2353,20 @@ textarea.dc-policy-text {
   .dc-button-destructive,
   .dc-nav-item.dc-active .dc-nav-icon {
     color: #0b1a2e;
+  }
+
+  .dc-state-disabled {
+    --dc-state-ink: #e5e5ea;
+    --dc-state-ground: #3a3a3f;
+  }
+
+  .dc-state-noAccess {
+    --dc-state-ink: #ffd27a;
+    --dc-state-ground: rgb(255 179 0 / 16%);
+  }
+
+  .dc-state-toDelete {
+    --dc-state-ink: #ffa39e;
   }
 
   .dc-nav-item:nth-child(5n + 1) .dc-nav-icon {

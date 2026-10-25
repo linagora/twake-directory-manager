@@ -9,6 +9,9 @@ Built on ldap-rest 1.0.1.
 - The form hints speak the administrator's words: _A size such as 4 GB, 500
   MB or 100 KB_ under a size, nothing about DNs under a search by name, and
   the banner says _Transit_ once (#171)
+- An account that is disabled, has no access or is to be deleted shows its
+  state as a badge in the lists, the organization and transit tables and on
+  its card; an active one reads as before (#172)
 
 ### Bug Fixes
 
@@ -27,6 +30,9 @@ Built on ldap-rest 1.0.1.
   and the other policy's DN (#176)
 - The LINAGORA badge closes the page instead of staying in the corner over
   the rows scrolling under it, hiding them and taking their clicks (#180)
+- A password typed or generated in the Reset password panel no longer stays
+  in the page once the panel is closed, and the panel is sent once and stays
+  open until the server answers (#182)
 
 ## v0.11.0 (2026-10-23)
 
