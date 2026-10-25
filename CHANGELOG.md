@@ -6,6 +6,9 @@ Built on ldap-rest 1.0.1.
 
 ### Features
 
+- The form hints speak the administrator's words: _A size such as 4 GB, 500
+  MB or 100 KB_ under a size, nothing about DNs under a search by name, and
+  the banner says _Transit_ once (#171)
 - An account that is disabled, has no access or is to be deleted shows its
   state as a badge in the lists, the organization and transit tables and on
   its card; an active one reads as before (#172)

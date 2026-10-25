@@ -22,10 +22,10 @@ test.describe('SCOPE scope banner and authorization', () => {
     await expect(app.scopeBranch('Sales')).toHaveAttribute('title', 'Sales');
     await expect(app.transitLink).toHaveAttribute('title', 'Transit');
     await expect(app.signOutLink).toHaveText('Sign out');
-    // the banner reads: branches, then Transit (with what waits there, when
-    // something does), then Sign out
+    // the banner reads: branches, then Transit once (with what waits there,
+    // when something does), then Sign out (#171)
     await expect(app.banner).toHaveText(
-      /You administer\s+Sales\s+read, write, delete\s+Transit\s+Transit(?: \(\d+\+?\))?\s*Sign out/
+      /You administer\s+Sales\s+read, write, delete\s+Transit(?: \(\d+\+?\))?\s*Sign out/
     );
 
     await app.navItem('Users').click();
