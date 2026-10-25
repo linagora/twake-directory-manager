@@ -1215,6 +1215,30 @@ test.describe('USER user accounts', () => {
     await expect(card.addToGroup()).toHaveText('Ajouter à un groupe…');
   });
 
+  test('USER-17 a solid focus ring, and remove buttons large enough to hit', async ({
+    page,
+  }) => {
+    // The pale halo vanished around a blue button, and the × of a group was
+    // 22 px against its name (#184).
+    const app = await new LoginPage(page).loginAs(ADMIN, 'users');
+    const card = await app.openEntry('users/alice');
+    await card.expectName('Alice Moreau');
+    const edit = card.action('Edit');
+    await edit.focus();
+    // By the keyboard, as :focus-visible asks.
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expect(edit).toBeFocused();
+    // Two rings: the surface's colour inside, the accent's outside, once the
+    // button's shadow transition has run.
+    await expect
+      .poll(() => edit.evaluate(element => getComputedStyle(element).boxShadow))
+      .toMatch(/^rgb\([^)]*\) 0px 0px 0px 2px, rgb\([^)]*\) 0px 0px 0px 4px$/);
+    const remove = await card.leaveGroup('sales-team').boundingBox();
+    expect(remove?.width).toBeGreaterThanOrEqual(24);
+    expect(remove?.height).toBeGreaterThanOrEqual(24);
+  });
+
   test('USER-16 a local administrator is offered the groups of their branch only', async ({
     page,
     directory,
