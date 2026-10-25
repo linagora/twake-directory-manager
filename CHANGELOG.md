@@ -4,6 +4,11 @@
 
 Built on ldap-rest 1.0.1.
 
+### Bug Fixes
+
+- The French password policy labels and hints use the typographic apostrophe,
+  as the rest of the console does (#179)
+
 ## v0.11.0 (2026-10-23)
 
 Built on ldap-rest 0.25.1.

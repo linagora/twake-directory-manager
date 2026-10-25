@@ -766,14 +766,14 @@ const fr: Catalogue = {
   'policy.never': 'Jamais',
   'policy.noLockout': 'Désactivé',
   'policy.lockoutFor': '{after}, {duration}',
-  'policy.untilUnlocked': "jusqu'au déverrouillage",
+  'policy.untilUnlocked': 'jusqu’au déverrouillage',
   'policy.title.new': 'Nouvelle politique de mot de passe',
   'policy.title.edit': 'Politique de mot de passe {name}',
   'policy.group.expiry': 'Expiration',
   'policy.group.quality': 'Qualité',
   'policy.group.lockout': 'Verrouillage',
   'policy.group.changes': 'Changements',
-  'policy.group.directory': "Fixé dans l'annuaire",
+  'policy.group.directory': 'Fixé dans l’annuaire',
   'policy.unit': 'Unité',
   'policy.unit.days': 'jours',
   'policy.unit.hours': 'heures',
@@ -786,9 +786,9 @@ const fr: Catalogue = {
   'policy.quality.0': 'Aucun contrôle',
   'policy.quality.1': 'Contrôle si possible',
   'policy.quality.2': 'Contrôle obligatoire',
-  'policy.hint.pwdMaxAge': "Vide ou 0 : le mot de passe n'expire jamais",
+  'policy.hint.pwdMaxAge': 'Vide ou 0 : le mot de passe n’expire jamais',
   'policy.hint.pwdLockoutDuration':
-    "Vide ou 0 : le compte reste verrouillé jusqu'à ce qu'un administrateur le déverrouille",
+    'Vide ou 0 : le compte reste verrouillé jusqu’à ce qu’un administrateur le déverrouille',
   'policy.hint.pwdCheckModuleArg':
     'Lue par le module de contrôle chargé par slapd, ppm par exemple : un réglage par ligne',
   'policy.error.name': 'Un nom est requis',
@@ -799,7 +799,7 @@ const fr: Catalogue = {
   'policy.deleteTitle': 'Supprimer la politique de mot de passe {name} ?',
   'policy.deleteButton': 'Supprimer la politique',
   'policy.inUse':
-    "{name} est la politique par défaut, ou des comptes l'utilisent encore",
+    '{name} est la politique par défaut, ou des comptes l’utilisent encore',
   'policy.lockoutAfter.one': 'Après {count} échec',
   'policy.lockoutAfter.other': 'Après {count} échecs',
   'policy.duration.days.one': '{count} jour',
@@ -811,7 +811,7 @@ const fr: Catalogue = {
   'policy.duration.seconds.one': '{count} seconde',
   'policy.duration.seconds.other': '{count} secondes',
   'policy.attr.pwdMaxAge': 'Le mot de passe expire après',
-  'policy.attr.pwdExpireWarning': "Avertir avant l'expiration",
+  'policy.attr.pwdExpireWarning': 'Avertir avant l’expiration',
   'policy.attr.pwdGraceAuthNLimit': 'Connexions permises après expiration',
   'policy.attr.pwdGraceExpiry': 'Ces connexions permises pendant',
   'policy.attr.pwdMaxIdle': 'Compte inutilisé depuis',
@@ -833,7 +833,7 @@ const fr: Catalogue = {
   'policy.attr.pwdAllowUserChange':
     'Les utilisateurs peuvent changer leur mot de passe',
   'policy.attr.pwdSafeModify': 'Mot de passe actuel exigé pour le changer',
-  'policy.attr.pwdAttribute': "S'applique à",
+  'policy.attr.pwdAttribute': 'S’applique à',
   'policy.attr.pwdCheckModule': 'Module de contrôle',
 };
 
