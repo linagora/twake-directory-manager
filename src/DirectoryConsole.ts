@@ -4682,7 +4682,10 @@ export class DirectoryConsole {
    * @returns its last non-empty segment, or the path itself when it has none
    */
   private pathLeaf(path: string): string {
-    const separator = this.api.organizationPathSeparator.trim() || '/';
+    // Split on the separator as the directory writes it, blanks included:
+    // trimmed to `/`, it cut a name holding a slash, _R&D/IT_, to _IT_.
+    const separator = this.api.organizationPathSeparator;
+    if (!separator) return path;
     const segments = path
       .split(separator)
       .map(segment => segment.trim())
