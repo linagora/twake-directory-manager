@@ -209,12 +209,17 @@ export function formatByteSize(value: string): string {
  * 1073741824, a gibibyte, is 1.073741824 GB — because the form hands it
  * back to the server. The card hands nothing back: there it reads rounded to
  * three significant figures, 1.07 GB, and the caller keeps the exact count
- * at hand for whoever needs it.
+ * at hand for whoever needs it. Nor does the server read it, so it is
+ * written the reader's way: 1,07 Go in French.
  *
  * @param value value as stored
+ * @param language interface language
  * @returns the size, and whether it says the stored count exactly
  */
-export function readableByteSize(value: string): {
+export function readableByteSize(
+  value: string,
+  language = 'en'
+): {
   text: string;
   exact: boolean;
 } {
@@ -225,7 +230,7 @@ export function readableByteSize(value: string): {
     !/^\d+$/.test(value.trim()) ||
     !Number.isSafeInteger(bytes)
   )
-    return { text: exact, exact: true };
+    return { text: localSize(exact, language), exact: true };
   for (const [index, [unit, size]] of SIZE_UNITS.entries()) {
     if (bytes < size) continue;
     const quantity = Number((bytes / size).toPrecision(3));
@@ -234,12 +239,40 @@ export function readableByteSize(value: string): {
     const above = SIZE_UNITS[index - 1];
     if (quantity >= 1000 && above)
       return {
-        text: `${Number((bytes / above[1]).toPrecision(3))} ${above[0]}`,
+        text: sizeText(
+          Number((bytes / above[1]).toPrecision(3)),
+          above[0],
+          language
+        ),
         exact: false,
       };
-    return { text: `${quantity} ${unit}`, exact: false };
+    return { text: sizeText(quantity, unit, language), exact: false };
   }
   return { text: exact, exact: true };
+}
+
+/**
+ * Size units as a language writes them, where it does not write them the
+ * English way: French counts octets.
+ */
+const SIZE_SYMBOLS: Record<string, Record<string, string>> = {
+  fr: { TB: 'To', GB: 'Go', MB: 'Mo', KB: 'Ko', B: 'o' },
+};
+
+/** A size as the interface language writes it: 4,5 Go in French. */
+function sizeText(quantity: number, unit: string, language: string): string {
+  const short = language.split('-')[0].toLowerCase();
+  const symbol = SIZE_SYMBOLS[short]?.[unit] ?? unit;
+  return `${new Intl.NumberFormat(language).format(quantity)} ${symbol}`;
+}
+
+/**
+ * A size `formatByteSize` wrote, `4.5 GB`, as the interface language writes
+ * it; digits it left as they are stay so.
+ */
+function localSize(text: string, language: string): string {
+  const sized = /^(\d+(?:\.\d+)?) (TB|GB|MB|KB|B)$/.exec(text);
+  return sized ? sizeText(Number(sized[1]), sized[2], language) : text;
 }
 
 /**
@@ -445,7 +478,7 @@ export function explainRefusal(
  * @param attr schema definition of the attribute
  * @param value value as stored
  * @param pointerLabel readable name of the entry a pointer lands on
- * @param language interface language, to write a date in
+ * @param language interface language, to write a date or a size in
  * @returns the text to show
  */
 export function displayValue(
@@ -456,7 +489,8 @@ export function displayValue(
 ): string {
   const pointer = attr?.type === 'pointer' || attr?.items?.type === 'pointer';
   if (pointer) return pointerLabel?.(value) || rdnValue(value);
-  if (attr?.normalize === 'byteSize') return formatByteSize(value);
+  if (attr?.normalize === 'byteSize')
+    return localSize(formatByteSize(value), language);
   if (attr?.type === 'date') return formatDate(value, language);
   return value;
 }

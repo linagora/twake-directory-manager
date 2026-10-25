@@ -485,7 +485,7 @@ export class EntityDetail {
     if (attr?.normalize === 'byteSize' && /^\d+$/.test(value.trim()))
       return `<span class="dc-value" title="${escapeHtml(
         this.options.translator.t('detail.bytes', { count: value.trim() })
-      )}">${escapeHtml(readableByteSize(value).text)}</span>`;
+      )}">${escapeHtml(readableByteSize(value, language).text)}</span>`;
     const shown =
       ownValueLabel(entity, name, value, language) ||
       displayValue(attr, value, this.options.pointerLabel, language);
