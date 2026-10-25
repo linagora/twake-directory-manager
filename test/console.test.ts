@@ -1839,6 +1839,51 @@ describe('Directory console', () => {
         (globalThis as Record<string, unknown>).document = original;
       }
     });
+
+    it('should say an address that names no DN names no organization', async () => {
+      // `#/organizations/zzz` read the server's "zzz is not a valid DN", in
+      // English and red, where any other unknown entry is simply not there.
+      const shown = async (
+        dn: string,
+        language = 'en'
+      ): Promise<{ html: string; asked: string[] }> => {
+        const holder = stubContainer();
+        const asked: string[] = [];
+        const app = consoleIn({ '[data-org-detail]': holder }, language);
+        Object.assign(app as unknown as { entities: EntityDescriptor[] }, {
+          entities: [organizations],
+        });
+        Object.assign((app as unknown as { api: object }).api, {
+          organization: (asking: string) => {
+            asked.push(asking);
+            return Promise.reject(
+              Object.assign(new Error(`${asking} is not a valid DN`), {
+                status: 400,
+              })
+            );
+          },
+        });
+        await (
+          app as unknown as {
+            showOrganization(node: { dn: string; name: string }): Promise<void>;
+          }
+        ).showOrganization({ dn, name: dn });
+        return { html: holder.innerHTML, asked };
+      };
+      expect(await shown('zzz')).to.deep.equal({
+        html: '<p class="dc-empty">This entry no longer exists</p>',
+        asked: [],
+      });
+      expect((await shown('ou=', 'fr')).html).to.equal(
+        '<p class="dc-empty">Cette entrée n’existe plus</p>'
+      );
+      // A DN refused all the same is a failure to say as one: a proxy may
+      // answer 400 to a real DN, which is no reason to call it gone.
+      expect(await shown(acme)).to.deep.equal({
+        html: `<p class="dc-empty dc-error-block">${acme} is not a valid DN</p>`,
+        asked: [acme],
+      });
+    });
   });
 
   describe('the people and the groups of an organization', () => {

@@ -13,6 +13,9 @@ Built on ldap-rest 1.0.1.
   duration (#177)
 - A mailbox size reads the interface's way on the account card and in the
   lists: _1,07 Go_ in French, not _1.07 GB_ (#178)
+- An organization address that names no DN, `#/organizations/zzz`, says the
+  entry does not exist, as any other unknown entry does, instead of the
+  server's English refusal in red (#175)
 - A new password policy under a name already taken says so under Name, in
   the interface's language, instead of a toast quoting the server's English
   and the other policy's DN (#176)
