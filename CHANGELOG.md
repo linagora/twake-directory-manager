@@ -10,6 +10,9 @@ Built on ldap-rest 1.0.1.
   as the rest of the console does (#179)
 - A mailbox size reads the interface's way on the account card and in the
   lists: _1,07 Go_ in French, not _1.07 GB_ (#178)
+- An organization address that names no DN, `#/organizations/zzz`, says the
+  entry does not exist, as any other unknown entry does, instead of the
+  server's English refusal in red (#175)
 
 ## v0.11.0 (2026-10-23)
 

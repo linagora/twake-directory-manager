@@ -2062,6 +2062,15 @@ export class DirectoryConsole {
     // shown before: a card that fails to load leaves it named after none.
     this.titlePage();
 
+    // The address names an organization by its DN, which the server checks
+    // before looking for it: `#/organizations/zzz` read its refusal, in
+    // English and red, where it names an entry that is simply not there.
+    if (!isDnShaped(node.dn)) {
+      holder.innerHTML = `<p class="dc-empty">${escapeHtml(
+        this.translator.t('detail.notFound')
+      )}</p>`;
+      return;
+    }
     let entry: Entry;
     try {
       entry = await this.api.organization(node.dn);
