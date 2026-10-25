@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## v0.12.0 (2026-10-25)
 
-Built on ldap-rest 1.0.1.
+Built on ldap-rest 1.1.0: a page of another origin that frames the console
+must now be named,
+[upgrading](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md#the-static-files-can-no-longer-be-framed-by-another-origin).
 
 ### Features
 
