@@ -37,6 +37,9 @@ Built on ldap-rest 1.0.1.
 - A hand-over offers to take the account out of the department's groups the
   administrator writes, checked, and names those it stays in; a claim names
   the person and opens their card (#165)
+- The accounts selected in the Users list join groups, or change state, in
+  one action: _Add to a group…_ and _Change state…_ beside Export and Delete
+  (#170)
 
 ### Bug Fixes
 

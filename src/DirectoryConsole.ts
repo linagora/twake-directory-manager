@@ -553,6 +553,11 @@ export class DirectoryConsole {
   private navigating = false;
   /** What waits for the panel to close before it opens: a late password */
   private afterPanel: (() => void)[] = [];
+  /**
+   * Told when the panel open now closes, or another replaces it: an action
+   * that waits on its panel, as the list's bulk actions do
+   */
+  private panelClosed: (() => void) | null = null;
 
   constructor(options: ConsoleOptions) {
     this.options = options;
@@ -1620,6 +1625,7 @@ export class DirectoryConsole {
       translator: this.translator,
       listable: !isLarge(entity),
       load: listLoader(this.api, entity),
+      bulkActions: this.bulkActions(entity),
       pathSeparator: this.api.organizationPathSeparator,
       canDelete: this.canDelete() && !readOnly,
       pointerLabel: named,
@@ -1940,6 +1946,450 @@ export class DirectoryConsole {
     return `#/${owner.key}/${encodeURIComponent(id)}`;
   }
 
+  /** A group found, as a group picker offers it. */
+  private groupChoice(found: {
+    dn: string;
+    entity: EntityDescriptor;
+    entry: Entry;
+  }): GroupChoice {
+    const group = rdnValue(found.dn);
+    const mail = roleAttribute(found.entity.schema, 'primaryEmail');
+    const address = mail
+      ? [entryValue(found.entry, mail) ?? []].flat()[0]
+      : undefined;
+    return {
+      dn: found.dn,
+      name: group,
+      // sales-team — Shared mailbox — sales@example.com
+      label: [
+        group,
+        this.groupType(found.entity, found.entry),
+        address ? String(address) : '',
+      ]
+        .filter(Boolean)
+        .join(' — '),
+    };
+  }
+
+  /**
+   * What a list of accounts may give its selection at once: Add to a
+   * group… and Change state…, one action where it took a visit to each
+   * card — forty after an import of forty.
+   *
+   * @param entity the entity listed
+   * @returns the actions, none for another entity or a caller who writes
+   *   nothing
+   */
+  private bulkActions(entity: EntityDescriptor): {
+    label: string;
+    run(selected: [string, Entry][]): Promise<boolean>;
+  }[] {
+    if (
+      !this.canWrite() ||
+      attachedEntity(this.entities, 'people')?.key !== entity.key
+    )
+      return [];
+    const t = (key: string): string => this.translator.t(key);
+    const actions: {
+      label: string;
+      run(selected: [string, Entry][]): Promise<boolean>;
+    }[] = [];
+    if (this.api.groupSearch(this.entities))
+      actions.push({
+        label: t('bulk.addToGroups'),
+        run: selected => this.bulkAddToGroups(entity, selected),
+      });
+    const status = entity.accountStatus;
+    if (status && entity.schema.attributes[status]?.states)
+      actions.push({
+        label: t('bulk.changeState'),
+        run: selected => this.bulkChangeState(entity, selected),
+      });
+    return actions;
+  }
+
+  /**
+   * The accounts selected that the caller writes, and how many others were
+   * left out: an account in transit, or in a branch only read, is listed
+   * as well, and its card offers neither action.
+   */
+  private bulkWritable(
+    entity: EntityDescriptor,
+    selected: [string, Entry][]
+  ): { kept: [string, Entry][]; leftOut: string | undefined } {
+    const kept = selected.filter(
+      ([, entry]) => entry.dn && this.writes(entity, entry)
+    );
+    const count = selected.length - kept.length;
+    return {
+      kept,
+      leftOut: count ? this.translator.t('bulk.leftOut', { count }) : undefined,
+    };
+  }
+
+  /** Whether the side panel is open: one opened needs a page to be in. */
+  private panelShown(): boolean {
+    return (
+      this.container?.querySelector<HTMLElement>('[data-panel]')?.hidden ===
+      false
+    );
+  }
+
+  /**
+   * Opened for one action: the panel's close, or its replacement, settles
+   * it unless its work is under way, which settles it once done.
+   *
+   * @returns `own`, whether the panel is still the action's, `start` and
+   *   `finish` around the work, and `settled`, its outcome once known
+   */
+  private bulkPanel(): {
+    own(): boolean;
+    start(): void;
+    finish(changed: boolean): void;
+    settled: Promise<boolean>;
+  } {
+    let closed = false;
+    let running = false;
+    let changed = false;
+    let settle = (_changed: boolean): void => undefined;
+    const settled = new Promise<boolean>(resolve => (settle = resolve));
+    this.panelClosed = (): void => {
+      closed = true;
+      if (!running) settle(changed);
+    };
+    return {
+      own: () => !closed,
+      start: (): void => {
+        running = true;
+        // Escape and Cancel would leave the work going, unseen; a reload
+        // would stop it halfway, and the browser asks first.
+        this.panelGuard = (): boolean => !running;
+        this.panelDirty = (): boolean => running;
+      },
+      finish: (done: boolean): void => {
+        running = false;
+        changed ||= done;
+        if (closed) settle(changed);
+        else {
+          this.panelGuard = null;
+          this.panelDirty = null;
+        }
+      },
+      settled,
+    };
+  }
+
+  /**
+   * Add the accounts selected to groups chosen in a panel, one request a
+   * group. A group that refuses stays chosen in the panel, with why.
+   *
+   * @returns whether the accounts are in a group chosen, once the panel is
+   *   closed
+   */
+  private bulkAddToGroups(
+    entity: EntityDescriptor,
+    selected: [string, Entry][]
+  ): Promise<boolean> {
+    const { kept, leftOut } = this.bulkWritable(entity, selected);
+    const members = kept.map(([, entry]) => String(entry.dn));
+    const search = this.api.groupSearch(this.entities, found =>
+      this.writes(found.entity, found.entry)
+    );
+    if (!search) return Promise.resolve(false);
+    if (!members.length) {
+      if (leftOut) this.toast(leftOut, true);
+      return Promise.resolve(false);
+    }
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    const owners = new Map<string, EntityDescriptor>();
+    // The members each group found holds already: one sent again fails the
+    // whole request, the others with it.
+    const holds = new Map<string, Set<string>>();
+    const picker = new GroupPicker({
+      translator: this.translator,
+      search: async (query: string): Promise<GroupChoice[]> =>
+        (await search(query)).map(found => {
+          const key = comparableDn(found.dn);
+          owners.set(key, found.entity);
+          const role = roleAttribute(found.entity.schema, 'members');
+          holds.set(
+            key,
+            new Set(
+              (role ? [entryValue(found.entry, role) ?? []].flat() : []).map(
+                dn => comparableDn(String(dn))
+              )
+            )
+          );
+          return this.groupChoice(found);
+        }),
+      onAdd: async (
+        chosen: GroupChoice[]
+      ): Promise<{ left: GroupChoice[]; error?: string }> => {
+        const already: string[] = [];
+        const left: GroupChoice[] = [];
+        const refused: string[] = [];
+        // How many each group joined took: one already in it is not said
+        // to be added.
+        const added = new Map<number, string[]>();
+        let sent = false;
+        action.start();
+        try {
+          for (const group of chosen) {
+            const key = comparableDn(group.dn);
+            const owner = owners.get(key);
+            if (!owner) continue;
+            const held = holds.get(key) ?? new Set<string>();
+            const absent = members.filter(dn => !held.has(comparableDn(dn)));
+            if (!absent.length) {
+              already.push(group.name);
+              continue;
+            }
+            try {
+              await this.api.addMembers(owner, group.name, absent);
+              for (const dn of absent) held.add(comparableDn(dn));
+              sent = true;
+              added.set(absent.length, [
+                ...(added.get(absent.length) ?? []),
+                group.name,
+              ]);
+            } catch (err) {
+              left.push(group);
+              refused.push(this.refusal(err, owner, group.name).message);
+            }
+          }
+        } finally {
+          // Everyone in the groups chosen already is done as well: the
+          // selection goes.
+          action.finish(sent || already.length > 0);
+        }
+        const told = [
+          ...[...added].map(([count, groups]) =>
+            t('bulk.added', { count, groups: groups.join(', ') })
+          ),
+          ...(already.length
+            ? [
+                t('bulk.alreadyIn', {
+                  count: members.length,
+                  groups: already.join(', '),
+                }),
+              ]
+            : []),
+        ];
+        if (told.length) this.toast(told.join('. '));
+        if (left.length === 0 && action.own()) this.closePanel(true);
+        return {
+          left,
+          // Each refusal said with the group it is about.
+          error: refused.length
+            ? refused
+                .map((message, index) => `${left[index].name}: ${message}`)
+                .join(' ')
+            : undefined,
+        };
+      },
+      onCancel: (): void => this.closePanel(),
+    });
+    this.openPanel(t('bulk.addTitle', { count: members.length }), body => {
+      body.innerHTML = `${
+        leftOut ? `<p class="dc-hint">${escapeHtml(leftOut)}</p>` : ''
+      }<div data-bulk-picker></div>`;
+      const holder = body.querySelector<HTMLElement>('[data-bulk-picker]');
+      if (holder) picker.render(holder);
+    });
+    if (!this.panelShown()) return Promise.resolve(false);
+    const action = this.bulkPanel();
+    return action.settled;
+  }
+
+  /**
+   * Move the accounts selected to one state, one after the other, the
+   * panel counting them as it goes; those refused are listed, with why.
+   *
+   * @returns whether any account changed state, once the panel is closed
+   */
+  private async bulkChangeState(
+    entity: EntityDescriptor,
+    selected: [string, Entry][]
+  ): Promise<boolean> {
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    const known = (key: string): string | undefined => {
+      const shown = t(key);
+      return shown === key ? undefined : shown;
+    };
+    const attribute = entity.accountStatus;
+    const states = attribute
+      ? entity.schema.attributes[attribute]?.states
+      : undefined;
+    if (!states) return false;
+    const { kept, leftOut } = this.bulkWritable(entity, selected);
+    if (!kept.length) {
+      if (leftOut) this.toast(leftOut, true);
+      return false;
+    }
+    const { language } = this.translator;
+    const label = (state: string): string =>
+      pointerLabel(this.entities, states[state], language) ??
+      stateLabel(this.translator, state);
+    const address =
+      typeof window === 'undefined' ? undefined : window.location.hash;
+    const described = await this.stateDescriptions(states);
+    // Gone elsewhere, or another panel opened, while the states were read:
+    // not opened over it.
+    if (
+      (typeof window !== 'undefined' && window.location.hash !== address) ||
+      this.container?.querySelector<HTMLElement>('[data-panel]')?.hidden ===
+        false
+    )
+      return false;
+    const total = kept.length;
+    this.openPanel(t('bulk.stateTitle', { count: total }), body => {
+      body.innerHTML = `
+          <form class="dc-form">
+            ${leftOut ? `<p class="dc-hint">${escapeHtml(leftOut)}</p>` : ''}
+            <fieldset class="dc-form-group" data-bulk-states>
+              <legend>${escapeHtml(t('status.choose'))}</legend>
+              ${Object.keys(states)
+                .map(state => {
+                  const field = `dc-state-${state}`;
+                  const line =
+                    described[state] ?? known(`status.help.${state}`);
+                  return `
+                <div class="dc-field dc-state-choice">
+                  <input type="radio" id="${escapeHtml(field)}" name="dc-state"
+                    value="${escapeHtml(state)}"${
+                      line
+                        ? ` aria-describedby="${escapeHtml(field)}-help"`
+                        : ''
+                    } />
+                  <label for="${escapeHtml(field)}">${escapeHtml(label(state))}</label>
+                  ${
+                    line
+                      ? `<p id="${escapeHtml(field)}-help" class="dc-hint">${escapeHtml(line)}</p>`
+                      : ''
+                  }
+                </div>`;
+                })
+                .join('')}
+            </fieldset>
+            <div data-bulk-progress hidden>
+              <p class="dc-hint" role="status"></p>
+              <div class="dc-progress" role="progressbar" aria-valuemin="0"
+                aria-valuemax="${total}" aria-valuenow="0">
+                <div class="dc-progress-bar" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="dc-form-actions">
+              <button type="button" class="dc-button" data-cancel>${escapeHtml(
+                t('app.cancel')
+              )}</button>
+              <button type="submit" class="dc-button dc-button-primary" disabled>${escapeHtml(
+                t('status.apply')
+              )}</button>
+            </div>
+          </form>`;
+    });
+    if (!this.panelShown()) return false;
+    const action = this.bulkPanel();
+    const body =
+      this.container?.querySelector<HTMLElement>('[data-panel-body]');
+    if (!body) return action.settled;
+    const submit = body.querySelector<HTMLButtonElement>(
+      'button[type="submit"]'
+    );
+    const cancel = body.querySelector<HTMLButtonElement>('[data-cancel]');
+    const fieldset =
+      body.querySelector<HTMLFieldSetElement>('[data-bulk-states]');
+    const progress = body.querySelector<HTMLElement>('[data-bulk-progress]');
+    const count = (done: number): void => {
+      if (!progress) return;
+      progress.hidden = false;
+      const line = progress.querySelector<HTMLElement>('[role="status"]');
+      if (line) line.textContent = t('bulk.progress', { done, count: total });
+      progress
+        .querySelector('.dc-progress')
+        ?.setAttribute('aria-valuenow', String(done));
+      const bar = progress.querySelector<HTMLElement>('.dc-progress-bar');
+      if (bar) bar.style.width = `${Math.round((done / total) * 100)}%`;
+    };
+    const chosen = (): string | undefined =>
+      body.querySelector<HTMLInputElement>('input[name="dc-state"]:checked')
+        ?.value;
+    let running = false;
+    for (const radio of Array.from(
+      body.querySelectorAll<HTMLInputElement>('input[name="dc-state"]')
+    ))
+      radio.addEventListener('change', () => {
+        const state = chosen();
+        if (!submit || !state || running) return;
+        submit.disabled = false;
+        submit.textContent =
+          known(`status.action.${state}`) ?? t('status.apply');
+      });
+    cancel?.addEventListener('click', () => this.closePanel());
+    body.querySelector('form')?.addEventListener('submit', event => {
+      event.preventDefault();
+      const state = chosen();
+      if (!state || running) return;
+      running = true;
+      if (submit) submit.disabled = true;
+      if (cancel) cancel.disabled = true;
+      if (fieldset) fieldset.disabled = true;
+      action.start();
+      void (async (): Promise<void> => {
+        const refused: string[] = [];
+        let done = 0;
+        try {
+          for (const [id, entry] of kept) {
+            if (action.own()) count(done);
+            const name = this.personName(entity, entry, id);
+            try {
+              await this.api.setStatus(entity, id, state);
+            } catch (err) {
+              refused.push(
+                `${name}: ${this.refusal(err, entity, name).message}`
+              );
+            }
+            done++;
+          }
+          if (action.own()) count(done);
+        } finally {
+          action.finish(done > refused.length);
+        }
+        const moved = total - refused.length;
+        if (moved)
+          this.toast(
+            t('bulk.stateDone', { count: moved, state: label(state) })
+          );
+        // The panel closed meanwhile, by a page left: another may be open.
+        if (!action.own()) return;
+        if (!refused.length) {
+          this.closePanel(true);
+          return;
+        }
+        // Those refused, named with why, in place of the form.
+        body.innerHTML = `
+              <div class="dc-form">
+                ${leftOut ? `<p class="dc-hint">${escapeHtml(leftOut)}</p>` : ''}
+                <p>${escapeHtml(t('bulk.refused', { count: refused.length }))}</p>
+                <ul class="dc-confirm-items">${refused
+                  .map(line => `<li>${escapeHtml(line)}</li>`)
+                  .join('')}</ul>
+                <div class="dc-form-actions">
+                  <button type="button" class="dc-button dc-button-primary" data-close>${escapeHtml(
+                    t('app.close')
+                  )}</button>
+                </div>
+              </div>`;
+        body
+          .querySelector('[data-close]')
+          ?.addEventListener('click', () => this.closePanel(true));
+      })();
+    });
+    return action.settled;
+  }
+
   /**
    * Add an account to groups, chosen in the panel _Add to a group…_ opens.
    * The groups offered are those the caller writes: any other would be
@@ -1968,23 +2418,7 @@ export class DirectoryConsole {
       search: async (query: string): Promise<GroupChoice[]> =>
         (await search(query)).map(found => {
           owners.set(comparableDn(found.dn), found.entity);
-          const group = rdnValue(found.dn);
-          const mail = roleAttribute(found.entity.schema, 'primaryEmail');
-          const address = mail
-            ? [entryValue(found.entry, mail) ?? []].flat()[0]
-            : undefined;
-          return {
-            dn: found.dn,
-            name: group,
-            // sales-team — Shared mailbox — sales@example.com
-            label: [
-              group,
-              this.groupType(found.entity, found.entry),
-              address ? String(address) : '',
-            ]
-              .filter(Boolean)
-              .join(' — '),
-          };
+          return this.groupChoice(found);
         }),
       onAdd: async (
         chosen: GroupChoice[]
@@ -2749,6 +3183,9 @@ export class DirectoryConsole {
     // where the reader was before any panel.
     if (panel.hidden && typeof document !== 'undefined')
       this.panelOpener = document.activeElement as HTMLElement | null;
+    const replaced = this.panelClosed;
+    this.panelClosed = null;
+    replaced?.();
     heading.textContent = title;
     this.panelGuard = null;
     this.panelDirty = null;
@@ -2789,6 +3226,9 @@ export class DirectoryConsole {
     const opener = this.panelOpener;
     this.panelOpener = null;
     if (opener?.isConnected) opener.focus();
+    const closed = this.panelClosed;
+    this.panelClosed = null;
+    closed?.();
     this.afterPanel.shift()?.();
   }
 
@@ -2867,8 +3307,11 @@ export class DirectoryConsole {
           wide: panel.classList.contains('dc-panel-wide'),
           guard: this.panelGuard,
           dirty: this.panelDirty,
+          closed: this.panelClosed,
           focus: document.activeElement as HTMLElement | null,
         };
+    // A question over a panel does not close it.
+    this.panelClosed = null;
     return new Promise(resolve => {
       let answered = false;
       let boxes: HTMLInputElement[] = [];
@@ -2890,6 +3333,7 @@ export class DirectoryConsole {
           body.replaceChildren(...covered.nodes);
           this.panelGuard = covered.guard;
           this.panelDirty = covered.dirty;
+          this.panelClosed = covered.closed;
           (covered.focus?.isConnected ? covered.focus : dialog).focus();
         } else this.closePanel(true);
         resolve(confirmed);
