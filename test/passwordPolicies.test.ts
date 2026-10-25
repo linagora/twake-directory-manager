@@ -516,7 +516,7 @@ describe('Password policies', () => {
         }
       ).deletePolicy({ dn: 'cn=software', cn: 'software', isDefault: false });
       expect(toast.textContent).to.equal(
-        "software est la politique par défaut, ou des comptes l'utilisent encore"
+        'software est la politique par défaut, ou des comptes l’utilisent encore'
       );
     });
   });
