@@ -10,7 +10,7 @@
  * @module browser/directory-console/format
  */
 
-import { toTitleCase } from './shared/dom';
+import { escapeHtml, toTitleCase } from './shared/dom';
 
 import type { Translator } from './i18n';
 import type {
@@ -546,6 +546,45 @@ export function pointerLabel(
   const labels = owner?.schema.entity?.valueLabels;
   if (!labels) return undefined;
   return valueLabel(labels, rdnValue(dn), language);
+}
+
+/** The states said as a badge: the exceptions, Active being the norm. */
+const BADGED_STATES = ['disabled', 'noAccess', 'toDelete'];
+
+/**
+ * The state an account's status names, by the key its schema gives it:
+ * `enabled`, `disabled`, `noAccess`, `toDelete`.
+ *
+ * @param entity the account's entity
+ * @param name attribute the value is held in
+ * @param value the value, the DN of a state
+ * @returns the key, or undefined for another attribute or an unknown state
+ */
+export function accountState(
+  entity: EntityDescriptor | undefined,
+  name: string | undefined,
+  value: string
+): string | undefined {
+  if (!entity?.accountStatus || name !== entity.accountStatus) return undefined;
+  const states = entity.schema.attributes[name]?.states ?? {};
+  return Object.keys(states).find(
+    state => comparableDn(states[state]) === comparableDn(value)
+  );
+}
+
+/**
+ * An account's state as the lists and the card show it: the exceptions as a
+ * badge, which a scan down a column catches, the text kept so that colour
+ * is never the only cue. Active, and a deployment's own states, stay text.
+ *
+ * @param state the state's key
+ * @param shown its name
+ * @returns the markup
+ */
+export function stateMarkup(state: string | undefined, shown: string): string {
+  return state && BADGED_STATES.includes(state)
+    ? `<span class="dc-state dc-state-${state}">${escapeHtml(shown)}</span>`
+    : escapeHtml(shown);
 }
 
 /**

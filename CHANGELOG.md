@@ -4,6 +4,12 @@
 
 Built on ldap-rest 1.0.1.
 
+### Features
+
+- An account that is disabled, has no access or is to be deleted shows its
+  state as a badge in the lists, the organization and transit tables and on
+  its card; an active one reads as before (#172)
+
 ### Bug Fixes
 
 - The French password policy labels and hints use the typographic apostrophe,
