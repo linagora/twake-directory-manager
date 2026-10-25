@@ -1557,11 +1557,15 @@ export class ConsoleApiClient {
    *
    * @param role `members` or `owners`
    * @param entities entities the console knows
+   * @param keep which of the entries found may be offered, judged before
+   *   the cut: a group's members matching the query filled it, leaving
+   *   none to add
    * @returns a search, or undefined when no entity has an email address
    */
   memberSearch(
     role: 'members' | 'owners',
-    entities: EntityDescriptor[]
+    entities: EntityDescriptor[],
+    keep?: (dn: string) => boolean
   ):
     | ((
         query: string
@@ -1586,14 +1590,16 @@ export class ConsoleApiClient {
             entity,
             query,
             scope,
-            POINTER_SEARCH_LIMIT
+            keep ? POINTER_LOOKUP_LIMIT : POINTER_SEARCH_LIMIT
           );
           const mail = roleAttribute(entity.schema, 'primaryEmail') as string;
           const display = roleAttribute(entity.schema, 'displayName');
           // An entry answered without its DN cannot be written as a member:
           // its identifier is no DN, and the save would be refused.
           return Object.entries(entries)
-            .filter(([, entry]) => entry.dn)
+            .filter(
+              ([, entry]) => entry.dn && (!keep || keep(String(entry.dn)))
+            )
             .map(([id, entry]) => {
               const first = (name?: string): string | undefined => {
                 const raw = name ? entryValue(entry, name) : undefined;

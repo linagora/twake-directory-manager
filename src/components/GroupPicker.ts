@@ -41,6 +41,16 @@ export interface GroupPickerOptions {
     groups: GroupChoice[]
   ): Promise<{ left: GroupChoice[]; error?: string }>;
   onCancel(): void;
+  /**
+   * What the field and its hint say, for a picker of something else than
+   * groups: the members of a group
+   */
+  words?: { field: string; hint: string };
+  /**
+   * What to say when nothing is offered, where a rule left out what was
+   * found: a shared mailbox takes the accounts of its domain only
+   */
+  emptyNote?(query: string): string | undefined;
 }
 
 export class GroupPicker {
@@ -63,7 +73,9 @@ export class GroupPicker {
     container.innerHTML = `
       <form class="dc-form" data-group-picker>
         <div class="dc-field">
-          <label for="dc-group-search">${escapeHtml(t('groups.field'))}</label>
+          <label for="dc-group-search">${escapeHtml(
+            this.options.words?.field ?? t('groups.field')
+          )}</label>
           <div class="dc-tokens dc-picker">
             <ul class="dc-token-list" data-chosen></ul>
             <div class="dc-picker-box">
@@ -76,7 +88,8 @@ export class GroupPicker {
             </div>
           </div>
           <p class="dc-hint" id="dc-group-hint">${escapeHtml(
-            t('groups.search', { count: SEARCH_MINIMUM })
+            this.options.words?.hint ??
+              t('groups.search', { count: SEARCH_MINIMUM })
           )}</p>
         </div>
         <p class="dc-error-block" role="alert" data-error hidden></p>
@@ -107,6 +120,8 @@ export class GroupPicker {
     // A search answered after a later keystroke is dropped.
     let generation = 0;
     let busy = false;
+    // What the suggestions answer, for a note on why there are none.
+    let asked = '';
 
     const redraw = (): void => {
       tokens.innerHTML = this.chosen
@@ -139,7 +154,10 @@ export class GroupPicker {
       input.removeAttribute('aria-activedescendant');
     };
     const paint = (): void => {
-      if (candidates.length === 0) return message(translator.t('list.noMatch'));
+      if (candidates.length === 0)
+        return message(
+          this.options.emptyNote?.(asked) ?? translator.t('list.noMatch')
+        );
       results.innerHTML = candidates
         .map(
           (candidate, index) => `
@@ -180,6 +198,7 @@ export class GroupPicker {
     };
 
     const run = (query: string, ticket: number): void => {
+      asked = query;
       message(translator.t('form.searching'));
       this.options
         .search(query)

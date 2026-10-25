@@ -155,10 +155,12 @@ export class EntryPage {
     );
   }
 
-  /** A related section (Groups, Members), by its heading */
+  /** A related section (Groups, Members), by its heading, whatever it counts */
   related(heading: string): Locator {
     return this.article.locator('section').filter({
-      has: this.page.getByRole('heading', { name: heading, exact: true }),
+      has: this.page.getByRole('heading', {
+        name: new RegExp(`^${escapeRegExp(heading)}(?: \\(\\d+\\+?\\))?$`),
+      }),
     });
   }
 
