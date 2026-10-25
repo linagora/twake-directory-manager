@@ -317,6 +317,8 @@
 /* ------------------------------------------------------------------ header */
 
 .dc-content {
+  /* Positioned for the badge, laid over the main area's bottom padding. */
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -2204,9 +2206,14 @@ select.dc-input {
 
 /* Closes the page, in the room the main area leaves at its bottom: fixed in
    the corner, it covered the rows scrolling under it and took their clicks. */
+/* Laid over the main area's bottom padding rather than flowed after it: in
+   the column's flow, pulled up by a negative margin, the badge took less than
+   no room, the main area grew by the difference and every page scrolled by
+   those few pixels, however short. */
 .dc-powered {
-  align-self: flex-end;
-  margin: -56px 20px 16px 0;
+  position: absolute;
+  right: 20px;
+  bottom: 16px;
   display: flex;
   padding: 6px;
   border-radius: 8px;
@@ -2377,7 +2384,7 @@ textarea.dc-policy-text {
   }
 
   .dc-powered {
-    margin-right: 12px;
+    right: 12px;
   }
 
   .dc-panel-inner {
