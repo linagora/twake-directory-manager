@@ -540,6 +540,8 @@ export class DirectoryConsole {
    * again: `false` keeps it open. Each panel opens without one.
    */
   private panelGuard: (() => boolean) | null = null;
+  /** What waits for the panel to close before it opens: a late password */
+  private afterPanel: (() => void)[] = [];
 
   constructor(options: ConsoleOptions) {
     this.options = options;
@@ -2361,6 +2363,10 @@ export class DirectoryConsole {
   /**
    * Close the side panel, unless what it holds asks to stay.
    *
+   * What it held goes with it: hidden, a password typed or generated in it
+   * stayed in the page, for any script or open developer tools to read, until
+   * the next panel replaced it.
+   *
    * @param force close it whatever it holds
    */
   private closePanel(force = false): void {
@@ -2369,9 +2375,13 @@ export class DirectoryConsole {
     if (!force && this.panelGuard && !this.panelGuard()) return;
     this.panelGuard = null;
     panel.hidden = true;
+    const body =
+      this.container?.querySelector<HTMLElement>('[data-panel-body]');
+    if (body) body.innerHTML = '';
     const opener = this.panelOpener;
     this.panelOpener = null;
     if (opener?.isConnected) opener.focus();
+    this.afterPanel.shift()?.();
   }
 
   /** What Tab reaches in an element: its enabled controls not hidden. */
@@ -3405,7 +3415,11 @@ export class DirectoryConsole {
 
   /**
    * Reset a password. A generated one is shown once, in the panel that asked
-   * for it: it cannot be read back afterwards.
+   * for it: it cannot be read back afterwards. So the panel is sent once and
+   * stays while the server answers: closed in the meantime, it had the
+   * password shown over whatever opened next, or a typed one close it. Only
+   * Cancel closes it then, should the server never answer; a password
+   * generated all the same gets a panel of its own.
    */
   private async resetPassword(
     entity: EntityDescriptor,
@@ -3437,11 +3451,26 @@ export class DirectoryConsole {
           </div>
         </form>`;
 
+      const form = body.querySelector('form');
+      const send = body.querySelector<HTMLButtonElement>(
+        'button[type="submit"]'
+      );
+      let pending = false;
       body
         .querySelector('[data-cancel]')
-        ?.addEventListener('click', () => this.closePanel());
-      body.querySelector('form')?.addEventListener('submit', event => {
+        ?.addEventListener('click', () => this.closePanel(pending));
+      // Whether the panel still holds this form; a guard it set is its own.
+      const own = (): boolean => !!form?.isConnected;
+      form?.addEventListener('submit', event => {
         event.preventDefault();
+        // A second reset would answer another password, and the one shown
+        // might not be the one the server kept.
+        if (pending) return;
+        pending = true;
+        if (send) send.disabled = true;
+        // Tied to the request, not set for good: a confirmation asked over
+        // the panel meanwhile gives this guard back once it is answered.
+        this.panelGuard = (): boolean => !pending;
         const password =
           body.querySelector<HTMLInputElement>('#dc-new-password')?.value || '';
         const force =
@@ -3450,14 +3479,43 @@ export class DirectoryConsole {
         void this.api
           .resetPassword(entity, id, password || undefined, force)
           .then(result => {
-            if (result.generated && result.password) {
-              this.showGeneratedPassword(body, id, result.password, force);
+            pending = false;
+            const generated = result.generated ? result.password : undefined;
+            if (own()) {
+              this.panelGuard = null;
+              if (generated)
+                this.showGeneratedPassword(body, id, generated, force);
+              else {
+                this.closePanel();
+                this.toast(t('password.set'));
+              }
               return;
             }
-            this.closePanel();
-            this.toast(t('password.set'));
+            // Shut by force all the same: the password, the only copy there
+            // is, gets a panel of its own rather than none, once the panel
+            // opened meanwhile, if any, is closed: replaced, it lost what it
+            // held, another password perhaps.
+            if (!generated) {
+              this.toast(t('password.set'));
+              return;
+            }
+            const show = (): void =>
+              this.openPanel(t('password.title'), inner =>
+                this.showGeneratedPassword(inner, id, generated, force)
+              );
+            if (
+              this.container?.querySelector<HTMLElement>('[data-panel]')
+                ?.hidden === false
+            )
+              this.afterPanel.push(show);
+            else show();
           })
-          .catch((err: Error) => this.toast(err.message, true));
+          .catch((err: Error) => {
+            pending = false;
+            if (send) send.disabled = false;
+            if (own()) this.panelGuard = null;
+            this.toast(err.message, true);
+          });
       });
     });
   }
@@ -3469,7 +3527,7 @@ export class DirectoryConsole {
    * stays until the panel is closed on purpose, and closing it uncopied asks
    * first, in the panel rather than in a native dialog.
    *
-   * @param body the Reset password panel's body
+   * @param body the panel's body, the Reset password form's or a new one's
    * @param name the account, as the panel names it
    * @param password the generated password
    * @param mustChange whether a change is required at the next sign-in

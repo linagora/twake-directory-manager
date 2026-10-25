@@ -21,6 +21,9 @@ Built on ldap-rest 1.0.1.
   and the other policy's DN (#176)
 - The LINAGORA badge closes the page instead of staying in the corner over
   the rows scrolling under it, hiding them and taking their clicks (#180)
+- A password typed or generated in the Reset password panel no longer stays
+  in the page once the panel is closed, and the panel is sent once and stays
+  open until the server answers (#182)
 
 ## v0.11.0 (2026-10-23)
 

@@ -91,6 +91,8 @@ export class EntityImport {
   private readonly options: ImportOptions;
   private readonly fields: ImportField[];
   private root: HTMLElement | null = null;
+  /** What it drew last, gone from the page once its panel is closed. */
+  private view: HTMLElement | null = null;
   private step: Step = 'file';
   private fileName = '';
   private table: CsvTable | null = null;
@@ -111,6 +113,7 @@ export class EntityImport {
 
   render(root: HTMLElement): void {
     this.root = root;
+    this.view = null;
     this.paint();
   }
 
@@ -133,8 +136,11 @@ export class EntityImport {
 
   private paint(): void {
     const root = this.root;
-    if (!root) return;
+    // Closed, or its panel given to another form, a running import draws no
+    // more: it filled the hidden panel row after row, or wrote over the form.
+    if (!root || this.view?.isConnected === false) return;
     root.innerHTML = `<div class="dc-import">${this.stepMarkup()}</div>`;
+    this.view = root.querySelector<HTMLElement>('.dc-import');
     this.bind(root);
   }
 
@@ -557,7 +563,9 @@ export class EntityImport {
   /** Repaint the progress in place, rather than the whole step per row. */
   private updateProgress(): void {
     const root = this.root;
-    if (!root || this.step !== 'running') return;
+    // Nor in place: the bar there may be another import's.
+    if (!root || this.step !== 'running' || this.view?.isConnected === false)
+      return;
     const bar = root.querySelector<HTMLElement>('.dc-progress-bar');
     if (!bar) return this.paint();
     const percent = this.total
