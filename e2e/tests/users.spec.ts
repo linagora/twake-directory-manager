@@ -171,6 +171,15 @@ test.describe('USER user accounts', () => {
     await form.submit();
 
     await app.expectToast('Tom Tester created');
+    // created with no password: one is generated and shown, before the card
+    // opens (#164)
+    const password = new ResetPasswordDialog(page);
+    await expect(password.title).toHaveText('New password — Tom Tester');
+    await expect(password.generated).not.toHaveValue('');
+    await expect(password.generatedHelp).toContainText(
+      'They will have to change it when they next sign in.'
+    );
+    await password.closeUncopied();
     await form.expectClosed();
     const card = app.entry();
     await card.expectName('Tom Tester');
@@ -196,9 +205,10 @@ test.describe('USER user accounts', () => {
     const app = await new LoginPage(page).loginAs(ADMIN, 'users');
     const creations: string[] = [];
     page.on('request', request => {
+      // the creation only: the password generated next is posted under it
       if (
         request.method() === 'POST' &&
-        request.url().includes('/api/v1/ldap/users')
+        new URL(request.url()).pathname === '/api/v1/ldap/users'
       )
         creations.push(request.url());
     });
@@ -245,6 +255,7 @@ test.describe('USER user accounts', () => {
     await form.pick('Department', 'Human', 'Human Resources');
     await form.submit();
     await app.expectToast('Checked Form created');
+    await new ResetPasswordDialog(page).closeUncopied();
     await expect(app.entry().detail('Mailbox size')).toHaveText('4 GB');
     expect(creations).toHaveLength(1);
   });
@@ -348,6 +359,7 @@ test.describe('USER user accounts', () => {
     await form.control('Deletion date').fill('');
     await form.submit();
     await app.expectToast(`Dr Jeanne Durand${unique} created`);
+    await new ResetPasswordDialog(page).closeUncopied();
     expect(await directory.values(dn, 'displayName')).toEqual([
       `Dr Jeanne Durand${unique}`,
     ]);
@@ -1031,6 +1043,7 @@ test.describe('USER user accounts', () => {
     await form.pick('Department', 'Front', frontend.path);
     await form.submit();
     await app.expectToast('Front Dev created');
+    await new ResetPasswordDialog(page).closeUncopied();
     await app.entry().expectName('Front Dev');
 
     await app.openList('Users');

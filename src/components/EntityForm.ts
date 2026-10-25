@@ -215,6 +215,10 @@ export class EntityForm {
    */
   private typed = false;
   private root: HTMLElement | null = null;
+  /** A submission waits for the server: a second one is not sent */
+  private submitting = false;
+  /** The form drawn, which the panel's body outlives */
+  private drawn: Element | null = null;
   private errors: Record<string, string> = {};
   /** Pointer fields chosen by searching, with their search */
   private readonly searches = new Map<
@@ -540,6 +544,7 @@ export class EntityForm {
         </div>
       </form>`;
 
+    this.drawn = container.querySelector('form');
     container.querySelector('form')?.addEventListener('input', event => {
       const target = event.target as Element | null;
       if (!target?.closest?.('[data-picker]')) this.typed = true;
@@ -629,12 +634,16 @@ export class EntityForm {
     // no example, and "the DN of an entry" under a search by name, which a
     // reader is never asked to type. A size gets the console's own words,
     // a search none: its placeholder says what to type.
+    // An empty password created an account nobody could sign in to, and
+    // nothing said so: one is generated, and shown, once it exists.
     const hint =
-      attr.normalize === 'byteSize'
-        ? translator.t('form.sizeHint')
-        : this.searches.has(name)
-          ? undefined
-          : attributeHint(attr, translator.language);
+      hasRole(attr, 'password') && !this.options.entry
+        ? translator.t('form.passwordGenerated')
+        : attr.normalize === 'byteSize'
+          ? translator.t('form.sizeHint')
+          : this.searches.has(name)
+            ? undefined
+            : attributeHint(attr, translator.language);
     const required = attr.required ? ' <span class="dc-required">*</span>' : '';
     const control = this.searches.has(name)
       ? this.pickerMarkup(name)
@@ -1719,9 +1728,19 @@ export class EntityForm {
     return replaced;
   }
 
+  /**
+   * Whether the form is still in the page, rather than closed or replaced
+   * while the server answered. One never drawn counts as shown.
+   */
+  isShown(): boolean {
+    return this.drawn?.isConnected !== false;
+  }
+
   /** Validate, then hand the values to the caller. */
   private async submit(): Promise<void> {
-    if (!this.validate()) return;
+    // A second Enter sent a second creation, the server numbering the
+    // identifier of the new one: two accounts for one person.
+    if (this.submitting || !this.validate()) return;
     const values: Record<string, string | string[]> = {};
     const cleared: string[] = [];
     for (const [name, attr] of this.fields) {
@@ -1739,7 +1758,12 @@ export class EntityForm {
         continue;
       values[name] = attr.type === 'array' ? list : list[0];
     }
-    await this.options.onSubmit(values, cleared);
+    this.submitting = true;
+    try {
+      await this.options.onSubmit(values, cleared);
+    } finally {
+      this.submitting = false;
+    }
   }
 
   /**
