@@ -72,7 +72,11 @@ test.describe('LIST lists, search and bulk actions', () => {
       'Last name',
       'First name',
       'Email',
+      // offered apart, kept out of Every field (#166)
+      'Department path',
     ]);
+    await list.search('Backend', 'Department path');
+    await expect(list.ids()).toContainText(['carol', 'frank']);
     await list.search('Moreau', 'Last name');
     await expect(list.ids()).toHaveText(['alice']);
     await list.search('Moreau', 'Identifier');

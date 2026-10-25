@@ -265,6 +265,18 @@ export class OrganizationTree {
   }
 
   /**
+   * Whether an organization holds others, as far as the tree has read it.
+   *
+   * @param dn organization, in any spelling of its DN
+   * @returns undefined when the tree has not read its children
+   */
+  hasChildren(dn: string): boolean | undefined {
+    const node = this.find(dn);
+    if (!node?.loaded) return undefined;
+    return (node.children?.length ?? 0) > 0;
+  }
+
+  /**
    * Read a node's children, keeping what is known of those still there: a
    * branch read again keeps the sub-branches that were open under it.
    */
