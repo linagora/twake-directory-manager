@@ -154,6 +154,11 @@ export class OrganizationTree {
     this.draw();
   }
 
+  /** The node the tree is drawn from, once read: none when it is empty. */
+  top(): OrganizationNode | null {
+    return this.tree ?? null;
+  }
+
   /** Mark a node as the current one and repaint. */
   select(dn: string | null): void {
     this.selectedDn = dn;

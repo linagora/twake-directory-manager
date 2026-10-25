@@ -162,6 +162,9 @@ export function stateLabel(translator: Translator, state: string): string {
   return shown === `state.${state}` ? state : shown;
 }
 
+/** Attributes naming the accounts or entries an entry is related to */
+const RELATION_ROLES = ['members', 'owners', 'managers', 'localAdmins'];
+
 export class EntityDetail {
   private readonly options: DetailOptions;
 
@@ -476,10 +479,9 @@ export class EntityDetail {
       )}" class="dc-path-link" title="${escapeHtml(value)}">${escapeHtml(
         value
       )}</a>`;
-    if (
-      (hasRole(attr, 'members') || hasRole(attr, 'owners')) &&
-      isDnShaped(value)
-    )
+    // An organization's managers and local administrators are accounts as
+    // well, and lead to them: who administers a branch was only a name.
+    if (RELATION_ROLES.some(role => hasRole(attr, role)) && isDnShaped(value))
       return this.relationLink(
         value,
         this.options.pointerLabel?.(value) || rdnValue(value),

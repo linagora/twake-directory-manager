@@ -1353,10 +1353,51 @@ describe('Directory console', () => {
       expect(read).to.deep.equal([backend]);
     });
 
+    it('should open on the top of the tree, the address naming it in place', async () => {
+      // "Select an organization" beside a tree of one root: the root was
+      // always clicked first (#173). Replaced, not pushed: Back leaves.
+      const { app, pushed, replaced, read, tree, restore } = setup();
+      try {
+        await app.followHash();
+      } finally {
+        restore();
+      }
+      expect(replaced).to.deep.equal([
+        `#/organizations/${encodeURIComponent(top)}`,
+      ]);
+      expect(pushed).to.deep.equal([]);
+      expect(app.route.id).to.equal(top);
+      expect(selected(tree())).to.equal(top);
+      expect(read).to.deep.equal([top]);
+    });
+
+    it('should keep Select an organization when there is no tree to open on', async () => {
+      for (const top of [
+        async () => null,
+        async () => {
+          throw new Error('Forbidden');
+        },
+      ]) {
+        const { app, replaced, read, restore } = setup();
+        Object.assign((app as unknown as { api: object }).api, {
+          organizationTop: top,
+        });
+        try {
+          await app.followHash();
+        } finally {
+          restore();
+        }
+        expect(replaced).to.deep.equal([]);
+        expect(read).to.deep.equal([]);
+        expect(app.route.id).to.equal(undefined);
+      }
+    });
+
     it('should name a node picked in the tree in the address, without drawing the view again', async () => {
       const { app, pushed, read, tree, restore } = setup();
       try {
         await app.followHash();
+        read.length = 0;
         const before = tree();
         app.tree.options.onSelect({ dn: sales, name: 'Sales' });
         expect(pushed).to.deep.equal([
@@ -1399,6 +1440,7 @@ describe('Directory console', () => {
       const { app, pushed, read, tree, restore } = setup();
       try {
         await app.followHash();
+        read.length = 0;
         await app.tree.toggle(engineering);
         await app.submitOrganization(
           organizations,
@@ -10892,6 +10934,67 @@ describe('Directory console', () => {
       expect(container.innerHTML).to.not.include('data-delete');
       expect(container.innerHTML).to.not.include('data-status');
       expect(container.innerHTML).to.not.include('data-password');
+    });
+
+    it('should lead from an organization to its managers and local administrators', () => {
+      // Named by their identifier, with nowhere to go: checking who
+      // administers a branch meant searching the users (#173).
+      const sophie = 'uid=sophie.martin,ou=users,dc=example,dc=com';
+      const branch: EntityDescriptor = {
+        key: 'organizations',
+        pluralName: 'organizations',
+        singularName: 'organization',
+        mainAttribute: 'ou',
+        base: 'ou=organization,dc=example,dc=com',
+        endpoint: '/api/v1/ldap/organizations',
+        kind: 'organization',
+        schema: {
+          attributes: {
+            ou: { type: 'string', role: 'identifier' },
+            twakeManagerLink: {
+              type: 'array',
+              role: 'managers',
+              items: {
+                type: 'pointer',
+                branch: ['ou=users,dc=example,dc=com'],
+              },
+              label: { en: 'Managers' },
+            },
+            twakeLocalAdminLink: {
+              type: 'array',
+              role: 'localAdmins',
+              items: {
+                type: 'pointer',
+                branch: ['ou=users,dc=example,dc=com'],
+              },
+              label: { en: 'Local administrators' },
+            },
+          },
+        },
+      };
+      const container = stubContainer();
+      new EntityDetail({
+        entity: branch,
+        entry: {
+          dn: 'ou=Sales,ou=organization,dc=example,dc=com',
+          ou: 'Sales',
+          twakeManagerLink: [sophie],
+          twakeLocalAdminLink: [sophie],
+        },
+        translator: new Translator('en'),
+        canWrite: false,
+        canDelete: false,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        onStatus: () => undefined,
+        onResetPassword: () => undefined,
+        relationHref: dn => `#/users/${rdnValue(dn)}`,
+      }).render(container);
+      expect(
+        container.innerHTML.match(
+          /<a href="#&#x2F;users&#x2F;sophie.martin" class="dc-link" data-relation="[^"]+" title="[^"]+">sophie.martin<\/a>/g
+        )
+      ).to.have.length(2);
     });
 
     it('should name the owners of a group and lead to them', () => {

@@ -15,6 +15,9 @@ Built on ldap-rest 1.0.1.
 - The keyboard focus is a solid ring on every control, clear on white and
   around a blue button, and the × that removes a group or a value is 24 px at
   least (#184)
+- Organizations opens on the top of the tree, its card shown and its address
+  named, and an organization's managers and local administrators are links
+  to their cards (#173)
 
 ### Bug Fixes
 
