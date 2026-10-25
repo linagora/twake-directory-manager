@@ -1009,14 +1009,15 @@ export class ConsoleApiClient {
     id: string,
     password?: string,
     forceChange = true
-  ): Promise<{ generated: boolean; password?: string }> {
-    return this.call<{ generated: boolean; password?: string }>(
-      `${entity.endpoint}/${encodeURIComponent(id)}/password`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ password, forceChange }),
-      }
-    );
+  ): Promise<{ generated: boolean; password?: string; forceChange?: boolean }> {
+    return this.call<{
+      generated: boolean;
+      password?: string;
+      forceChange?: boolean;
+    }>(`${entity.endpoint}/${encodeURIComponent(id)}/password`, {
+      method: 'POST',
+      body: JSON.stringify({ password, forceChange }),
+    });
   }
 
   /** The password policies, sorted by name, and the attributes they take. */

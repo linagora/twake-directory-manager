@@ -3210,16 +3210,29 @@ export class DirectoryConsole {
             const created = await this.api.create(entity, values as Entry);
             const createdId = createdEntryId(entity, created, values);
             this.toast(this.createdToast(entity, values, createdId));
-            this.closePanel(true);
             // Created from an organization's card, the entry joins its table
             // there: the next one is often created right after it.
-            if (here) here.created();
-            else
-              this.go(
-                createdId
-                  ? `${entity.key}/${encodeURIComponent(createdId)}`
-                  : entity.key
-              );
+            const next = (): void => {
+              if (here) here.created();
+              else
+                this.go(
+                  createdId
+                    ? `${entity.key}/${encodeURIComponent(createdId)}`
+                    : entity.key
+                );
+            };
+            if (
+              await this.givePassword(entity, values, createdId, next, () =>
+                form.isShown()
+              )
+            )
+              return;
+            // Gone elsewhere while the server answered, the creation or a
+            // failed reset: neither the panel now open nor the card are its
+            // own to take.
+            if (!form.isShown()) return;
+            this.closePanel(true);
+            next();
           }
         } catch (err) {
           // Refused the rights to the organization it goes to, that is the
@@ -3937,7 +3950,12 @@ export class DirectoryConsole {
             if (own()) {
               this.panelGuard = null;
               if (generated)
-                this.showGeneratedPassword(body, id, generated, force);
+                this.showGeneratedPassword(
+                  body,
+                  id,
+                  generated,
+                  result.forceChange ?? force
+                );
               else {
                 this.closePanel();
                 this.toast(t('password.set'));
@@ -3971,6 +3989,85 @@ export class DirectoryConsole {
           });
       });
     });
+  }
+
+  /**
+   * A first password for an account just created without one: generated
+   * and shown in the form's panel, as Reset password shows one, before the
+   * account's card opens. An account created empty could not be signed in
+   * to, and only a call from its owner said so.
+   *
+   * The panel may have been closed, or given to another form, while the
+   * server answered: the password, the only copy there is, then gets a
+   * panel of its own, once the one open meanwhile is closed, and the card is
+   * not opened over where the administrator went.
+   *
+   * @param entity the entity created
+   * @param values what the form sent
+   * @param id the new entry, empty when the server named none
+   * @param next what the creation does once the panel is closed
+   * @param own whether the panel still holds the form
+   * @returns whether the form's panel now shows a password, and stays
+   */
+  private async givePassword(
+    entity: EntityDescriptor,
+    values: Record<string, string | string[]>,
+    id: string,
+    next: () => void,
+    own: () => boolean = () => true
+  ): Promise<boolean> {
+    const field = entity.password;
+    if (!field || [values[field] ?? []].flat().some(Boolean)) return false;
+    const name = this.submittedName(entity, values, id);
+    if (!id) {
+      this.toast(this.translator.t('create.noPassword', { name }), true);
+      return false;
+    }
+    const reset = roleAttribute(entity.schema, 'passwordReset');
+    // A generated password is meant to be changed, unless told otherwise.
+    const force =
+      !reset || String([values[reset] ?? []].flat()[0] ?? '') !== 'FALSE';
+    const address =
+      typeof window === 'undefined' ? undefined : window.location.hash;
+    let result: {
+      generated: boolean;
+      password?: string;
+      forceChange?: boolean;
+    };
+    try {
+      result = await this.api.resetPassword(entity, id, undefined, force);
+    } catch {
+      this.toast(this.translator.t('create.noPassword', { name }), true);
+      return false;
+    }
+    const password = result.password;
+    if (!result.generated || !password) return false;
+    // What the server did, not what was asked: an entity with no reset
+    // attribute flags nothing.
+    const mustChange = result.forceChange ?? force;
+    const body =
+      this.container?.querySelector<HTMLElement>('[data-panel-body]');
+    if (own() && body) {
+      this.panelDirty = null;
+      // Its card, unless the administrator has gone elsewhere since.
+      this.afterPanel.push(() => {
+        if (typeof window === 'undefined' || window.location.hash === address)
+          next();
+      });
+      this.showGeneratedPassword(body, name, password, mustChange);
+      return true;
+    }
+    const show = (): void =>
+      this.openPanel(this.translator.t('password.title'), inner =>
+        this.showGeneratedPassword(inner, name, password, mustChange)
+      );
+    if (
+      this.container?.querySelector<HTMLElement>('[data-panel]')?.hidden ===
+      false
+    )
+      this.afterPanel.push(show);
+    else show();
+    return true;
   }
 
   /**

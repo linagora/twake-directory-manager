@@ -612,6 +612,7 @@ export class EntityImport {
             : ''
         }
       </div>
+      ${this.passwordlessMarkup()}
       ${this.successes.length ? this.createdMarkup() : ''}
       ${this.failures.length ? this.problemsMarkup(this.failures) : ''}
       <div class="dc-form-actions">
@@ -626,6 +627,24 @@ export class EntityImport {
           this.t('app.close')
         )}</button>
       </div>`;
+  }
+
+  /**
+   * What the accounts created lack when the file gave no password: their
+   * owners cannot sign in until each is given one, and "2 created" hid it.
+   */
+  private passwordlessMarkup(): string {
+    const password = this.options.entity.password;
+    if (!password) return '';
+    // By row, not by column: a Password column left empty creates the
+    // accounts without one all the same.
+    const count = this.successes.filter(
+      ({ row }) => ![row.values[password] ?? []].flat().some(Boolean)
+    ).length;
+    if (!count) return '';
+    return `<p class="dc-list-notice" role="status">${escapeHtml(
+      this.t('import.noPassword', { count })
+    )}</p>`;
   }
 
   /**

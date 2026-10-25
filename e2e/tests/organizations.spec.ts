@@ -1,4 +1,4 @@
-import { ConfirmDialog, LoginPage } from '../pages';
+import { ConfirmDialog, LoginPage, ResetPasswordDialog } from '../pages';
 import { ADMIN, ALICE, ORG, SOPHIE } from '../support/accounts';
 import { uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
@@ -603,6 +603,7 @@ test.describe('ORG organizations', () => {
     });
     await form.submit();
     await local.expectToast('Hilda Here created');
+    await new ResetPasswordDialog(local.page).closeUncopied();
     await form.expectClosed();
     await expect(own.heading).toHaveText(tenant.org.name);
     await expect(own.attachedHeading('People')).toHaveText('People (2)');

@@ -86,7 +86,10 @@ it: the entries already created stay created, the others are not sent.
 At the end, the result lists the entries **created**, those **refused by the
 server** with its message, and, if the import was stopped, those **not
 sent**. :guilabel:`Download the refused rows` downloads the refused rows, to
-correct and import again.
+correct and import again. Accounts created without a password, a file with no
+Password column or a cell left empty, are counted under the result: each needs
+one given from its card (:guilabel:`Reset password`) before its owner can sign
+in.
 
 .. note::
 

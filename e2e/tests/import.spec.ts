@@ -210,6 +210,10 @@ test.describe('IMPORT CSV import', () => {
     await expect(panel.progress.or(panel.closeButton)).toBeVisible();
     await expect(panel.closeButton).toBeVisible({ timeout: 60_000 });
     await expect(panel.stat('created')).toHaveText('2');
+    // no Password column: the accounts cannot sign in yet, and it says so (#164)
+    await expect(panel.dialog).toContainText(
+      '2 accounts were created without a password: give each one from its card (Reset password)'
+    );
 
     // Each created account named, and linked to its card
     await expect(panel.created.locator('td:first-child')).toHaveText([

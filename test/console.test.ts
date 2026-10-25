@@ -2440,6 +2440,33 @@ describe('Directory console', () => {
       expect(form.picked.get(france)).to.equal('Sales / France');
     });
 
+    it('should send a form once while the server answers', async () => {
+      // A second Enter created a second account (#164).
+      let release = (): void => undefined;
+      let sent = 0;
+      const form = new EntityForm({
+        entity: users,
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        pointerSearch: () => async () => [],
+        onSubmit: () => {
+          sent++;
+          return new Promise<void>(resolve => (release = resolve));
+        },
+        onCancel: () => undefined,
+      }) as unknown as { validate(): boolean; submit(): Promise<void> };
+      form.validate = () => true;
+      const first = form.submit();
+      await form.submit();
+      expect(sent).to.equal(1);
+      release();
+      await first;
+      const again = form.submit();
+      expect(sent).to.equal(2);
+      release();
+      await again;
+    });
+
     describe('what waits in transit', () => {
       const bob: Entry = {
         ...sophie,
@@ -2780,6 +2807,41 @@ describe('Directory console', () => {
       root.innerHTML = '';
       (importer as unknown as { paint(): void }).paint();
       expect(root.innerHTML).to.equal('');
+    });
+
+    it('should say the accounts it created have no password', () => {
+      // "2 created" hid that their owners could not sign in yet (#164), and
+      // a Password column left empty creates them without one as well.
+      const importer = new EntityImport({
+        entity: { ...users, password: 'userPassword' },
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        create: () => Promise.resolve(),
+        onDone: () => undefined,
+        onClose: () => undefined,
+      });
+      const state = importer as unknown as {
+        created: number;
+        successes: { row: { values: Record<string, string> }; id: string }[];
+        doneMarkup(): string;
+      };
+      const created = (
+        password?: string
+      ): { row: { values: Record<string, string> }; id: string } => ({
+        row: { values: password ? { userPassword: password } : {} },
+        id: 'x',
+      });
+      state.created = 2;
+      state.successes = [created(), created()];
+      expect(state.doneMarkup()).to.include(
+        '2 accounts were created without a password: give each one from its card (Reset password)'
+      );
+      state.successes = [created('Typed-1!'), created('Typed-2!')];
+      expect(state.doneMarkup()).to.not.include('without a password');
+      state.successes = [created('Typed-1!'), created()];
+      expect(state.doneMarkup()).to.include(
+        '1 account was created without a password: give it one from its card'
+      );
     });
 
     it('should say the import counts of one in the singular', () => {
@@ -3218,6 +3280,7 @@ describe('Directory console', () => {
      * @param typed the password typed, or none to have one generated
      * @param meanwhile what happens before the server answers
      * @param refusal what the server answers instead of a password
+     * @param answer what the server answers, when not the default
      */
     const reset = async (
       typed: string,
@@ -3230,7 +3293,8 @@ describe('Directory console', () => {
         els: Record<string, ReturnType<typeof control>>;
         panel: { hidden: boolean };
       }) => void,
-      refusal?: Error
+      refusal?: Error,
+      answer?: { generated: boolean; password?: string; forceChange?: boolean }
     ) => {
       const els = {
         form: control(),
@@ -3286,6 +3350,7 @@ describe('Directory console', () => {
         resetPassword: () => {
           calls++;
           if (refusal) return Promise.reject(refusal);
+          if (answer) return Promise.resolve(answer);
           return Promise.resolve(
             typed
               ? { generated: false }
@@ -3317,6 +3382,17 @@ describe('Directory console', () => {
       expect(els.field.focused).to.equal(1);
       els.field.fire('focus');
       expect(els.field.selected).to.equal(1);
+    });
+
+    it('should say no change is required when the server set none', async () => {
+      // An entity with no reset attribute flags nothing, whatever was asked.
+      const { body } = await reset('', undefined, undefined, {
+        generated: true,
+        password: 's3cret',
+        forceChange: false,
+      });
+      expect(body.innerHTML).to.contain('It will not be shown again.');
+      expect(body.innerHTML).to.not.contain('change it when they next sign in');
     });
 
     it('should ask once before it is closed uncopied', async () => {
@@ -3462,6 +3538,200 @@ describe('Directory console', () => {
       expect(title.textContent).to.equal('New password — alice');
       expect(body.innerHTML).to.match(
         /<input id="dc-generated-password"[^>]*readonly value="s3cret!&lt;x&gt;"/
+      );
+    });
+  });
+
+  describe('a password for an account just created', () => {
+    const setup = (reset: () => Promise<unknown>) => {
+      const body = {
+        innerHTML: '',
+        scrollTop: 0,
+        querySelector: () => null,
+        querySelectorAll: () => [],
+      };
+      const title = { textContent: '' };
+      const toast = toastElement();
+      const panel = { hidden: true, classList: { toggle: () => undefined } };
+      const app = consoleIn({
+        '[data-panel]': panel,
+        '[data-panel-body]': body,
+        '[data-panel-title]': title,
+        '[data-toast]': toast,
+      });
+      const asked: unknown[][] = [];
+      Object.assign((app as unknown as { api: object }).api, {
+        resetPassword: (...args: unknown[]) => {
+          asked.push(args);
+          return reset();
+        },
+      });
+      const give = (
+        values: Record<string, string>,
+        next: () => void,
+        own = true,
+        entity: EntityDescriptor = { ...users, password: 'userPassword' },
+        id = 'helene'
+      ) =>
+        (
+          app as unknown as {
+            givePassword(
+              entity: EntityDescriptor,
+              values: Record<string, string>,
+              id: string,
+              next: () => void,
+              own: () => boolean
+            ): Promise<boolean>;
+          }
+        ).givePassword(entity, values, id, next, () => own);
+      return { app, body, title, toast, asked, give, panel };
+    };
+
+    it('should be generated and shown before the card opens', async () => {
+      // An account created empty could not be signed in to (#164).
+      const { app, body, title, asked, give } = setup(async () => ({
+        generated: true,
+        password: 's3cret',
+      }));
+      let opened = 0;
+      const shown = await give({ cn: 'Hélène Lefèvre' }, () => opened++);
+      expect(shown).to.equal(true);
+      expect(asked).to.deep.equal([
+        [{ ...users, password: 'userPassword' }, 'helene', undefined, true],
+      ]);
+      expect(body.innerHTML).to.include('id="dc-generated-password"');
+      expect(title.textContent).to.match(/^New password — /);
+      // The card opens once the password panel is closed.
+      const queued = (app as unknown as { afterPanel: (() => void)[] })
+        .afterPanel;
+      expect(queued).to.have.length(1);
+      queued[0]();
+      expect(opened).to.equal(1);
+    });
+
+    it('should not be asked to change when the form said No', async () => {
+      const { asked, give } = setup(async () => ({
+        generated: true,
+        password: 's3cret',
+        forceChange: false,
+      }));
+      const reset: EntityDescriptor = {
+        ...users,
+        password: 'userPassword',
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            pwdReset: { type: 'boolean', role: 'passwordReset' },
+          },
+        },
+      };
+      await give({ pwdReset: 'FALSE' }, () => undefined, true, reset);
+      expect(asked[0][3]).to.equal(false);
+    });
+
+    it('should say what the server did of the change required', async () => {
+      // An entity with no reset attribute flags nothing, whatever was asked.
+      const { body, give } = setup(async () => ({
+        generated: true,
+        password: 's3cret',
+        forceChange: false,
+      }));
+      await give({}, () => undefined);
+      expect(body.innerHTML).to.include('id="dc-generated-password"');
+      expect(body.innerHTML).to.not.include('change it when they next sign in');
+    });
+
+    it('should wait behind the panel opened meanwhile, and open no card', async () => {
+      const { app, body, panel, give } = setup(async () => ({
+        generated: true,
+        password: 's3cret',
+      }));
+      panel.hidden = false;
+      let opened = 0;
+      expect(await give({}, () => opened++, false)).to.equal(true);
+      expect(body.innerHTML).to.not.include('dc-generated-password');
+      const queued = (app as unknown as { afterPanel: (() => void)[] })
+        .afterPanel;
+      expect(queued).to.have.length(1);
+      panel.hidden = true;
+      queued[0]();
+      expect(body.innerHTML).to.include('id="dc-generated-password"');
+      expect(opened).to.equal(0);
+    });
+
+    it('should open the card only if the administrator stayed', async () => {
+      const global = globalThis as { window?: unknown };
+      const saved = global.window;
+      const location = { hash: '#users' };
+      global.window = { location };
+      try {
+        const { app, give } = setup(async () => ({
+          generated: true,
+          password: 's3cret',
+        }));
+        let opened = 0;
+        await give({}, () => opened++);
+        const queued = (app as unknown as { afterPanel: (() => void)[] })
+          .afterPanel;
+        location.hash = '#groups';
+        queued[0]();
+        expect(opened).to.equal(0);
+        await give({}, () => opened++);
+        location.hash = '#groups';
+        queued[1]();
+        expect(opened).to.equal(1);
+      } finally {
+        global.window = saved;
+      }
+    });
+
+    it('should give the password a panel of its own when its form was closed meanwhile', async () => {
+      // Written into the hidden panel, it was seen by nobody, and the card
+      // it queued opened at some later close (#164).
+      const { app, body, panel, give } = setup(async () => ({
+        generated: true,
+        password: 's3cret',
+      }));
+      let opened = 0;
+      expect(await give({}, () => opened++, false)).to.equal(true);
+      expect(panel.hidden).to.be.false;
+      expect(body.innerHTML).to.include('id="dc-generated-password"');
+      expect(
+        (app as unknown as { afterPanel: unknown[] }).afterPanel
+      ).to.have.length(0);
+      expect(opened).to.equal(0);
+    });
+
+    it('should say so when the server named no account to give one to', async () => {
+      const { asked, toast, give } = setup(async () => ({
+        generated: true,
+        password: 'x',
+      }));
+      expect(
+        await give(
+          {},
+          () => undefined,
+          true,
+          { ...users, password: 'userPassword' },
+          ''
+        )
+      ).to.equal(false);
+      expect(asked).to.deep.equal([]);
+      expect(toast.textContent).to.include('without a password');
+    });
+
+    it('should not be asked for when one was typed, and say when it fails', async () => {
+      const typed = setup(async () => ({ generated: true, password: 'x' }));
+      expect(
+        await typed.give({ userPassword: 'Typed-1!' }, () => undefined)
+      ).to.equal(false);
+      expect(typed.asked).to.deep.equal([]);
+      const refused = setup(async () => {
+        throw new Error('Forbidden');
+      });
+      expect(await refused.give({}, () => undefined)).to.equal(false);
+      expect(refused.toast.textContent).to.match(
+        /created, without a password: use Reset password on the card to give one$/
       );
     });
   });
@@ -9160,6 +9430,35 @@ describe('Directory console', () => {
         onSubmit: () => Promise.resolve(),
         onCancel: () => undefined,
       });
+
+    it('should say what an empty password does, on creating only', async () => {
+      // Left empty, it gave an account nobody could sign in to (#164).
+      const passworded: EntityDescriptor = {
+        ...users,
+        schema: {
+          attributes: {
+            ...usersSchema.attributes,
+            userPassword: { type: 'string', role: 'password' },
+          },
+        },
+      };
+      const render = async (entry?: Entry): Promise<string> => {
+        const container = stubContainer();
+        await new EntityForm({
+          entity: passworded,
+          entry,
+          translator: new Translator('en'),
+          pointerOptions: () => Promise.resolve([]),
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        }).render(container);
+        return container.innerHTML;
+      };
+      const hint =
+        'Leave empty to generate one: it is shown once the account is created';
+      expect(await render()).to.include(hint);
+      expect(await render({ uid: 'alice' })).to.not.include(hint);
+    });
 
     it('should hint a size in the console’s words, and no DN under a search', async () => {
       // "xGB, xMB, xKB" is a notation, not an example, and the members are

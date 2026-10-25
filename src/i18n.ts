@@ -157,6 +157,14 @@ const en: Catalogue = {
     'Only a domain an organization above this one links can be linked here',
   'form.notSize':
     'Expected a size such as 4 GB, 500 MB or 100 KB, or a number of bytes',
+  'form.passwordGenerated':
+    'Leave empty to generate one: it is shown once the account is created',
+  'create.noPassword':
+    '{name} created, without a password: use Reset password on the card to give one',
+  'import.noPassword.one':
+    '{count} account was created without a password: give it one from its card (Reset password)',
+  'import.noPassword.other':
+    '{count} accounts were created without a password: give each one from its card (Reset password)',
   'form.sizeHint': 'A size such as 4 GB, 500 MB or 100 KB',
   'form.pastDate': 'Expected a date not earlier than today',
   'form.true': 'Yes',
@@ -586,6 +594,14 @@ const fr: Catalogue = {
     'Seul un domaine lié par une organisation au-dessus de celle-ci peut être lié ici',
   'form.notSize':
     'Attendu : une taille telle que 4 GB, 500 MB ou 100 KB, ou un nombre d’octets',
+  'form.passwordGenerated':
+    'Laissez vide pour en générer un : il s’affichera une fois le compte créé',
+  'create.noPassword':
+    '{name} est dans l’annuaire, sans mot de passe : utilisez Réinitialiser le mot de passe sur la fiche pour en donner un',
+  'import.noPassword.one':
+    '{count} compte a été créé sans mot de passe : donnez-lui-en un depuis sa fiche (Réinitialiser le mot de passe)',
+  'import.noPassword.other':
+    '{count} comptes ont été créés sans mot de passe : donnez-en un à chacun depuis sa fiche (Réinitialiser le mot de passe)',
   'form.sizeHint': 'Une taille telle que 4 GB, 500 MB ou 100 KB',
   'form.pastDate': 'Attendu : aujourd’hui ou une date ultérieure',
   'form.true': 'Oui',
@@ -1008,6 +1024,12 @@ const mn: Catalogue = {
     'Энд зөвхөн үүнээс дээд байгууллагын холбосон домэйныг холбох боломжтой',
   'form.notSize':
     '4 GB, 500 MB, 100 KB гэх мэт хэмжээ, эсвэл байтын тоо оруулна уу',
+  'form.passwordGenerated':
+    'Хоосон орхивол нууц үг үүсгэнэ: бүртгэл үүссэний дараа харуулна',
+  'create.noPassword':
+    '{name} үүссэн, нууц үггүй: картаас «Нууц үг дахин тохируулах»-ыг ашиглана уу',
+  'import.noPassword':
+    '{count} бүртгэл нууц үггүй үүссэн: картаас нь нууц үг өгнө үү (Нууц үг дахин тохируулах)',
   'form.sizeHint': '4 GB, 500 MB, 100 KB гэх мэт хэмжээ',
   'form.pastDate': 'Өнөөдөр эсвэл түүнээс хойшх огноо оруулна уу',
   'form.true': 'Тийм',

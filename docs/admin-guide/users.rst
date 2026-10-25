@@ -58,12 +58,14 @@ With the default Twake schemas:
        :guilabel:`Zip code`, :guilabel:`Locality`
      - Contact details.
    * - :guilabel:`Password`
-     - The initial password. It is never shown again. It can be left empty
-       and one generated after the account is created (see
-       :ref:`reset-password`).
+     - The initial password. It is never shown again. Left empty, one is
+       generated once the account is created and shown in the panel, with
+       :guilabel:`Copy`, before the account's card opens; it cannot be read
+       again afterwards (see :ref:`reset-password`).
    * - :guilabel:`Password reset required`
      - :guilabel:`Yes` makes the user change their password at their next
-       sign-in.
+       sign-in. A generated password is to be changed unless this says
+       :guilabel:`No`.
    * - :guilabel:`Deletion date`
      - The date the account is due to be deleted; not earlier than today.
    * - *Mailbox Settings* section: :guilabel:`Mailbox size`,
