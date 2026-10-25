@@ -96,6 +96,12 @@ export interface DetailOptions {
   /** Open the change of state, which asks before writing anything */
   onStatus(): void;
   onResetPassword(): void;
+  /**
+   * Why Edit is not offered, said under the heading where it would be: an
+   * organization the caller administers is changed from above, reference
+   * data is kept outside the console
+   */
+  notice?: string;
   /** The entry waits in the transit branch, or is attached to nothing */
   inTransit?: boolean;
   /** Move it into an organization of the caller's, when they may */
@@ -202,6 +208,13 @@ export class EntityDetail {
           </div>
           <div class="dc-detail-actions">${this.actionsMarkup()}</div>
         </header>
+        ${
+          this.options.notice
+            ? `<p class="dc-muted dc-detail-notice" data-notice>${escapeHtml(
+                this.options.notice
+              )}</p>`
+            : ''
+        }
 
         <section class="dc-card">
           <h3>${escapeHtml(translator.t('detail.attributes'))}</h3>

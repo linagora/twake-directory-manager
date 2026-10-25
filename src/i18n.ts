@@ -300,6 +300,10 @@ const en: Catalogue = {
   'delete.done': 'Deleted',
   'delete.failed': '{name}: {error}',
 
+  'org.changedAbove':
+    '{name} is changed by the administrator above you; you manage what it contains',
+  'reference.readOnly':
+    'Reference data is kept outside the console: you can read it and use it in forms',
   'transit.branch': 'Transit',
   'transit.badge': 'In transit',
   'transit.claim': 'Claim…',
@@ -726,6 +730,10 @@ const fr: Catalogue = {
   'delete.done': 'Supprimé',
   'delete.failed': '{name} : {error}',
 
+  'org.changedAbove':
+    '{name} est modifiée par l’administrateur au-dessus de vous ; vous gérez ce qu’elle contient',
+  'reference.readOnly':
+    'Les référentiels sont tenus hors de la console : vous pouvez les consulter et les utiliser dans les formulaires',
   'transit.branch': 'Transit',
   'transit.badge': 'En transit',
   'transit.claim': 'Rattacher à…',
@@ -1117,6 +1125,10 @@ const mn: Catalogue = {
   'delete.done': 'Устгагдлаа',
   'delete.failed': '{name}: {error}',
 
+  'org.changedAbove':
+    '{name}-ийг таны дээд администратор өөрчилнө; та түүний доторхыг удирдана',
+  'reference.readOnly':
+    'Лавлах өгөгдлийг консолоос гадуур хөтөлдөг: та үзэж, маягтад ашиглаж болно',
   'transit.branch': 'Дамжуулалт',
   'transit.badge': 'Дамжуулалтад',
   'transit.claim': 'Авах…',

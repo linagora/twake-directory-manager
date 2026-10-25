@@ -1,4 +1,4 @@
-import { ConfirmDialog, LoginPage } from '../pages';
+import { LoginPage } from '../pages';
 import { ADMIN, ALICE, CAROL, ERIC, ORG, SOPHIE } from '../support/accounts';
 import { callApi } from '../support/api';
 import { HUMAN_RESOURCES, uniquePart } from '../support/directory';
@@ -6,9 +6,6 @@ import { expect, test } from '../support/fixtures';
 
 const ACTIVE =
   'cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com';
-
-/** What a refusal must never read like */
-const UNREADABLE = /Internal Server Error|check logs|^\s*\{|"error"/;
 
 test.describe('SCOPE scope banner and authorization', () => {
   test('SCOPE-01 a local administrator sees only their branch', async ({
@@ -83,7 +80,7 @@ test.describe('SCOPE scope banner and authorization', () => {
     ]);
   });
 
-  test('SCOPE-03 an organization is judged on its parent: editing Sales itself is refused', async ({
+  test('SCOPE-03 an organization is judged on its parent: Sales itself offers no Edit', async ({
     page,
     directory,
   }) => {
@@ -92,22 +89,19 @@ test.describe('SCOPE scope banner and authorization', () => {
     const sales = organizations.card;
     await expect(sales.heading).toHaveText('Sales');
 
-    // the button may be shown (documented): the server refuses
-    if ((await sales.action('Edit').count()) > 0) {
-      await sales.action('Edit').click();
-      const form = app.form();
-      await form.expectOpen('Edit — Sales');
-      await form.fill('Description', 'Changed by sophie');
-      await form.submit();
-      await expect(app.errorToast).toBeVisible();
-      await expect(app.errorToast).not.toHaveText(UNREADABLE);
-    }
+    // not offered, and said where it would be (#167)
+    await expect(sales.action('Edit')).toHaveCount(0);
+    await expect(sales.action('Delete')).toHaveCount(0);
+    await expect(page.locator('[data-notice]')).toHaveText(
+      'Sales is changed by the administrator above you; you manage what it contains'
+    );
+    await expect(sales.action('New organization here')).toBeVisible();
     expect(await directory.values(ORG.sales, 'description')).toEqual([
       'Sales department',
     ]);
   });
 
-  test('SCOPE-03 reference data changes are refused with the server reason', async ({
+  test('SCOPE-03 reference data offers no change, and says why', async ({
     page,
     directory,
   }) => {
@@ -116,41 +110,17 @@ test.describe('SCOPE scope banner and authorization', () => {
     const list = app.list();
     await expect(list.row(position.cn)).toBeVisible();
     await expect(list.newButton).toHaveCount(0);
+    // said once above the list, and on the card where Edit would be (#167)
+    const readOnly =
+      'Reference data is kept outside the console: you can read it and use it in forms';
+    await expect(page.locator('[data-read-only]')).toHaveText(readOnly);
     await list.open(position.cn);
     const entry = app.entry();
     await entry.expectName(position.cn);
-
-    if ((await entry.action('Delete').count()) > 0) {
-      await entry.perform('Delete');
-      await new ConfirmDialog(page).confirm();
-      await expect(app.errorToast).toBeVisible();
-      await expect(app.errorToast).not.toHaveText(UNREADABLE);
-    }
+    await expect(entry.action('Edit')).toHaveCount(0);
+    await expect(entry.action('Delete')).toHaveCount(0);
+    await expect(page.locator('[data-notice]')).toHaveText(readOnly);
     expect(await directory.exists(position.dn)).toBe(true);
-  });
-
-  test('SCOPE-03 deleting a reference entry still in use is refused readably', async ({
-    page,
-    directory,
-  }) => {
-    const app = await new LoginPage(page).loginAs(
-      SOPHIE,
-      'positions/Sales%20Manager'
-    );
-    const entry = app.entry();
-    await entry.expectName('Sales Manager');
-    if ((await entry.action('Delete').count()) > 0) {
-      await entry.perform('Delete');
-      await new ConfirmDialog(page).confirm();
-      await expect(app.errorToast).toBeVisible();
-      await expect(app.errorToast).not.toContainText(
-        'cn=Sales Manager,ou=positions'
-      );
-      await expect(app.errorToast).not.toContainText('(title)');
-    }
-    expect(
-      await directory.exists('cn=Sales Manager,ou=positions,dc=example,dc=com')
-    ).toBe(true);
   });
 
   test('SCOPE-03 the Department search offers no branch out of scope', async ({

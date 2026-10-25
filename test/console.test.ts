@@ -2199,6 +2199,32 @@ describe('Directory console', () => {
       transit,
     });
 
+    it('should say why the organization one administers offers no Edit', async () => {
+      // Edit was offered on Sales, to sophie, Sales' administrator, and Save
+      // refused: the server judges an organization by its parent (#167).
+      const own = await card(sales, localAdmin(sales));
+      expect(own).to.not.include('data-edit');
+      expect(own).to.include(
+        '<p class="dc-muted dc-detail-notice" data-notice>Sales is changed by the administrator above you; you manage what it contains</p>'
+      );
+      expect(own).to.include('New user here');
+      const below = await card(france, localAdmin(sales));
+      expect(below).to.include('data-edit');
+      expect(below).to.not.include('data-notice');
+      // The administrator above is offered it, and told nothing.
+      const above = await card(sales, null);
+      expect(above).to.include('data-edit');
+      expect(above).to.not.include('data-notice');
+      // Nor is the administrator of the top of the tree, which nobody above
+      // changes from the console: no Edit, and no one above to name.
+      const root = await card(
+        organizations.base,
+        localAdmin(organizations.base)
+      );
+      expect(root).to.not.include('data-edit');
+      expect(root).to.not.include('data-notice');
+    });
+
     it('should offer New user here where the caller creates, as the Overview does', async () => {
       expect(await card(france, localAdmin(sales))).to.include('New user here');
       expect(await card(france, null)).to.include('New group here');
@@ -2447,9 +2473,18 @@ describe('Directory console', () => {
           write: false,
           delete: false,
         });
+        // An organization is judged by its parent: Engineering is changed
+        // from above it, what it holds by its administrator (#167).
         expect(local.organizationRights(`ou=Engineering,${top}`)).to.deep.equal(
-          { write: true, delete: true }
+          { write: false, delete: false }
         );
+        expect(
+          local.organizationRights(`ou=Backend,ou=Engineering,${top}`)
+        ).to.deep.equal({ write: true, delete: true });
+        expect(local.organizationRights(`ou=Sales,${top}`)).to.deep.equal({
+          write: false,
+          delete: false,
+        });
         const admin = setup(
           {
             ...eric(),
@@ -2461,6 +2496,45 @@ describe('Directory console', () => {
           write: true,
           delete: true,
         });
+        // A branch naming the organization itself must grant it too.
+        const narrowed = setup(
+          {
+            ...eric(),
+            branches: [
+              { dn: top, read: true, write: true, delete: true },
+              {
+                dn: `ou=Engineering,${top}`,
+                read: true,
+                write: true,
+                delete: false,
+              },
+            ],
+          },
+          []
+        ).app;
+        expect(
+          narrowed.organizationRights(`ou=Engineering,${top}`)
+        ).to.deep.equal({ write: true, delete: false });
+        // The most specific branch holding the parent judges, as the
+        // server's does; and Delete needs every branch below as well.
+        const backend = `ou=Backend,ou=Engineering,${top}`;
+        expect(narrowed.organizationRights(backend)).to.deep.equal({
+          write: true,
+          delete: false,
+        });
+        const below = setup(
+          {
+            ...eric(),
+            branches: [
+              { dn: top, read: true, write: true, delete: true },
+              { dn: backend, read: true, write: true, delete: false },
+            ],
+          },
+          []
+        ).app;
+        expect(below.organizationRights(`ou=Engineering,${top}`)).to.deep.equal(
+          { write: true, delete: false }
+        );
       });
     });
   });
@@ -4578,6 +4652,113 @@ describe('Directory console', () => {
         await views.renderOrganizations(main, 0);
         expect(asked).to.include.members(['get', 'top']);
       }
+    });
+  });
+
+  describe('reference data, for a local administrator', () => {
+    const base = 'ou=positions,dc=example,dc=com';
+    const positions: EntityDescriptor = {
+      key: 'positions',
+      pluralName: 'positions',
+      singularName: 'position',
+      mainAttribute: 'cn',
+      base,
+      schema: { attributes: { cn: { type: 'string', role: 'identifier' } } },
+      endpoint: '/api/v1/ldap/positions',
+      kind: 'flat',
+    };
+    const scoped = (create: boolean): Scope => ({
+      user: 'uid=sophie.martin,ou=users,dc=example,dc=com',
+      unrestricted: false,
+      described: true,
+      branches: [
+        {
+          dn: 'ou=Sales,dc=example,dc=com',
+          read: true,
+          write: true,
+          delete: true,
+        },
+      ],
+      entities: [{ name: 'positions', base, create }],
+    });
+    /** The list and the card of a position, as this scope sees them */
+    const views = async (
+      scope: Scope,
+      failed = false,
+      entities: EntityDescriptor[] = [users, positions]
+    ): Promise<{ list: string; card: string }> => {
+      const holder = stubContainer();
+      const detail = stubContainer();
+      const main = {
+        innerHTML: '',
+        querySelector: (selector: string): unknown =>
+          ({ '[data-list]': holder, '[data-detail]': detail })[selector] ??
+          null,
+      };
+      const app = consoleIn({ '[data-main]': main });
+      Object.assign(app as unknown as object, {
+        scope: failed ? null : scope,
+        scopeError: failed ? 'Service Unavailable' : undefined,
+        entities,
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        listBounded: async () => ({
+          entries: { Administrator: { cn: 'Administrator' } },
+          truncated: false,
+        }),
+        get: async () => ({
+          dn: `cn=Administrator,${base}`,
+          cn: 'Administrator',
+        }),
+        pointerOptions: async () => [],
+      });
+      const app2 = app as unknown as {
+        renderList(main: unknown, entity: EntityDescriptor): Promise<void>;
+        renderDetail(
+          main: unknown,
+          entity: EntityDescriptor,
+          id: string,
+          generation: number
+        ): Promise<void>;
+      };
+      await app2.renderList(main, positions);
+      const list = main.innerHTML + holder.innerHTML;
+      await app2.renderDetail(main, positions, 'Administrator', 0);
+      return { list, card: detail.innerHTML };
+    };
+    const readOnly =
+      'Reference data is kept outside the console: you can read it and use it in forms';
+
+    it('should offer no Edit nor Delete the server would refuse, and say why', async () => {
+      // Edit was offered on a position, to the administrator of Sales, and
+      // Save refused: reference data lies outside every department (#167).
+      const { list, card } = await views(scoped(false));
+      expect(list).to.include(readOnly);
+      expect(card).to.include(readOnly);
+      expect(card).to.not.include('data-edit');
+      expect(card).to.not.include('data-delete');
+    });
+
+    it('should withhold them in a directory with no tree, without calling it reference data', async () => {
+      // Every collection is put forward there: the line would be untrue.
+      const { list, card } = await views(scoped(false), false, [positions]);
+      expect(card).to.not.include('data-edit');
+      expect(card).to.not.include(readOnly);
+      expect(list).to.not.include(readOnly);
+    });
+
+    it('should give no reason when the scope could not be read', async () => {
+      // The banner says the scope is unavailable; every action is withheld
+      // already.
+      const { list } = await views(scoped(false), true);
+      expect(list).to.not.include(readOnly);
+    });
+
+    it('should offer them to whoever the scope lets write them', async () => {
+      const { list, card } = await views(scoped(true));
+      expect(list).to.not.include(readOnly);
+      expect(card).to.include('data-edit');
+      expect(card).to.not.include(readOnly);
     });
   });
 

@@ -18,6 +18,10 @@ Built on ldap-rest 1.0.1.
 - Organizations opens on the top of the tree, its card shown and its address
   named, and an organization's managers and local administrators are links
   to their cards (#173)
+- Edit and Delete are offered only where the server allows them: an
+  organization is judged by its parent, as the server does, and reference
+  data kept outside the console offers neither; a line says why where they
+  would be (#167)
 
 ### Bug Fixes
 

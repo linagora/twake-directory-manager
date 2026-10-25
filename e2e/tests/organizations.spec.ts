@@ -3,9 +3,6 @@ import { ADMIN, ALICE, ORG, SOPHIE } from '../support/accounts';
 import { uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
-/** What a refusal must never read like */
-const UNREADABLE = /Internal Server Error|check logs|^\s*\{|"error"/;
-
 test.describe('ORG organizations', () => {
   test('ORG-01 browse the tree and open a card', async ({ page }) => {
     const app = await new LoginPage(page).loginAs(ADMIN);
@@ -288,15 +285,13 @@ test.describe('ORG organizations', () => {
     await app.expectToast('Deleted');
     await expect(organizations.label(spain)).toHaveCount(0);
 
+    // its own organization is changed from above it (#167)
     await organizations.select(tenant.org.name);
-    if ((await organizations.card.action('Edit').count()) > 0) {
-      await organizations.card.action('Edit').click();
-      await form.expectOpen(`Edit — ${tenant.org.name}`);
-      await form.fill('Description', 'Changed by its administrator');
-      await form.submit();
-      await expect(app.errorToast).toBeVisible();
-      await expect(app.errorToast).not.toHaveText(UNREADABLE);
-    }
+    await expect(organizations.card.action('Edit')).toHaveCount(0);
+    await expect(organizations.card.action('Delete')).toHaveCount(0);
+    await expect(page.locator('[data-notice]')).toHaveText(
+      `${tenant.org.name} is changed by the administrator above you; you manage what it contains`
+    );
     expect(await directory.values(tenant.org.dn, 'description')).toEqual([]);
   });
 
