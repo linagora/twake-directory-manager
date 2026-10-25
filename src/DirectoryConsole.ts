@@ -1670,6 +1670,18 @@ export class DirectoryConsole {
     const readOnly = this.readsReferenceOnly(entity);
     const canWrite = !readOnly && (transit.rights?.write ?? this.canWrite());
     const groups = relations?.groups && entry.dn ? relations.items : undefined;
+    // A group's members, managed from its card as an account's groups are
+    // from the account's: the whole form was the only way to change one.
+    // Only a group has the routes that add and remove one member: a flat
+    // entity's members, a team mailbox's, are saved with the whole entry.
+    const members =
+      relations &&
+      !relations.groups &&
+      entity.kind === 'group' &&
+      this.writes(entity, entry)
+        ? relations
+        : undefined;
+    if (members) for (const item of members.items) item.removable = true;
     const joins =
       !!groups &&
       this.writes(entity, entry) &&
@@ -1718,7 +1730,21 @@ export class DirectoryConsole {
       onLeaveGroup: groups
         ? (dn: string): Promise<void> =>
             this.leaveGroup(entry, detail.heading(), dn)
-        : undefined,
+        : members
+          ? (dn: string): Promise<void> =>
+              this.removeMember(entity, id, detail.heading(), dn)
+          : undefined,
+      onAddMembers:
+        members && this.api.memberSearch('members', this.entities)
+          ? (): void =>
+              this.addMembers(
+                entity,
+                entry,
+                id,
+                detail.heading(),
+                members.items.map(item => item.id)
+              )
+          : undefined,
     });
     detail.render(
       main.querySelector<HTMLElement>('[data-detail]') as HTMLElement
@@ -1775,10 +1801,14 @@ export class DirectoryConsole {
           list = await this.api
             .memberships(entry.dn, this.entities)
             .catch(() => []);
-        const items = list.map(dn => ({
-          id: String(dn),
-          label: rdnValue(String(dn)),
-        }));
+        // An empty value stands for no member in some directories: it is
+        // neither counted nor offered a ×, as the deletion's count skips it.
+        const items = list
+          .filter(dn => String(dn).trim())
+          .map(dn => ({
+            id: String(dn),
+            label: rdnValue(String(dn)),
+          }));
         if (role === 'members')
           return {
             title: attributeLabel(name, attr, this.translator.language),
@@ -1976,6 +2006,167 @@ export class DirectoryConsole {
       onCancel: (): void => this.closePanel(),
     });
     this.openPanel(t('groups.title', { name }), body => picker.render(body));
+  }
+
+  /**
+   * Add members to a group, chosen in a panel as an account's groups are:
+   * found by name, address or employee ID, added in one request.
+   *
+   * A team mailbox the server keeps to its domain is offered the accounts
+   * of that domain only, as in the form. A DN typed whole, or an outside
+   * address, is still the form's to add.
+   *
+   * @param entity the group's entity
+   * @param entry the group
+   * @param id the group
+   * @param name what its card is headed with
+   * @param held DN of its members, not offered again
+   */
+  private addMembers(
+    entity: EntityDescriptor,
+    entry: Entry,
+    id: string,
+    name: string,
+    held: string[]
+  ): void {
+    // Nor the group itself.
+    const holds = new Set(
+      [...held, String(entry.dn ?? '')].map(dn => comparableDn(dn))
+    );
+    const search = this.api.memberSearch(
+      'members',
+      this.entities,
+      dn => !holds.has(comparableDn(dn))
+    );
+    if (!search) return;
+    const domain = this.teamMailboxDomain(entity, entry);
+    let leftOut = false;
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    const picker = new GroupPicker({
+      translator: this.translator,
+      words: {
+        field: t('members.field'),
+        hint: t('form.searchMember', { count: SEARCH_MINIMUM }),
+      },
+      search: async (query: string): Promise<GroupChoice[]> => {
+        const found = (await search(query)).filter(
+          candidate => !holds.has(comparableDn(candidate.dn))
+        );
+        const kept = found.filter(
+          candidate =>
+            !domain ||
+            candidate.mail
+              ?.slice(candidate.mail.lastIndexOf('@') + 1)
+              .toLowerCase() === domain
+        );
+        leftOut = kept.length < found.length;
+        return kept.map(candidate => ({
+          dn: candidate.dn,
+          name: rdnValue(candidate.dn),
+          label: candidate.label,
+        }));
+      },
+      // An address typed at another domain is said to be refused as well,
+      // as the form says it: the search found no account of it to leave out.
+      emptyNote: (query: string): string | undefined => {
+        if (!domain) return undefined;
+        const at = query.lastIndexOf('@');
+        const typed =
+          at > 0
+            ? query
+                .slice(at + 1)
+                .trim()
+                .toLowerCase()
+            : undefined;
+        return leftOut || (typed && !domain.startsWith(typed))
+          ? t('form.otherDomain', { domain })
+          : undefined;
+      },
+      onAdd: async (
+        chosen: GroupChoice[]
+      ): Promise<{ left: GroupChoice[]; error?: string }> => {
+        try {
+          await this.api.addMembers(
+            entity,
+            id,
+            chosen.map(member => member.dn)
+          );
+        } catch (err) {
+          return {
+            left: chosen,
+            error: this.refusal(err, entity, name).message,
+          };
+        }
+        this.toast(
+          t('members.added', {
+            count: chosen.length,
+            names: chosen.map(member => member.name).join(', '),
+            group: name,
+          })
+        );
+        this.closePanel(true);
+        await this.refreshCard('[data-add-members]');
+        return { left: [] };
+      },
+      onCancel: (): void => this.closePanel(),
+    });
+    this.openPanel(t('members.title', { group: name }), body =>
+      picker.render(body)
+    );
+  }
+
+  /**
+   * The domain a group keeps its members to: a team mailbox's, when the
+   * server keeps them to theirs. What `EntityForm` reads from the form, read
+   * from the group as stored.
+   */
+  private teamMailboxDomain(
+    entity: EntityDescriptor,
+    entry: Entry
+  ): string | undefined {
+    if (!this.api.teamMailboxesKeepDomain) return undefined;
+    const type = roleAttribute(entity.schema, 'mailboxType');
+    const mail = roleAttribute(entity.schema, 'primaryEmail');
+    if (!type || !mail) return undefined;
+    const types = [entryValue(entry, type) ?? []].flat().map(String);
+    if (!types.some(dn => /^\s*cn=teamMailbox\s*,/i.test(dn))) return undefined;
+    const address = String([entryValue(entry, mail) ?? []].flat()[0] ?? '');
+    const at = address.lastIndexOf('@');
+    return at > 0
+      ? address
+          .slice(at + 1)
+          .trim()
+          .toLowerCase()
+      : undefined;
+  }
+
+  /**
+   * Take a member out of a group, from the × on the member: one click, as
+   * the × of a group on an account's card.
+   *
+   * @param entity the group's entity
+   * @param id the group
+   * @param name what its card is headed with
+   * @param dn DN of the member
+   */
+  private async removeMember(
+    entity: EntityDescriptor,
+    id: string,
+    name: string,
+    dn: string
+  ): Promise<void> {
+    const member = rdnValue(dn);
+    try {
+      await this.api.removeMember(entity, id, dn);
+    } catch (err) {
+      this.toast(this.refusal(err, entity, name).message, true);
+      return;
+    }
+    this.toast(
+      this.translator.t('groups.removed', { name: member, group: name })
+    );
+    await this.refreshCard('[data-add-members]');
   }
 
   /**

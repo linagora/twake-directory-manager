@@ -1,4 +1,4 @@
-import { ConfirmDialog, LoginPage } from '../pages';
+import { AddToGroupsDialog, ConfirmDialog, LoginPage } from '../pages';
 import {
   ADMIN,
   CAROL,
@@ -28,17 +28,13 @@ test.describe('GROUP groups', () => {
     await expect(card.detail('Department path').getByRole('link')).toHaveText(
       'Sales'
     );
-    await expect(card.relatedItems('Members')).toHaveText([
+    await expect(card.relatedLinks('Members')).toHaveText([
       'sophie.martin',
       'alice',
       'bob',
     ]);
 
-    await card
-      .relatedItems('Members')
-      .filter({ hasText: 'bob' })
-      .getByRole('link')
-      .click();
+    await card.relatedLinks('Members').filter({ hasText: 'bob' }).click();
     await app.entry().expectName('Bob Schneider');
   });
 
@@ -99,7 +95,7 @@ test.describe('GROUP groups', () => {
     ).toHaveAttribute('title', CAROL.dn);
     await expect(await form.field('Members')).toHaveAttribute(
       'placeholder',
-      'Type 3 characters of an email address, or a full DN'
+      'Type 3 characters of a name, an email address or an employee ID'
     );
 
     await form.type('Members', 'dave@');
@@ -133,7 +129,7 @@ test.describe('GROUP groups', () => {
     await form.removeToken('Members', 'frank');
     await form.submit();
     await app.expectToast('Saved');
-    await expect(card.relatedItems('Members')).toHaveText([
+    await expect(card.relatedLinks('Members')).toHaveText([
       'carol',
       'dave',
       'erin',
@@ -142,11 +138,7 @@ test.describe('GROUP groups', () => {
       [CAROL.dn, DAVE.dn, ERIN.dn].sort()
     );
 
-    await card
-      .relatedItems('Members')
-      .filter({ hasText: 'dave' })
-      .getByRole('link')
-      .click();
+    await card.relatedLinks('Members').filter({ hasText: 'dave' }).click();
     await app.entry().expectName('Dave Okafor');
     await expect(
       app.entry().relatedLinks('Groups').filter({ hasText: group.cn })
@@ -343,5 +335,51 @@ test.describe('GROUP groups', () => {
         form.options('Members').filter({ hasText: 'erin@example.com' })
       ).toBeVisible();
     }
+  });
+
+  test('GROUP-09 members managed from the group card', async ({
+    page,
+    directory,
+  }) => {
+    // The whole form was the only way to add or remove one (#168)
+    const leaving = await directory.createUser();
+    const staying = await directory.createUser();
+    const joining = await directory.createUser();
+    const group = await directory.createGroup({ members: [leaving, staying] });
+    const app = await new LoginPage(page).loginAs(ADMIN, `groups/${group.cn}`);
+    const card = app.entry();
+    const members = card.related('Members');
+    await expect(members.getByRole('heading')).toHaveText('Members (2)');
+
+    // the × takes a member out at once
+    await members
+      .getByRole('button', { name: `Remove ${leaving.uid} from ${group.cn}` })
+      .click();
+    await app.expectToast(`${leaving.uid} removed from ${group.cn}`);
+    await expect(members.getByRole('heading')).toHaveText('Members (1)');
+    expect(await directory.values(group.dn, 'member')).not.toContain(
+      leaving.dn
+    );
+
+    // Add members… finds people by name
+    await members.getByRole('button', { name: 'Add members…' }).click();
+    const dialog = new AddToGroupsDialog(page);
+    await dialog.expectOpen(`Add members to ${group.cn}`);
+    await expect(dialog.hint).toHaveText(
+      'Type 3 characters of a name, an email address or an employee ID'
+    );
+    await dialog.search.fill(joining.displayName.split(' ')[1]);
+    await dialog.options.filter({ hasText: joining.displayName }).click();
+    await dialog.addButton.click();
+    await app.expectToast(`${joining.uid} added to ${group.cn}`);
+    await expect(members.getByRole('heading')).toHaveText('Members (2)');
+    await expect(card.relatedLinks('Members')).toContainText([joining.uid]);
+    expect(await directory.values(group.dn, 'member')).toContain(joining.dn);
+    // and the new member's card lists the group
+    await card.relatedLinks('Members').filter({ hasText: joining.uid }).click();
+    await expect(app.entry().heading).toContainText(joining.displayName);
+    await expect(
+      app.entry().relatedLinks('Groups').filter({ hasText: group.cn })
+    ).toBeVisible();
   });
 });

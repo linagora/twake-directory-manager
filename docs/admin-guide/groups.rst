@@ -76,7 +76,19 @@ Members are designated by their **directory name** (DN), such as
 ``uid=`` and followed by the users branch of the directory. The operations
 team can confirm the exact form in use.
 
-To add or remove members:
+The group’s card counts its members. If you may change the group, it offers:
+
+- a :guilabel:`×` after each member, which takes them out of the group at
+  once;
+- :guilabel:`Add members…`, which opens a search: type 3 characters of a
+  name, an email address or an employee ID, choose the people found, then
+  click :guilabel:`Add`. Those already in the group are not offered.
+
+A group of type :guilabel:`Shared mailbox` takes the accounts of its own
+domain only: the search leaves out the others, and says why when it then
+offers nobody, as it does for an address typed at another domain.
+
+Members can also be changed in the whole form:
 
 #. Open the group’s card and click :guilabel:`Edit`.
 #. In the :guilabel:`Members` field:

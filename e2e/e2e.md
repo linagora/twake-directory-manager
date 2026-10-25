@@ -86,6 +86,7 @@ Conventions).
 - [x] GROUP-06 (P2) Owners: chosen by search, saved, named on the card — `groups.spec.ts`
 - [x] GROUP-07 (P2) Unknown member: refused by name, external address — `groups.spec.ts` (follows `features.externalUsersInGroups` of `/api/v1/config`)
 - [x] GROUP-08 (P3) Shared mailbox's member search — `groups.spec.ts` (follows `features.james`)
+- [x] GROUP-09 (P2) Members added and removed from the group card — `groups.spec.ts`
 
 ## Organizations
 

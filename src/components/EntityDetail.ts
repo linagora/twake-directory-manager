@@ -129,6 +129,8 @@ export interface DetailOptions {
     truncated?: boolean;
     /** How many it left out, when it counted them */
     more?: number;
+    /** An account's groups, rather than a group's members */
+    groups?: boolean;
   };
   /**
    * The address of a related entry's card, from its DN: none for an entry
@@ -137,9 +139,11 @@ export interface DetailOptions {
   relationHref?(dn: string): string | undefined;
   /** Add the account to groups, when the caller may write it */
   onAddToGroups?(): void;
+  /** Add members to the group, when the caller may write it */
+  onAddMembers?(): void;
   /**
-   * Take the account out of one of its groups, offered where `removable`;
-   * settled once the server has answered
+   * Take the account out of one of its groups, or a member out of the
+   * group, offered where `removable`; settled once the server has answered
    */
   onLeaveGroup?(id: string): Promise<void> | void;
   /**
@@ -537,18 +541,30 @@ export class EntityDetail {
    * take the account out of, where it took a trip to each group's form.
    */
   private relationsMarkup(): string {
-    const { relations, translator, onAddToGroups } = this.options;
+    const { relations, translator, onAddToGroups, onAddMembers } = this.options;
     if (!relations) return '';
+    // A group's members are counted, as its card is opened to manage them.
+    const counted =
+      relations.more !== undefined
+        ? String(relations.items.length + relations.more)
+        : `${relations.items.length}${relations.truncated ? '+' : ''}`;
+    const title = relations.groups
+      ? relations.title
+      : `${relations.title} (${counted})`;
     return `
       <section class="dc-card">
         <div class="dc-card-heading">
-          <h3>${escapeHtml(relations.title)}</h3>
+          <h3>${escapeHtml(title)}</h3>
           ${
-            onAddToGroups
+            relations.groups && onAddToGroups
               ? `<button type="button" class="dc-button" data-add-groups>${escapeHtml(
                   translator.t('groups.add')
                 )}</button>`
-              : ''
+              : !relations.groups && onAddMembers
+                ? `<button type="button" class="dc-button" data-add-members>${escapeHtml(
+                    translator.t('members.add')
+                  )}</button>`
+                : ''
           }
         </div>
         ${
@@ -582,7 +598,12 @@ export class EntityDetail {
         ? `<button type="button" class="dc-relation-remove" data-leave="${escapeHtml(
             item.id
           )}" aria-label="${escapeHtml(
-            translator.t('groups.remove', { group: item.label })
+            this.options.relations?.groups
+              ? translator.t('groups.remove', { group: item.label })
+              : translator.t('members.remove', {
+                  member: item.label,
+                  group: this.naming().title,
+                })
           )}">×</button>`
         : ''
     }</li>`;
@@ -674,6 +695,9 @@ export class EntityDetail {
     container
       .querySelector('[data-add-groups]')
       ?.addEventListener('click', () => this.options.onAddToGroups?.());
+    container
+      .querySelector('[data-add-members]')
+      ?.addEventListener('click', () => this.options.onAddMembers?.());
     for (const button of Array.from(
       container.querySelectorAll<HTMLElement>('[data-leave]')
     )) {

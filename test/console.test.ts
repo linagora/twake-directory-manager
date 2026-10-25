@@ -4977,6 +4977,179 @@ describe('Directory console', () => {
     });
   });
 
+  describe('a group’s members on its card', () => {
+    const bob = 'uid=bob,ou=users,dc=example,dc=com';
+    const staff = 'cn=staff,ou=groups,dc=example,dc=com';
+    /** The card of a group of one member, as this scope sees it */
+    const shown = async (scope: Scope | null, member: string[] = [bob]) => {
+      const detail = stubContainer();
+      const removed: unknown[][] = [];
+      const main = {
+        innerHTML: '',
+        querySelector: (selector: string): unknown =>
+          selector === '[data-detail]' ? detail : null,
+      };
+      const app = consoleIn({ '[data-main]': main });
+      Object.assign(app as unknown as object, {
+        scope,
+        entities: [users, groups],
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        get: async () => ({ dn: staff, cn: 'staff', member }),
+        pointerOptions: async () => [],
+        memberSearch: () => async () => [],
+        removeMember: async (...args: unknown[]) => {
+          removed.push(args);
+        },
+      });
+      const views = app as unknown as {
+        renderDetail(
+          main: unknown,
+          entity: EntityDescriptor,
+          id: string,
+          generation: number
+        ): Promise<void>;
+        removeMember(
+          entity: EntityDescriptor,
+          id: string,
+          name: string,
+          dn: string
+        ): Promise<void>;
+        renderMain(): Promise<void>;
+      };
+      views.renderMain = async () => undefined;
+      await views.renderDetail(main, groups, 'staff', 0);
+      return { html: detail.innerHTML, views, removed };
+    };
+
+    it('should offer the ×s and Add members… to whoever writes the group only', async () => {
+      // Read-only, as the server judges it: neither is offered (#168).
+      const readOnly: Scope = {
+        user: 'uid=alice,ou=users,dc=example,dc=com',
+        unrestricted: false,
+        described: true,
+        branches: [
+          { dn: 'ou=groups,dc=example,dc=com', read: true, write: false },
+        ],
+        entities: [],
+      };
+      const read = await shown(readOnly);
+      // The same branch written: the right is what decides.
+      const writer = await shown({
+        ...readOnly,
+        branches: [
+          { dn: 'ou=groups,dc=example,dc=com', read: true, write: true },
+        ],
+      });
+      expect(writer.html).to.include('data-add-members');
+      expect(read.html).to.match(/<h3>[^<]+ \(1\)<\/h3>/);
+      expect(read.html).to.not.include('data-add-members');
+      expect(read.html).to.not.include('dc-relation-remove');
+      const written = await shown(null);
+      expect(written.html).to.include('data-add-members');
+      expect(written.html).to.include('aria-label="Remove bob from staff"');
+      // The × sends one removal, the group by its id, the member by its DN.
+      await written.views.removeMember(groups, 'staff', 'staff', bob);
+      expect(written.removed).to.deep.equal([[groups, 'staff', bob]]);
+    });
+
+    it('should neither count nor offer to remove the empty member', async () => {
+      // groupOfNames needs one: ldap-rest writes the empty DN for none.
+      const { html } = await shown(null, ['', bob]);
+      expect(html).to.match(/<h3>[^<]+ \(1\)<\/h3>/);
+      expect(html.match(/dc-relation-remove/g) ?? []).to.have.length(1);
+    });
+
+    it('should say why a shared mailbox’s search offers nobody', async () => {
+      // It takes accounts of its domain: one found elsewhere is left out,
+      // and an address typed at another domain will be refused alike.
+      const app = consoleIn({});
+      Object.assign(app as unknown as object, {
+        entities: [users, groups],
+        openPanel: (_title: string, build: (body: unknown) => void) =>
+          build(stubContainer()),
+        teamMailboxDomain: () => 'example.com',
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        memberSearch: () => async (query: string) =>
+          query === 'carol'
+            ? [
+                {
+                  dn: 'uid=carol,ou=users,dc=example,dc=com',
+                  mail: 'carol@other.org',
+                },
+              ]
+            : [],
+      });
+      let picker: {
+        options: {
+          search(query: string): Promise<unknown[]>;
+          emptyNote(query: string): string | undefined;
+        };
+      } = undefined as never;
+      const original = GroupPicker.prototype.render;
+      GroupPicker.prototype.render = function (this: GroupPicker) {
+        picker = this as unknown as typeof picker;
+      };
+      try {
+        (
+          app as unknown as {
+            addMembers(
+              entity: EntityDescriptor,
+              entry: Entry,
+              id: string,
+              name: string,
+              held: string[]
+            ): void;
+          }
+        ).addMembers(groups, { dn: staff }, 'staff', 'staff', []);
+      } finally {
+        GroupPicker.prototype.render = original;
+      }
+      const note =
+        'A shared mailbox at example.com only takes accounts of example.com';
+      expect(await picker.options.search('dave')).to.deep.equal([]);
+      expect(picker.options.emptyNote('dave')).to.equal(undefined);
+      expect(picker.options.emptyNote('dave@exam')).to.equal(undefined);
+      expect(picker.options.emptyNote('dave@other.org')).to.equal(note);
+      expect(await picker.options.search('carol')).to.deep.equal([]);
+      expect(picker.options.emptyNote('carol')).to.equal(note);
+    });
+
+    it('should leave a flat entity’s members to its form', async () => {
+      // A team mailbox has no route for one member: saved whole.
+      const mailboxes: EntityDescriptor = { ...groups, kind: 'flat' };
+      const detail = stubContainer();
+      const main = {
+        innerHTML: '',
+        querySelector: (selector: string): unknown =>
+          selector === '[data-detail]' ? detail : null,
+      };
+      const app = consoleIn({ '[data-main]': main });
+      Object.assign(app as unknown as object, {
+        scope: null,
+        entities: [users, mailboxes],
+      });
+      Object.assign((app as unknown as { api: object }).api, {
+        get: async () => ({ dn: staff, cn: 'staff', member: [bob] }),
+        pointerOptions: async () => [],
+        memberSearch: () => async () => [],
+      });
+      await (
+        app as unknown as {
+          renderDetail(
+            main: unknown,
+            entity: EntityDescriptor,
+            id: string,
+            generation: number
+          ): Promise<void>;
+        }
+      ).renderDetail(main, mailboxes, 'staff', 0);
+      expect(detail.innerHTML).to.not.include('data-add-members');
+      expect(detail.innerHTML).to.not.include('dc-relation-remove');
+    });
+  });
+
   describe('the overview, in names', () => {
     const admin = 'uid=admin,ou=users,dc=example,dc=com';
     const alice = 'uid=alice,ou=users,dc=example,dc=com';
@@ -9836,7 +10009,10 @@ describe('Directory console', () => {
           ]);
         });
         expect(container.innerHTML).to.include('data-picker="member"');
-        expect(container.innerHTML).to.include('of an email address');
+        // Found by name and employee ID as well, as the placeholder now says.
+        expect(container.innerHTML).to.include(
+          'of a name, an email address or an employee ID'
+        );
 
         input.value = 'jane@exa';
         input.fire('input');
@@ -11490,6 +11666,50 @@ describe('Directory console', () => {
           /<a href="#&#x2F;users&#x2F;sophie.martin" class="dc-link" data-relation="[^"]+" title="[^"]+">sophie.martin<\/a>/g
         )
       ).to.have.length(2);
+    });
+
+    it('should count a group’s members and let its writer manage them there', () => {
+      // Members were chips with no count and no action: the whole form was
+      // the only way to add or remove one (#168).
+      const card = (manage: boolean) => {
+        const container = stubContainer();
+        new EntityDetail({
+          entity: groups,
+          entry: {
+            cn: 'sales-team',
+            member: ['uid=bob,ou=users,dc=example,dc=com'],
+          },
+          translator: new Translator('en'),
+          canWrite: manage,
+          canDelete: false,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          onStatus: () => undefined,
+          onResetPassword: () => undefined,
+          relations: {
+            title: 'Members',
+            attribute: 'member',
+            items: [
+              {
+                id: 'uid=bob,ou=users,dc=example,dc=com',
+                label: 'bob',
+                removable: manage,
+              },
+            ],
+          },
+          onAddMembers: manage ? () => undefined : undefined,
+          onLeaveGroup: manage ? () => undefined : undefined,
+        }).render(container);
+        return container.innerHTML;
+      };
+      const managed = card(true);
+      expect(managed).to.include('<h3>Members (1)</h3>');
+      expect(managed).to.include('data-add-members>Add members…</button>');
+      expect(managed).to.include('aria-label="Remove bob from sales-team"');
+      const read = card(false);
+      expect(read).to.include('<h3>Members (1)</h3>');
+      expect(read).to.not.include('data-add-members');
+      expect(read).to.not.include('dc-relation-remove');
     });
 
     it('should name the owners of a group and lead to them', () => {
