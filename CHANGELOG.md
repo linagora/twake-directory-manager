@@ -8,6 +8,8 @@ Built on ldap-rest 1.0.1.
 
 - The French password policy labels and hints use the typographic apostrophe,
   as the rest of the console does (#179)
+- A mailbox size reads the interface's way on the account card and in the
+  lists: _1,07 Go_ in French, not _1.07 GB_ (#178)
 
 ## v0.11.0 (2026-10-23)
 

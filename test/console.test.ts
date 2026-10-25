@@ -7683,13 +7683,45 @@ describe('Directory console', () => {
         exact: false,
       });
       expect(readableByteSize('1999999999999999')).to.deep.equal({
-        text: '2000 TB',
+        text: '2,000 TB',
         exact: false,
       });
       expect(readableByteSize('lots')).to.deep.equal({
         text: 'lots',
         exact: true,
       });
+    });
+
+    it("should write a size on the card the reader's way", () => {
+      // French writes 1,07 Go: a decimal comma, and octets.
+      expect(readableByteSize('1073741824', 'fr')).to.deep.equal({
+        text: '1,07 Go',
+        exact: false,
+      });
+      expect(readableByteSize('4500000000', 'fr-FR')).to.deep.equal({
+        text: '4,5 Go',
+        exact: true,
+      });
+      expect(readableByteSize('999', 'fr')).to.deep.equal({
+        text: '999 o',
+        exact: true,
+      });
+      expect(readableByteSize('lots', 'fr')).to.deep.equal({
+        text: 'lots',
+        exact: true,
+      });
+      // A language without symbols of its own keeps the English ones.
+      expect(readableByteSize('15728640', 'mn').text).to.equal('15.7 MB');
+      // So do the lists, which show what a unit says exactly, and the digits
+      // of what none does.
+      const size = { type: 'number', normalize: 'byteSize' } as const;
+      expect(displayValue(size, '4500000000', undefined, 'fr')).to.equal(
+        '4,5 Go'
+      );
+      expect(displayValue(size, '4500000000')).to.equal('4.5 GB');
+      expect(displayValue(size, '1073741824', undefined, 'fr')).to.equal(
+        '1073741824'
+      );
     });
   });
 
