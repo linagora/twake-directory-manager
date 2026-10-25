@@ -782,6 +782,10 @@ export class DirectoryConsole {
         <div class="dc-content">
           <header class="dc-header">${this.scopeMarkup()}${this.logoutMarkup()}</header>
           <main class="dc-main" data-main></main>
+          <a class="dc-powered" href="https://linagora.com" target="_blank"
+            rel="noopener noreferrer">
+            <img src="${LINAGORA_LOGO}" alt="LINAGORA" width="100" height="21" />
+          </a>
         </div>
         <div class="dc-panel" data-panel hidden>
           <div class="dc-panel-inner" data-panel-dialog role="dialog"
@@ -797,10 +801,6 @@ export class DirectoryConsole {
         <div data-toast-region role="status" aria-live="polite" aria-atomic="true">
           <div class="dc-toast" data-toast hidden></div>
         </div>
-        <a class="dc-powered" href="https://linagora.com" target="_blank"
-          rel="noopener noreferrer">
-          <img src="${LINAGORA_LOGO}" alt="LINAGORA" width="100" height="21" />
-        </a>
       </div>`;
 
     for (const button of Array.from(

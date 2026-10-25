@@ -16,6 +16,8 @@ Built on ldap-rest 1.0.1.
 - A new password policy under a name already taken says so under Name, in
   the interface's language, instead of a toast quoting the server's English
   and the other policy's DN (#176)
+- The LINAGORA badge closes the page instead of staying in the corner over
+  the rows scrolling under it, hiding them and taking their clicks (#180)
 
 ## v0.11.0 (2026-10-23)
 
