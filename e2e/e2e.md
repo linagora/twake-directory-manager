@@ -108,7 +108,7 @@ Conventions).
 ## Transit: hand over and claim
 
 - [x] TRANSIT-01 (P1) Hand an account over to transit — `transit.spec.ts` (the confirmation names the person and the organization they leave, #131; the toast names it too, the banner link counts what waits, and the Transit card offers the local administrator neither Edit nor Delete, #127)
-- [x] TRANSIT-02 (P1) Claim an entry into one's own organization — `transit.spec.ts` (the button reads Claim into {organization} and follows the select, #131)
+- [x] TRANSIT-02 (P1) Claim an entry into one's own organization — `transit.spec.ts` (the button reads Claim into {organization}, the organization alone, and follows the select, #131)
 - [x] TRANSIT-03 (P3) Admin sees full actions on an entry in transit — `transit.spec.ts` (and keeps Edit and Delete on the Transit card, #127)
 - [x] TRANSIT-04 (P2) Hand over and claim a group — `transit.spec.ts` (the toast names the organization it leaves, #127)
 - [x] TRANSIT-05 (P3) Account with no rights to claim into — `transit.spec.ts`

@@ -104,13 +104,14 @@ test.describe('TRANSIT hand over and claim', () => {
       other.backend.path,
       other.frontend.path,
     ]);
-    // the button names where the entry goes, and follows the select
+    // the button names where the entry goes, by the organization's own name
+    // (the select shows the path), and follows the select
     await expect(claim.confirmButton).toHaveText(
-      `Claim into ${other.org.path}`
+      `Claim into ${other.org.name}`
     );
     await claim.target.selectOption({ label: other.backend.path });
     await expect(claim.confirmButton).toHaveText(
-      `Claim into ${other.backend.path}`
+      `Claim into ${other.backend.name}`
     );
     await claim.claimInto(other.frontend.path);
 

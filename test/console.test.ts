@@ -4722,6 +4722,49 @@ describe('Directory console', () => {
       expect(titles).to.deep.equal(['Claim Bob Schneider']);
     });
 
+    it('should name the organization alone on the claim button, a slash in its name kept', async () => {
+      // The select shows the whole path; the button says the leaf. The path
+      // is split on the separator as the directory writes it, ` / `: a name
+      // holding a bare slash is one segment.
+      const body = { innerHTML: '', querySelector: () => null };
+      const app = consoleIn({}) as unknown as {
+        scope: Scope;
+        api: object;
+        openPanel(title: string, build: (body: unknown) => void): void;
+        claim(
+          entity: EntityDescriptor,
+          id: string,
+          name?: string
+        ): Promise<void>;
+      };
+      app.scope = {
+        user: 'eric',
+        unrestricted: false,
+        described: true,
+        transit: 'ou=transit,dc=example,dc=com',
+        branches: [
+          { dn: 'ou=R&D/IT,dc=example,dc=com', read: true, write: true },
+        ],
+        entities: [],
+      };
+      Object.assign(app.api, {
+        organizationOptions: async () => [
+          {
+            dn: 'ou=R&D/IT,ou=Engineering,dc=example,dc=com',
+            label: 'Engineering / R&D/IT',
+          },
+        ],
+      });
+      app.openPanel = (_title: string, build: (body: unknown) => void) => {
+        build(body);
+      };
+      await app.claim(users, 'bob', 'Bob Schneider');
+      expect(body.innerHTML).to.include('Claim into R&amp;D&#x2F;IT</button>');
+      expect(body.innerHTML).to.include(
+        '>Engineering &#x2F; R&amp;D&#x2F;IT</option>'
+      );
+    });
+
     it('should say where a handed-over entry comes from', async () => {
       // In transit the entry no longer names its organization: the toast is
       // the last place that says where it came from.
