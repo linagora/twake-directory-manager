@@ -166,4 +166,21 @@ test.describe('POLICY password policies', () => {
     );
     expect(await directory.exists(policy.dn)).toBe(true);
   });
+
+  test('POLICY-04 a name already taken is said under Name', async ({
+    page,
+  }) => {
+    // A toast quoted the server's English and the other policy's DN (#176).
+    const app = await new LoginPage(page).loginAs(ADMIN, 'password-policies');
+    const panel = await app.policies().openNew();
+    await panel.nameInput.fill('default');
+    await panel.submit();
+    await expect(panel.error('cn')).toHaveText(
+      'A password policy is already named default'
+    );
+    await expect(panel.nameInput).toHaveAttribute('aria-invalid', 'true');
+    await expect(panel.nameInput).toBeFocused();
+    await expect(panel.dialog).toBeVisible();
+    await expect(page.locator('[data-toast]')).toBeHidden();
+  });
 });

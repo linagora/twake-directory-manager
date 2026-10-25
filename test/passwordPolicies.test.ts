@@ -589,6 +589,63 @@ describe('Password policies', () => {
         'software est la politique par défaut, ou des comptes l’utilisent encore'
       );
     });
+
+    it('should say under Name that a policy already has the name', async () => {
+      // A toast quoted the server's English and the other policy's DN.
+      const toast = {
+        textContent: '',
+        hidden: true,
+        onclick: null,
+        classList: { toggle: () => undefined },
+      };
+      const app = await consoleFor(null, { '[data-toast]': toast });
+      const name = control('default');
+      const error = errorSlot();
+      let submit = (): void => undefined;
+      const controls: Record<string, unknown> = {
+        '#dc-policy-cn': name,
+        '[data-field="cn"] [data-error]': error,
+        form: {
+          addEventListener: (
+            _type: string,
+            listener: (event: { preventDefault(): void }) => void
+          ): void => {
+            submit = () => listener({ preventDefault: () => undefined });
+          },
+        },
+      };
+      const body = {
+        innerHTML: '',
+        querySelector: (selector: string) => controls[selector] ?? null,
+        querySelectorAll: (selector: string) =>
+          selector === '[data-error]' ? [error] : [],
+      };
+      Object.assign(app, {
+        openPanel: (_title: string, build: (body: unknown) => void) =>
+          build(body),
+      });
+      const created = nock(baseUrl)
+        .post('/api/v1/password-policies')
+        .reply(409, {
+          error:
+            'A password policy is named default: cn=default,ou=policies,dc=example,dc=com',
+        });
+      (app as unknown as { openPolicyForm(): void }).openPolicyForm();
+      submit();
+      for (let wait = 0; wait < 50 && error.hidden; wait++)
+        await new Promise(resolve => setTimeout(resolve, 2));
+      expect(created.isDone()).to.equal(true);
+      expect(error.hidden).to.equal(false);
+      expect(error.textContent).to.equal(
+        'Une politique de mot de passe s’appelle déjà default'
+      );
+      expect(name.attributes).to.deep.equal({
+        'aria-invalid': 'true',
+        'aria-describedby': 'dc-policy-cn-error',
+      });
+      expect(name.focused).to.equal(1);
+      expect(toast.textContent).to.equal('');
+    });
   });
 
   describe('translations', () => {
@@ -600,6 +657,7 @@ describe('Password policies', () => {
         'policy.boolean.unset',
         'policy.quality.unset',
         'policy.inUse',
+        'policy.error.taken',
         ...POLICY_GROUPS.map(group => `policy.group.${group.key}`),
         ...POLICY_GROUPS.flatMap(group =>
           group.fields.map(field => `policy.attr.${field.name}`)

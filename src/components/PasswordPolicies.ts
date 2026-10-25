@@ -437,14 +437,7 @@ export class PolicyForm {
     const refused: (HTMLElement | null)[] = [];
     const fail = (name: string, message: string): void => {
       valid = false;
-      const error = container.querySelector<HTMLElement>(
-        `[data-field="${name}"] [data-error]`
-      );
-      if (error) {
-        error.textContent = message;
-        error.hidden = false;
-      }
-      refused.push(this.markInvalid(name, true));
+      refused.push(this.showError(name, message));
     };
     for (const error of Array.from(
       container.querySelectorAll<HTMLElement>('[data-error]')
@@ -481,6 +474,35 @@ export class PolicyForm {
     if (valid) return { cn, wanted };
     refused.find(control => control)?.focus();
     return null;
+  }
+
+  /**
+   * Say under a field why the server refused it, as the form says its own
+   * refusals: a name already taken belongs under Name, in the reader's
+   * words, not in a toast quoting the server's English and the other
+   * policy's DN.
+   *
+   * @param name the field
+   * @param message the refusal
+   */
+  refuse(name: string, message: string): void {
+    this.showError(name, message)?.focus();
+  }
+
+  /**
+   * Show a field's error under it and mark its control.
+   *
+   * @returns its control, when the form shows the field
+   */
+  private showError(name: string, message: string): HTMLElement | null {
+    const error = this.container?.querySelector<HTMLElement>(
+      `[data-field="${name}"] [data-error]`
+    );
+    if (error) {
+      error.textContent = message;
+      error.hidden = false;
+    }
+    return this.markInvalid(name, true);
   }
 
   /**

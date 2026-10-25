@@ -2649,8 +2649,8 @@ export class DirectoryConsole {
       policy
         ? t('policy.title.edit', { name: policy.cn })
         : t('policy.title.new'),
-      body =>
-        new PolicyForm({
+      body => {
+        const form: PolicyForm = new PolicyForm({
           translator: this.translator,
           policy,
           attributes,
@@ -2660,7 +2660,10 @@ export class DirectoryConsole {
               if (policy) await this.api.updatePasswordPolicy(cn, values);
               else await this.api.createPasswordPolicy(cn, values);
             } catch (err) {
-              this.toast(this.policyRefusal(err, cn), true);
+              // A new policy conflicts with nothing but one of its name.
+              if (!policy && (err as { status?: number }).status === 409)
+                form.refuse('cn', t('policy.error.taken', { name: cn }));
+              else this.toast(this.policyRefusal(err, cn), true);
               return;
             }
             this.closePanel();
@@ -2670,7 +2673,9 @@ export class DirectoryConsole {
           onDelete: (): void =>
             void this.deletePolicy(policy as PasswordPolicy),
           onCancel: (): void => this.closePanel(),
-        }).render(body),
+        });
+        form.render(body);
+      },
       false,
       true
     );
