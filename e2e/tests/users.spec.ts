@@ -504,13 +504,26 @@ test.describe('USER user accounts', () => {
     await expect(card.emptyField('Email aliases')).toHaveCount(1);
     expect(await directory.values(user.dn, 'mailAlternateAddress')).toEqual([]);
 
-    // Cancel and × close without saving
+    // Cancel and × ask before throwing it away, then close without saving
+    // (#169); Keep editing gives the form back as it was
     await card.action('Edit').click();
     await form.fill('Mobile', '+00 0');
-    await form.cancel();
+    await form.cancelButton.click();
+    await expect(form.discardPrompt).toContainText('Discard what you typed?');
+    await expect(form.keepEditingButton).toBeFocused();
+    await form.keepEditingButton.click();
+    await expect(form.discardPrompt).toHaveCount(0);
+    await expect(form.control('Mobile')).toHaveValue('+00 0');
+    await form.discard();
     await card.action('Edit').click();
     await form.fill('Mobile', '+00 0');
     await form.closeButton.click();
+    await expect(form.discardPrompt).toBeVisible();
+    await page.keyboard.press('Escape');
+    await form.expectClosed();
+    // nothing changed: closed at once
+    await card.action('Edit').click();
+    await page.keyboard.press('Escape');
     await form.expectClosed();
     expect(await directory.values(user.dn, 'mobile')).toEqual([
       '+49 170 0000000',

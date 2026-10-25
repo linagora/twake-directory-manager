@@ -235,6 +235,41 @@ describe('Password policies', () => {
       expect(error.textContent).to.equal('A whole number, 0 or more');
     });
 
+    it('should be changed once typed in, and saved unchanged close as saved', async () => {
+      // Saved with nothing that differs, it asked "Discard what you typed?"
+      let typed = (): void => undefined;
+      let cancelled = 0;
+      const form = new PolicyForm({
+        translator: en,
+        policy,
+        canDelete: true,
+        onSave: async () => undefined,
+        onDelete: () => undefined,
+        onCancel: () => {
+          cancelled++;
+        },
+      });
+      const controls: Record<string, unknown> = {
+        form: {
+          addEventListener: (type: string, listener: () => void): void => {
+            if (type === 'input') typed = listener;
+          },
+        },
+        '#dc-policy-pwdMinLength': control(String(policy.pwdMinLength ?? '')),
+      };
+      form.render({
+        innerHTML: '',
+        querySelector: (selector: string) => controls[selector] ?? null,
+        querySelectorAll: () => [],
+      } as unknown as HTMLElement);
+      expect(form.isDirty()).to.equal(false);
+      typed();
+      expect(form.isDirty()).to.equal(true);
+      await submit(form);
+      expect(cancelled).to.equal(1);
+      expect(form.isDirty()).to.equal(false);
+    });
+
     it('should mark the refused fields and focus the first', async () => {
       // As in the entry forms: the messages alone left the keyboard on Create.
       const saved: { cn: string; values: Record<string, unknown> }[] = [];
@@ -607,10 +642,11 @@ describe('Password policies', () => {
         '[data-field="cn"] [data-error]': error,
         form: {
           addEventListener: (
-            _type: string,
+            type: string,
             listener: (event: { preventDefault(): void }) => void
           ): void => {
-            submit = () => listener({ preventDefault: () => undefined });
+            if (type === 'submit')
+              submit = () => listener({ preventDefault: () => undefined });
           },
         },
       };

@@ -245,6 +245,8 @@ export interface PolicyFormOptions {
 export class PolicyForm {
   private readonly options: PolicyFormOptions;
   private container: HTMLElement | null = null;
+  /** Something was typed or picked in it since it opened */
+  private touched = false;
 
   constructor(options: PolicyFormOptions) {
     this.options = options;
@@ -321,10 +323,20 @@ export class PolicyForm {
     container
       .querySelector('[data-delete]')
       ?.addEventListener('click', () => this.options.onDelete());
-    container.querySelector('form')?.addEventListener('submit', event => {
+    const form = container.querySelector('form');
+    form?.addEventListener('submit', event => {
       event.preventDefault();
       void this.submit();
     });
+    for (const type of ['input', 'change'])
+      form?.addEventListener(type, () => {
+        this.touched = true;
+      });
+  }
+
+  /** Whether closing the form would lose what was typed or picked in it. */
+  isDirty(): boolean {
+    return this.touched;
   }
 
   private fieldMarkup(field: PolicyField): string {
@@ -541,6 +553,8 @@ export class PolicyForm {
           Object.entries(read.wanted).filter(([, value]) => value !== null)
         );
     if (policy && Object.keys(values).length === 0) {
+      // Saved with nothing changed: closed as saved, not asked about.
+      this.touched = false;
       this.options.onCancel();
       return;
     }

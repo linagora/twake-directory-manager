@@ -1609,7 +1609,7 @@ describe('Directory console', () => {
           selector === 'form' ? form : null,
         querySelectorAll: () => [],
       };
-      const picker = { value: '' };
+      const picker = { value: '', addEventListener: () => undefined };
       const body = {
         innerHTML: '',
         querySelector: (selector: string) =>
@@ -3374,6 +3374,132 @@ describe('Directory console', () => {
       expect(body.innerHTML).to.match(
         /<input id="dc-generated-password"[^>]*readonly value="s3cret!&lt;x&gt;"/
       );
+    });
+  });
+
+  describe('a form closed with what was typed in it', () => {
+    /** A button the question holds, which records its focus and fires */
+    const button = () => {
+      let click = (): void => undefined;
+      return {
+        focused: 0,
+        focus(): void {
+          this.focused++;
+        },
+        addEventListener: (_type: string, listener: () => void): void => {
+          click = listener;
+        },
+        fire: (): void => click(),
+      };
+    };
+    const setup = () => {
+      const keep = button();
+      const discard = button();
+      const question = {
+        className: '',
+        innerHTML: '',
+        removed: false,
+        setAttribute: (): void => undefined,
+        remove(): void {
+          this.removed = true;
+        },
+        querySelector: (selector: string) =>
+          selector === '[data-discard-keep]'
+            ? keep
+            : selector === '[data-discard-confirm]'
+              ? discard
+              : null,
+      };
+      const row = {
+        hidden: false,
+        added: null as unknown,
+        after(element: unknown): void {
+          this.added = element;
+        },
+        querySelector: () => null,
+      };
+      const body = {
+        innerHTML: '',
+        scrollTop: 0,
+        querySelector: (selector: string) =>
+          selector === '.dc-form-actions' ? row : null,
+        querySelectorAll: () => [],
+      };
+      const panel = { hidden: false, classList: { toggle: () => undefined } };
+      const app = consoleIn({
+        '[data-panel]': panel,
+        '[data-panel-body]': body,
+        '[data-panel-title]': { textContent: '' },
+      }) as unknown as {
+        guardDiscard(body: unknown, dirty: () => boolean): void;
+        closePanel(force?: boolean): void;
+      };
+      return { app, body, panel, row, question, keep, discard };
+    };
+    const g = globalThis as Record<string, unknown>;
+    let original: unknown;
+    beforeEach(() => {
+      original = g.document;
+    });
+    afterEach(() => {
+      g.document = original;
+    });
+
+    it('should ask before discarding, Keep editing first', () => {
+      // Escape, × or Cancel closed a filled form at once (#169).
+      const { app, panel, row, question, keep, discard } = setup();
+      g.document = { createElement: () => question, activeElement: null };
+      app.guardDiscard({ querySelector: () => row }, () => true);
+      app.closePanel();
+      expect(panel.hidden).to.be.false;
+      expect(row.hidden).to.be.true;
+      expect(row.added).to.equal(question);
+      expect(question.innerHTML)
+        .to.include('Discard what you typed?')
+        .and.include('Keep editing')
+        .and.include('>Discard<');
+      expect(keep.focused).to.equal(1);
+      // Keep editing gives the form back as it was.
+      keep.fire();
+      expect(question.removed).to.be.true;
+      expect(row.hidden).to.be.false;
+      expect(panel.hidden).to.be.false;
+      // Asked again, Discard closes.
+      app.closePanel();
+      discard.fire();
+      expect(panel.hidden).to.be.true;
+    });
+
+    it('should close on a second Escape, and at once when nothing changed', () => {
+      const { app, panel, row, question } = setup();
+      g.document = { createElement: () => question, activeElement: null };
+      app.guardDiscard({ querySelector: () => row }, () => true);
+      app.closePanel();
+      expect(panel.hidden).to.be.false;
+      app.closePanel();
+      expect(panel.hidden).to.be.true;
+      const clean = setup();
+      g.document = { createElement: () => clean.question, activeElement: null };
+      clean.app.guardDiscard({ querySelector: () => clean.row }, () => false);
+      clean.app.closePanel();
+      expect(clean.panel.hidden).to.be.true;
+      expect(clean.row.added).to.equal(null);
+    });
+
+    it('should tell a changed form from one only opened', () => {
+      const form = new EntityForm({
+        entity: users,
+        entry: { uid: 'alice', cn: 'Alice' },
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+      });
+      expect(form.isDirty()).to.be.false;
+      (form as unknown as { values: Record<string, string[]> }).values.cn = [
+        'Alice Moreau',
+      ];
+      expect(form.isDirty()).to.be.true;
     });
   });
 

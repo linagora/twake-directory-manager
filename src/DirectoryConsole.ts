@@ -540,6 +540,10 @@ export class DirectoryConsole {
    * again: `false` keeps it open. Each panel opens without one.
    */
   private panelGuard: (() => boolean) | null = null;
+  /** Whether the form in the panel holds what closing it would lose */
+  private panelDirty: (() => boolean) | null = null;
+  /** The address changed: the page the panel belongs to is gone */
+  private navigating = false;
   /** What waits for the panel to close before it opens: a late password */
   private afterPanel: (() => void)[] = [];
 
@@ -601,6 +605,14 @@ export class DirectoryConsole {
     this.readRoute();
     window.addEventListener('hashchange', () => void this.followHash());
     document.addEventListener('keydown', event => this.panelKey(event));
+    // A reload or a closed tab loses a form as surely as Escape: the
+    // browser's own question then.
+    window.addEventListener('beforeunload', event => {
+      const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
+      if (!panel || panel.hidden || !this.panelDirty?.()) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
 
     this.drawShell();
     // The Overview reads it for its own section; any other first page has
@@ -646,7 +658,14 @@ export class DirectoryConsole {
    * covers that page and saves into an entry no longer on screen.
    */
   private async followHash(): Promise<void> {
-    this.closePanel();
+    // A changed form is not asked about here: kept over the new page, it
+    // would save into an entry no longer on screen.
+    this.navigating = true;
+    try {
+      this.closePanel();
+    } finally {
+      this.navigating = false;
+    }
     this.readRoute();
     await this.renderMain();
   }
@@ -2457,6 +2476,7 @@ export class DirectoryConsole {
       this.panelOpener = document.activeElement as HTMLElement | null;
     heading.textContent = title;
     this.panelGuard = null;
+    this.panelDirty = null;
     panel.classList.toggle('dc-panel-modal', modal);
     panel.classList.toggle('dc-panel-wide', wide);
     body.innerHTML = '';
@@ -2486,6 +2506,7 @@ export class DirectoryConsole {
     if (!panel || panel.hidden) return;
     if (!force && this.panelGuard && !this.panelGuard()) return;
     this.panelGuard = null;
+    this.panelDirty = null;
     panel.hidden = true;
     const body =
       this.container?.querySelector<HTMLElement>('[data-panel-body]');
@@ -2570,6 +2591,7 @@ export class DirectoryConsole {
           modal: panel.classList.contains('dc-panel-modal'),
           wide: panel.classList.contains('dc-panel-wide'),
           guard: this.panelGuard,
+          dirty: this.panelDirty,
           focus: document.activeElement as HTMLElement | null,
         };
     return new Promise(resolve => {
@@ -2587,6 +2609,7 @@ export class DirectoryConsole {
           panel.classList.toggle('dc-panel-wide', covered.wide);
           body.replaceChildren(...covered.nodes);
           this.panelGuard = covered.guard;
+          this.panelDirty = covered.dirty;
           (covered.focus?.isConnected ? covered.focus : dialog).focus();
         } else this.closePanel(true);
         resolve(confirmed);
@@ -2639,6 +2662,8 @@ export class DirectoryConsole {
         },
         true
       );
+      // The form it covers still holds what a reload would lose.
+      this.panelDirty = covered?.dirty ?? null;
       dialog.setAttribute('role', 'alertdialog');
       dialog.setAttribute('aria-describedby', 'dc-confirm-body');
       // Escape, the close button and a page left all cancel.
@@ -2797,7 +2822,7 @@ export class DirectoryConsole {
               else this.toast(this.policyRefusal(err, cn), true);
               return;
             }
-            this.closePanel();
+            this.closePanel(true);
             this.toast(t(policy ? 'policy.saved' : 'policy.created'));
             await this.renderMain();
           },
@@ -2806,6 +2831,7 @@ export class DirectoryConsole {
           onCancel: (): void => this.closePanel(),
         });
         form.render(body);
+        this.guardDiscard(body, () => form.isDirty());
       },
       false,
       true
@@ -2836,7 +2862,7 @@ export class DirectoryConsole {
       );
       return;
     }
-    this.closePanel();
+    this.closePanel(true);
     this.toast(t('policy.deleted'));
     await this.renderMain();
   }
@@ -2926,13 +2952,13 @@ export class DirectoryConsole {
             // The entry as stored: what a membership change is diffed against.
             await this.api.update(entity, id, values, cleared, entry);
             this.toast(t('save.done'));
-            this.closePanel();
+            this.closePanel(true);
             await this.renderMain();
           } else {
             const created = await this.api.create(entity, values as Entry);
             const createdId = createdEntryId(entity, created, values);
             this.toast(this.createdToast(entity, values, createdId));
-            this.closePanel();
+            this.closePanel(true);
             // Created from an organization's card, the entry joins its table
             // there: the next one is often created right after it.
             if (here) here.created();
@@ -2972,9 +2998,66 @@ export class DirectoryConsole {
         : this.createLabel(entity),
       (body: HTMLElement): void => {
         void form.render(body);
+        this.guardDiscard(body, () => form.isDirty());
       },
       !form.wantsPanel
     );
+  }
+
+  /**
+   * Ask before a form loses what was typed in it: Escape, the panel's × and
+   * Cancel closed a long form at once, and the Escape that closes a list of
+   * suggestions is a press away from the one that closed the panel. The
+   * question takes the place of the form's actions, as the generated
+   * password's does; a second Escape, or Discard, closes.
+   *
+   * @param body the panel's body, holding the form
+   * @param dirty whether the form holds what closing it would lose
+   */
+  private guardDiscard(body: HTMLElement, dirty: () => boolean): void {
+    const t = (key: string): string => this.translator.t(key);
+    let asking: HTMLElement | null = null;
+    let before: HTMLElement | null = null;
+    const actions = (): HTMLElement | null =>
+      body.querySelector<HTMLElement>('.dc-form-actions');
+    const keep = (): void => {
+      asking?.remove();
+      asking = null;
+      const row = actions();
+      if (row) row.hidden = false;
+      (before?.isConnected
+        ? before
+        : row?.querySelector<HTMLElement>('button')
+      )?.focus();
+    };
+    this.panelDirty = dirty;
+    this.panelGuard = (): boolean => {
+      if (asking || this.navigating || !dirty()) return true;
+      const row = actions();
+      if (!row || typeof document === 'undefined') return true;
+      before = document.activeElement as HTMLElement | null;
+      row.hidden = true;
+      asking = document.createElement('div');
+      asking.className = 'dc-form-leave';
+      asking.setAttribute('data-discard', '');
+      asking.innerHTML = `
+        <p>${escapeHtml(t('form.discardQuestion'))}</p>
+        <button type="button" class="dc-button" data-discard-keep>${escapeHtml(
+          t('form.keepEditing')
+        )}</button>
+        <button type="button" class="dc-button dc-button-danger" data-discard-confirm>${escapeHtml(
+          t('form.discard')
+        )}</button>`;
+      row.after(asking);
+      asking
+        .querySelector('[data-discard-keep]')
+        ?.addEventListener('click', keep);
+      asking
+        .querySelector('[data-discard-confirm]')
+        ?.addEventListener('click', () => this.closePanel(true));
+      asking.querySelector<HTMLElement>('[data-discard-keep]')?.focus();
+      return false;
+    };
   }
 
   /**
@@ -3046,6 +3129,9 @@ export class DirectoryConsole {
         ? `${t('app.edit')} — ${this.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
         : this.createLabel(entity),
       (body: HTMLElement): void => {
+        // The parent picked is outside the form, and as much typed in it.
+        let moved = false;
+        this.guardDiscard(body, () => moved || form.isDirty());
         if (parents.length < 2) {
           void form.render(body);
           return;
@@ -3068,6 +3154,9 @@ export class DirectoryConsole {
         picker = body.querySelector<HTMLSelectElement>(
           '#dc-organization-parent'
         );
+        picker?.addEventListener('change', () => {
+          moved = true;
+        });
         void form.render(
           body.querySelector<HTMLElement>(
             '[data-organization-form]'
@@ -3259,7 +3348,7 @@ export class DirectoryConsole {
         const dn = String(entry.dn);
         await this.api.updateOrganization(dn, values, cleared);
         this.toast(t('save.done'));
-        this.closePanel();
+        this.closePanel(true);
         // Its parent's children are read again, for a changed name. The
         // address already names it, so the view drawn again shows its card,
         // the tree open down to it.
@@ -3274,7 +3363,7 @@ export class DirectoryConsole {
             createdEntryId(entity, undefined, values)
           )
         );
-        this.closePanel();
+        this.closePanel(true);
         // The new organization is found among its parent's children by the
         // name it was given, since the server answers no DN. From the tree,
         // it is then shown and selected where it was created; from the
