@@ -330,6 +330,11 @@ test.describe('ORG organizations', () => {
     });
     const app = await new LoginPage(page).loginAs(ADMIN);
     const organizations = await app.openOrganizations();
+    // the top of the tree is shown at once, its address in place (#173)
+    await expect(page).toHaveURL(
+      new RegExp(`#/organizations/${encodeURIComponent(ORG.root)}$`)
+    );
+    await expect(organizations.card.heading).toBeVisible();
     await organizations.expand('Sales');
     await organizations.expand(tenant.org.name);
     await organizations.label(france.name).click();
@@ -525,6 +530,13 @@ test.describe('ORG organizations', () => {
     const app = await new LoginPage(page).loginAs(ADMIN);
     const organizations = await app.openOrganizations(ORG.sales);
     const card = organizations.card;
+
+    // who administers it leads to them (#173)
+    await expect(
+      card.detail('Local administrators').getByRole('link', {
+        name: 'sophie.martin',
+      })
+    ).toHaveAttribute('href', '#/users/sophie.martin');
 
     // a row opens the card, and Back returns to the organization
     await card

@@ -2064,11 +2064,22 @@ export class DirectoryConsole {
       main.querySelector<HTMLElement>('[data-tree]') as HTMLElement
     );
 
-    if (this.route.id && this.current(generation)) {
+    if (!this.current(generation)) return;
+    if (this.route.id) {
       const node = { dn: this.route.id, name: this.route.id };
       await this.tree.reveal(this.route.id);
       if (this.current(generation)) await this.showOrganization(node);
+      return;
     }
+    // Opened on "Select an organization" beside a tree of one root, the page
+    // was always left by a click on that root: it is shown at once, the
+    // address naming it in place of the bare one, so that Back leaves the
+    // page rather than coming back to the empty box.
+    const top = this.tree.top();
+    if (!top) return;
+    this.record(`organizations/${encodeURIComponent(top.dn)}`, true);
+    this.tree.select(top.dn);
+    await this.showOrganization(top);
   }
 
   /** Show one organization in the right-hand pane, tree still visible. */
