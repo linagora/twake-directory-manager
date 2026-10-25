@@ -100,6 +100,11 @@ export interface Confirmation {
    * following it cancels the action and runs `run`
    */
   alternative?: { label: string; run: () => void };
+  /**
+   * What to do along with the action, as boxes under the paragraphs. Each
+   * `checked` is set to the box's state once the question is answered.
+   */
+  choices?: { title: string; options: { label: string; checked: boolean }[] };
 }
 
 const LANGUAGE_KEY = 'ldap-rest.console.language';
@@ -999,7 +1004,12 @@ export class DirectoryConsole {
       label: this.translator.t('transit.claim'),
       named: name => this.translator.t('transit.claimTitle', { name }),
       offered: (entry, entity) => this.claimable(entry, entity),
-      run: (entry, entity) => void this.claim(entity, entry.label),
+      run: (entry, entity) =>
+        void this.claim(
+          entity,
+          entry.label,
+          entry.values?.displayName || entry.label
+        ),
     };
   }
 
@@ -1698,7 +1708,8 @@ export class DirectoryConsole {
           : undefined,
       inTransit: transit.inTransit,
       onClaim: transit.claim
-        ? (): void => void this.claim(entity, id)
+        ? (): void =>
+            void this.claim(entity, id, this.personName(entity, entry, id))
         : undefined,
       onHandOver: transit.handOver
         ? (): void => void this.handOver(entity, id, entry)
@@ -1773,10 +1784,15 @@ export class DirectoryConsole {
    * running OpenLDAP's `memberof` overlay fills in. Without it they are
    * searched among the groups; a search that fails leaves the section empty
    * rather than the card unshown.
+   *
+   * @param strict whether a group entity that cannot be searched fails the
+   * search, which then says `unknown` rather than no group: what is to be
+   * done to every group, as a hand-over, cannot take one for the other
    */
   private async relations(
     entity: EntityDescriptor,
-    entry: Entry
+    entry: Entry,
+    strict = false
   ): Promise<
     | {
         title: string;
@@ -1788,9 +1804,12 @@ export class DirectoryConsole {
           removable?: boolean;
         }[];
         groups?: boolean;
+        /** The groups could not be listed: none is not to be told from it */
+        unknown?: boolean;
       }
     | undefined
   > {
+    let unknown = false;
     for (const role of ['members', 'groupMemberships']) {
       for (const [name, attr] of Object.entries(entity.schema.attributes)) {
         const roles = Array.isArray(attr.role) ? attr.role : [attr.role];
@@ -1799,8 +1818,11 @@ export class DirectoryConsole {
         let list = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
         if (role === 'groupMemberships' && !list.length && entry.dn)
           list = await this.api
-            .memberships(entry.dn, this.entities)
-            .catch(() => []);
+            .memberships(entry.dn, this.entities, strict)
+            .catch(() => {
+              unknown = strict;
+              return [];
+            });
         // An empty value stands for no member in some directories: it is
         // neither counted nor offered a ×, as the deletion's count skips it.
         const items = list
@@ -1822,6 +1844,7 @@ export class DirectoryConsole {
           attribute: name,
           items: await this.groupItems(items),
           groups: true,
+          ...(unknown ? { unknown } : {}),
         };
       }
     }
@@ -2848,9 +2871,14 @@ export class DirectoryConsole {
         };
     return new Promise(resolve => {
       let answered = false;
+      let boxes: HTMLInputElement[] = [];
       const answer = (confirmed: boolean): void => {
         if (answered) return;
         answered = true;
+        // Read before the panel gives its body back or is emptied.
+        question.choices?.options.forEach((option, index) => {
+          if (boxes[index]) option.checked = boxes[index].checked;
+        });
         this.panelGuard = null;
         // An alert dialog only while it asks.
         dialog.setAttribute('role', 'dialog');
@@ -2883,6 +2911,23 @@ export class DirectoryConsole {
               }
             </div>
             ${
+              question.choices?.options.length
+                ? `<fieldset class="dc-confirm-choices">
+                    <legend>${escapeHtml(question.choices.title)}</legend>
+                    ${question.choices.options
+                      .map(
+                        (option, index) => `<label class="dc-field-inline">
+                          <input type="checkbox" data-confirm-choice="${index}"${
+                            option.checked ? ' checked' : ''
+                          } />
+                          <span>${escapeHtml(option.label)}</span>
+                        </label>`
+                      )
+                      .join('')}
+                  </fieldset>`
+                : ''
+            }
+            ${
               question.alternative
                 ? `<p class="dc-confirm-alternative"><button type="button" class="dc-link" data-confirm-alternative>${escapeHtml(
                     question.alternative.label
@@ -2899,6 +2944,9 @@ export class DirectoryConsole {
                   : 'dc-button-destructive'
               }" data-confirm>${escapeHtml(question.action)}</button>
             </div>`;
+          boxes = Array.from(
+            inner.querySelectorAll<HTMLInputElement>('[data-confirm-choice]')
+          );
           inner
             .querySelector('[data-cancel]')
             ?.addEventListener('click', () => answer(false));
@@ -4187,7 +4235,11 @@ export class DirectoryConsole {
    * those are offered: the server asks for write on the destination and
    * nothing else, so any other choice would be refused.
    */
-  private async claim(entity: EntityDescriptor, id: string): Promise<void> {
+  private async claim(
+    entity: EntityDescriptor,
+    id: string,
+    name = id
+  ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     const scope = this.scope;
@@ -4204,7 +4256,7 @@ export class DirectoryConsole {
     }
 
     this.openPanel(
-      t('transit.claimTitle', { name: id }),
+      t('transit.claimTitle', { name }),
       body => {
         if (targets.length === 0) {
           body.innerHTML = `<p class="dc-empty">${escapeHtml(t('transit.noTarget'))}</p>`;
@@ -4264,9 +4316,19 @@ export class DirectoryConsole {
             .then(async () => {
               this.closePanel();
               this.toast(
-                t('transit.claimed', { name: id, organization: target.label })
+                t('transit.claimed', { name, organization: target.label })
               );
-              await this.afterTransitMove();
+              // To its card, where its position and its groups wait to be
+              // put right: the Overview's toast left it to be searched for.
+              const here =
+                this.route.view === 'entity' &&
+                this.route.entity === entity.key &&
+                this.route.id === id;
+              if (here) await this.afterTransitMove();
+              else {
+                this.go(`${entity.key}/${encodeURIComponent(id)}`);
+                await this.readTransit();
+              }
             })
             // Claiming is judged on the organization chosen alone.
             .catch((err: unknown) =>
@@ -4303,6 +4365,24 @@ export class DirectoryConsole {
     if (!transit) return;
     const name = this.personName(entity, entry, id);
     const organization = this.roleValue(entity, entry, 'organizationPath');
+    // The department's groups went with the person, a shared mailbox
+    // included, and once handed over the caller no longer reached the
+    // account's card to take them out: those the caller writes are offered,
+    // checked; the others are named.
+    let failed = false;
+    const relations = await this.relations(entity, entry, true).catch(() => {
+      failed = true;
+      return undefined;
+    });
+    const groups = relations?.groups ? relations.items : [];
+    // Groups that could not be listed are no groups: it is said.
+    const unknown = failed || !!relations?.unknown;
+    const offered = groups.filter(group => group.removable);
+    const kept = groups.filter(group => !group.removable);
+    const choices = offered.map(group => ({
+      label: group.note ? `${group.label} · ${group.note}` : group.label,
+      checked: true,
+    }));
     if (
       !(await this.confirmAction({
         title: t('transit.handOverTitle', { name }),
@@ -4311,7 +4391,24 @@ export class DirectoryConsole {
             ? [t('transit.handOverLeaves', { name, organization })]
             : []),
           t('transit.handOverConfirm'),
+          ...(unknown ? [t('delete.groupsUnknown', { name })] : []),
+          ...(kept.length
+            ? [
+                t('transit.staysIn', {
+                  name,
+                  groups: kept.map(group => group.label).join(', '),
+                }),
+              ]
+            : []),
         ],
+        ...(choices.length
+          ? {
+              choices: {
+                title: t('transit.alsoRemove', { name }),
+                options: choices,
+              },
+            }
+          : {}),
         action: t('transit.handOver'),
         reversible: true,
       }))
@@ -4319,18 +4416,41 @@ export class DirectoryConsole {
       return;
     try {
       await this.api.move(entity, id, transit);
-      // Where it comes from is said once more, and only here: the entry,
-      // now in transit, no longer names it.
-      this.toast(
-        organization
-          ? t('transit.handedOverFrom', { name: id, from: organization })
-          : t('transit.handedOver', { name: id })
-      );
-      await this.afterTransitMove();
     } catch (err) {
-      // Handing over is judged on the organization the entry leaves.
+      // Handing over is judged on the organization the entry leaves. Moved
+      // first, a refusal leaves the account in its groups as well.
       this.toast(this.refusal(err, entity, organization ?? name).message, true);
+      return;
     }
+    // Out of the checked groups once moved: a removal is judged on the group
+    // the caller writes, wherever the account now is.
+    const still: string[] = [];
+    for (const [index, group] of offered.entries()) {
+      if (!choices[index].checked) continue;
+      const owner = this.groupEntity(group.id);
+      try {
+        if (!owner || !entry.dn) throw new Error();
+        await this.api.removeMember(
+          owner,
+          rdnValue(group.id),
+          String(entry.dn)
+        );
+      } catch {
+        still.push(group.label);
+      }
+    }
+    // Where it comes from is said once more, and only here: the entry, now
+    // in transit, no longer names it. A group it stays in is a refusal.
+    const done = organization
+      ? t('transit.handedOverFrom', { name: id, from: organization })
+      : t('transit.handedOver', { name: id });
+    this.toast(
+      still.length
+        ? `${done}${t('transit.stillIn', { groups: still.join(', ') })}`
+        : done,
+      still.length > 0
+    );
+    await this.afterTransitMove();
   }
 
   /**

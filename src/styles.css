@@ -2124,6 +2124,22 @@ select.dc-input {
   padding-left: 20px;
 }
 
+/* What to do along with the action: the groups a hand-over leaves. */
+.dc-confirm-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 0;
+  border: 0;
+}
+
+.dc-confirm-choices legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-weight: 500;
+}
+
 .dc-confirm-alternative {
   margin: 0;
   font-size: 13px;

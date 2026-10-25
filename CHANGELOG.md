@@ -34,6 +34,9 @@ Built on ldap-rest 1.0.1.
 - A group's card counts its members and, for whoever may write the group,
   offers a × on each and _Add members…_; the member search says it finds a
   name, an email address or an employee ID (#168)
+- A hand-over offers to take the account out of the department's groups the
+  administrator writes, checked, and names those it stays in; a claim names
+  the person and opens their card (#165)
 
 ### Bug Fixes
 

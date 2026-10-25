@@ -334,6 +334,9 @@ const en: Catalogue = {
   'transit.claimButton': 'Claim into {organization}',
   'transit.handOverTitle': 'Hand {name} over?',
   'transit.handOverLeaves': '{name} leaves {organization} for Transit.',
+  'transit.alsoRemove': 'Also remove {name} from:',
+  'transit.staysIn': '{name} stays in {groups}, which you do not manage.',
+  'transit.stillIn': '; still in {groups}',
   'transit.handOverConfirm':
     'Every administrator will see this entry and may claim it; you will no longer manage it.',
   'transit.handedOver': '{name} is in transit',
@@ -784,6 +787,9 @@ const fr: Catalogue = {
   'transit.claimButton': 'Rattacher à {organization}',
   'transit.handOverTitle': 'Mettre {name} en transit ?',
   'transit.handOverLeaves': '{name} quitte {organization} pour Transit.',
+  'transit.alsoRemove': 'Retirer aussi {name} de :',
+  'transit.staysIn': '{name} reste dans {groups}, que vous ne gérez pas.',
+  'transit.stillIn': ' ; toujours dans {groups}',
   'transit.handOverConfirm':
     'Tous les administrateurs verront cette entrée et pourront la rattacher ; vous ne la gérerez plus.',
   'transit.handedOver': '{name} est en transit',
@@ -1197,6 +1203,9 @@ const mn: Catalogue = {
   'transit.handOverTitle': '{name}-г шилжүүлэх үү?',
   'transit.handOverLeaves':
     '{name} {organization}-с гарч дамжуулалтад шилжинэ.',
+  'transit.alsoRemove': '{name}-ийг мөн дараахаас хасах:',
+  'transit.staysIn': '{name} нь таны удирддаггүй {groups}-д үлдэнэ.',
+  'transit.stillIn': '; {groups}-д хэвээр',
   'transit.handOverConfirm':
     'Бүх администратор энэ бичлэгийг харж, авах боломжтой болно; та үүнийг цаашид удирдахгүй.',
   'transit.handedOver': '{name} дамжуулалтад байна',

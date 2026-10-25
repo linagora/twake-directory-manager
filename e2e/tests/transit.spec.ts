@@ -97,7 +97,8 @@ test.describe('TRANSIT hand over and claim', () => {
     await expect(card.transitTag).toBeVisible();
     await card.action('Claim…').click();
     const claim = new ClaimDialog(page);
-    await expect(claim.title).toHaveText(`Claim ${user.uid}`);
+    // named as a colleague names them (#165)
+    await expect(claim.title).toHaveText(`Claim ${user.displayName}`);
     await expect(claim.targets()).toHaveText([
       other.org.path,
       other.backend.path,
@@ -113,7 +114,9 @@ test.describe('TRANSIT hand over and claim', () => {
     );
     await claim.claimInto(other.frontend.path);
 
-    await app.expectToast(`${user.uid} moved to ${other.frontend.path}`);
+    await app.expectToast(
+      `${user.displayName} moved to ${other.frontend.path}`
+    );
     await expect(card.transitTag).toHaveCount(0);
     await expect(card.detail('Department path')).toHaveText(
       other.frontend.path
@@ -268,22 +271,30 @@ test.describe('TRANSIT hand over and claim', () => {
       ).toHaveText('Claim…');
     await expect(app.transitLink).toHaveText(/^Transit \(\d+\+?\)$/);
 
-    // claimed from there, it leaves the list without a reload
+    // claimed from there, it opens the card, and the Overview, back, no
+    // longer lists it, all without a reload
     await page.evaluate(() => {
       (window as unknown as { kept: boolean }).kept = true;
+      // Only a count read again after the claim replaces it: the card
+      // reads none of its own.
+      const link = document.querySelector('[data-transit-link]');
+      if (link) link.textContent = 'Transit (stale)';
     });
-    // the section drawn before the claim, to tell it from the one drawn after
-    await waiting.evaluate(section => section.setAttribute('data-before', ''));
     await waiting
       .locator('tbody tr')
       .filter({ hasText: user.displayName })
       .getByRole('button', { name: `Claim ${user.displayName}`, exact: true })
       .click();
     const claim = new ClaimDialog(page);
-    await expect(claim.title).toHaveText(`Claim ${user.uid}`);
+    await expect(claim.title).toHaveText(`Claim ${user.displayName}`);
     await claim.claimInto(other.backend.path);
-    await app.expectToast(`${user.uid} moved to ${other.backend.path}`);
-    const redrawn = page.locator('[data-transit-section]:not([data-before])');
+    await app.expectToast(`${user.displayName} moved to ${other.backend.path}`);
+    // its card opens, its position and groups to put right (#165)
+    await app.entry().expectName(user.displayName);
+    // and the banner counts transit again: Grace still waits there
+    await expect(app.transitLink).toHaveText(/^Transit \(\d+\+?\)$/);
+    await page.goBack();
+    const redrawn = app.transitWaiting;
     await expect(
       redrawn.locator('tbody tr').filter({ hasText: 'Grace Kim' })
     ).toBeVisible();
@@ -296,5 +307,50 @@ test.describe('TRANSIT hand over and claim', () => {
     expect(await directory.values(user.dn, 'twakeDepartmentLink')).toEqual([
       other.backend.dn,
     ]);
+  });
+
+  test('TRANSIT-07 a hand-over takes the account out of the groups one writes', async ({
+    page,
+    directory,
+    tenant,
+  }) => {
+    // Moved on, they still read the department's shared mailbox (#165)
+    const user = await directory.createUser({ org: tenant.org });
+    // a second member: the last one taken out would need the placeholder
+    const leaving = await directory.createGroup({
+      org: tenant.org,
+      members: [user, tenant.admin],
+      mailboxType: 'teamMailbox',
+    });
+    const staying = await directory.createGroup({
+      org: tenant.org,
+      members: [user],
+    });
+    const app = await new LoginPage(page).loginAs(
+      tenant.admin,
+      `users/${user.uid}`
+    );
+    await app.entry().perform('Hand over');
+    const confirm = new ConfirmDialog(page);
+    await confirm.expectOpen(`Hand ${user.displayName} over?`);
+    await expect(confirm.choicesLegend).toHaveText(
+      `Also remove ${user.displayName} from:`
+    );
+    await expect(confirm.choices).toHaveCount(2);
+    await expect(
+      confirm.dialog.getByRole('checkbox', {
+        name: `${leaving.cn} · Shared mailbox`,
+      })
+    ).toBeVisible();
+    for (const box of await confirm.choices.all())
+      await expect(box).toBeChecked();
+    // the second one stays
+    await confirm.dialog
+      .getByRole('checkbox', { name: new RegExp(`^${staying.cn}`) })
+      .uncheck();
+    await confirm.confirm();
+    await app.expectToast(`${user.uid} (${tenant.org.path}) is in transit`);
+    expect(await directory.values(leaving.dn, 'member')).not.toContain(user.dn);
+    expect(await directory.values(staying.dn, 'member')).toContain(user.dn);
   });
 });

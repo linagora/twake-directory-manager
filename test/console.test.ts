@@ -4578,6 +4578,150 @@ describe('Directory console', () => {
       ]);
     });
 
+    it('should offer to take the account out of the groups one writes', async () => {
+      // Moved out of Sales, bob still read its shared mailbox, and nobody
+      // could take him out of it once handed over (#165).
+      const sales = 'cn=sales-team,ou=groups,dc=example,dc=com';
+      const staff = 'cn=all-staff,ou=groups,dc=example,dc=com';
+      const run = async (
+        keep: boolean,
+        refuse = false,
+        stuck = false,
+        unknown: boolean | 'thrown' = false
+      ) => {
+        const toast = toastElement();
+        const calls: string[] = [];
+        const strict: unknown[] = [];
+        let question: Confirmation | undefined;
+        const app = consoleIn({ '[data-toast]': toast }) as unknown as {
+          scope: Scope;
+          entities: EntityDescriptor[];
+          api: object;
+          relations(
+            entity: unknown,
+            entry: unknown,
+            strict?: boolean
+          ): Promise<unknown>;
+          confirmAction(question: Confirmation): Promise<boolean>;
+          afterTransitMove(): Promise<void>;
+          handOver(
+            entity: EntityDescriptor,
+            id: string,
+            entry: Entry
+          ): Promise<void>;
+        };
+        app.scope = {
+          transit: 'ou=transit,dc=example,dc=com',
+        } as unknown as Scope;
+        app.entities = [users, groups];
+        app.relations = async (_entity, _entry, asked) => {
+          strict.push(asked);
+          if (unknown === 'thrown') throw new Error('Bad Gateway');
+          return {
+            title: 'Groups',
+            attribute: 'memberOf',
+            groups: true,
+            ...(unknown ? { unknown: true } : {}),
+            items: [
+              {
+                id: sales,
+                label: 'sales-team',
+                note: 'Shared mailbox',
+                removable: true,
+              },
+              { id: staff, label: 'all-staff', note: 'Distribution list' },
+            ],
+          };
+        };
+        app.confirmAction = async asked => {
+          question = asked;
+          if (keep && asked.choices) asked.choices.options[0].checked = false;
+          return true;
+        };
+        app.afterTransitMove = async () => undefined;
+        Object.assign(app.api, {
+          removeMember: async (_entity: unknown, id: string) => {
+            calls.push(`remove ${id}`);
+            if (refuse) throw new Error('Forbidden');
+          },
+          move: async () => {
+            calls.push('move');
+            if (stuck) throw new Error('Service Unavailable');
+          },
+        });
+        await app.handOver(users, 'bob', {
+          dn: 'uid=bob,ou=users,dc=example,dc=com',
+          uid: 'bob',
+          cn: 'Bob Schneider',
+          twakeDepartmentPath: 'Sales',
+        });
+        return { question, calls, toast, strict };
+      };
+      const { question, calls, toast, strict } = await run(false);
+      // Every group is to be gone through: one entity unsearched fails all.
+      expect(strict).to.deep.equal([true]);
+      expect(question?.choices).to.deep.equal({
+        title: 'Also remove Bob Schneider from:',
+        options: [{ label: 'sales-team · Shared mailbox', checked: true }],
+      });
+      expect(question?.lines).to.include(
+        'Bob Schneider stays in all-staff, which you do not manage.'
+      );
+      // Moved first: a removal is judged on the group, wherever he is, and
+      // a move refused leaves him in his groups as well.
+      expect(calls).to.deep.equal(['move', 'remove sales-team']);
+      expect((await run(false, false, true)).calls).to.deep.equal(['move']);
+      // Groups that could not be listed are said to be.
+      expect((await run(false, false, false, true)).question?.lines).to.include(
+        'The groups Bob Schneider belongs to could not be listed.'
+      );
+      expect(
+        (await run(false, false, false, 'thrown')).question?.lines
+      ).to.include('The groups Bob Schneider belongs to could not be listed.');
+      expect(toast.textContent).to.equal('bob (Sales) is in transit');
+      expect((await run(true)).calls).to.deep.equal(['move']);
+      expect((await run(false, true)).toast.textContent).to.equal(
+        'bob (Sales) is in transit; still in sales-team'
+      );
+    });
+
+    it('should name the person to claim, not their identifier', async () => {
+      const titles: string[] = [];
+      const app = consoleIn({}) as unknown as {
+        scope: Scope;
+        api: object;
+        openPanel(title: string): void;
+        claim(
+          entity: EntityDescriptor,
+          id: string,
+          name?: string
+        ): Promise<void>;
+      };
+      app.scope = {
+        user: 'eric',
+        unrestricted: false,
+        described: true,
+        transit: 'ou=transit,dc=example,dc=com',
+        branches: [
+          { dn: 'ou=Backend,dc=example,dc=com', read: true, write: true },
+        ],
+        entities: [],
+      };
+      Object.assign(app.api, {
+        organizationOptions: async () => [
+          {
+            dn: 'ou=Backend,dc=example,dc=com',
+            label: 'Engineering / Backend',
+          },
+        ],
+      });
+      app.openPanel = (title: string) => {
+        titles.push(title);
+      };
+      await app.claim(users, 'bob', 'Bob Schneider');
+      expect(titles).to.deep.equal(['Claim Bob Schneider']);
+    });
+
     it('should say where a handed-over entry comes from', async () => {
       // In transit the entry no longer names its organization: the toast is
       // the last place that says where it came from.
