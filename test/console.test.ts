@@ -5019,7 +5019,8 @@ describe('Directory console', () => {
           .to.include('<h3>Groups</h3>')
           .and.include('data-add-groups>Add to a group…</button>')
           .and.include(
-            `data-relation="${salesTeam.dn}">sales-team</button><span class="dc-relation-note">· Shared mailbox</span>`
+            // A link: a middle click opens it in a new tab.
+            `<a href="#&#x2F;${typedGroups.key}&#x2F;sales-team" class="dc-link" data-relation="${salesTeam.dn}">sales-team</a><span class="dc-relation-note">· Shared mailbox</span>`
           )
           .and.include('aria-label="Remove from sales-team"')
           .and.include('aria-label="Remove from engineering"');
@@ -5036,7 +5037,7 @@ describe('Directory console', () => {
           .and.not.include('aria-label="Remove from engineering"');
         // Still listed, with its type: only the × goes.
         expect(detail.innerHTML).to.include(
-          `data-relation="${engineers.dn}">engineering</button><span class="dc-relation-note">· Group</span></li>`
+          `data-relation="${engineers.dn}">engineering</a><span class="dc-relation-note">· Group</span></li>`
         );
       });
 
@@ -10911,26 +10912,35 @@ describe('Directory console', () => {
         },
       };
       const owner = 'uid=sophie.martin,ou=users,dc=example,dc=com';
-      const container = stubContainer();
-      new EntityDetail({
-        entity: owned,
-        entry: { cn: 'sales-team', owner: [owner, 'not a dn'] },
-        translator: new Translator('en'),
-        canWrite: true,
-        canDelete: true,
-        onEdit: () => undefined,
-        onDelete: () => undefined,
-        onStatus: () => undefined,
-        onResetPassword: () => undefined,
-        relations: { title: 'Members', attribute: 'member', items: [] },
-      }).render(container);
-      expect(container.innerHTML)
+      const card = (relationHref?: (dn: string) => string | undefined) => {
+        const container = stubContainer();
+        new EntityDetail({
+          entity: owned,
+          entry: { cn: 'sales-team', owner: [owner, 'not a dn'] },
+          translator: new Translator('en'),
+          canWrite: true,
+          canDelete: true,
+          onEdit: () => undefined,
+          onDelete: () => undefined,
+          onStatus: () => undefined,
+          onResetPassword: () => undefined,
+          relations: { title: 'Members', attribute: 'member', items: [] },
+          relationHref,
+        }).render(container);
+        return container.innerHTML;
+      };
+      // A link, which a middle click opens in a new tab (#174).
+      expect(card(dn => `#/users/${rdnValue(dn)}`))
         .to.include(
-          `<button type="button" class="dc-link" data-relation="${owner}" title="${owner}">sophie.martin</button>`
+          `<a href="#&#x2F;users&#x2F;sophie.martin" class="dc-link" data-relation="${owner}" title="${owner}">sophie.martin</a>`
         )
         .and.not.include(`>${owner}<`);
+      // An entry no page shows is named all the same.
+      expect(card(() => undefined)).to.include(
+        `<span class="dc-value" data-relation="${owner}" title="${owner}">sophie.martin</span>`
+      );
       // What is no DN has nowhere to lead.
-      expect(container.innerHTML).to.include(
+      expect(card()).to.include(
         '<span class="dc-value" title="not a dn">not a dn</span>'
       );
     });

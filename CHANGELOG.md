@@ -33,6 +33,8 @@ Built on ldap-rest 1.0.1.
 - A password typed or generated in the Reset password panel no longer stays
   in the page once the panel is closed, and the panel is sent once and stays
   open until the server answers (#182)
+- An account's groups and a group's members and owners are links to their
+  cards, which a middle click opens in a new tab, instead of buttons (#174)
 
 ## v0.11.0 (2026-10-23)
 

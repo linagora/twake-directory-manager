@@ -124,7 +124,11 @@ export interface DetailOptions {
     /** How many it left out, when it counted them */
     more?: number;
   };
-  onOpenRelation?(id: string): void;
+  /**
+   * The address of a related entry's card, from its DN: none for an entry
+   * no page shows, which is then named without a link
+   */
+  relationHref?(dn: string): string | undefined;
   /** Add the account to groups, when the caller may write it */
   onAddToGroups?(): void;
   /**
@@ -476,11 +480,11 @@ export class EntityDetail {
       (hasRole(attr, 'members') || hasRole(attr, 'owners')) &&
       isDnShaped(value)
     )
-      return `<button type="button" class="dc-link" data-relation="${escapeHtml(
+      return this.relationLink(
+        value,
+        this.options.pointerLabel?.(value) || rdnValue(value),
         value
-      )}" title="${escapeHtml(value)}">${escapeHtml(
-        this.options.pointerLabel?.(value) || rdnValue(value)
-      )}</button>`;
+      );
     const { language } = this.options.translator;
     // 1073741824 is 1 GiB, which no decimal unit says exactly: the card
     // rounds it, and leaves the exact count in the tooltip.
@@ -551,9 +555,7 @@ export class EntityDetail {
     removable?: boolean;
   }): string {
     const { translator, onLeaveGroup } = this.options;
-    const link = `<button type="button" class="dc-link" data-relation="${escapeHtml(
-      item.id
-    )}">${escapeHtml(item.label)}</button>`;
+    const link = this.relationLink(item.id, item.label);
     const removable = item.removable && onLeaveGroup;
     if (!item.note && !removable) return `<li>${link}</li>`;
     return `<li class="dc-relation">${link}${
@@ -569,6 +571,27 @@ export class EntityDetail {
           )}">×</button>`
         : ''
     }</li>`;
+  }
+
+  /**
+   * A related entry, named: a link to its card, which a middle click opens
+   * in a new tab and whose address can be copied, as the Department's is.
+   * They were buttons, which only ever opened in place.
+   *
+   * @param dn the entry
+   * @param label its name
+   * @param title its tooltip, the DN where the name hides it
+   */
+  private relationLink(dn: string, label: string, title?: string): string {
+    const href = this.options.relationHref?.(dn);
+    const tip = title ? ` title="${escapeHtml(title)}"` : '';
+    return href
+      ? `<a href="${escapeHtml(href)}" class="dc-link" data-relation="${escapeHtml(
+          dn
+        )}"${tip}>${escapeHtml(label)}</a>`
+      : `<span class="dc-value" data-relation="${escapeHtml(dn)}"${tip}>${escapeHtml(
+          label
+        )}</span>`;
   }
 
   /**
@@ -633,13 +656,6 @@ export class EntityDetail {
       .querySelector('[data-status]')
       ?.addEventListener('click', () => this.options.onStatus());
 
-    for (const button of Array.from(
-      container.querySelectorAll<HTMLElement>('[data-relation]')
-    )) {
-      button.addEventListener('click', () => {
-        this.options.onOpenRelation?.(button.dataset.relation as string);
-      });
-    }
     container
       .querySelector('[data-add-groups]')
       ?.addEventListener('click', () => this.options.onAddToGroups?.());
