@@ -819,7 +819,7 @@ const fr: Catalogue = {
     'Les référentiels sont tenus hors de la console : vous pouvez les consulter et les utiliser dans les formulaires',
   'transit.branch': 'Transit',
   'transit.badge': 'En transit',
-  'transit.claim': 'Rattacher à…',
+  'transit.claim': 'Rattacher…',
   'transit.claimTitle': 'Rattacher {name}',
   'transit.target': 'À l’organisation',
   'transit.noTarget':
