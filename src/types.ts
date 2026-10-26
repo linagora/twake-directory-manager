@@ -291,3 +291,27 @@ export interface Refusal {
   /** The authorised mail domains, for `mailDomain` */
   domains?: string[];
 }
+
+/** What the console asks before an action it cannot take back. */
+export interface Confirmation {
+  /** The question, as the dialog's heading: "Delete Alice Martin?" */
+  title: string;
+  /** Paragraphs under it, as text */
+  lines: string[];
+  /** Names listed after the paragraphs: the entries of a selection */
+  items?: string[];
+  /** The button that acts, named after the action: "Delete Alice" */
+  action: string;
+  /** The action deletes nothing: its button is not the red one */
+  reversible?: boolean;
+  /**
+   * A safer way to the same end, offered as a link under the paragraphs:
+   * following it cancels the action and runs `run`
+   */
+  alternative?: { label: string; run: () => void };
+  /**
+   * What to do along with the action, as boxes under the paragraphs. Each
+   * `checked` is set to the box's state once the question is answered.
+   */
+  choices?: { title: string; options: { label: string; checked: boolean }[] };
+}

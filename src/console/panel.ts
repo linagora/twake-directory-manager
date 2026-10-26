@@ -5,6 +5,9 @@
  * @module twake-directory-manager/console/panel
  */
 
+import { html, type SafeHtml } from '../shared/html';
+import { announcerMarkup } from '../ui/announce';
+
 /** What Tab can reach in the side panel. */
 const FOCUSABLE = [
   'a[href]',
@@ -74,4 +77,31 @@ export function tabTarget(
       : (following[0] ?? first);
   }
   return back ? last : first;
+}
+
+/**
+ * What the frame lays over the page: the side panel, a dialog the keyboard
+ * stays in while it is open; the toast region, a live region that says each
+ * message as it shows; and the hidden region of `announce`. Drawn once with
+ * the frame; the console fills the panel and binds its close.
+ *
+ * @param close what the close button is called
+ * @returns the markup
+ */
+export function overlayMarkup(close: string): SafeHtml {
+  return html`<div class="dc-panel" data-panel hidden>
+      <div class="dc-panel-inner" data-panel-dialog role="dialog"
+        aria-modal="true" aria-labelledby="dc-panel-title" tabindex="-1">
+        <header class="dc-panel-header">
+          <h2 id="dc-panel-title" data-panel-title></h2>
+          <button type="button" class="dc-icon-button" data-panel-close
+            aria-label="${close}">×</button>
+        </header>
+        <div class="dc-panel-body" data-panel-body></div>
+      </div>
+    </div>
+    <div data-toast-region role="status" aria-live="polite" aria-atomic="true">
+      <div class="dc-toast" data-toast hidden></div>
+    </div>
+    ${announcerMarkup()}`;
 }

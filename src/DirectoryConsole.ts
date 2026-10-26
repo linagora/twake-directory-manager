@@ -70,6 +70,7 @@ export {
   type TransitState,
 } from './rights';
 import type {
+  Confirmation,
   AttachedEntries,
   AttachedEntry,
   ConsoleOptions,
@@ -82,7 +83,8 @@ import type {
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
-import { firstFocus, tabTarget } from './console/panel';
+import { confirmMarkup, markAlert } from './console/dialog';
+import { firstFocus, overlayMarkup, tabTarget } from './console/panel';
 import {
   highContrast,
   onContrastChange,
@@ -92,11 +94,12 @@ import {
   rememberReference,
   storedLanguage,
 } from './console/settings';
-import { announcer, announcerMarkup } from './ui/announce';
+import { announcer } from './ui/announce';
 import { ToastController } from './ui/toast';
 
-// Kept importable from here, where it was first defined.
+// Kept importable from here, where they were first defined.
 export { ToastController };
+export type { Confirmation };
 
 /** The signed-in account, as the overview names it. */
 interface SignedIn {
@@ -109,30 +112,6 @@ interface Route {
   view: 'dashboard' | 'entity' | 'organizations' | 'policies';
   entity?: string;
   id?: string;
-}
-
-/** What the console asks before an action it cannot take back. */
-export interface Confirmation {
-  /** The question, as the dialog's heading: "Delete Alice Martin?" */
-  title: string;
-  /** Paragraphs under it, as text */
-  lines: string[];
-  /** Names listed after the paragraphs: the entries of a selection */
-  items?: string[];
-  /** The button that acts, named after the action: "Delete Alice" */
-  action: string;
-  /** The action deletes nothing: its button is not the red one */
-  reversible?: boolean;
-  /**
-   * A safer way to the same end, offered as a link under the paragraphs:
-   * following it cancels the action and runs `run`
-   */
-  alternative?: { label: string; run: () => void };
-  /**
-   * What to do along with the action, as boxes under the paragraphs. Each
-   * `checked` is set to the box's state once the question is answered.
-   */
-  choices?: { title: string; options: { label: string; checked: boolean }[] };
 }
 
 const POLICIES_KEY = 'password-policies';
@@ -536,21 +515,7 @@ export class DirectoryConsole {
             <img src="${LINAGORA_LOGO}" alt="LINAGORA" width="100" height="21" />
           </a>
         </div>
-        <div class="dc-panel" data-panel hidden>
-          <div class="dc-panel-inner" data-panel-dialog role="dialog"
-            aria-modal="true" aria-labelledby="dc-panel-title" tabindex="-1">
-            <header class="dc-panel-header">
-              <h2 id="dc-panel-title" data-panel-title></h2>
-              <button type="button" class="dc-icon-button" data-panel-close
-                aria-label="${t('app.close')}">×</button>
-            </header>
-            <div class="dc-panel-body" data-panel-body></div>
-          </div>
-        </div>
-        <div data-toast-region role="status" aria-live="polite" aria-atomic="true">
-          <div class="dc-toast" data-toast hidden></div>
-        </div>
-        ${announcerMarkup()}
+        ${overlayMarkup(t('app.close'))}
       </div>`
     );
 
@@ -2903,8 +2868,7 @@ export class DirectoryConsole {
         });
         this.panelGuard = null;
         // An alert dialog only while it asks.
-        dialog.setAttribute('role', 'dialog');
-        dialog.removeAttribute('aria-describedby');
+        markAlert(dialog, false);
         if (covered) {
           heading.textContent = covered.title;
           panel.classList.toggle('dc-panel-modal', covered.modal);
@@ -2922,49 +2886,7 @@ export class DirectoryConsole {
         inner => {
           render(
             inner,
-            html`
-            <div class="dc-confirm" id="dc-confirm-body" data-confirm-body>
-              ${question.lines.map(line => html`<p>${line}</p>`)}
-              ${
-                question.items?.length
-                  ? html`<ul class="dc-confirm-items">${question.items.map(
-                      item => html`<li>${item}</li>`
-                    )}</ul>`
-                  : ''
-              }
-            </div>
-            ${
-              question.choices?.options.length
-                ? html`<fieldset class="dc-confirm-choices">
-                    <legend>${question.choices.title}</legend>
-                    ${question.choices.options.map(
-                      (option, index) => html`<label class="dc-field-inline">
-                          <input type="checkbox" data-confirm-choice="${index}"${
-                            option.checked ? ' checked' : ''
-                          } />
-                          <span>${option.label}</span>
-                        </label>`
-                    )}
-                  </fieldset>`
-                : ''
-            }
-            ${
-              question.alternative
-                ? html`<p class="dc-confirm-alternative"><button type="button" class="dc-link" data-confirm-alternative>${
-                    question.alternative.label
-                  }</button></p>`
-                : ''
-            }
-            <div class="dc-form-actions">
-              <button type="button" class="dc-button" data-cancel>${this.translator.t(
-                'app.cancel'
-              )}</button>
-              <button type="button" class="dc-button ${
-                question.reversible
-                  ? 'dc-button-primary'
-                  : 'dc-button-destructive'
-              }" data-confirm>${question.action}</button>
-            </div>`
+            confirmMarkup(question, this.translator.t('app.cancel'))
           );
           boxes = Array.from(
             inner.querySelectorAll<HTMLInputElement>('[data-confirm-choice]')
@@ -2986,8 +2908,7 @@ export class DirectoryConsole {
       );
       // The form it covers still holds what a reload would lose.
       this.panelDirty = covered?.dirty ?? null;
-      dialog.setAttribute('role', 'alertdialog');
-      dialog.setAttribute('aria-describedby', 'dc-confirm-body');
+      markAlert(dialog, true);
       // Escape, the close button and a page left all cancel.
       this.panelGuard = (): boolean => {
         answer(false);

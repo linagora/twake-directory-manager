@@ -63,8 +63,10 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── shared/dom.ts           escapeHtml and small DOM helpers
     ├── console/shell.ts        the sidebar's markup (the frame moves here, #220)
     ├── console/settings.ts     what the browser remembers: language, reference section, contrast
-    ├── console/panel.ts        what Tab reaches in the panel, and from where
+    ├── console/panel.ts        the overlay (panel, toast region, announcer) and what Tab reaches in the panel
+    ├── console/dialog.ts       the confirm question's markup and its alert role
     ├── ui/table.ts             dataTable: the one way to draw a table (#226)
+    ├── ui/search.ts            searchBox: a named search box, with the select of its scope
     ├── ui/announce.ts          the hidden live region: said to a screen reader, not shown
     ├── ui/field.ts             what a form field shares: its help, a button the keyboard reaches
     ├── ui/toast.ts             the toast: shown for a moment, and said as it shows

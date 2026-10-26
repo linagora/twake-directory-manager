@@ -39,6 +39,16 @@ const tableSyntax = {
     'Draw a table with dataTable() from ui/table, which heads its columns and names it.',
 };
 
+// A dialog and a live region are drawn once, by the frame (src/console) and
+// the primitives (src/ui), with their focus and announcement handled there.
+// A search box is `searchBox` (src/ui/search.ts); the typing box of a picker,
+// a combobox over a listbox, is its own thing and stays with the pickers.
+const dialogSyntax = {
+  selector: 'TemplateElement[value.raw=/role="(alert)?dialog"|aria-live=/]',
+  message:
+    'A dialog and a live region are drawn by src/console and src/ui (overlayMarkup, confirmMarkup, announcerMarkup), not by a view.',
+};
+
 // What the caller may do is read from the scope in one module, src/rights.ts
 // (#222): one file to review when the authorization model changes, and one
 // table of tests to pin it. The client that fetches the scope may read it;
@@ -85,7 +95,12 @@ const rules = {
   // Markup reaches the page through `html` and `render` (src/shared/html.ts),
   // which escape every interpolation: a bare `innerHTML` is one escaping
   // forgotten away from a stored XSS in an administrator's session.
-  'no-restricted-syntax': ['error', ...restrictedSyntax, tableSyntax],
+  'no-restricted-syntax': [
+    'error',
+    ...restrictedSyntax,
+    tableSyntax,
+    dialogSyntax,
+  ],
   // TypeScript resolves names itself, DOM types included, which `no-undef`
   // knows nothing about.
   'no-undef': 'off',
@@ -96,7 +111,7 @@ const rules = {
 // when the file does; remove the file when it goes under the budget; never
 // add one.
 const oversized = {
-  'src/DirectoryConsole.ts': 3825,
+  'src/DirectoryConsole.ts': 3761,
   'src/components/EntityForm.ts': 1406,
 };
 
@@ -171,6 +186,7 @@ export default [
         'error',
         ...restrictedSyntax,
         tableSyntax,
+        dialogSyntax,
         ...scopeSyntax,
       ],
     },
@@ -178,7 +194,23 @@ export default [
   {
     files: ['src/ui/table.ts'],
     rules: {
-      'no-restricted-syntax': ['error', ...restrictedSyntax, ...scopeSyntax],
+      'no-restricted-syntax': [
+        'error',
+        ...restrictedSyntax,
+        dialogSyntax,
+        ...scopeSyntax,
+      ],
+    },
+  },
+  {
+    files: ['src/ui/search.ts', 'src/ui/announce.ts', 'src/console/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...restrictedSyntax,
+        tableSyntax,
+        ...scopeSyntax,
+      ],
     },
   },
   // The page's own script, a module run by the browser.

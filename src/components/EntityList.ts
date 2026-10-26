@@ -37,6 +37,7 @@ import { rememberPageSize, storedPageSize } from '../console/settings';
 import { selectorValue } from '../shared/dom';
 import { html, render, type SafeHtml } from '../shared/html';
 import type { Announce } from '../ui/announce';
+import { searchBox } from '../ui/search';
 import { dataTable } from '../ui/table';
 
 // Kept importable from here, where it was first defined.
@@ -751,32 +752,29 @@ export class EntityList {
     const searchLabel = translator.t('list.searchLabel', {
       entity: this.title,
     });
-    return html`
-      <div class="dc-search">
-        <input type="search" class="dc-input" data-search
-          value="${this.search}"
-          placeholder="${translator.t('list.search')}"
-          aria-label="${searchLabel}" title="${searchLabel}" />
-        <label class="dc-search-scope">
-          <span>${translator.t('list.searchIn')}</span>
-          <select class="dc-input" data-search-attribute
-            aria-label="${translator.t('list.searchInLabel')}">
-            <option value="${SEARCH_ANYWHERE}"${
-              this.searchAttribute === SEARCH_ANYWHERE ? ' selected' : ''
-            }>${translator.t('list.searchAnywhere')}</option>
-            ${this.scopeAttributes().map(
-              ([name, attr]) =>
-                html`<option value="${name}"${
-                  name === this.searchAttribute ? ' selected' : ''
-                }>${attributeLabel(
-                  name,
-                  attr,
-                  this.options.translator.language
-                )}</option>`
-            )}
-          </select>
-        </label>
-      </div>`;
+    return searchBox({
+      data: 'search',
+      name: searchLabel,
+      placeholder: translator.t('list.search'),
+      value: this.search,
+      scope: {
+        data: 'search-attribute',
+        text: translator.t('list.searchIn'),
+        name: translator.t('list.searchInLabel'),
+        options: [
+          {
+            value: SEARCH_ANYWHERE,
+            label: translator.t('list.searchAnywhere'),
+            selected: this.searchAttribute === SEARCH_ANYWHERE,
+          },
+          ...this.scopeAttributes().map(([name, attr]) => ({
+            value: name,
+            label: attributeLabel(name, attr, translator.language),
+            selected: name === this.searchAttribute,
+          })),
+        ],
+      },
+    });
   }
 
   /** Keep where the reader is, for the list drawn in this one's place. */

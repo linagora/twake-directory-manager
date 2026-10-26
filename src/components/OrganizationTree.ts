@@ -15,6 +15,7 @@ import type { OrganizationNode } from '../types';
 import { background, type Reporter } from '../shared/background';
 import { selectorValue } from '../shared/dom';
 import { html, render, type SafeHtml } from '../shared/html';
+import { searchBox } from '../ui/search';
 
 export interface TreeOptions {
   translator: Translator;
@@ -323,11 +324,12 @@ export class OrganizationTree {
         <div class="dc-tree">
           <div class="dc-tree-header">
             <h2>${translator.t('tree.title')}</h2>
-            <input type="search" class="dc-input" data-filter
-              value="${this.filter}"
-              placeholder="${translator.t('tree.filter')}"
-              aria-label="${translator.t('tree.filterLabel')}"
-              title="${translator.t('tree.filterLabel')}" />
+            ${searchBox({
+              data: 'filter',
+              name: translator.t('tree.filterLabel'),
+              placeholder: translator.t('tree.filter'),
+              value: this.filter,
+            })}
           </div>
           <div data-tree-list></div>
         </div>`

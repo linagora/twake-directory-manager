@@ -1107,6 +1107,29 @@ describe('Directory console: the shell and the overview', () => {
         );
       });
 
+      it('should lay the panel, the toast region and the hidden region over the page', () => {
+        const { container } = drawn();
+        const dialog = container.querySelector(
+          '[data-panel] [data-panel-dialog]'
+        );
+        expect(dialog?.getAttribute('role')).to.equal('dialog');
+        expect(dialog?.getAttribute('aria-modal')).to.equal('true');
+        expect(dialog?.getAttribute('aria-labelledby')).to.equal(
+          'dc-panel-title'
+        );
+        expect(
+          container
+            .querySelector('[data-panel-close]')
+            ?.getAttribute('aria-label')
+        ).to.equal('Close');
+        const toast = container.querySelector('[data-toast-region]');
+        expect(toast?.getAttribute('role')).to.equal('status');
+        expect(toast?.getAttribute('aria-live')).to.equal('polite');
+        expect(
+          container.querySelector('[data-toast-region] [data-toast]')
+        ).to.not.equal(null);
+      });
+
       it('should hold a hidden region that says to a screen reader what the eye reads at once', () => {
         const { container } = drawn();
         const region = container.querySelector(

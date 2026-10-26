@@ -33,8 +33,11 @@ README's Development section shows. CI runs all of it on every pull request
 context, report)` (`src/shared/background.ts`), which reports a failure.
 - No `<table` written by hand: a table is `dataTable({ name, columns, rows })`
   from `src/ui/table.ts`, which heads every column and names the table (a
-  hidden caption, or the heading above it). The shared primitives of #226
-  live in `src/ui/`.
+  hidden caption, or the heading above it). A search box is `searchBox` from
+  `src/ui/search.ts`; a dialog and a live region are drawn by the frame
+  (`src/console/panel.ts`, `src/console/dialog.ts`) and the announcer, never
+  by a view (ESLint refuses `role="dialog"` and `aria-live` elsewhere). The
+  shared primitives of #226 live in `src/ui/`.
 - What a screen reader must hear while the eye reads it at once (a result
   count, a selection) goes through the frame's announcer (`announce`, from
   `src/ui/announce.ts`), passed to a component as an option; what everyone
