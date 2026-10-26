@@ -40,13 +40,16 @@ src/index.ts                public exports: DirectoryConsole, four components
 └── DirectoryConsole.ts     the controller: boot, routing, shell and sidebar,
     │                       the views not moved yet (overview, lists, cards,
     │                       organizations), the actions not moved yet (forms,
-    │                       transit, deletion, Add to a group…)
+    │                       Add to a group…)
     ├── views/
     │   └── policies.ts         the password policies page and its panel (#220's first view)
     ├── actions/
     │   ├── passwords.ts        Reset password, the first password of an account created
     │   │                       without one, the generated password shown once
-    │   └── state.ts            an account's state from its card, and Change state… on a selection
+    │   ├── state.ts            an account's state from its card, and Change state… on a selection
+    │   ├── transit.ts          Claim… into one of the caller's organizations, and Hand over,
+    │   │                       the groups the caller writes offered to leave
+    │   └── deletion.ts         Delete, asked first: an entry, an organization, a selection
     ├── components/
     │   ├── EntityList.ts       search, list, selection, CSV export
     │   ├── EntityDetail.ts     an entry's card, its relations and actions
@@ -91,7 +94,7 @@ e2e/                        the Playwright suite, a package of its own
 scripts/qa-environment/     OpenLDAP + Dex + the image, for e2e and by hand
 ```
 
-`DirectoryConsole.ts` is far too large (over 3,500 lines) and takes in every
+`DirectoryConsole.ts` is far too large (over 3,000 lines) and takes in every
 feature; splitting it into views and actions behind a small shell is
 [#220](https://github.com/linagora/twake-directory-manager/issues/220), under
 way. A view is a class of `src/views/` given a `ConsoleContext`
@@ -100,14 +103,19 @@ the dialog services, the toast and the reporter, the page's ticket, the
 entities — built once in `init()`, whose changing parts (the translator, the
 rights, the entities once discovered) are functions asked each time, never
 copies. The password policies are the first (`PoliciesView`). An action is a
-class of `src/actions/` given the same context: what a card, a list or a form
-starts and that opens a panel or writes, the password resets
-(`PasswordActions`) and the state changes (`StateActions`) first; it holds
-nothing between two calls, and `init()` makes one of each. The console keeps
-a one-line method for each view, each action and the panel and dialog
-services while the other callers move, deleted at the last step. ESLint keeps
-the direction: a view imports no other view, an action neither a view nor
-another action, and `components/` imports neither `views/` nor `actions/`.
+class of `src/actions/` given the same context, for what a card, a list or a
+form starts and that opens a panel or writes — the password resets
+(`PasswordActions`), the state changes (`StateActions`), Claim… and Hand
+over (`TransitActions`) and the deletions (`DeletionActions`) so far; it
+holds nothing between two calls, and `init()` makes one of each. What an
+action needs of a page the console still draws — the address, the
+organization tree, an entry's groups, the banner's count of what waits in
+transit — it asks of the context, which the console answers until that page
+moves. The console keeps a one-line method for each view, each action and
+the panel and dialog services while the other callers move, deleted at the
+last step. ESLint keeps the direction: a view imports no other view, an
+action neither a view nor another action, and `components/` imports neither
+`views/` nor `actions/`.
 Until a feature's turn comes, a new page is a view, a new action an action, a
 new reusable widget a component.
 

@@ -114,7 +114,7 @@ const rules = {
 // when the file does; remove the file when it goes under the budget; never
 // add one.
 const oversized = {
-  'src/DirectoryConsole.ts': 2824,
+  'src/DirectoryConsole.ts': 2420,
   'src/components/EntityForm.ts': 1406,
 };
 
