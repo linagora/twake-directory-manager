@@ -83,7 +83,7 @@ import type {
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
-import type { ConsoleContext } from './console/context';
+import type { ConsoleContext, Relations } from './console/context';
 import type { ConsoleDeps } from './console/deps';
 import { DialogService } from './console/dialog';
 import { POLICIES_KEY, type Route, routeOf } from './console/route';
@@ -101,6 +101,8 @@ import { announcer } from './ui/announce';
 import { PoliciesView } from './views/policies';
 import { PasswordActions } from './actions/passwords';
 import { StateActions } from './actions/state';
+import { TransitActions } from './actions/transit';
+import { DeletionActions } from './actions/deletion';
 import { bulkPanel, bulkWritable } from './console/bulk';
 import { ToastController } from './ui/toast';
 
@@ -242,6 +244,10 @@ export class DirectoryConsole {
   private passwords!: PasswordActions;
   /** The changes of state, made by `init()` with the context: they hold nothing */
   private states!: StateActions;
+  /** Claim… and Hand over, made by `init()` with the context: they hold nothing */
+  private transits!: TransitActions;
+  /** The deletions, made by `init()` with the context: they hold nothing */
+  private deletions!: DeletionActions;
 
   /**
    * @param options what the page gives the console
@@ -289,6 +295,8 @@ export class DirectoryConsole {
     this.context = this.contextOf();
     this.passwords = new PasswordActions(this.context);
     this.states = new StateActions(this.context);
+    this.transits = new TransitActions(this.context);
+    this.deletions = new DeletionActions(this.context);
 
     render(
       this.container,
@@ -392,6 +400,18 @@ export class DirectoryConsole {
       personName: (entity, entry, id) => this.personName(entity, entry, id),
       submittedName: (entity, values, id) =>
         this.submittedName(entity, values, id),
+      entryName: (entity, id) => this.entryName(entity, id),
+      roleValue: (entity, entry, role) => this.roleValue(entity, entry, role),
+      go: path => this.go(path),
+      record: (path, replace) => this.record(path, replace),
+      route: () => this.route,
+      readTransit: () => this.readTransit(),
+      tree: () => this.tree,
+      relations: (entity, entry, strict) =>
+        this.relations(entity, entry, strict),
+      groupEntity: dn => this.groupEntity(dn),
+      changeState: (entity, id, entry, preselect) =>
+        this.changeState(entity, id, entry, preselect),
     };
   }
 
@@ -1389,22 +1409,7 @@ export class DirectoryConsole {
     entity: EntityDescriptor,
     entry: Entry,
     strict = false
-  ): Promise<
-    | {
-        title: string;
-        attribute: string;
-        items: {
-          id: string;
-          label: string;
-          note?: string;
-          removable?: boolean;
-        }[];
-        groups?: boolean;
-        /** The groups could not be listed: none is not to be told from it */
-        unknown?: boolean;
-      }
-    | undefined
-  > {
+  ): Promise<Relations | undefined> {
     let unknown = false;
     for (const role of ['members', 'groupMemberships']) {
       for (const [name, attr] of Object.entries(entity.schema.attributes)) {
@@ -3077,257 +3082,24 @@ export class DirectoryConsole {
   }
 
   /**
-   * The last segment of an organization path: the organization's own name,
-   * for a place that has the whole path next to it.
-   *
-   * @param path full path, as the directory writes it
-   * @returns its last non-empty segment, or the path itself when it has none
+   * Claim an entry in transit into one of the caller's organizations (see
+   * `TransitActions`).
    */
-  private pathLeaf(path: string): string {
-    // Split on the separator as the directory writes it, blanks included:
-    // trimmed to `/`, it cut a name holding a slash, _R&D/IT_, to _IT_.
-    const separator = this.api.organizationPathSeparator;
-    if (!separator) return path;
-    const segments = path
-      .split(separator)
-      .map(segment => segment.trim())
-      .filter(Boolean);
-    return segments[segments.length - 1] ?? path;
-  }
-
-  /**
-   * Claim an entry in transit into one of the caller's organizations. Only
-   * those are offered: the server asks for write on the destination and
-   * nothing else, so any other choice would be refused.
-   */
-  private async claim(
+  private claim(
     entity: EntityDescriptor,
     id: string,
     name = id
   ): Promise<void> {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const rights = this.rights;
-    if (!rights.transit) return;
-    const transit = comparableDn(rights.transit);
-    let targets: { dn: string; label: string }[];
-    try {
-      targets = (
-        await this.api.organizationOptions(rights.claimRoots())
-      ).filter(target => comparableDn(target.dn) !== transit);
-    } catch (err) {
-      this.toast((err as Error).message, true);
-      return;
-    }
-
-    this.openPanel(
-      t('transit.claimTitle', { name }),
-      body => {
-        if (targets.length === 0) {
-          render(body, html`<p class="dc-empty">${t('transit.noTarget')}</p>`);
-          return;
-        }
-        render(
-          body,
-          html`
-          <form class="dc-form">
-            <div class="dc-field">
-              <label for="dc-claim-target">${t('transit.target')}</label>
-              <select id="dc-claim-target" class="dc-input">
-                ${targets.map(
-                  target =>
-                    html`<option value="${target.dn}">${target.label}</option>`
-                )}
-              </select>
-            </div>
-            <div class="dc-form-actions">
-              <button type="button" class="dc-button" data-cancel>${t(
-                'app.cancel'
-              )}</button>
-              <button type="submit" class="dc-button dc-button-primary">${t(
-                'transit.claimButton',
-                {
-                  organization: this.pathLeaf(targets[0].label),
-                }
-              )}</button>
-            </div>
-          </form>`
-        );
-
-        body
-          .querySelector('[data-cancel]')
-          ?.addEventListener('click', () => this.closePanel());
-        // The button says where the entry goes, as the select changes: by
-        // the organization's own name, the select above it showing the whole
-        // path, which repeated on the button ran over three lines.
-        const submit = body.querySelector<HTMLButtonElement>(
-          'button[type="submit"]'
-        );
-        body
-          .querySelector<HTMLSelectElement>('#dc-claim-target')
-          ?.addEventListener('change', event => {
-            const chosen = targets.find(
-              item => item.dn === (event.target as HTMLSelectElement).value
-            );
-            if (submit && chosen)
-              submit.textContent = t('transit.claimButton', {
-                organization: this.pathLeaf(chosen.label),
-              });
-          });
-        body.querySelector('form')?.addEventListener('submit', event => {
-          event.preventDefault();
-          const select =
-            body.querySelector<HTMLSelectElement>('#dc-claim-target');
-          const target = targets.find(item => item.dn === select?.value);
-          if (!target) return;
-          background(
-            () =>
-              this.api
-                .move(entity, id, target.dn)
-                .then(async () => {
-                  this.closePanel();
-                  this.toast(
-                    t('transit.claimed', { name, organization: target.label })
-                  );
-                  // To its card, where its position and its groups wait to be
-                  // put right: the Overview's toast left it to be searched for.
-                  const here =
-                    this.route.view === 'entity' &&
-                    this.route.entity === entity.key &&
-                    this.route.id === id;
-                  if (here) await this.afterTransitMove();
-                  else {
-                    this.go(`${entity.key}/${encodeURIComponent(id)}`);
-                    await this.readTransit();
-                  }
-                })
-                // Claiming is judged on the organization chosen alone.
-                .catch((err: unknown) =>
-                  this.toast(
-                    this.refusal(err, entity, target.label).message,
-                    true
-                  )
-                ),
-            'api.move',
-            this.report
-          );
-        });
-      },
-      true
-    );
+    return this.transits.claim(entity, id, name);
   }
 
-  /**
-   * Draw the page again after an entry went into or out of transit, and
-   * count the branch again on the banner. The Overview counts it itself.
-   */
-  private async afterTransitMove(): Promise<void> {
-    await this.renderMain();
-    if (this.route.view !== 'dashboard') await this.readTransit();
-  }
-
-  /**
-   * Let an entry go into the transit branch, for another administrator,
-   * once asked: named as a colleague would name it, with the organization
-   * it leaves.
-   */
-  private async handOver(
+  /** Let an entry go into the transit branch, once asked (see `TransitActions`). */
+  private handOver(
     entity: EntityDescriptor,
     id: string,
     entry: Entry
   ): Promise<void> {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const transit = this.rights.transit;
-    if (!transit) return;
-    const name = this.personName(entity, entry, id);
-    const organization = this.roleValue(entity, entry, 'organizationPath');
-    // The department's groups went with the person, a shared mailbox
-    // included, and once handed over the caller no longer reached the
-    // account's card to take them out: those the caller writes are offered,
-    // checked; the others are named.
-    let failed = false;
-    const relations = await this.relations(entity, entry, true).catch(() => {
-      failed = true;
-      return undefined;
-    });
-    const groups = relations?.groups ? relations.items : [];
-    // Groups that could not be listed are no groups: it is said.
-    const unknown = failed || !!relations?.unknown;
-    const offered = groups.filter(group => group.removable);
-    const kept = groups.filter(group => !group.removable);
-    const choices = offered.map(group => ({
-      label: group.note ? `${group.label} · ${group.note}` : group.label,
-      checked: true,
-    }));
-    if (
-      !(await this.confirmAction({
-        title: t('transit.handOverTitle', { name }),
-        lines: [
-          ...(organization
-            ? [t('transit.handOverLeaves', { name, organization })]
-            : []),
-          t('transit.handOverConfirm'),
-          ...(unknown ? [t('delete.groupsUnknown', { name })] : []),
-          ...(kept.length
-            ? [
-                t('transit.staysIn', {
-                  name,
-                  groups: kept.map(group => group.label).join(', '),
-                }),
-              ]
-            : []),
-        ],
-        ...(choices.length
-          ? {
-              choices: {
-                title: t('transit.alsoRemove', { name }),
-                options: choices,
-              },
-            }
-          : {}),
-        action: t('transit.handOver'),
-        reversible: true,
-      }))
-    )
-      return;
-    try {
-      await this.api.move(entity, id, transit);
-    } catch (err) {
-      // Handing over is judged on the organization the entry leaves. Moved
-      // first, a refusal leaves the account in its groups as well.
-      this.toast(this.refusal(err, entity, organization ?? name).message, true);
-      return;
-    }
-    // Out of the checked groups once moved: a removal is judged on the group
-    // the caller writes, wherever the account now is.
-    const still: string[] = [];
-    for (const [index, group] of offered.entries()) {
-      if (!choices[index].checked) continue;
-      const owner = this.groupEntity(group.id);
-      try {
-        if (!owner || !entry.dn) throw new Error();
-        await this.api.removeMember(
-          owner,
-          rdnValue(group.id),
-          String(entry.dn)
-        );
-      } catch {
-        still.push(group.label);
-      }
-    }
-    // Where it comes from is said once more, and only here: the entry, now
-    // in transit, no longer names it. A group it stays in is a refusal.
-    const done = organization
-      ? t('transit.handedOverFrom', { name: id, from: organization })
-      : t('transit.handedOver', { name: id });
-    this.toast(
-      still.length
-        ? `${done}${t('transit.stillIn', { groups: still.join(', ') })}`
-        : done,
-      still.length > 0
-    );
-    await this.afterTransitMove();
+    return this.transits.handOver(entity, id, entry);
   }
 
   /**
@@ -3425,300 +3197,35 @@ export class DirectoryConsole {
   }
 
   /**
-   * The groups an account belongs to, by name: from its `memberOf`, else
-   * searched among the groups, as its card finds them.
-   *
-   * @returns their names, or undefined when the search failed or could not
-   *   be made: the account may belong to groups all the same
-   */
-  private async groupsOf(
-    entity: EntityDescriptor,
-    entry: Entry
-  ): Promise<string[] | undefined> {
-    for (const [name, attr] of Object.entries(entity.schema.attributes)) {
-      const roles = Array.isArray(attr.role) ? attr.role : [attr.role];
-      if (!roles.includes('groupMemberships')) continue;
-      let list = [entryValue(entry, name) ?? []].flat();
-      if (!list.length && entry.dn) {
-        try {
-          list = await this.api.memberships(entry.dn, this.entities, true);
-        } catch {
-          return undefined;
-        }
-      }
-      return list.map(dn => rdnValue(String(dn)));
-    }
-    return [];
-  }
-
-  /**
-   * What to ask before deleting an entry. An account is named by its full
-   * name, email and organization, the way to tell two "jmartin" apart, with
-   * the groups it leaves and the state change offered instead. A group says
-   * its members stay. Anything else, a position or a mail domain, is named
-   * as its card names it.
+   * Delete an entry once asked (see `DeletionActions`).
    *
    * @param entry the entry, when its card is open
    * @param canChangeState offer an account's state change instead
    */
-  private async deletion(
-    entity: EntityDescriptor,
-    id: string,
-    entry?: Entry,
-    canChangeState = false
-  ): Promise<Confirmation> {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const irreversible = t('delete.irreversible');
-    const name = entry
-      ? this.personName(entity, entry, id)
-      : this.entryName(entity, id);
-    const title = t('delete.title', { name });
-    if (entry && entity.kind === 'group') {
-      const members = roleAttribute(entity.schema, 'members');
-      // groupOfNames needs a member: an empty DN stands for none.
-      const count = members
-        ? [entryValue(entry, members) ?? []]
-            .flat()
-            .filter(member => String(member).trim()).length
-        : 0;
-      return {
-        title,
-        lines: [
-          ...(count ? [t('delete.membersStay', { count })] : []),
-          irreversible,
-        ],
-        action: t('delete.groupButton'),
-      };
-    }
-    if (!entry || !roleAttribute(entity.schema, 'displayName'))
-      return {
-        title,
-        lines: [irreversible],
-        action: t('delete.button', { name }),
-      };
-
-    const groups = await this.groupsOf(entity, entry);
-    const summary = [
-      name,
-      this.roleValue(entity, entry, 'primaryEmail'),
-      this.roleValue(entity, entry, 'organizationPath'),
-    ].filter(Boolean);
-    // Offered only where Disabled is a state the account is not already in.
-    const status = entity.accountStatus;
-    const disabled = status
-      ? entity.schema.attributes[status]?.states?.disabled
-      : undefined;
-    const current = status
-      ? [entryValue(entry, status) ?? []].flat()[0]
-      : undefined;
-    const offer =
-      canChangeState &&
-      !!disabled &&
-      comparableDn(disabled) !== comparableDn(String(current ?? ''));
-    return {
-      title,
-      lines: [
-        summary.join(' · '),
-        // Groups that could not be listed are not none: it says so, and
-        // leaves the deletion to the administrator.
-        !groups
-          ? `${irreversible} ${t('delete.groupsUnknown', { name })}`
-          : groups.length
-            ? `${irreversible} ${t('delete.leavesGroups', {
-                name,
-                groups: groups.join(', '),
-              })}`
-            : irreversible,
-      ],
-      action: t('delete.button', {
-        name: this.roleValue(entity, entry, 'givenName') ?? name,
-      }),
-      alternative: offer
-        ? {
-            label: t('delete.preferDisable'),
-            run: (): void =>
-              background(
-                () => this.changeState(entity, id, entry, 'disabled'),
-                'changeState',
-                this.report
-              ),
-          }
-        : undefined,
-    };
-  }
-
-  /**
-   * Delete an entry once asked.
-   *
-   * @param entry the entry, when its card is open
-   * @param canChangeState offer an account's state change instead
-   */
-  private async confirmDelete(
+  private confirmDelete(
     entity: EntityDescriptor,
     id: string,
     entry?: Entry,
     canChangeState = false
   ): Promise<void> {
-    // Named as the dialog names it.
-    const name = entry
-      ? this.personName(entity, entry, id)
-      : this.entryName(entity, id);
-    if (
-      !(await this.confirmAction(
-        await this.deletion(entity, id, entry, canChangeState)
-      ))
-    )
-      return;
-    try {
-      await this.api.remove(entity, id);
-      this.toast(this.translator.t('delete.done'));
-      this.go(entity.key);
-    } catch (err) {
-      this.toast(
-        this.inUse(err, entity, id) ?? this.refusal(err, entity, name).message,
-        true
-      );
-    }
+    return this.deletions.one(entity, id, entry, canChangeState);
   }
 
-  /**
-   * Why an entry still pointed at may not be deleted, in words. The server
-   * refuses with a 409 naming the entry by its DN and the pointer by its
-   * attribute, in English: `Cannot delete cn=Sales Manager,…: still
-   * referenced by another entry (title)`. The pointer is named by the label
-   * of a field landing in the entry's branch, _Position_.
-   *
-   * @param err the refusal
-   * @param entity the entity of the entry
-   * @param id the entry's main attribute value
-   * @returns the message, or undefined for another refusal
-   */
-  private inUse(
-    err: unknown,
-    entity: EntityDescriptor,
-    id: string
-  ): string | undefined {
-    const { status, message } = err as { status?: number; message?: string };
-    const attribute = /still referenced[^(]*\(([^)]+)\)\s*$/i.exec(
-      message ?? ''
-    )?.[1];
-    if (status !== 409 || !attribute) return undefined;
-    const { language } = this.translator;
-    const base = entity.base ? comparableDn(entity.base) : undefined;
-    let field: string | undefined;
-    for (const candidate of this.entities) {
-      const found = Object.entries(candidate.schema.attributes).find(
-        ([name, attr]) =>
-          name.toLowerCase() === attribute.toLowerCase() &&
-          (attr.branch || attr.items?.branch || []).some(
-            branch => comparableDn(branch) === base
-          )
-      );
-      if (found) {
-        field = attributeLabel(found[0], found[1], language);
-        break;
-      }
-    }
-    return this.translator.t('delete.inUse', {
-      name: this.entryName(entity, id),
-      field: field ?? attribute,
-    });
-  }
-
-  private async confirmDeleteOrganization(
+  /** Delete an organization once asked (see `DeletionActions`). */
+  private confirmDeleteOrganization(
     entity: EntityDescriptor,
     entry: Entry,
     dn: string
   ): Promise<void> {
-    // Named the way the console shows it, by its path: a DN is no name.
-    const named = (attribute?: string): string | undefined => {
-      const value = attribute ? entryValue(entry, attribute) : undefined;
-      return Array.isArray(value) ? value[0] : value;
-    };
-    const name =
-      named(entity.organizationPath) ||
-      named(entity.mainAttribute) ||
-      rdnValue(dn);
-    if (
-      !(await this.confirmAction({
-        title: this.translator.t('delete.title', { name }),
-        lines: [this.translator.t('delete.irreversible')],
-        action: this.translator.t('delete.organizationButton'),
-      }))
-    )
-      return;
-    try {
-      await this.api.deleteOrganization(dn);
-      this.toast(this.translator.t('delete.done'));
-      // Its parent takes its place: where it was, beside its siblings. Its
-      // address is replaced, as Back could only lead to a page now gone.
-      const parent = this.tree?.parentOf(dn);
-      if (parent) {
-        await this.tree?.refresh(parent).catch(() => []);
-        this.record(`organizations/${encodeURIComponent(parent)}`, true);
-      } else this.record('organizations', true);
-      await this.renderMain();
-    } catch (err) {
-      // The server's refusal names the DN, in English: say it in words.
-      if ((err as { status?: number }).status === 409)
-        this.toast(this.translator.t('delete.notEmpty', { name }), true);
-      else this.toast(this.refusal(err, entity, name).message, true);
-    }
+    return this.deletions.organization(entity, entry, dn);
   }
 
-  /**
-   * Delete a selection, reporting each refusal on its own: a bulk action that
-   * stops at the first error leaves the operator guessing which entries went.
-   *
-   * @returns whether any entry was deleted: none on Cancel, and the list
-   *   then stays as it was, selection and focus with it
-   */
-  private async deleteMany(
+  /** Delete a selection once asked (see `DeletionActions`): whether any went. */
+  private deleteMany(
     entity: EntityDescriptor,
     ids: string[]
   ): Promise<boolean> {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    if (ids.length === 0) return false;
-    // The first few by name, enough to see the selection is the right one.
-    const named = ids.slice(0, 5).map(id => this.entryName(entity, id));
-    const more = ids.length - named.length;
-    if (
-      !(await this.confirmAction({
-        title: t('delete.manyTitle', { count: ids.length }),
-        lines: [t('delete.irreversible')],
-        items: more ? [...named, t('delete.andMore', { count: more })] : named,
-        action: t('delete.manyButton', { count: ids.length }),
-      }))
-    )
-      return false;
-
-    const failures: string[] = [];
-    let deleted = 0;
-    for (const id of ids) {
-      try {
-        await this.api.remove(entity, id);
-        deleted++;
-      } catch (err) {
-        const name = this.entryName(entity, id);
-        const { refusal } = err as { refusal?: { code?: string } };
-        const said = this.refusal(err, entity, name).message;
-        // A refusal of rights names the entry itself; any other is said
-        // after its name.
-        failures.push(
-          this.inUse(err, entity, id) ??
-            (refusal?.code === 'forbidden'
-              ? said
-              : t('delete.failed', { name, error: said }))
-        );
-      }
-    }
-    this.toast(
-      failures.length === 0 ? t('delete.done') : failures.join(' · '),
-      failures.length > 0
-    );
-    return deleted > 0;
+    return this.deletions.many(entity, ids);
   }
 
   /** Show a short message. */

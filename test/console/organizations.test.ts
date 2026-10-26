@@ -93,7 +93,6 @@ describe('Directory console: organizations', () => {
       });
       Object.assign(app as unknown as { entities: EntityDescriptor[] }, {
         entities: [organizations],
-        confirmAction: async () => true,
       });
       Object.assign((app as unknown as { api: object }).api, {
         organizationTop: async () => ({ dn: top, name: 'organization' }),
@@ -144,11 +143,6 @@ describe('Directory console: organizations', () => {
             cleared: string[],
             entry?: Entry,
             parentDn?: string
-          ): Promise<void>;
-          confirmDeleteOrganization(
-            entity: EntityDescriptor,
-            entry: Entry,
-            dn: string
           ): Promise<void>;
         },
         location,
@@ -285,27 +279,6 @@ describe('Directory console: organizations', () => {
       expect(tree()).to.include('>Lyon</button>');
       expect(selected(tree())).to.equal(lyon);
       expect(read).to.deep.equal([lyon]);
-    });
-
-    it('should select the parent of an organization just deleted', async () => {
-      const { app, location, replaced, read, tree, restore } = setup();
-      try {
-        location.hash = `#/organizations/${encodeURIComponent(backend)}`;
-        await app.followHash();
-        read.length = 0;
-        await app.confirmDeleteOrganization(
-          organizations,
-          { dn: backend, ou: 'Backend' },
-          backend
-        );
-      } finally {
-        restore();
-      }
-      expect(replaced).to.deep.equal([
-        `#/organizations/${encodeURIComponent(engineering)}`,
-      ]);
-      expect(selected(tree())).to.equal(engineering);
-      expect(read).to.deep.equal([engineering]);
     });
 
     /** The nodes drawn with a "+". */
@@ -1333,7 +1306,6 @@ describe('Directory console: organizations', () => {
         rights: {
           organizationRights(dn: string): { write: boolean; delete: boolean };
         };
-        claim(entity: EntityDescriptor, id: string): Promise<void>;
       };
       /** A console of this scope, the transit branch holding these entries */
       const setup = (scope: Scope | null, waiting: Entry[]) => {

@@ -1,18 +1,39 @@
 /**
  * What a view or an action is given of the console, instead of reaching into
  * it: the client, the words, the rights, the entities, the panel and the
- * dialog, the toast and the reporter, the ticket of the page drawn (#220).
+ * dialog, the toast and the reporter, the ticket of the page drawn, the
+ * address (#220).
  *
  * @module twake-directory-manager/console/context
  */
 
 import type { ConsoleApiClient } from '../api/ConsoleApiClient';
+import type { OrganizationTree } from '../components/OrganizationTree';
 import type { Translator } from '../i18n';
 import type { Rights } from '../rights';
 import type { Reporter } from '../shared/background';
-import type { EntityDescriptor, Entry } from '../types';
+import type { AttachedEntries, EntityDescriptor, Entry } from '../types';
 import type { DialogService } from './dialog';
 import type { PanelService } from './panel';
+import type { Route } from './route';
+
+/**
+ * The entries related to one: the members of a group, the groups an
+ * account belongs to, as its card lists them.
+ */
+export interface Relations {
+  title: string;
+  attribute: string;
+  items: {
+    id: string;
+    label: string;
+    note?: string;
+    removable?: boolean;
+  }[];
+  groups?: boolean;
+  /** The groups could not be listed: none is not to be told from it */
+  unknown?: boolean;
+}
 
 /**
  * The console as a view sees it, built once in `init()` from its own fields
@@ -22,9 +43,10 @@ import type { PanelService } from './panel';
  * keeps the context, not what it said.
  *
  * It holds what the views and actions moved out so far need (the password
- * policies; the password resets and the state changes), and grows with each
- * view and action moved out of `DirectoryConsole` (#220): add a member when
- * a moved method needs one, not before.
+ * policies; the password resets, the state changes, the transit and the
+ * deletions), and grows with each view and action moved out of
+ * `DirectoryConsole` (#220): add a member when a moved method needs one, not
+ * before.
  */
 export interface ConsoleContext {
   /** The client of ldap-rest */
@@ -70,4 +92,52 @@ export interface ConsoleContext {
     values: Record<string, string | string[]>,
     id: string
   ): string;
+  /**
+   * An entry named as its card and its list name it: a nomenclature's by
+   * the label its schema gives it, else by its identifier.
+   */
+  entryName(entity: EntityDescriptor, id: string): string;
+  /** The first value of the attribute playing a role, trimmed; none when empty */
+  roleValue(
+    entity: EntityDescriptor,
+    entry: Entry,
+    role: string
+  ): string | undefined;
+  /** Open the page an address names, after `#/`: the hash's change draws it */
+  go(path: string): void;
+  /**
+   * Name the page in the address without drawing it again; `replace` takes
+   * the place of the current address, for a page that no longer exists
+   */
+  record(path: string, replace?: boolean): void;
+  /** The page the address names now */
+  route(): Route;
+  /**
+   * Read what waits in transit again, and count it on the banner: null when
+   * there is nothing to read
+   */
+  readTransit(): Promise<AttachedEntries | null>;
+  /** The organization tree drawn last, when the organizations page drew one */
+  tree(): OrganizationTree | null;
+  /**
+   * An entry's members or groups, as its card lists them. `strict` fails
+   * a search of groups that cannot be made, rather than finding none.
+   */
+  relations(
+    entity: EntityDescriptor,
+    entry: Entry,
+    strict?: boolean
+  ): Promise<Relations | undefined>;
+  /** The group entity whose branch holds a DN */
+  groupEntity(dn: string): EntityDescriptor | undefined;
+  /**
+   * Open an account's change of state, a state picked already when named:
+   * the deletion's way out (see `StateActions`)
+   */
+  changeState(
+    entity: EntityDescriptor,
+    id: string,
+    entry: Entry,
+    preselect?: string
+  ): Promise<void>;
 }
