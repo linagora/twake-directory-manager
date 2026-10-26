@@ -50,7 +50,7 @@ export interface AttachedOptions {
   /** Name of the organization, for the tables that list no one */
   name: string;
   /** Readable name of the entry a pointer lands on, when one is known */
-  pointerLabel?(dn: string): string | undefined;
+  pointerLabel?: (dn: string) => string | undefined;
   /**
    * Create an entry of this kind in the organization, when the caller may:
    * the button stands in the table's heading

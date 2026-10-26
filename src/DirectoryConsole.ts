@@ -1425,7 +1425,7 @@ export class DirectoryConsole {
       main.querySelectorAll<HTMLElement>('[data-new]')
     ))
       button.addEventListener('click', () => {
-        const entity = this.entity(button.dataset.new as string);
+        const entity = this.entity(button.dataset.new);
         if (entity)
           background(() => this.openForm(entity), 'openForm', this.report);
       });
@@ -3572,7 +3572,7 @@ export class DirectoryConsole {
           ): Promise<string> =>
             createdEntryId(
               entity,
-              await this.api.create(entity, values as Entry),
+              await this.api.create(entity, values),
               values
             ),
           onDone: (created: string[]): void => {
@@ -3758,11 +3758,11 @@ export class DirectoryConsole {
    * @param here where a creation was asked for: what the new entry starts
    *   with, and what to do once it exists instead of opening its card
    */
-  private async openForm(
+  private openForm(
     entity: EntityDescriptor,
     entry?: Entry,
     here?: { preset: Entry; created(): void }
-  ): Promise<void> {
+  ): void {
     // Organizations are written through their own endpoints, whatever offered
     // the form. The dashboard's "New organization" button came through here,
     // and this path reads the new entry's id from the create response, which
@@ -3826,7 +3826,7 @@ export class DirectoryConsole {
             this.closePanel(true);
             await this.renderMain();
           } else {
-            const created = await this.api.create(entity, values as Entry);
+            const created = await this.api.create(entity, values);
             const createdId = createdEntryId(entity, created, values);
             this.toast(this.createdToast(entity, values, createdId));
             // Created from an organization's card, the entry joins its table
@@ -3955,11 +3955,11 @@ export class DirectoryConsole {
    * root when the scope allows it there, otherwise under their one written
    * branch, or under the one they pick when they write several.
    */
-  private async openOrganizationForm(
+  private openOrganizationForm(
     entity: EntityDescriptor,
     entry?: Entry,
     parentDn?: string
-  ): Promise<void> {
+  ): void {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     const parents = entry || parentDn ? [] : this.creationParents(entity);
@@ -4520,10 +4520,7 @@ export class DirectoryConsole {
    * Cancel closes it then, should the server never answer; a password
    * generated all the same gets a panel of its own.
    */
-  private async resetPassword(
-    entity: EntityDescriptor,
-    id: string
-  ): Promise<void> {
+  private resetPassword(entity: EntityDescriptor, id: string): void {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     this.openPanel(t('password.title'), body => {

@@ -336,7 +336,6 @@
   padding: 10px 32px;
   background: color-mix(in srgb, var(--dc-ground) 82%, transparent);
   backdrop-filter: saturate(180%) blur(16px);
-  -webkit-backdrop-filter: saturate(180%) blur(16px);
   border-bottom: 1px solid var(--dc-line);
   font-size: 13px;
 }
