@@ -31,6 +31,7 @@ const en: Catalogue = {
   'app.notFound': 'There is no page at this address.',
   'app.notFoundTitle': 'No such page',
   'app.skipToContent': 'Skip to main content',
+  'app.highContrast': 'High contrast',
   'app.languageHint':
     'The interface changes language as soon as one is chosen.',
   'app.toOverview': 'Go to the Overview',
@@ -490,6 +491,7 @@ const fr: Catalogue = {
   'app.notFound': 'Il n’y a pas de page à cette adresse.',
   'app.notFoundTitle': 'Page introuvable',
   'app.skipToContent': 'Aller au contenu principal',
+  'app.highContrast': 'Contraste élevé',
   'app.languageHint':
     'L’interface change de langue dès qu’une langue est choisie.',
   'app.toOverview': 'Aller à l’accueil',
@@ -980,6 +982,7 @@ const mn: Catalogue = {
   'app.notFound': 'Энэ хаягт хуудас алга.',
   'app.notFoundTitle': 'Хуудас олдсонгүй',
   'app.skipToContent': 'Үндсэн агуулга руу шилжих',
+  'app.highContrast': 'Өндөр контраст',
   'app.languageHint': 'Хэл сонгомогц интерфэйс тэр даруй солигдоно.',
   'app.toOverview': 'Нүүр хуудас руу очих',
 

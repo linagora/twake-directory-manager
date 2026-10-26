@@ -616,6 +616,66 @@ test.describe('NAV layout, navigation and language', () => {
     await form.expectClosed();
   });
 
+  test('NAV-13 high contrast, chosen from the sidebar or asked by the system', async ({
+    page,
+  }) => {
+    // Fields outlined at 1.5:1 and a current place shown by a tint only left
+    // low-vision readers to guess (#210).
+    const app = await new LoginPage(page).loginAs(ADMIN, 'users');
+    const box = app.sidebar.getByRole('checkbox', { name: 'High contrast' });
+    const frame = page.locator('.dc-app');
+    const border = (): Promise<string> =>
+      app.list().searchBox.evaluate(el => getComputedStyle(el).borderColor);
+    await expect(box).toBeVisible();
+    await expect(box).not.toBeChecked();
+    await expect(frame).not.toHaveClass(/dc-contrast-high/);
+    const standard = await border();
+
+    await box.focus();
+    await page.keyboard.press('Space');
+    await expect(box).toBeChecked();
+    await expect(box).toBeFocused();
+    await expect(frame).toHaveClass(/dc-contrast-high/);
+    // #595959 on white: 7:1, where the default border measured 1.5:1
+    await expect.poll(border).toBe('rgb(89, 89, 89)');
+    await expect(app.navItem('Users')).toHaveCSS('font-weight', '700');
+    await expect(app.list().rows.first().getByRole('link')).toHaveCSS(
+      'text-decoration-line',
+      'underline'
+    );
+
+    // Kept across a reload and a change of language
+    await app.reload();
+    await expect(frame).toHaveClass(/dc-contrast-high/);
+    await expect(box).toBeChecked();
+    await app.setLanguage('fr');
+    await expect(frame).toHaveClass(/dc-contrast-high/);
+    await expect(
+      app.sidebar.getByRole('checkbox', { name: 'Contraste élevé' })
+    ).toBeChecked();
+    await app.setLanguage('en');
+
+    // Unticked: the default theme again, pixel for pixel
+    await box.uncheck();
+    await expect(frame).not.toHaveClass(/dc-contrast-high/);
+    await expect.poll(border).toBe(standard);
+
+    // With no choice stored, the system's wish decides
+    await page.evaluate(() =>
+      localStorage.removeItem('ldap-rest.console.contrast')
+    );
+    await page.emulateMedia({ contrast: 'more' });
+    await app.reload();
+    await expect(frame).toHaveClass(/dc-contrast-high/);
+    await expect(box).toBeChecked();
+    // and the reader's choice wins over it
+    await box.uncheck();
+    await expect(frame).not.toHaveClass(/dc-contrast-high/);
+    await app.reload();
+    await expect(frame).not.toHaveClass(/dc-contrast-high/);
+    await page.emulateMedia({ contrast: 'no-preference' });
+  });
+
   test('NAV-11 the frame for keyboard and screen-reader users: titles, skip link, lists, language', async ({
     page,
   }) => {
