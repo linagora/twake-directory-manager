@@ -465,7 +465,9 @@
 
 .dc-tag-transit {
   background: var(--dc-accent-soft);
-  color: var(--dc-accent);
+  /* The darker accent: the tag sits on tinted rows too (a selected one), where
+     the accent measured 4.4:1, and AA wants 4.5. */
+  color: var(--dc-accent-dark);
 }
 
 /* An account's state when it is an exception, caught by a scan down the
