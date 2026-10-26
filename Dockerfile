@@ -19,7 +19,9 @@ RUN npm ci --ignore-scripts
 COPY rollup.config.mjs tsconfig.json ./
 COPY src ./src
 COPY public ./public
-RUN npm run build && rm -f dist/*.map
+# The page loads the ESM bundle and the stylesheet; the UMD bundles are for
+# the npm package, and the source maps for nobody in production.
+RUN npm run build && rm -f dist/*.map dist/twake-directory-manager.js dist/twake-directory-manager.min.js
 
 FROM ${LDAP_REST_IMAGE}
 

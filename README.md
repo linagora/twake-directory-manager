@@ -211,24 +211,27 @@ Japan.
 
 ### ldap-rest version
 
-The image is built on `ghcr.io/linagora/ldap-rest`, whose version is a build
-argument:
+The image is built on `ghcr.io/linagora/ldap-rest`, at the version the
+`Dockerfile` names (1.1.0 today), and the console is tested against that
+version only. The base image is a build argument:
 
 ```sh
-docker build --build-arg LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:0.8.0 \
+docker build --build-arg LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:1.1.0 \
   -t twake-directory-manager .
 ```
 
-The console needs the enterprise plugins, which ldap-rest ships from 0.8.0.
+An older ldap-rest serves the console as far as its API matches, but is not
+tested; one older than 0.25.0 lacks parts of the scope answer the console
+reads, and offers less.
 
 ### Kubernetes
 
 A Helm chart is published with each release, under the same version as the
-image:
+image (`--version` names the release to install):
 
 ```sh
 helm install directory-manager \
-  oci://ghcr.io/linagora/charts/twake-directory-manager --version 0.1.0 \
+  oci://ghcr.io/linagora/charts/twake-directory-manager --version 0.12.0 \
   --set ldap.url=ldap://ldap.example.org \
   --set ldap.bindDn='cn=admin,dc=example,dc=org' \
   --set ldap.base='dc=example,dc=org' \

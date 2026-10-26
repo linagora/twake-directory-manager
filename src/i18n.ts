@@ -7,7 +7,7 @@
  * deployment's own vocabulary, and translating them here would put one
  * customer's words in the product.
  *
- * @module browser/directory-console/i18n
+ * @module twake-directory-manager/i18n
  */
 
 export type Catalogue = Record<string, string>;
