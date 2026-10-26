@@ -759,7 +759,9 @@ test.describe('LIST lists, search and bulk actions', () => {
     await page.keyboard.press('Space');
     await expect(list.selectAll).toBeFocused();
 
-    await list.perPage.selectOption('25');
+    await list.perPage.focus();
+    await list.perPage.selectOption('50');
+    await expect(list.perPage).toHaveValue('50');
     await expect(list.perPage).toBeFocused();
     if (await list.nextButton.isEnabled()) {
       await list.nextButton.focus();

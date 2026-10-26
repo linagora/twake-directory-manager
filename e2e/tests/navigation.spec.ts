@@ -468,7 +468,10 @@ test.describe('NAV layout, navigation and language', () => {
     });
     const tooltip = form.dialog.locator('#dc-help-employeeNumber');
     await expect(tooltip).toBeHidden();
-    await help.focus();
+    // Reached with the keyboard (Shift+Tab from the field it precedes), which
+    // is what shows the help: a focus set by a script does not.
+    await page.keyboard.press('Shift+Tab');
+    await expect(help).toBeFocused();
     await expect(tooltip).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(tooltip).toBeHidden();
