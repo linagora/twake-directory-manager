@@ -38,11 +38,13 @@ src/index.ts                public exports: DirectoryConsole, four components
                             ConsoleApiClient, Translator, Rights and the scope helpers,
                             html/SafeHtml, types
 └── DirectoryConsole.ts     the controller: boot, routing, shell and sidebar,
-    │                       the views not moved yet (overview, lists, cards,
-    │                       organizations) and what they start themselves
-    │                       (Add to a group…, Add members…, the CSV import)
+    │                       the views not moved yet (overview, lists, cards)
+    │                       and what they start themselves (Add to a group…,
+    │                       Add members…, the CSV import)
     ├── views/
-    │   └── policies.ts         the password policies page and its panel (#220's first view)
+    │   ├── policies.ts         the password policies page and its panel (#220's first view)
+    │   └── organizations.ts    the tree and the card of the organization selected, its
+    │                           people and groups; kept by the console, for the tree it holds
     ├── actions/
     │   ├── passwords.ts        Reset password, the first password of an account created
     │   │                       without one, the generated password shown once
@@ -96,7 +98,7 @@ e2e/                        the Playwright suite, a package of its own
 scripts/qa-environment/     OpenLDAP + Dex + the image, for e2e and by hand
 ```
 
-`DirectoryConsole.ts` is far too large (over 2,500 lines) and takes in every
+`DirectoryConsole.ts` is far too large (over 2,400 lines) and takes in every
 feature; splitting it into views and actions behind a small shell is
 [#220](https://github.com/linagora/twake-directory-manager/issues/220), under
 way. A view is a class of `src/views/` given a `ConsoleContext`
@@ -104,7 +106,11 @@ way. A view is a class of `src/views/` given a `ConsoleContext`
 the dialog services, the toast and the reporter, the page's ticket, the
 entities — built once in `init()`, whose changing parts (the translator, the
 rights, the entities once discovered) are functions asked each time, never
-copies. The password policies are the first (`PoliciesView`). An action is a
+copies. The password policies are the first (`PoliciesView`), made anew
+each time as they hold nothing; the organizations the second
+(`OrganizationsView`), kept by the console from one drawing to the next for
+the tree it holds, which a page drawn again finds open where the reader
+left it. An action is a
 class of `src/actions/` given the same context, for what a card, a list or a
 form starts and that opens a panel or writes — the password resets
 (`PasswordActions`), the state changes (`StateActions`), Claim… and Hand
@@ -112,16 +118,18 @@ over (`TransitActions`), the deletions (`DeletionActions`) and the forms
 (`FormActions`), the last of #220's step 5; what the pages start themselves
 (Add to a group…, Add members…, the CSV import) moves with them. An action
 holds nothing between two calls, and `init()` makes one of each. What it
-needs of a page the console still draws — the address, the organization
-tree, an entry's groups, the banner's count of what waits in transit, the
-label of a New button — it asks of the context, which the console answers
-until that page moves; what it needs of another action (a change of state
-from a deletion, the first password of an account just created) it asks of
-the context too. The console keeps a one-line method for each view, each
+needs of a page — the address, the organization tree, an entry's groups,
+the banner's count of what waits in transit, the label of a New button — it
+asks of the context, which the console answers until that page moves, and
+then asks the view (the tree is `OrganizationsView`'s); what it needs of
+another action (a change of state from a deletion, the first password of an
+account just created) it asks of the context too, and so does a view of an
+action it starts (the organization's form and its deletion), or of a page
+still in the console (the list of users opened on a department's path). The console keeps a one-line method for each view, each
 action and the panel and dialog services while the other callers move,
 deleted at the last step, or as soon as no caller is left. ESLint keeps the direction: a view imports no
-other view, an action neither a view nor another action, and `components/`
-imports neither `views/` nor `actions/`.
+other view and no action, an action neither a view nor another action, and
+`components/` imports neither `views/` nor `actions/`.
 Until a feature's turn comes, a new page is a view, a new action an action, a
 new reusable widget a component.
 
