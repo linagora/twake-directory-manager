@@ -65,21 +65,32 @@ describe('EntityForm', () => {
         .querySelector('#dc-field-employeeNumber')
         ?.getAttribute('aria-describedby')
     ).to.equal('dc-help-employeeNumber');
+    const escape = (): KeyboardEvent => {
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        cancelable: true,
+        bubbles: true,
+      });
+      help.dispatchEvent(event);
+      return event;
+    };
     help.focus();
+    // Pressed, shown; pressed again, hidden although the focus stays
     help.click();
     expect(help.getAttribute('aria-expanded')).to.equal('true');
     help.click();
     expect(help.getAttribute('aria-expanded')).to.equal('false');
-    const escape = new KeyboardEvent('keydown', {
-      key: 'Escape',
-      cancelable: true,
-      bubbles: true,
-    });
-    help.dispatchEvent(escape);
-    expect(escape.defaultPrevented).to.equal(true);
     expect(tip.classList.contains('dc-dismissed')).to.equal(true);
+    // Nothing shown: the Escape is the panel's
+    expect(escape().defaultPrevented).to.equal(false);
+    // Shown by the focus, Escape hides it and is spent
     help.dispatchEvent(new Event('blur'));
     expect(tip.classList.contains('dc-dismissed')).to.equal(false);
+    help.focus();
+    expect(escape().defaultPrevented).to.equal(true);
+    expect(tip.classList.contains('dc-dismissed')).to.equal(true);
+    // A second Escape, with nothing left to hide, closes the form
+    expect(escape().defaultPrevented).to.equal(false);
   });
 
   it('should group named fields in a fieldset, and the rest in a plain block', async () => {

@@ -37,5 +37,10 @@ export function toTitleCase(text: string): string {
  * @returns what goes between the quotes
  */
 export function selectorValue(value: string): string {
-  return value.replace(/["\\]/g, '\\$&');
+  return value.replace(/["\\]/g, '\\$&').replace(
+    // A control character ends a CSS string: written as its code point.
+    // eslint-disable-next-line no-control-regex
+    /[\x00-\x1f\x7f]/g,
+    character => `\\${character.charCodeAt(0).toString(16)} `
+  );
 }

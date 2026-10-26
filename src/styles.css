@@ -1693,7 +1693,22 @@
   box-shadow: var(--dc-shadow-raised);
   visibility: hidden;
   opacity: 0;
-  transition: opacity 0.12s;
+  transition:
+    opacity 0.12s,
+    visibility 0s 0.15s;
+  /* Over the field below it: a click there is the field's, unless the
+     pointer is reading the text, which it reached from the help. */
+  pointer-events: none;
+}
+
+/* The gap between the help and its text, which the pointer crosses. */
+.dc-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 8px;
 }
 
 /* Shown under the pointer, under the keyboard's focus, once pressed, and
@@ -1704,11 +1719,18 @@
 .dc-tooltip:hover {
   visibility: visible;
   opacity: 1;
+  transition: opacity 0.12s;
+}
+
+.dc-help:hover + .dc-tooltip,
+.dc-tooltip:hover {
+  pointer-events: auto;
 }
 
 .dc-tooltip.dc-dismissed {
   visibility: hidden !important;
   opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .dc-required {

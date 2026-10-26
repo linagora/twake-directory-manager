@@ -35,21 +35,42 @@ export function bindHelp(wrapper: HTMLElement): void {
   const help = wrapper.querySelector<HTMLElement>('.dc-help');
   const tip = wrapper.querySelector<HTMLElement>('.dc-tooltip');
   if (!help || !tip) return;
+  const focused = (): boolean => document.activeElement === help;
+  /** Whether the text is on screen: pressed open, or under the focus or the pointer and not dismissed. */
+  const shown = (): boolean => {
+    if (help.getAttribute('aria-expanded') === 'true') return true;
+    if (tip.classList.contains('dc-dismissed')) return false;
+    try {
+      return help.matches(':focus-visible, :hover') || focused();
+    } catch {
+      return focused();
+    }
+  };
+  const hide = (): void => {
+    tip.classList.add('dc-dismissed');
+    help.setAttribute('aria-expanded', 'false');
+  };
   const reset = (): void => {
     tip.classList.remove('dc-dismissed');
     help.setAttribute('aria-expanded', 'false');
   };
   help.addEventListener('click', () => {
-    const open = help.getAttribute('aria-expanded') !== 'true';
-    tip.classList.remove('dc-dismissed');
-    help.setAttribute('aria-expanded', open ? 'true' : 'false');
+    // Pressed again, the text goes although the focus still shows it.
+    if (help.getAttribute('aria-expanded') === 'true') hide();
+    else {
+      tip.classList.remove('dc-dismissed');
+      help.setAttribute('aria-expanded', 'true');
+    }
   });
   help.addEventListener('keydown', event => {
-    if (event.key !== 'Escape') return;
+    // An Escape with nothing to hide is the panel's, which it closes.
+    if (event.key !== 'Escape' || !shown()) return;
     event.preventDefault();
-    tip.classList.add('dc-dismissed');
-    help.setAttribute('aria-expanded', 'false');
+    hide();
   });
   help.addEventListener('blur', reset);
-  help.parentElement?.addEventListener('mouseleave', reset);
+  help.parentElement?.addEventListener('mouseleave', () => {
+    // The pointer leaving changes nothing for a help the keyboard holds.
+    if (!focused()) reset();
+  });
 }

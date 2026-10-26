@@ -493,6 +493,8 @@ test.describe('NAV layout, navigation and language', () => {
       expect(await insidePanel(), `focus after ${i + 1} Shift+Tab`).toBe(true);
     }
 
+    // From a field: a help button showing its text would spend the Escape
+    await (await form.field('Employee ID')).focus();
     await page.keyboard.press('Escape');
     await form.expectClosed();
     await expect(edit).toBeFocused();

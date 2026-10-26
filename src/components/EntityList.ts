@@ -229,7 +229,9 @@ const KEPT_FOCUS = [
   '[data-export]',
   '[data-delete-selected]',
   '[data-list-all]',
+  '[data-leave-imported]',
   '.dc-empty',
+  '.dc-count',
 ];
 
 interface FocusState {
@@ -821,6 +823,9 @@ export class EntityList {
 
   /** What names the focused control once it is drawn anew, if anything. */
   private selectorOf(root: HTMLElement, active: HTMLElement): string | null {
+    // Only what the list itself draws: the tree names its rows by the same
+    // data, and is not this list's to move.
+    if (root.contains?.(active) === false) return null;
     for (const selector of KEPT_FOCUS)
       if (root.querySelector(selector) === active) return selector;
     const { select, bulkAction } = (active.dataset ?? {}) as {
@@ -830,6 +835,9 @@ export class EntityList {
     if (select !== undefined) return `[data-select="${selectorValue(select)}"]`;
     if (bulkAction !== undefined)
       return `[data-bulk-action="${selectorValue(bulkAction)}"]`;
+    const row = active.closest?.<HTMLElement>('tr[data-id]');
+    if (row?.dataset.id !== undefined && active.matches?.('.dc-row-link'))
+      return `[data-id="${selectorValue(row.dataset.id)}"] .dc-row-link`;
     return null;
   }
 
@@ -842,10 +850,12 @@ export class EntityList {
     const root = this.root;
     if (!root || !state) return;
     const drawn = root.querySelector<HTMLInputElement>(state.selector);
-    const target =
-      drawn && !(drawn as HTMLElement & { disabled?: boolean }).disabled
-        ? drawn
-        : this.focusInstead(root, state.selector);
+    // Disabled, or hidden with the bulk bar, a control cannot take the focus.
+    const takes =
+      drawn &&
+      !(drawn as HTMLElement & { disabled?: boolean }).disabled &&
+      !drawn.closest?.('[hidden]');
+    const target = takes ? drawn : this.focusInstead(root, state.selector);
     if (!target) return;
     target.focus();
     if (state.start !== null && typeof target.setSelectionRange === 'function')
@@ -869,17 +879,26 @@ export class EntityList {
   ): HTMLInputElement | null {
     const find = (query: string): HTMLInputElement | null =>
       root.querySelector<HTMLInputElement>(query);
+    const message = (): HTMLInputElement | null => find('.dc-empty');
     if (selector.startsWith('[data-page=')) {
       const other = find(
         selector === '[data-page="1"]' ? '[data-page="-1"]' : '[data-page="1"]'
       );
-      return other && !other.disabled ? other : find('.dc-count');
+      return other && !other.disabled
+        ? other
+        : (find('.dc-count') ?? message());
     }
-    if (/^\[data-(export|bulk-action|delete-selected)/.test(selector))
-      return find('[data-select-all]');
-    if (selector === '[data-list-all]' || selector === '.dc-empty')
-      return find('.dc-row-link') ?? find('.dc-empty');
-    return null;
+    // A bulk action gone with the selection, a row's box gone with its row:
+    // the header's box, else what the table left (a message).
+    if (/^\[data-(export|bulk-action|delete-selected|select=)/.test(selector))
+      return find('[data-select-all]') ?? message();
+    if (
+      selector === '[data-list-all]' ||
+      selector === '.dc-empty' ||
+      selector.endsWith(' .dc-row-link')
+    )
+      return find('.dc-row-link') ?? message();
+    return message();
   }
 
   private bodyMarkup(slice: [string, Entry][]): SafeHtml {

@@ -494,6 +494,42 @@ describe('OrganizationTree', () => {
       expect(document.activeElement).to.equal(toggle());
       expect(toggle()?.getAttribute('aria-label')).to.equal('Expand Sales');
     });
+
+    it('should leave the focus where the reader moved it while the children loaded', async () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      let release: (() => void) | undefined;
+      await new OrganizationTree({
+        translator: new Translator('en'),
+        root: async () => ({ dn: top, name: 'organization' }),
+        children: dn =>
+          dn === top
+            ? Promise.resolve([{ dn: sales, name: 'Sales' }])
+            : new Promise(resolve => {
+                release = (): void =>
+                  resolve([{ dn: `ou=France,${sales}`, name: 'France' }]);
+              }),
+        onSelect: () => undefined,
+      }).render(container);
+      const arrow = container.querySelector<HTMLElement>(
+        `[data-toggle="${sales}"]`
+      );
+      if (!arrow) throw new Error('no arrow');
+      arrow.focus();
+      arrow.click();
+      const elsewhere = document.createElement('button');
+      document.body.append(elsewhere);
+      elsewhere.focus();
+      release?.();
+      await tick();
+      await tick();
+      expect(
+        container
+          .querySelector(`[data-toggle="${sales}"]`)
+          ?.getAttribute('aria-expanded')
+      ).to.equal('true');
+      expect(document.activeElement).to.equal(elsewhere);
+    });
   });
 
   describe('OrganizationTree, revealing a node', () => {

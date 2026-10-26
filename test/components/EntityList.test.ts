@@ -261,6 +261,30 @@ describe('EntityList', () => {
       );
     });
 
+    it('should move the focus from a bulk action gone with the selection to the header’s box', async () => {
+      // The bar is drawn hidden, its buttons with it: a browser gives no
+      // focus to a hidden button, and the page took it.
+      const root = await mounted(3);
+      const all = root.querySelector<HTMLInputElement>('[data-select-all]');
+      if (!all) throw new Error('no header box');
+      change(all, true);
+      const exportButton = root.querySelector<HTMLElement>('[data-export]');
+      if (!exportButton) throw new Error('no Export');
+      exportButton.focus();
+      expect(document.activeElement).to.equal(exportButton);
+      // The selection cleared from the header's box, Export focused still
+      const header = root.querySelector<HTMLInputElement>('[data-select-all]');
+      if (!header) throw new Error('no header box');
+      header.checked = false;
+      header.dispatchEvent(new Event('change'));
+      expect(root.querySelector('.dc-bulk')?.hasAttribute('hidden')).to.equal(
+        true
+      );
+      expect(document.activeElement).to.equal(
+        root.querySelector('[data-select-all]')
+      );
+    });
+
     it('should keep the focus on Next, and move it to Previous at the last page', async () => {
       const root = await mounted(60);
       const next = root.querySelector<HTMLElement>('[data-page="1"]');

@@ -13,6 +13,7 @@ import { comparableDn, withinDn } from '../format';
 import type { Translator } from '../i18n';
 import type { OrganizationNode } from '../types';
 import { background, type Reporter } from '../shared/background';
+import { selectorValue } from '../shared/dom';
 import { html, render, type SafeHtml } from '../shared/html';
 
 export interface TreeOptions {
@@ -757,12 +758,12 @@ export class OrganizationTree {
       typeof document !== 'undefined' &&
       (document.activeElement as HTMLElement | null)?.dataset?.toggle === dn;
     const refocus = (): void => {
-      if (pressed)
-        this.container
-          ?.querySelector<HTMLElement>(
-            `[data-toggle="${dn.replace(/["\\]/g, '\\$&')}"]`
-          )
-          ?.focus();
+      // Left alone when the reader moved it meanwhile, as the load ran.
+      const active = document.activeElement;
+      if (!pressed || (active && active !== document.body)) return;
+      this.container
+        ?.querySelector<HTMLElement>(`[data-toggle="${selectorValue(dn)}"]`)
+        ?.focus();
     };
     if (this.expanded.has(dn)) {
       this.expanded.delete(dn);
