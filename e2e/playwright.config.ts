@@ -19,7 +19,9 @@ function traceMode(raw: string | undefined): TraceMode {
 /**
  * One retry by default: on a Docker host, Chromium aborts the requests in flight with
  * net::ERR_NETWORK_CHANGED whenever a container joins or leaves any network of the host (another
- * stack starting). Playwright reports a test that passed on its retry as flaky.
+ * stack starting). Playwright reports a test that passed on its retry as flaky — and in CI, where
+ * the stack is up before the first test and nothing else starts, a flaky test fails the run
+ * (`failOnFlakyTests`): one that passes only on retry would otherwise go unseen for good.
  */
 function retries(raw: string | undefined): number {
   const parsed = Number(raw);
@@ -49,6 +51,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: isCI,
   retries: retries(process.env.E2E_RETRIES),
+  failOnFlakyTests: isCI,
   workers: workers(process.env.E2E_WORKERS),
   timeout: 90_000,
   expect: { timeout: 10_000 },

@@ -6,7 +6,7 @@
  * and it took a trip to each group's form, one group at a time. The groups
  * are chosen here, from the account, and joined in one go.
  *
- * @module browser/directory-console/components/GroupPicker
+ * @module twake-directory-manager/components/GroupPicker
  */
 
 import { escapeHtml } from '../shared/dom';

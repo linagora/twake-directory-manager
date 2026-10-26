@@ -12,7 +12,7 @@
  * new account's card, are folded away; and the DN, which few administrators
  * need, waits under _Technical details_.
  *
- * @module browser/directory-console/components/EntityDetail
+ * @module twake-directory-manager/components/EntityDetail
  */
 
 import { escapeHtml } from '../shared/dom';

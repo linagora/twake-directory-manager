@@ -7,7 +7,7 @@
  * row, so the server applies exactly the rules a creation through the form
  * meets. Nothing is written before the operator has seen the check.
  *
- * @module components/EntityImport
+ * @module twake-directory-manager/components/EntityImport
  */
 
 import { parseCsv, writeCsv, type CsvTable } from '../csv';
@@ -341,8 +341,8 @@ export class EntityImport {
         for (const name of names) resolvers[name] = resolver;
       }
     } catch (err) {
-      // Said the way the list says it: "Internal Server Error" is what
-      // ldap-rest 0.12.0 answers a search too broad for the directory.
+      // Said the way the list says it: a refusal as too broad, a failure of
+      // the server's own, each in the words the list would use.
       this.error = listFailure(err, this.options.translator);
       this.step = 'mapping';
       this.paint();

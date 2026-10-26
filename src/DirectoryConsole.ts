@@ -7,7 +7,7 @@
  * label is written here, so a deployment that names its things differently
  * gets its own interface without a change.
  *
- * @module browser/directory-console/DirectoryConsole
+ * @module twake-directory-manager/DirectoryConsole
  */
 
 import { escapeHtml } from './shared/dom';
@@ -732,7 +732,6 @@ export class DirectoryConsole {
 
   /* ------------------------------------------------------------------ shell */
 
-  /** Draw the permanent frame: sidebar, scope, main area, side panel. */
   /**
    * Draw the console again in another language. An open side panel is kept
    * as it is, in the language it was opened in: drawn again, it was closed,
@@ -756,6 +755,7 @@ export class DirectoryConsole {
     background(() => this.renderMain(), 'renderMain', this.report);
   }
 
+  /** Draw the permanent frame: sidebar, scope, main area, side panel. */
   private drawShell(): void {
     const container = this.container;
     if (!container) return;

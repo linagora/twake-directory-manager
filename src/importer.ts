@@ -7,7 +7,7 @@
  * the entity's ordinary create endpoint, which applies every rule the server
  * has — the same ones a creation through the form meets.
  *
- * @module importer
+ * @module twake-directory-manager/importer
  */
 
 import type { CsvTable } from './csv';

@@ -1,6 +1,6 @@
 /**
  * Getting a session back once the server has ended it.
- * @module session
+ * @module twake-directory-manager/session
  */
 
 const REAUTH_KEY = 'ldap-rest.console.reauthAt';

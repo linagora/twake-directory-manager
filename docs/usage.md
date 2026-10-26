@@ -148,10 +148,11 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 - **A list asks for 1,000 entries at most**, searched or not
   (`?limit=1000`). A server that honours it and answers
   `X-Result-Truncated: true` gets a notice above the table: there are more,
-  to be reached by searching. A search the directory refuses as too broad is
-  explained rather than shown as the server's generic error: `422` from an
-  ldap-rest that tells that refusal apart says so; a `500`, which is how
-  ldap-rest 0.12.0 reports it, suggests narrowing the search.
+  to be reached by searching. A search the directory refuses as too broad
+  (`422`) is explained rather than shown in the server's words for an API
+  client; a proxy giving up on a slow search (`502`, `504`) is read the same
+  way, hedged. A failure of the server's own (`500`) says the list could not
+  be loaded, with the cause the server names, if any.
 - **The page size is remembered**, along with the chosen language.
 - **A group's members are found by email address.** With ldap-rest's
   `core/ldap/externalUsersInGroups` (ldap-rest 0.19.0 or later), an address no entry holds is offered as an
@@ -246,9 +247,9 @@ last.
    its name, a department by its path, or any of them by its DN. The
    pointer's branch is listed whole for that; a branch the directory will not
    list in one search — the accounts of a large directory, for a column of
-   managers — is refused (`422`, or `500` from ldap-rest 0.12.0, or a proxy's
-   `502`/`504`), and the values the file holds are then looked up one by one
-   instead, a few at a time. A DN is read as such when it names a direct
+   managers — is refused (`422`, or a proxy's `502`/`504`), and the values
+   the file holds are then looked up one by one instead, a few at a time; a
+   failure of the server's own (`500`) stops the check and is said. A DN is read as such when it names a direct
    child of the branch by its main attribute, the way ldap-rest's flat
    entities are laid out; any other DN is not found. Anything else is read as
    an identifier, which settles it exactly: written in another case, it is
@@ -353,8 +354,8 @@ When the listing fails, the select keeps the value the entry holds either
 way. A branch the caller may not read (`403`) offers nothing more, and says
 nothing: that is what it holds for them. Any other failure is said under the
 field, in the words the entity list uses. A branch refused as too broad
-(`422`, or `500` from ldap-rest 0.12.0, or a proxy's `502`/`504`) that an
-entity owns becomes a search box instead, since its entries can still be
+(`422`, or a proxy's `502`/`504`) that an entity owns becomes a search box
+instead, since its entries can still be
 found by typing — by the attributes the entity's list searches, not by a
 nomenclature's labels, which live in its schema. The organization tree has no
 search, and keeps the select with the message. A raw branch still offers
@@ -380,7 +381,8 @@ the plain key.
   reached by searching, not by paging. That needs a server that honours
   `limit` on the list endpoint: ldap-rest 0.12.0 ignores it, still fetches a
   branch or a search in full, and fails once the directory's size limit is
-  exceeded. Across origins, the deployment's CORS policy has to expose
+  exceeded, with a `500` the console shows as a server failure: it no longer
+  reads that version's `500` as a search too broad. Across origins, the deployment's CORS policy has to expose
   `X-Result-Truncated` (`Access-Control-Expose-Headers`), or the list looks
   complete and shows no notice.
 - Moving an entry between two organizations the caller writes has no control

@@ -5,12 +5,12 @@
  * ```html
  * <div id="console"></div>
  * <script type="module">
- *   import { DirectoryConsole } from '/static/browser/directory-console.esm.js';
+ *   import { DirectoryConsole } from '/static/console/twake-directory-manager.esm.js';
  *   await new DirectoryConsole({ containerId: 'console' }).init();
  * </script>
  * ```
  *
- * @module browser/directory-console
+ * @module twake-directory-manager
  */
 
 import './styles.css';

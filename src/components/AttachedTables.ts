@@ -12,7 +12,7 @@
  * paging: an organization's attached entries are what the server lists in
  * one answer, and it says when it left some out.
  *
- * @module browser/directory-console/components/AttachedTables
+ * @module twake-directory-manager/components/AttachedTables
  */
 
 import { escapeHtml } from '../shared/dom';

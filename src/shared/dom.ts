@@ -1,7 +1,7 @@
 /**
  * DOM helpers, taken from ldap-rest's browser libraries.
  *
- * @module shared/dom
+ * @module twake-directory-manager/shared/dom
  */
 
 /**

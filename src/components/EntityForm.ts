@@ -11,7 +11,7 @@
  * gets it wrong; and a long form opens as a side panel rather than a modal
  * whose Save button ends up off screen.
  *
- * @module browser/directory-console/components/EntityForm
+ * @module twake-directory-manager/components/EntityForm
  */
 
 import { escapeHtml } from '../shared/dom';

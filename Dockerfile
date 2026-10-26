@@ -4,8 +4,9 @@
 #   docker build -t twake-directory-manager .
 #   docker build --build-arg LDAP_REST_IMAGE=ldap-rest:local -t … .
 #
-# The console needs an ldap-rest recent enough to serve the enterprise
-# plugins (enterpriseRules, accountLifecycle, authzScope).
+# The console is tested against the ldap-rest named here, and needs at least
+# one that serves the enterprise plugins (enterpriseRules, accountLifecycle,
+# authzScope) and the scope answer of 0.25.0.
 ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:1.1.0
 
 # The console builds to JavaScript and CSS, which are the same whatever the
@@ -19,7 +20,9 @@ RUN npm ci --ignore-scripts
 COPY rollup.config.mjs tsconfig.json ./
 COPY src ./src
 COPY public ./public
-RUN npm run build && rm -f dist/*.map
+# The page loads the ESM bundle and the stylesheet; the UMD bundles are for
+# the npm package, and the source maps for nobody in production.
+RUN npm run build && rm -f dist/*.map dist/twake-directory-manager.js dist/twake-directory-manager.min.js
 
 FROM ${LDAP_REST_IMAGE}
 
