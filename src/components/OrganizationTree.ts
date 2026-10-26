@@ -6,7 +6,7 @@
  * Children are fetched the first time a node is opened, so a wide tree costs
  * one request per branch actually visited.
  *
- * @module browser/directory-console/components/OrganizationTree
+ * @module twake-directory-manager/components/OrganizationTree
  */
 
 import { escapeHtml } from '../shared/dom';

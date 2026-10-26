@@ -166,4 +166,6 @@ a network interface appears or goes, that is whenever a container of any stack o
 or leaves a network. `LoginPage.loginAs`, `ConsolePage.open` and `ConsolePage.reload` start such a
 full page load again; a request of the console itself cannot be replayed, hence one retry by
 default (`E2E_RETRIES`). Playwright lists a test that passed on its retry as flaky: look at its
-trace before blaming the console.
+trace before blaming the console. In CI, where the stack is up before the first test and nothing
+else starts, a flaky test fails the run (`failOnFlakyTests`), so that one passing only on retry
+does not go unseen.

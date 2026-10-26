@@ -5,7 +5,7 @@
  * `core/ldap/passwordPolicy` serves typed. Unlike the entities, it comes with
  * no schema: the attributes are the overlay's, so the product names them.
  *
- * @module browser/directory-console/components/PasswordPolicies
+ * @module twake-directory-manager/components/PasswordPolicies
  */
 
 import { escapeHtml } from '../shared/dom';

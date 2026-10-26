@@ -7,7 +7,7 @@
  * they did not already know. Both are fixed here, in one place, so the table,
  * the detail card and the form agree.
  *
- * @module browser/directory-console/format
+ * @module twake-directory-manager/format
  */
 
 import { escapeHtml, toTitleCase } from './shared/dom';
