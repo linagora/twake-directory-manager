@@ -387,7 +387,7 @@ export class DirectoryConsole {
         readRelations(this.context, entity, entry, strict),
       groupEntity: dn => groupEntity(this.entities, dn),
       changeState: (entity, id, entry, preselect) =>
-        this.changeState(entity, id, entry, preselect),
+        this.states.change(entity, id, entry, preselect),
       resetPassword: (entity, id) => this.passwords.reset(entity, id),
       claim: (entity, id, name) => this.claim(entity, id, name),
       handOver: (entity, id, entry) =>
@@ -1540,16 +1540,6 @@ export class DirectoryConsole {
   }
 
   /* --------------------------------------------------------------- actions */
-
-  /** Change an account's state from its card (see `StateActions`). */
-  private changeState(
-    entity: EntityDescriptor,
-    id: string,
-    entry: Entry,
-    preselect?: string
-  ): Promise<void> {
-    return this.states.change(entity, id, entry, preselect);
-  }
 
   /**
    * Claim an entry in transit into one of the caller's organizations (see

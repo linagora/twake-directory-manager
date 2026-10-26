@@ -270,7 +270,8 @@ refinements aside. Entity and attribute names are **not** translated here: they 
 - `npm test`: mocha over `test/`, which mirrors `src/`: `test/api/`,
   `test/components/`, one file per module, and `test/console/` for the
   console's own behaviours (helpers, organizations, the panel and the toast,
-  the shell and the overview, entries and their groups), `test/views/` and
+  the shell and the overview, the bulk actions a list offers and the group
+  picker's keyboard), `test/views/` and
   `test/actions/` for the views and actions moved out of it. A DOM
   (happy-dom, `test/support/dom.ts`) is registered before any test, and
   nothing reaches the network: the API is `nock`, with no connection allowed

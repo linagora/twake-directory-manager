@@ -2,7 +2,7 @@
  * An entry's relations, as its card lists them: the members of a group,
  * the groups an account belongs to, each group with its type and whether
  * the caller may take the account out of it; and where a related entry's
- * card is. Read by the entry's card, and through the context by the
+ * card is. Read through the context, by the entry's card and by the
  * actions that need an entry's groups (Hand over); a group's type is said
  * by the group pickers too (#220).
  *
