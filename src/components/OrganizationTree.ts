@@ -751,23 +751,24 @@ export class OrganizationTree {
   private async toggle(dn: string): Promise<void> {
     const node = this.find(dn);
     if (!node) return;
-    // The arrow pressed is drawn anew with the list, and the focus went
-    // with it to the page: it comes back to the arrow, whose name now says
-    // the other state (#208). Left alone when the focus was elsewhere.
-    const pressed =
-      typeof document !== 'undefined' &&
-      (document.activeElement as HTMLElement | null)?.dataset?.toggle === dn;
+    // The list is drawn anew, and the focus went with the node it was on to
+    // the page: it comes back to the same node — the arrow pressed, whose
+    // name now says the other state, or another the reader moved to as the
+    // children loaded (#208). Left alone when it was outside the tree.
     const refocus = (): void => {
-      // Left alone when the reader moved it meanwhile, as the load ran.
-      const active = document.activeElement;
-      if (!pressed || (active && active !== document.body)) return;
-      this.container
-        ?.querySelector<HTMLElement>(`[data-toggle="${selectorValue(dn)}"]`)
-        ?.focus();
+      const active = document.activeElement as HTMLElement | null;
+      const { toggle, select } = active?.dataset ?? {};
+      const kept =
+        toggle !== undefined
+          ? `[data-toggle="${selectorValue(toggle)}"]`
+          : select !== undefined && active?.classList.contains('dc-tree-label')
+            ? `[data-select="${selectorValue(select)}"]`
+            : null;
+      this.draw();
+      if (kept) this.container?.querySelector<HTMLElement>(kept)?.focus();
     };
     if (this.expanded.has(dn)) {
       this.expanded.delete(dn);
-      this.draw();
       refocus();
       return;
     }
@@ -782,7 +783,6 @@ export class OrganizationTree {
         this.expanded.delete(dn);
       }
     }
-    this.draw();
     refocus();
   }
 

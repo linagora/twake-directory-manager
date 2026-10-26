@@ -36,14 +36,14 @@ export function bindHelp(wrapper: HTMLElement): void {
   const tip = wrapper.querySelector<HTMLElement>('.dc-tooltip');
   if (!help || !tip) return;
   const focused = (): boolean => document.activeElement === help;
-  /** Whether the text is on screen: pressed open, or under the focus or the pointer and not dismissed. */
+  /** Whether the text is on screen: pressed open, or under the keyboard's focus or the pointer and not dismissed. */
   const shown = (): boolean => {
     if (help.getAttribute('aria-expanded') === 'true') return true;
     if (tip.classList.contains('dc-dismissed')) return false;
     try {
-      return help.matches(':focus-visible, :hover') || focused();
+      return help.matches(':focus-visible, :hover');
     } catch {
-      return focused();
+      return false;
     }
   };
   const hide = (): void => {

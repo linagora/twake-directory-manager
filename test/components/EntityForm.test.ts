@@ -83,12 +83,15 @@ describe('EntityForm', () => {
     expect(tip.classList.contains('dc-dismissed')).to.equal(true);
     // Nothing shown: the Escape is the panel's
     expect(escape().defaultPrevented).to.equal(false);
-    // Shown by the focus, Escape hides it and is spent
+    // Shown (pressed open), Escape hides it and is spent
     help.dispatchEvent(new Event('blur'));
     expect(tip.classList.contains('dc-dismissed')).to.equal(false);
     help.focus();
+    help.click();
+    expect(help.getAttribute('aria-expanded')).to.equal('true');
     expect(escape().defaultPrevented).to.equal(true);
     expect(tip.classList.contains('dc-dismissed')).to.equal(true);
+    expect(help.getAttribute('aria-expanded')).to.equal('false');
     // A second Escape, with nothing left to hide, closes the form
     expect(escape().defaultPrevented).to.equal(false);
   });

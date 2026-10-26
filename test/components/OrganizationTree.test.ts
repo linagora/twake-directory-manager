@@ -530,6 +530,40 @@ describe('OrganizationTree', () => {
       ).to.equal('true');
       expect(document.activeElement).to.equal(elsewhere);
     });
+
+    it('should follow the reader to another node of the tree moved to while the children loaded', async () => {
+      // That node is drawn anew with the list too, and the arrow pressed
+      // would have taken the focus from it.
+      const container = document.createElement('div');
+      document.body.append(container);
+      let release: (() => void) | undefined;
+      await new OrganizationTree({
+        translator: new Translator('en'),
+        root: async () => ({ dn: top, name: 'organization' }),
+        children: dn =>
+          dn === top
+            ? Promise.resolve([{ dn: sales, name: 'Sales' }])
+            : new Promise(resolve => {
+                release = (): void =>
+                  resolve([{ dn: `ou=France,${sales}`, name: 'France' }]);
+              }),
+        onSelect: () => undefined,
+      }).render(container);
+      container.querySelector<HTMLElement>(`[data-toggle="${sales}"]`)?.click();
+      const label = container.querySelector<HTMLElement>(
+        `.dc-tree-label[data-select="${sales}"]`
+      );
+      if (!label) throw new Error('no label');
+      label.focus();
+      release?.();
+      await tick();
+      await tick();
+      const drawn = container.querySelector(
+        `.dc-tree-label[data-select="${sales}"]`
+      );
+      expect(drawn).to.not.equal(label);
+      expect(document.activeElement).to.equal(drawn);
+    });
   });
 
   describe('OrganizationTree, revealing a node', () => {
