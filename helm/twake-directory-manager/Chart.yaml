@@ -5,10 +5,11 @@ description: |
   serving its API under /api with the console's static files next to it, so
   one Deployment and one Ingress cover both.
 type: application
-# version and appVersion are overwritten from the git tag by the release
-# workflow. The values here are only a fallback for a checkout.
-version: 0.1.0
-appVersion: "0.1.0"
+# version and appVersion follow package.json: bumped with it in the release
+# commit, and checked against the tag by the release workflow, which packages
+# the chart as it is here.
+version: 0.12.0
+appVersion: "0.12.0"
 home: https://github.com/linagora/twake-directory-manager
 keywords:
   - ldap

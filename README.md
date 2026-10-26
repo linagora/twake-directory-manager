@@ -290,6 +290,7 @@ and [storage](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugi
 ```sh
 npm ci
 npm test           # unit tests, no server needed
+npm run test:coverage  # the same, with coverage (thresholds in .c8rc.json)
 npm run build      # bundles and page in dist/
 npm run lint
 npm run format:check

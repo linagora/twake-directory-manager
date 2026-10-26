@@ -22,92 +22,57 @@ env:
   IMAGE_DOCKER: docker.io/yadd/twake-directory-manager
 
 jobs:
-  # Gate the whole release on a green build + test suite: nothing is published
-  # if the console does not build.
-  test:
-    name: Test
+  # Every gate a pull request runs, from the one workflow that defines them:
+  # lint, format, typecheck, unit tests on each Node version, build, the end
+  # to end suite against the image built from this tree, and the Helm checks.
+  # Nothing is published if any of them fails.
+  checks:
+    name: Checks
+    uses: ./.github/workflows/test.yml
+
+  # The tag, package.json, the chart and the changelog have to agree before
+  # anything is published under the tag's version: the version in
+  # package.json has lagged behind a tag before, and a tag without its
+  # changelog section would have made a release note out of a link.
+  preflight:
+    name: Version, chart and changelog agree
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24.x
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npm run typecheck
-
-      - name: Run tests
-        run: npm test
-
-      - name: Build
-        run: npm run build
-
-  # The end to end suite gates the release too: the Playwright suite of e2e/ against the image
-  # built from this tree, behind the stack of scripts/qa-environment/ (OpenLDAP + Dex).
-  e2e:
-    name: E2E
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: e2e
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24.x
-          cache: 'npm'
-          cache-dependency-path: e2e/package-lock.json
-
-      - run: npm ci
-
-      - name: Type check
-        run: npm run typecheck
-
-      - name: Build the image
-        run: ../scripts/qa-environment/build.sh
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Start the stack
-        run: ./scripts/start.sh
-
-      - name: Test
-        run: npx playwright test
-
-      - name: Logs of the stack
-        if: failure()
-        run: mkdir -p test-results && docker compose -p twake-directory-manager-e2e -f ../scripts/qa-environment/docker-compose.yaml logs --no-color > test-results/stack.log 2>&1 || true
-
-      - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}
-        with:
-          name: e2e-report
-          path: |
-            e2e/playwright-report/
-            e2e/test-results/
-          retention-days: 14
-
-      - name: Stop the stack
-        if: always()
-        run: ./scripts/stop.sh
+      - name: Compare the tag with package.json, Chart.yaml and CHANGELOG.md
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE=$(node -p "require('./package.json').version")
+          CHART=$(sed -n 's/^version: *//p' helm/twake-directory-manager/Chart.yaml)
+          APP=$(sed -n 's/^appVersion: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' helm/twake-directory-manager/Chart.yaml)
+          failed=0
+          if [ "$PACKAGE" != "$VERSION" ]; then
+            echo "::error::package.json says $PACKAGE, the tag says $VERSION"; failed=1
+          fi
+          if [ "$CHART" != "$VERSION" ]; then
+            echo "::error::Chart.yaml version is $CHART, the tag says $VERSION"; failed=1
+          fi
+          if [ "$APP" != "$VERSION" ]; then
+            echo "::error::Chart.yaml appVersion is $APP, the tag says $VERSION"; failed=1
+          fi
+          # The heading release-notes reads: `## v1.2.3` alone or followed by a space.
+          if ! awk -v hdr="## v$VERSION" '
+            index($0, hdr) == 1 && (length($0) == length(hdr) || substr($0, length(hdr) + 1, 1) == " ") { found = 1 }
+            END { exit !found }
+          ' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section '## v$VERSION'"; failed=1
+          fi
+          exit $failed
 
   # Build and push one image per architecture, in parallel, each on a native
   # runner: no QEMU emulation for arm64.
   docker:
     name: Build & Push Docker (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    needs: [test, e2e]
+    needs: [checks, preflight]
     strategy:
       matrix:
         include:
@@ -231,13 +196,8 @@ jobs:
         with:
           version: v3.16.0
 
-      - name: Set chart version from tag
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          sed -i "s/^version:.*/version: $VERSION/" helm/twake-directory-manager/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" helm/twake-directory-manager/Chart.yaml
-          cat helm/twake-directory-manager/Chart.yaml
-
+      # The chart's version is the one in git: preflight checked it against
+      # the tag before anything was built.
       - name: Package chart
         run: helm package helm/twake-directory-manager --destination .
 
@@ -271,9 +231,9 @@ jobs:
             }
             inSection { print }
           ' CHANGELOG.md > release-notes.md
-          # Fall back to a link if the version has no CHANGELOG entry.
+          # preflight checked the section exists; an empty one is still a mistake.
           if [ ! -s release-notes.md ]; then
-            echo "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/v${VERSION}/CHANGELOG.md)." > release-notes.md
+            echo "::error::CHANGELOG.md has nothing under '## v$VERSION'"; exit 1
           fi
           echo "----- release notes -----"; cat release-notes.md
 
