@@ -1027,6 +1027,45 @@ describe('Directory console: the shell and the overview', () => {
         ).to.equal('1');
       });
 
+      it('should take Tab on from the lead of a panel step, not back to the panel’s first control', () => {
+        // A lead focused for the screen reader is no control: Tab went to
+        // the header's × from it, wherever it stood.
+        const { app, container } = drawn();
+        const panel = container.querySelector<HTMLElement>('[data-panel]');
+        const body = container.querySelector<HTMLElement>('[data-panel-body]');
+        if (!panel || !body) throw new Error('no panel');
+        panel.hidden = false;
+        body.innerHTML =
+          '<button type="button" id="one">one</button>' +
+          '<p tabindex="-1" id="lead">lead</p>' +
+          '<button type="button" id="two">two</button>';
+        const lead = body.querySelector<HTMLElement>('#lead');
+        lead?.focus();
+        const press = (shiftKey: boolean): boolean => {
+          const event = new KeyboardEvent('keydown', {
+            key: 'Tab',
+            shiftKey,
+            cancelable: true,
+          });
+          (app as unknown as { panelKey(event: KeyboardEvent): void }).panelKey(
+            event
+          );
+          return event.defaultPrevented;
+        };
+        expect(press(false)).to.equal(true);
+        expect(document.activeElement?.id).to.equal('two');
+        lead?.focus();
+        expect(press(true)).to.equal(true);
+        expect(document.activeElement?.id).to.equal('one');
+        // From a control, the browser's own Tab, until the last one
+        expect(press(false)).to.equal(false);
+        body.querySelector<HTMLElement>('#two')?.focus();
+        expect(press(false)).to.equal(true);
+        expect(
+          document.activeElement?.getAttribute('data-panel-close')
+        ).to.equal('');
+      });
+
       it('should hold a hidden region that says to a screen reader what the eye reads at once', () => {
         const { container } = drawn();
         const region = container.querySelector(

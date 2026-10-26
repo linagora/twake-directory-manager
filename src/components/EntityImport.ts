@@ -175,21 +175,28 @@ export class EntityImport {
     // (#213). A control the repaint replaced gets the focus back (a column
     // mapped otherwise, Stop); otherwise the step's lead takes it when the
     // step changes, an error appears, or the focus was lost with the content.
+    // A step that completes on its own (a file read, the last row written)
+    // while the reader works elsewhere on the page does not take the focus
+    // from there.
     const changed =
       this.step !== this.painted.step || this.error !== this.painted.error;
     this.painted = { step: this.step, error: this.error };
     const back = this.refocus && root.querySelector<HTMLElement>(this.refocus);
     this.refocus = null;
     if (back) back.focus();
-    else if (changed || !this.holdsFocus(root))
+    else if (
+      this.focusIs(root) !== 'elsewhere' &&
+      (changed || this.focusIs(root) === 'lost')
+    )
       root.querySelector<HTMLElement>('[data-step-lead]')?.focus();
   }
 
-  /** Whether the focus is on something the import draws. */
-  private holdsFocus(root: HTMLElement): boolean {
-    if (typeof document === 'undefined') return true;
+  /** Where the focus is: on what the import draws, lost, or elsewhere on the page. */
+  private focusIs(root: HTMLElement): 'here' | 'lost' | 'elsewhere' {
+    if (typeof document === 'undefined') return 'here';
     const active = document.activeElement;
-    return !!active && active !== document.body && root.contains(active);
+    if (!active || active === document.body) return 'lost';
+    return root.contains(active) ? 'here' : 'elsewhere';
   }
 
   private stepMarkup(): SafeHtml {
@@ -511,15 +518,14 @@ export class EntityImport {
 
   private progressMarkup(): SafeHtml {
     return html`
-      <p>${this.t('import.progress', {
+      <p tabindex="-1" data-step-lead>${this.t('import.progress', {
         done: this.processed,
         total: this.total,
         count: this.total,
       })}</p>
       <div class="dc-progress" role="progressbar" aria-valuemin="0"
         aria-valuemax="${this.total}" aria-valuenow="${this.processed}"
-        aria-label="${this.t('import.progressLabel')}" tabindex="-1"
-        data-step-lead>
+        aria-label="${this.t('import.progressLabel')}">
         <div class="dc-progress-bar"></div>
       </div>
       <p class="dc-muted">${this.t('import.progressDetail', {

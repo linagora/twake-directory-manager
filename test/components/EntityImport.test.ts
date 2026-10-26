@@ -48,21 +48,16 @@ describe('EntityImport', () => {
     expect(document.activeElement).to.equal(fresh);
   });
 
-  it('should focus the error of an empty file, the second one too', async () => {
-    // The second empty file in a row changed nothing the paint could see,
-    // and the focus fell to the page with the input it replaced.
-    const { root, read } = drawn('fr');
-    await read('');
-    const lead = root.querySelector<HTMLElement>('p.dc-error[data-step-lead]');
-    expect(lead?.textContent).to.equal(
-      'Ce fichier ne contient aucune ligne à importer.'
-    );
-    expect(document.activeElement).to.equal(lead);
-    root.querySelector<HTMLElement>('[data-import-file]')?.focus();
-    await read('');
-    expect(document.activeElement).to.equal(
-      root.querySelector('p.dc-error[data-step-lead]')
-    );
+  it('should not take the focus from elsewhere on the page when a step completes', async () => {
+    // A file read, or the last row written, while the reader is on the
+    // language select: the step is drawn, the focus stays where it is.
+    const { root, read } = drawn();
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    elsewhere.focus();
+    await read('Identifier,Name\nA1,Ann\n');
+    expect(root.querySelector('[data-step-lead]')).to.not.equal(null);
+    expect(document.activeElement).to.equal(elsewhere);
   });
 
   it('should focus the error of an empty file, the second one too', async () => {
@@ -80,15 +75,5 @@ describe('EntityImport', () => {
     expect(document.activeElement).to.equal(
       root.querySelector('p.dc-error[data-step-lead]')
     );
-  });
-
-  it('should focus the error of an empty file', async () => {
-    const { root, read } = drawn('fr');
-    await read('');
-    const lead = root.querySelector<HTMLElement>('p.dc-error[data-step-lead]');
-    expect(lead?.textContent).to.equal(
-      'Ce fichier ne contient aucune ligne à importer.'
-    );
-    expect(document.activeElement).to.equal(lead);
   });
 });

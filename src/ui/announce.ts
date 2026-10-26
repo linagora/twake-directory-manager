@@ -39,9 +39,9 @@ export function announcer(
 ): Announce {
   let timer: ReturnType<typeof setTimeout> | undefined;
   return text => {
+    if (timer !== undefined) clearTimeout(timer);
     const region = element();
     if (!region) return;
-    if (timer !== undefined) clearTimeout(timer);
     region.textContent = '';
     timer = setTimeout(() => {
       timer = undefined;

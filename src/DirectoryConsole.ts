@@ -82,6 +82,7 @@ import type {
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
+import { focusables, tabTarget } from './console/panel';
 import { announcer, announcerMarkup } from './ui/announce';
 import { ToastController } from './ui/toast';
 
@@ -128,16 +129,6 @@ export interface Confirmation {
 const LANGUAGE_KEY = 'ldap-rest.console.language';
 const POLICIES_KEY = 'password-policies';
 const REFERENCE_OPEN_KEY = 'ldap-rest.console.referenceOpen';
-
-/** What Tab can reach in the side panel. */
-const FOCUSABLE = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled]):not([type="hidden"])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(', ');
 
 /**
  * What a failed read means for the reader.
@@ -2805,7 +2796,7 @@ export class DirectoryConsole {
     // Into the panel, on its first field: left on the button that opened
     // it, the keyboard went on through the page behind it. A panel with no
     // field holds the focus itself.
-    (this.focusables(body)[0] ?? dialog)?.focus();
+    (focusables(body)[0] ?? dialog)?.focus();
   }
 
   /**
@@ -2836,13 +2827,6 @@ export class DirectoryConsole {
     this.afterPanel.shift()?.();
   }
 
-  /** What Tab reaches in an element: its enabled controls not hidden. */
-  private focusables(root: HTMLElement): HTMLElement[] {
-    return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-      element => !element.closest('[hidden]')
-    );
-  }
-
   /**
    * Keep the keyboard in the side panel while it is open, and close it on
    * Escape. Listened to on the document, so that Tab is caught even once
@@ -2865,18 +2849,14 @@ export class DirectoryConsole {
       return;
     }
     if (event.key !== 'Tab') return;
-    const items = this.focusables(dialog);
-    const first = items[0];
-    const last = items[items.length - 1];
-    const active = document.activeElement as HTMLElement | null;
-    const inside = !!active && items.includes(active);
-    if (!first) {
-      event.preventDefault();
-      dialog.focus();
-    } else if (!inside || active === (event.shiftKey ? first : last)) {
-      event.preventDefault();
-      (event.shiftKey ? last : first).focus();
-    }
+    const target = tabTarget(
+      dialog,
+      document.activeElement as HTMLElement | null,
+      event.shiftKey
+    );
+    if (!target) return;
+    event.preventDefault();
+    target.focus();
   }
 
   /**

@@ -455,7 +455,9 @@ export class EntityList {
       this.entries = [];
       this.truncated = false;
     } finally {
-      if (generation === this.generation) {
+      // Nor drawn, nor said, once the page moved on: the request of a list
+      // left behind resolves into a page that is no longer its own.
+      if (generation === this.generation && this.root?.isConnected !== false) {
         this.loading = false;
         this.draw();
         this.announceLoaded();
@@ -627,6 +629,7 @@ export class EntityList {
     this.loading = false;
     this.loaded = true;
     this.draw();
+    this.announceLoaded();
   }
 
   /** Draw the page now shown, reading it first for an import's entries. */
@@ -639,7 +642,8 @@ export class EntityList {
       );
     else {
       this.draw();
-      this.announceLoaded();
+      // A page turned while a load is on its way is said when it arrives.
+      if (!this.loading) this.announceLoaded();
     }
   }
 
@@ -851,7 +855,7 @@ export class EntityList {
     return html`
       ${
         this.truncated
-          ? html`<p class="dc-list-notice" role="status">${
+          ? html`<p class="dc-list-notice">${
               // What was received, not what was asked: a server may cap
               // lower than the console asked. Cut to a department, what is
               // shown is no longer what was received, and a search typed
