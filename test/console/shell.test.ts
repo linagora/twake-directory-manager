@@ -6,12 +6,7 @@ import { referenceOpen } from '../../src/console/settings';
 import { mountConsole, settled } from '../support/mount';
 import type { SafeHtml } from '../../src/shared/html';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
-import {
-  baseUrl,
-  stubContainer,
-  treeContainer,
-  consoleIn,
-} from '../support/stubs';
+import { baseUrl, stubContainer, consoleIn } from '../support/stubs';
 import { users, groups, mailboxTypes } from '../fixtures/entities';
 
 describe('Directory console: the shell and the overview', () => {
@@ -645,7 +640,6 @@ describe('Directory console: the shell and the overview', () => {
           ({
             '[data-list]': holder,
             '[data-detail]': stubContainer(),
-            '[data-tree]': treeContainer(),
           })[selector] ?? null,
       };
       const app = consoleIn({ '[data-main]': main });
@@ -662,10 +656,6 @@ describe('Directory console: the shell and the overview', () => {
           asked.push('get');
           return { dn: 'uid=bob,ou=users,dc=example,dc=com', uid: 'bob' };
         },
-        organizationTop: async () => {
-          asked.push('top');
-          return null;
-        },
       });
       const views = app as unknown as {
         renderList(main: unknown, entity: EntityDescriptor): Promise<void>;
@@ -675,7 +665,6 @@ describe('Directory console: the shell and the overview', () => {
           id: string,
           generation: number
         ): Promise<void>;
-        renderOrganizations(main: unknown, generation: number): Promise<void>;
       };
       return { views, main, holder, asked };
     };
@@ -695,8 +684,7 @@ describe('Directory console: the shell and the overview', () => {
       expect(holder.innerHTML).to.contain(notice).and.not.contain('error');
       await views.renderDetail(main, users, 'bob', 0);
       expect(main.innerHTML).to.contain(notice);
-      await views.renderOrganizations(main, 0);
-      expect(main.innerHTML).to.contain(notice);
+      // The organizations page: in test/views/organizations.test.ts.
       expect(asked).to.deep.equal([]);
     });
 
@@ -709,8 +697,8 @@ describe('Directory console: the shell and the overview', () => {
         await views.renderList(main, users);
         expect(holder.innerHTML).to.not.contain(notice);
         await views.renderDetail(main, users, 'bob', 0);
-        await views.renderOrganizations(main, 0);
-        expect(asked).to.include.members(['get', 'top']);
+        // The organizations page's tree: in test/views/organizations.test.ts.
+        expect(asked).to.include.members(['get']);
       }
     });
   });
