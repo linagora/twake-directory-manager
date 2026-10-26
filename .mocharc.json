@@ -1,5 +1,5 @@
 {
-  "require": ["tsx/cjs"],
+  "require": ["tsx/cjs", "test/support/dom.ts"],
   "extensions": ["ts"],
   "spec": "test/**/*.test.ts",
   "exit": true,

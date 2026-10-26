@@ -66,13 +66,11 @@ const rules = {
 // The files over the line budget when it was set, each held to its size then
 // (comments and blank lines aside): it may shrink, not grow. Lower a figure
 // when the file does; remove the file when it goes under the budget; never
-// add one. The exception is test/console.test.ts, which grows with the tests
-// it holds until #221 splits it: its figure follows, the others do not.
+// add one.
 const oversized = {
   'src/DirectoryConsole.ts': 3911,
   'src/components/EntityForm.ts': 1411,
   'src/i18n.ts': 1340,
-  'test/console.test.ts': 11459,
 };
 
 // What the types tell on top: a promise nobody waits for or handles, a
