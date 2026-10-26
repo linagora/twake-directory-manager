@@ -67,14 +67,18 @@ and log to the browser's console without one.
 
 An `apiBaseUrl` on another origin makes every call a cross-origin one, sent
 with credentials: that deployment has to allow the console's origin _and_
-credentials in its CORS policy, or the browser drops the answer. The page the
-image serves comes with a `Content-Security-Policy` whose `connect-src` is its
-own origin (`DM_STATIC_CSP` in the `Dockerfile`): a page of your own under
-that policy widens it to the API's origin. The console itself needs no inline
-script or style, and writes none: every value it shows goes through `html`
-(see _Exported pieces_), which escapes it. It also has
+credentials in its CORS policy, or the browser drops the answer. It also has
 to expose the `X-Result-Truncated` header (`Access-Control-Expose-Headers`),
 or the browser hides it and a truncated list reads as complete.
+
+The page the image serves comes with a `Content-Security-Policy`
+(`DM_STATIC_CSP` in the `Dockerfile`, sent by ldap-rest's static plugin with
+everything under `/static`): scripts, styles and requests from the page's own
+origin only, no inline script or style. A page of your own served from under
+`/static` is under the same policy; one that reaches an API on another origin
+widens `connect-src` to it. The console itself needs no inline script or
+style, and writes none: every value it shows goes through `html` (see
+_Exported pieces_), which escapes it.
 
 ## What the server has to expose
 
@@ -327,8 +331,17 @@ import {
   OrganizationTree,
   Translator,
   roleAttribute,
+  html,
+  render,
+  trusted,
 } from 'twake-directory-manager';
 ```
+
+`html` is the tagged template every piece of the console's markup is written
+with: it escapes each interpolation unless it is a `SafeHtml` made by another
+template, or by `trusted()` for a constant of your own; `render(element,
+markup)` writes it into the page. A client assembling its own page writes its
+markup the same way, and never a value from the directory into `innerHTML`.
 
 `ConsoleApiClient.list(entity, search?, attribute?, limit?)` answers the
 entries as a map keyed by identifier. `listBounded()` takes the same

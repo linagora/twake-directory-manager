@@ -80,6 +80,10 @@ const copyPublic = () => ({
       }
     }
     writeFileSync('dist/index.html', page);
+    // A rewrite that missed (another quoting of the import, a renamed file)
+    // would ship a bundle browsers keep from their cache: refuse the build.
+    if (!readFileSync('dist/boot.js', 'utf8').includes(`${NAME}.esm.js?v=`))
+      throw new Error('dist/boot.js does not import the digested bundle');
   },
 });
 

@@ -18,16 +18,17 @@ test.describe('SEC the page against what the directory holds', () => {
   test('SEC-01 the console is served under a strict Content-Security-Policy, which it keeps to', async ({
     page,
   }) => {
+    // Every page the console draws, without the browser refusing anything: no inline script or
+    // style is left, and none is written by the console.
+    const refused = cspViolations(page);
+    const app = await new LoginPage(page).loginAs(ADMIN);
+    // Read signed in, with the page's cookies: before that the request is redirected to the
+    // provider, whose answer carries no policy of the console's.
     const response = await page.request.get('/static/console/');
     const policy = response.headers()['content-security-policy'] ?? '';
     expect(policy).toContain("script-src 'self'");
     expect(policy).toContain("style-src 'self'");
     expect(policy).not.toContain('unsafe-inline');
-
-    // Every page the console draws, without the browser refusing anything: no inline script or
-    // style is left, and none is written by the console.
-    const refused = cspViolations(page);
-    const app = await new LoginPage(page).loginAs(ADMIN);
     await app.navItem('Users').click();
     await app.list().listEverything();
     await expect(app.list().rows.first()).toBeVisible();
@@ -56,12 +57,15 @@ test.describe('SEC the page against what the directory holds', () => {
     const app = await new LoginPage(page).loginAs(ADMIN, 'users');
     const list = app.list();
     await list.search(user.uid);
-    await expect(list.cells(user.uid).first()).toContainText(payload);
+    // The third cell is the full name (identifier, employee id, full name…).
+    await expect(list.cells(user.uid).nth(2)).toContainText(payload);
     await list.open(user.uid);
     await app.entry().expectName(payload);
     const organizations = await app.openOrganizations(tenant.org.dn);
     await expect(organizations.card.heading).toHaveText(tenant.org.name);
-    await expect(page.getByText(payload).first()).toBeVisible();
+    await expect(
+      organizations.detail.getByRole('cell', { name: payload }).first()
+    ).toBeVisible();
 
     expect(
       await page.evaluate(() => (window as { __xss?: number }).__xss)
