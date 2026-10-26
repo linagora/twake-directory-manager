@@ -51,9 +51,11 @@ context, report)` (`src/shared/background.ts`), which reports a failure.
   the files over it today are listed in `eslint.config.mjs` with the size
   they had, which may only shrink. A new page or action goes in a file of
   its own. The catalogues of `src/i18n.ts` are data and exempt.
-- A view of `src/views/` imports no other view, and `src/components/`
-  imports neither `src/views/` nor `src/actions/` (`no-restricted-imports`):
-  what two views share goes to `src/console/`, `src/ui/` or a component.
+- A view of `src/views/` imports no other view, an action of `src/actions/`
+  imports no view and no other action, and `src/components/` imports
+  neither `src/views/` nor `src/actions/` (`no-restricted-imports`): what two
+  of them share goes to `src/console/`, `src/ui/`, `src/format.ts` or a
+  component.
 - Coverage thresholds (`.c8rc.json`) only go up; lower one in the PR that
   needs it and say why.
 - A colour is a token of `src/styles.css`, set once for the default theme and
@@ -64,9 +66,9 @@ context, report)` (`src/shared/background.ts`), which reports a failure.
 
 ## Adding things
 
-**A page: how to add a view.** A page is a class of its own in
-`src/views/`, as `PoliciesView` (`src/views/policies.ts`) is: its constructor
-takes the `ConsoleContext` (`src/console/context.ts`), and
+**A page or an action: how to add a view or an action.** A page is a
+class of its own in `src/views/`, as `PoliciesView` (`src/views/policies.ts`)
+is: its constructor takes the `ConsoleContext` (`src/console/context.ts`), and
 `render(main, generation)` draws it into the main area, checking
 `ctx.current(generation)` after each `await` so that a late answer draws
 over no newer page. It reaches the console only through the context — the
@@ -79,6 +81,16 @@ a view that holds nothing between drawings is made anew each time, one that
 keeps something (where a list was left) is kept by the console. Its tests
 mount the console on its address (`test/views/`). Markup through `html`,
 writes through `render`, actions through `background`.
+
+An action — what a card, a list or a form starts that opens a panel or
+writes — is a class of `src/actions/`, as `PasswordActions` and
+`StateActions` are, given the same context and reaching the console only
+through it. It holds nothing between two calls, so `init()` makes one with
+the context and the console's caller asks it; what it waits for is the
+panel's (`ctx.panel.setGuard`, `setDirty`, `whenClosed`, `afterClose`,
+`whenFree`). After a write it closes the panel, then says so in a toast,
+then draws the page again (`ctx.refresh()`). Its tests mount the console
+where the action is offered and press it (`test/actions/`).
 
 **A reusable widget.** A class in `src/components/` taking an options object
 (translator, callbacks, what it shows, an optional `report`) and rendering

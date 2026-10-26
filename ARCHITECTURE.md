@@ -39,10 +39,14 @@ src/index.ts                public exports: DirectoryConsole, four components
                             html/SafeHtml, types
 └── DirectoryConsole.ts     the controller: boot, routing, shell and sidebar,
     │                       the views not moved yet (overview, lists, cards,
-    │                       organizations), the actions (forms, state changes,
-    │                       passwords, transit, deletion, bulk actions)
+    │                       organizations), the actions not moved yet (forms,
+    │                       transit, deletion, Add to a group…)
     ├── views/
     │   └── policies.ts         the password policies page and its panel (#220's first view)
+    ├── actions/
+    │   ├── passwords.ts        Reset password, the first password of an account created
+    │   │                       without one, the generated password shown once
+    │   └── state.ts            an account's state from its card, and Change state… on a selection
     ├── components/
     │   ├── EntityList.ts       search, list, selection, CSV export
     │   ├── EntityDetail.ts     an entry's card, its relations and actions
@@ -70,6 +74,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── console/route.ts        what the hash names: routeOf
     ├── console/deps.ts         ConsoleDeps: what a test gives the console in place of what it builds
     ├── console/context.ts      ConsoleContext: what a view or an action is given of the console
+    ├── console/bulk.ts         what the list's bulk actions share: the accounts written, the panel held
     ├── ui/table.ts             dataTable: the one way to draw a table (#226)
     ├── ui/search.ts            searchBox: a named search box, with the select of its scope
     ├── ui/announce.ts          the hidden live region: said to a screen reader, not shown
@@ -86,19 +91,25 @@ e2e/                        the Playwright suite, a package of its own
 scripts/qa-environment/     OpenLDAP + Dex + the image, for e2e and by hand
 ```
 
-`DirectoryConsole.ts` is far too large (over 4,000 lines) and takes in every
+`DirectoryConsole.ts` is far too large (over 3,500 lines) and takes in every
 feature; splitting it into views and actions behind a small shell is
 [#220](https://github.com/linagora/twake-directory-manager/issues/220), under
 way. A view is a class of `src/views/` given a `ConsoleContext`
 (`src/console/context.ts`) — the client, the words, the rights, the panel and
-the dialog services, the toast and the reporter, the page's ticket — built
-once in `init()`, whose changing parts (the translator, the rights) are
-functions asked each time, never copies. The password policies are the
-first (`PoliciesView`); the console keeps a one-line method for each view and
-for the panel and dialog services while the other callers move, deleted at
-the last step. ESLint keeps the direction: a view imports no other view, and
-`components/` imports neither `views/` nor `actions/`. Until a feature's
-turn comes, a new page is a view, a new reusable widget is a component.
+the dialog services, the toast and the reporter, the page's ticket, the
+entities — built once in `init()`, whose changing parts (the translator, the
+rights, the entities once discovered) are functions asked each time, never
+copies. The password policies are the first (`PoliciesView`). An action is a
+class of `src/actions/` given the same context: what a card, a list or a form
+starts and that opens a panel or writes, the password resets
+(`PasswordActions`) and the state changes (`StateActions`) first; it holds
+nothing between two calls, and `init()` makes one of each. The console keeps
+a one-line method for each view, each action and the panel and dialog
+services while the other callers move, deleted at the last step. ESLint keeps
+the direction: a view imports no other view, an action neither a view nor
+another action, and `components/` imports neither `views/` nor `actions/`.
+Until a feature's turn comes, a new page is a view, a new action an action, a
+new reusable widget a component.
 
 ## Boot
 
@@ -230,8 +241,8 @@ refinements aside. Entity and attribute names are **not** translated here: they 
 - `npm test`: mocha over `test/`, which mirrors `src/`: `test/api/`,
   `test/components/`, one file per module, and `test/console/` for the
   console's own behaviours (helpers, organizations, the panel and the toast,
-  the shell and the overview, entries and their groups), `test/views/` for
-  the views moved out of it. A DOM
+  the shell and the overview, entries and their groups), `test/views/` and
+  `test/actions/` for the views and actions moved out of it. A DOM
   (happy-dom, `test/support/dom.ts`) is registered before any test, and
   nothing reaches the network: the API is `nock`, with no connection allowed
   otherwise. A console test mounts one into the page with `mountConsole`
