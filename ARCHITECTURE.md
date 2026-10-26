@@ -62,6 +62,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── shared/background.ts    background(): work nobody waits for, reported
     ├── shared/dom.ts           escapeHtml and small DOM helpers
     ├── console/shell.ts        the sidebar's markup (the frame moves here, #220)
+    ├── console/settings.ts     what the browser remembers: language, reference section, contrast
     ├── console/panel.ts        what Tab reaches in the panel, and from where
     ├── ui/table.ts             dataTable: the one way to draw a table (#226)
     ├── ui/announce.ts          the hidden live region: said to a screen reader, not shown

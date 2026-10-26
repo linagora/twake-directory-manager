@@ -26,6 +26,8 @@ export interface SidebarOptions {
   reference: NavEntry[];
   /** The interface's language, selected in the list */
   language: string;
+  /** Whether the high-contrast colours are on (#210) */
+  contrast: boolean;
 }
 
 /**
@@ -54,6 +56,22 @@ const OVERVIEW_ICON = trusted(
 );
 
 /**
+ * Switch the high-contrast colours on or off on the frame drawn, and show
+ * the choice in its box (#210).
+ *
+ * @param container what holds the frame
+ * @param on whether high contrast is on
+ */
+export function applyContrast(
+  container: ParentNode | null | undefined,
+  on: boolean
+): void {
+  container?.querySelector('.dc-app')?.classList.toggle('dc-contrast-high', on);
+  const box = container?.querySelector<HTMLInputElement>('[data-contrast]');
+  if (box) box.checked = on;
+}
+
+/**
  * The sidebar. The entries are lists, so that a screen reader announces them
  * with their count (#219); the language select says that choosing changes
  * the interface at once (#209).
@@ -62,7 +80,7 @@ const OVERVIEW_ICON = trusted(
  * @returns the `<aside>`
  */
 export function sidebarMarkup(options: SidebarOptions): SafeHtml {
-  const { t, primary, reference, language } = options;
+  const { t, primary, reference, language, contrast } = options;
   return html`<aside class="dc-sidebar">
     <div class="dc-brand">
       <span class="dc-brand-logo" aria-hidden="true">${CONSOLE_LOGO}</span>
@@ -126,6 +144,10 @@ export function sidebarMarkup(options: SidebarOptions): SafeHtml {
       <span id="dc-language-hint" class="dc-visually-hidden">${t(
         'app.languageHint'
       )}</span>
+      <label class="dc-language dc-contrast">
+        <input type="checkbox" data-contrast${contrast ? ' checked' : ''} />
+        <span>${t('app.highContrast')}</span>
+      </label>
     </div>
   </aside>`;
 }

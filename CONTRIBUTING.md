@@ -49,6 +49,11 @@ context, report)` (`src/shared/background.ts`), which reports a failure.
   its own. The catalogues of `src/i18n.ts` are data and exempt.
 - Coverage thresholds (`.c8rc.json`) only go up; lower one in the PR that
   needs it and say why.
+- A colour is a token of `src/styles.css`, set once for the default theme and
+  again in the dark and high-contrast blocks at its end; a state is never
+  shown by colour alone (high contrast underlines links and bars the current
+  place). What the browser remembers of a choice goes through
+  `src/console/settings.ts`, never through `localStorage` directly.
 
 ## Adding things
 

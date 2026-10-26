@@ -6,6 +6,7 @@ import {
 } from '../../src/DirectoryConsole';
 import { Translator, availableLanguages, languageName } from '../../src/i18n';
 import { splitEntities } from '../../src/rights';
+import { referenceOpen } from '../../src/console/settings';
 import type { SafeHtml } from '../../src/shared/html';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
 import {
@@ -879,7 +880,6 @@ describe('Directory console: the shell and the overview', () => {
           apiBaseUrl: baseUrl,
         }) as unknown as {
           translator: Translator;
-          referenceOpen(): boolean;
         };
 
       it('should start in the language of the last visit, with the reference section as it was left', () => {
@@ -887,7 +887,7 @@ describe('Directory console: the shell and the overview', () => {
         localStorage.setItem('ldap-rest.console.referenceOpen', '1');
         const app = fresh();
         expect(app.translator.language).to.equal('fr');
-        expect(app.referenceOpen()).to.equal(true);
+        expect(referenceOpen()).to.equal(true);
       });
 
       it('should start in English with the section closed when storage is denied', () => {
@@ -902,7 +902,7 @@ describe('Directory console: the shell and the overview', () => {
         const app = fresh();
         // The browser's language then, which happy-dom fixes at en-US.
         expect(app.translator.language).to.equal('en');
-        expect(app.referenceOpen()).to.equal(false);
+        expect(referenceOpen()).to.equal(false);
       });
     });
 
@@ -1064,6 +1064,47 @@ describe('Directory console: the shell and the overview', () => {
         expect(
           document.activeElement?.getAttribute('data-panel-close')
         ).to.equal('');
+      });
+
+      it('should offer high contrast under the language, remembered and applied at once', () => {
+        // Fields outlined at 1.5:1 and a current place shown by a tint only
+        // left low-vision readers to guess (#210).
+        const { container } = drawn();
+        const app = container.querySelector('.dc-app');
+        const box = container.querySelector<HTMLInputElement>(
+          '.dc-sidebar-footer label.dc-contrast input[type="checkbox"][data-contrast]'
+        );
+        if (!app || !box) throw new Error('no contrast box');
+        expect(box.checked).to.equal(false);
+        expect(app.classList.contains('dc-contrast-high')).to.equal(false);
+        expect(box.parentElement?.textContent?.trim()).to.equal(
+          'High contrast'
+        );
+        box.checked = true;
+        box.dispatchEvent(new Event('change'));
+        expect(app.classList.contains('dc-contrast-high')).to.equal(true);
+        expect(localStorage.getItem('ldap-rest.console.contrast')).to.equal(
+          'high'
+        );
+        // Drawn anew (a change of language), the choice holds
+        const again = drawn('fr');
+        expect(
+          again.container
+            .querySelector('.dc-app')
+            ?.classList.contains('dc-contrast-high')
+        ).to.equal(true);
+        expect(
+          again.container.querySelector<HTMLInputElement>('[data-contrast]')
+            ?.checked
+        ).to.equal(true);
+        expect(
+          again.container.querySelector('.dc-contrast span')?.textContent
+        ).to.equal('Contraste élevé');
+        box.checked = false;
+        box.dispatchEvent(new Event('change'));
+        expect(localStorage.getItem('ldap-rest.console.contrast')).to.equal(
+          'standard'
+        );
       });
 
       it('should hold a hidden region that says to a screen reader what the eye reads at once', () => {

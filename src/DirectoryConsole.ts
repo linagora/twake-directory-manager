@@ -17,7 +17,7 @@ import {
   roleAttribute,
 } from './api/ConsoleApiClient';
 import { LINAGORA_LOGO } from './assets';
-import { initial, sidebarMarkup } from './console/shell';
+import { applyContrast, initial, sidebarMarkup } from './console/shell';
 import {
   AttachedTables,
   attachedClass,
@@ -83,6 +83,15 @@ import type {
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
 import { firstFocus, tabTarget } from './console/panel';
+import {
+  highContrast,
+  onContrastChange,
+  referenceOpen,
+  rememberContrast,
+  rememberLanguage,
+  rememberReference,
+  storedLanguage,
+} from './console/settings';
 import { announcer, announcerMarkup } from './ui/announce';
 import { ToastController } from './ui/toast';
 
@@ -126,9 +135,7 @@ export interface Confirmation {
   choices?: { title: string; options: { label: string; checked: boolean }[] };
 }
 
-const LANGUAGE_KEY = 'ldap-rest.console.language';
 const POLICIES_KEY = 'password-policies';
-const REFERENCE_OPEN_KEY = 'ldap-rest.console.referenceOpen';
 
 /**
  * What a failed read means for the reader.
@@ -301,16 +308,7 @@ export class DirectoryConsole {
     this.api.onSessionEnded = (): void => {
       signInAgain();
     };
-    this.translator = new Translator(options.language || this.storedLanguage());
-  }
-
-  /** Language remembered from a previous visit, if any. */
-  private storedLanguage(): string | undefined {
-    try {
-      return localStorage.getItem(LANGUAGE_KEY) || undefined;
-    } catch {
-      return undefined;
-    }
+    this.translator = new Translator(options.language || storedLanguage());
   }
 
   /**
@@ -374,6 +372,9 @@ export class DirectoryConsole {
       this.report(event.error, 'unhandled');
     });
     document.addEventListener('keydown', event => this.panelKey(event));
+    // The system's wish for contrast, followed as it changes, until the
+    // reader chooses.
+    onContrastChange(() => applyContrast(this.container, highContrast()));
     // A reload or a closed tab loses a form as surely as Escape: the
     // browser's own question then.
     window.addEventListener('beforeunload', event => {
@@ -477,10 +478,7 @@ export class DirectoryConsole {
    * @param code the language chosen
    */
   private changeLanguage(code: string): void {
-    try {
-      localStorage.setItem(LANGUAGE_KEY, code);
-      // eslint-disable-next-line no-empty
-    } catch {}
+    rememberLanguage(code);
     const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
     const kept = panel && !panel.hidden ? panel : null;
     this.translator = new Translator(code);
@@ -517,7 +515,7 @@ export class DirectoryConsole {
     render(
       container,
       html`
-      <div class="dc-app">
+      <div class="dc-app${highContrast() ? ' dc-contrast-high' : ''}">
         <a class="dc-skip-link dc-button dc-button-primary" href="#dc-main"
           data-skip>${t('app.skipToContent')}</a>
         ${sidebarMarkup({
@@ -528,6 +526,7 @@ export class DirectoryConsole {
           })),
           reference: settings,
           language: this.translator.language,
+          contrast: highContrast(),
         })}
         <div class="dc-content">
           <header class="dc-header">${this.scopeMarkup()}${this.logoutMarkup()}</header>
@@ -576,18 +575,23 @@ export class DirectoryConsole {
     const toggle = container.querySelector<HTMLElement>('[data-nav-toggle]');
     toggle?.addEventListener('click', () => {
       const open = toggle.getAttribute('aria-expanded') !== 'true';
-      try {
-        localStorage.setItem(REFERENCE_OPEN_KEY, open ? '1' : '');
-        // eslint-disable-next-line no-empty
-      } catch {}
+      rememberReference(open);
       this.showReference(open);
     });
-    this.showReference(this.referenceOpen());
+    this.showReference(referenceOpen());
 
     container
       .querySelector<HTMLSelectElement>('[data-language]')
       ?.addEventListener('change', event => {
         this.changeLanguage((event.target as HTMLSelectElement).value);
+      });
+
+    container
+      .querySelector<HTMLInputElement>('[data-contrast]')
+      ?.addEventListener('change', event => {
+        const on = (event.target as HTMLInputElement).checked;
+        rememberContrast(on);
+        applyContrast(this.container, on);
       });
 
     container
@@ -746,15 +750,6 @@ export class DirectoryConsole {
   /** True while the view this ticket was taken for is still the one asked for. */
   private current(generation: number): boolean {
     return generation === this.viewGeneration;
-  }
-
-  /** Whether the reader left the reference section open last time. */
-  private referenceOpen(): boolean {
-    try {
-      return localStorage.getItem(REFERENCE_OPEN_KEY) === '1';
-    } catch {
-      return false;
-    }
   }
 
   /** Open or close the reference section of the navigation. */

@@ -337,6 +337,11 @@
   padding-bottom: 4px;
 }
 
+/* The contrast box, a line under the language. */
+.dc-contrast {
+  margin-top: 8px;
+}
+
 /* ------------------------------------------------------------------ header */
 
 .dc-content {
@@ -2613,6 +2618,145 @@ textarea.dc-policy-text {
   .dc-search input[type='search'] {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23a1a1a6' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3.5 3.5'/%3E%3C/svg%3E");
   }
+}
+
+/* ------------------------------------------------------------ high contrast */
+
+/* Switched on from the sidebar, or by the system (`prefers-contrast: more`)
+   until the reader chooses (#210). After the dark theme, so that it wins
+   over it: black on white, borders a low-vision reader finds, the current
+   place and the links told apart without colour. The default theme is
+   untouched. */
+.dc-app.dc-contrast-high {
+  color-scheme: light;
+  --dc-ink: #000000;
+  --dc-muted: #3d3d3d;
+  --dc-surface: #ffffff;
+  --dc-ground: #ffffff;
+  --dc-hover: #e8e8e8;
+  --dc-line: #595959;
+  --dc-line-strong: #595959;
+  --dc-accent: #0040a0;
+  --dc-accent-dark: #002d70;
+  --dc-accent-soft: #e8eefa;
+  --dc-danger: #a3001b;
+  --dc-danger-soft: #fbe6ea;
+  --dc-focus: 0 0 0 2px #ffffff, 0 0 0 5px #000000;
+  --dc-focus-inset: inset 0 0 0 3px #000000, inset 0 0 0 5px #ffffff;
+}
+
+.dc-app.dc-contrast-high .dc-tag,
+.dc-app.dc-contrast-high .dc-state {
+  color: #000;
+  background: #fff;
+  border: 1px solid #000;
+}
+
+.dc-app.dc-contrast-high .dc-toast {
+  background: #000;
+  color: #fff;
+}
+
+.dc-app.dc-contrast-high .dc-toast-error {
+  background: #a3001b;
+}
+
+.dc-app.dc-contrast-high .dc-tooltip {
+  background: #000;
+  color: #fff;
+}
+
+.dc-app.dc-contrast-high .dc-help,
+.dc-app.dc-contrast-high .dc-tree-toggle,
+.dc-app.dc-contrast-high .dc-tree-add {
+  color: #000;
+  border-color: #000;
+}
+
+.dc-app.dc-contrast-high .dc-nav-icon,
+.dc-app.dc-contrast-high .dc-nav-list > li .dc-nav-icon,
+.dc-app.dc-contrast-high .dc-entity-icon,
+.dc-app.dc-contrast-high .dc-cards .dc-card .dc-entity-icon {
+  --dc-tint: #000000;
+}
+
+/* What the dark theme sets by colour rather than by token, told again here
+   (a dark system asking for more contrast meets both). */
+.dc-app.dc-contrast-high .dc-button-primary,
+.dc-app.dc-contrast-high .dc-button-destructive,
+.dc-app.dc-contrast-high .dc-nav-item.dc-active .dc-nav-icon {
+  color: #fff;
+}
+
+.dc-app.dc-contrast-high .dc-header > .dc-scope-empty::before {
+  background: #000;
+}
+
+.dc-app.dc-contrast-high .dc-import-stat-ok strong {
+  color: #000;
+}
+
+.dc-app.dc-contrast-high select.dc-input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23000000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E");
+}
+
+.dc-app.dc-contrast-high .dc-search input[type='search'] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23000000' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3.5 3.5'/%3E%3C/svg%3E");
+}
+
+/* The bar and its track, told apart without colour. */
+.dc-app.dc-contrast-high .dc-progress {
+  background: #fff;
+  border: 1px solid #000;
+}
+
+.dc-app.dc-contrast-high .dc-progress-bar {
+  background: #000;
+}
+
+.dc-app.dc-contrast-high .dc-input::placeholder {
+  color: #3d3d3d;
+}
+
+.dc-app.dc-contrast-high .dc-button[disabled] {
+  opacity: 1;
+  color: #595959;
+  background: #fff;
+  border-color: #595959;
+}
+
+/* A leaf's dot, not faded: grey at full opacity. */
+.dc-app.dc-contrast-high .dc-tree-toggle[disabled] {
+  opacity: 1;
+  color: #595959;
+  border-color: #595959;
+}
+
+/* The current place, shown by more than a colour. */
+.dc-app.dc-contrast-high .dc-nav-item[aria-current='page'],
+.dc-app.dc-contrast-high
+  .dc-tree-node.dc-selected
+  > .dc-tree-row
+  .dc-tree-label {
+  font-weight: 700;
+  box-shadow: inset 4px 0 0 #000000;
+}
+
+/* The bar and the focus ring, both drawn as shadows: together when focused. */
+.dc-app.dc-contrast-high .dc-nav-item[aria-current='page']:focus-visible,
+.dc-app.dc-contrast-high
+  .dc-tree-node.dc-selected
+  > .dc-tree-row
+  .dc-tree-label:focus-visible {
+  box-shadow:
+    inset 4px 0 0 #000000,
+    var(--dc-focus);
+}
+
+.dc-app.dc-contrast-high a:not(.dc-button),
+.dc-app.dc-contrast-high .dc-link,
+.dc-app.dc-contrast-high .dc-path-link {
+  text-decoration: underline;
 }
 
 /* Forced colours draw no shadow, and every ring above is one: an outline

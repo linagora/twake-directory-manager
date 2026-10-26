@@ -34,6 +34,7 @@ Conventions).
 - [x] NAV-10 (P3) An unknown address says there is no page there, with a link to the Overview — `navigation.spec.ts` (`#/passwordPolicies`, `#/accountStates`; `#/` and the bare console still open the Overview)
 - [x] NAV-11 (P2) The frame for keyboard and screen-reader users: a title per page (#214), a skip link to the main area (#215), the sidebar as lists (#219), the page's `lang` and the focus kept on the Language select (#209) — `navigation.spec.ts`
 - [x] NAV-12 (P2) The discard question of a changed form is read with the Keep editing button it focuses (a group named by the question, the button described by it) — `navigation.spec.ts` (#217)
+- [x] NAV-13 (P2) High contrast: a checkbox under Language switches the colours at once (field borders 7:1, the current entry in bold with a bar, links underlined), the choice survives a reload and a change of language, the system's `prefers-contrast: more` is followed until the reader chooses — `navigation.spec.ts` (#210)
 
 ## Scope banner and authorization
 
