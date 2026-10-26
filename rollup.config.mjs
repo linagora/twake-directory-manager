@@ -5,12 +5,35 @@ import commonjs from '@rollup/plugin-commonjs';
 import resolve from '@rollup/plugin-node-resolve';
 import terser from '@rollup/plugin-terser';
 import typescript from '@rollup/plugin-typescript';
-import postcss from 'rollup-plugin-postcss';
+import { transform } from 'lightningcss';
 
 const NAME = 'twake-directory-manager';
 
 /** Files the page loads, named the same from one release to the next. */
 const PAGE_ASSETS = [`${NAME}.esm.js`, `${NAME}.css`];
+
+/**
+ * The stylesheet, minified, next to the bundles. One plain CSS file needs no
+ * PostCSS pipeline: lightningcss reads it, drops what it can, and writes it
+ * with a source map, as the former plugin did.
+ */
+const stylesheet = () => ({
+  name: 'stylesheet',
+  writeBundle() {
+    const file = `${NAME}.css`;
+    const { code, map } = transform({
+      filename: 'src/styles.css',
+      code: readFileSync('src/styles.css'),
+      minify: true,
+      sourceMap: true,
+    });
+    writeFileSync(
+      `dist/${file}`,
+      `${code}\n/*# sourceMappingURL=${file}.map */\n`
+    );
+    writeFileSync(`dist/${file}.map`, map);
+  },
+});
 
 /**
  * The page and its favicon go next to the bundles, so `dist/` is the whole
@@ -71,11 +94,7 @@ export default {
       include: ['src/**/*'],
       sourceMap: true,
     }),
-    postcss({
-      extract: `${NAME}.css`,
-      minimize: true,
-      sourceMap: true,
-    }),
+    stylesheet(),
     copyPublic(),
   ],
 };

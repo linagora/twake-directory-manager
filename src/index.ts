@@ -13,8 +13,6 @@
  * @module twake-directory-manager
  */
 
-import './styles.css';
-
 export { DirectoryConsole } from './DirectoryConsole';
 export {
   ConsoleApiClient,
