@@ -37,38 +37,20 @@
       "groupName": "qa images"
     },
     {
-      "matchDepNames": ["helm/helm"],
+      "description": "The Helm version azure/setup-helm installs, which Renovate reads from the workflows itself",
+      "matchDepNames": ["helm"],
       "groupName": "helm"
     }
   ],
   "customManagers": [
     {
-      "description": "The ldap-rest image the Dockerfile builds on",
-      "customType": "regex",
-      "managerFilePatterns": ["/^Dockerfile$/"],
-      "matchStrings": [
-        "ARG LDAP_REST_IMAGE=(?<depName>[^:\\s]+):(?<currentValue>\\S+)"
-      ],
-      "datasourceTemplate": "docker"
-    },
-    {
-      "description": "The images build.sh pulls for the QA stack (docker-compose.yaml has a manager of its own)",
+      "description": "The images build.sh pulls for the QA stack (docker-compose.yaml and the Dockerfile's ARG have managers of their own)",
       "customType": "regex",
       "managerFilePatterns": ["/^scripts/qa-environment/build\\.sh$/"],
       "matchStrings": [
-        "(?<depName>osixia/openldap|ghcr\\.io/dexidp/dex):(?<currentValue>\\S+)"
+        "(?<depName>osixia/openldap|ghcr\\.io/dexidp/dex):(?<currentValue>[^\\s;]+)"
       ],
       "datasourceTemplate": "docker"
-    },
-    {
-      "description": "The Helm version azure/setup-helm installs",
-      "customType": "regex",
-      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
-      "matchStrings": [
-        "uses: azure/setup-helm@[^\\n]*\\n\\s+with:\\n\\s+version: (?<currentValue>v\\d+\\.\\d+\\.\\d+)"
-      ],
-      "depNameTemplate": "helm/helm",
-      "datasourceTemplate": "github-releases"
     }
   ]
 }

@@ -5,7 +5,8 @@ import commonjs from '@rollup/plugin-commonjs';
 import resolve from '@rollup/plugin-node-resolve';
 import terser from '@rollup/plugin-terser';
 import typescript from '@rollup/plugin-typescript';
-import { transform } from 'lightningcss';
+import browserslist from 'browserslist';
+import { browserslistToTargets, transform } from 'lightningcss';
 
 const NAME = 'twake-directory-manager';
 
@@ -15,17 +16,22 @@ const PAGE_ASSETS = [`${NAME}.esm.js`, `${NAME}.css`];
 /**
  * The stylesheet, minified, next to the bundles. One plain CSS file needs no
  * PostCSS pipeline: lightningcss reads it, drops what it can, and writes it
- * with a source map, as the former plugin did.
+ * with a source map, as the former plugin did. Told the browsers the console
+ * supports (`browserslist` in package.json): without them it writes the
+ * newest syntax it knows — a range media query Safari 16.4 is the first to
+ * read, one `backdrop-filter` where the prefixed one is still needed.
  */
 const stylesheet = () => ({
   name: 'stylesheet',
   writeBundle() {
     const file = `${NAME}.css`;
     const { code, map } = transform({
-      filename: 'src/styles.css',
+      // Named from where the map will sit, so devtools find the source.
+      filename: '../src/styles.css',
       code: readFileSync('src/styles.css'),
       minify: true,
       sourceMap: true,
+      targets: browserslistToTargets(browserslist()),
     });
     writeFileSync(
       `dist/${file}`,
