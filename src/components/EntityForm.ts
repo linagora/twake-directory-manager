@@ -121,13 +121,13 @@ export interface FormOptions {
    * when the caller may link it to those only: the ones linked by the
    * organizations above it. Undefined, or a failure, when any may be linked
    */
-  linkableDomains?(): Promise<string[] | undefined>;
+  linkableDomains?: () => Promise<string[] | undefined>;
   /**
    * The mail domains an entry attached to an organization may hold
    * addresses at, offered once an "@" is typed into an address. A failure
    * offers none: the field stays the text box it was
    */
-  mailDomains?(organization?: string): Promise<string[]>;
+  mailDomains?: (organization?: string) => Promise<string[]>;
   /** Called with the attributes to write and those to clear */
   onSubmit(
     values: Record<string, string | string[]>,
@@ -1311,7 +1311,7 @@ export class EntityForm {
     });
 
     input.addEventListener('keydown', event => {
-      const key = (event as KeyboardEvent).key;
+      const key = event.key;
       if (key === 'Escape') {
         if (!results.hidden) event.preventDefault();
         close();

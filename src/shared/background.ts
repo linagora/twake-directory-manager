@@ -40,7 +40,7 @@ export const logReporter: Reporter = (error, context): void => {
  * @param report told of a failure; the console's own, or the log
  */
 export function background(
-  task: () => Promise<unknown> | unknown,
+  task: () => unknown,
   context: string,
   report: Reporter = logReporter
 ): void {

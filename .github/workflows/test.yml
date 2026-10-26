@@ -67,6 +67,25 @@ jobs:
       - name: Build
         run: npm run build
 
+  # Known vulnerabilities in the two npm trees. SECURITY.md says how a finding
+  # is handled.
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+
+      - name: Audit the console's dependencies
+        run: npm audit --audit-level=high
+
+      - name: Audit the e2e suite's dependencies
+        run: npm audit --audit-level=high
+        working-directory: e2e
+
   # The Playwright suite of e2e/ against the image built from this tree, behind the stack of
   # scripts/qa-environment/ (OpenLDAP + Dex).
   e2e:
@@ -91,6 +110,18 @@ jobs:
 
       - name: Build the image
         run: ../scripts/qa-environment/build.sh
+
+      # The image is ldap-rest and its base image under the console, which has no runtime
+      # dependency of its own: a CRITICAL vulnerability with a fix available fails the gate, and
+      # so the release, before anything is published. SECURITY.md says how one is accepted.
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: twake-directory-manager-qa
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          trivyignores: .trivyignore
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium

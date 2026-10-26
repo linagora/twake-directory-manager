@@ -1645,7 +1645,7 @@ describe('Directory console', () => {
       });
       const views = app as unknown as {
         renderDashboard(main: unknown): void;
-        openForm(entity: EntityDescriptor): Promise<void>;
+        openForm(entity: EntityDescriptor): void;
       };
       return {
         dashboard: (): string => {
@@ -3340,7 +3340,7 @@ describe('Directory console', () => {
         '[data-toast]': toast,
       }) as unknown as {
         api: unknown;
-        resetPassword(entity: unknown, id: string): Promise<void>;
+        resetPassword(entity: unknown, id: string): void;
         closePanel(force?: boolean): void;
         openPanel(title: string, build: (body: unknown) => void): void;
         panelGuard: (() => boolean) | null;
@@ -4283,7 +4283,7 @@ describe('Directory console', () => {
     it('should name a nomenclature entry as its card does, to edit or delete it', async () => {
       const app = consoleIn({}, 'fr') as unknown as {
         openPanel(title: string): void;
-        openForm(entity: EntityDescriptor, entry?: Entry): Promise<void>;
+        openForm(entity: EntityDescriptor, entry?: Entry): void;
         confirmAction(question: Confirmation): Promise<boolean>;
         confirmDelete(entity: EntityDescriptor, id: string): Promise<void>;
       };
