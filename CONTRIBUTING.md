@@ -31,6 +31,10 @@ README's Development section shows. CI runs all of it on every pull request
   `trusted(...)` for a constant of the console's own, never for a value.
 - No `void promise`: work nobody waits for goes through `background(task,
 context, report)` (`src/shared/background.ts`), which reports a failure.
+- No `<table` written by hand: a table is `dataTable({ name, columns, rows })`
+  from `src/ui/table.ts`, which heads every column and names the table (a
+  hidden caption, or the heading above it). The shared primitives of #226
+  live in `src/ui/`.
 - A module stays under 1,200 lines (2,500 for a test file), comments aside;
   the files over it today are listed in `eslint.config.mjs` with the size
   they had, which may only shrink. A new page or action goes in a file of

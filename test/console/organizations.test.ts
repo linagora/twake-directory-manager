@@ -1068,6 +1068,22 @@ describe('Directory console: organizations', () => {
       expect(tables([sophie])).to.not.include('data-list-everyone');
     });
 
+    it('should name each table after its heading, two blocks apart', () => {
+      // A reader moving by table heard "table, four columns" twice (#218).
+      const first = tables([sophie]);
+      const heading = first.match(
+        /<h3 id="(dc-attached-people-\d+)">People \(1\)<\/h3>/
+      );
+      expect(heading, 'heading with an id').to.not.equal(null);
+      expect(first).to.include(
+        `<table class="dc-table dc-attached-table" aria-labelledby="${heading?.[1]}">`
+      );
+      const second = tables([sophie]).match(
+        /<h3 id="(dc-attached-people-\d+)"/
+      );
+      expect(second?.[1]).to.not.equal(heading?.[1]);
+    });
+
     it('should carry New user here and New group here when offered', () => {
       const offered = tables([sophie], {}, { people: () => undefined });
       expect(offered).to.include('>New user here<');
@@ -1369,7 +1385,7 @@ describe('Directory console: organizations', () => {
         expect(holder.innerHTML).to.include('aria-label="Claim Bob Schneider"');
         expect(holder.innerHTML).to.include('aria-label="Claim Grace Kim"');
         expect(holder.innerHTML).to.include(
-          '<th><span class="dc-visually-hidden">Actions</span></th>'
+          '<th scope="col"><span class="dc-visually-hidden">Actions</span></th>'
         );
         // No group waits: no Groups table saying so.
         expect(holder.innerHTML).to.not.include('data-attached="groups"');

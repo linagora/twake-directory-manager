@@ -33,6 +33,7 @@ import { EntityList, listFailure } from './EntityList';
 import type { EntityDescriptor } from '../types';
 import { background, type Reporter } from '../shared/background';
 import { html, render, type SafeHtml } from '../shared/html';
+import { dataTable } from '../ui/table';
 
 export interface ImportOptions {
   entity: EntityDescriptor;
@@ -223,16 +224,16 @@ export class EntityImport {
         file: this.fileName,
       })}</p>
       <p class="dc-muted">${this.t('import.mappingHelp')}</p>
-      <div class="dc-table-scroll">
-        <table class="dc-table dc-import-mapping">
-          <thead><tr>
-            <th>${this.t('import.column')}</th>
-            <th>${this.t('import.example')}</th>
-            <th>${this.t('import.attribute')}</th>
-          </tr></thead>
-          <tbody>
-            ${table.headers.map(
-              (header, index) => html`<tr>
+      ${dataTable({
+        className: 'dc-import-mapping',
+        name: this.t('import.table.mapping'),
+        columns: [
+          { heading: this.t('import.column') },
+          { heading: this.t('import.example') },
+          { heading: this.t('import.attribute') },
+        ],
+        rows: table.headers.map(
+          (header, index) => html`<tr>
                   <td>${header}</td>
                   <td class="dc-muted" title="${
                     table.rows[0]?.[index] ?? ''
@@ -252,10 +253,8 @@ export class EntityImport {
                     </select>
                   </td>
                 </tr>`
-            )}
-          </tbody>
-        </table>
-      </div>
+        ),
+      })}
       ${
         missing.length
           ? html`<p class="dc-error">${this.t('import.unmapped', {
@@ -402,22 +401,20 @@ export class EntityImport {
 
   private problemsMarkup(problems: Failure[]): SafeHtml {
     return html`
-      <div class="dc-table-scroll dc-import-problems">
-        <table class="dc-table">
-          <thead><tr>
-            <th>${this.t('import.line')}</th>
-            <th>${this.t('import.problem')}</th>
-          </tr></thead>
-          <tbody>
-            ${problems.slice(0, SHOWN_ERRORS).map(
-              problem => html`<tr>
+      ${dataTable({
+        wrapperClassName: 'dc-import-problems',
+        name: this.t('import.table.problems'),
+        columns: [
+          { heading: this.t('import.line') },
+          { heading: this.t('import.problem') },
+        ],
+        rows: problems.slice(0, SHOWN_ERRORS).map(
+          problem => html`<tr>
                   <td>${problem.row.line}</td>
                   <td class="dc-import-message">${problem.message}</td>
                 </tr>`
-            )}
-          </tbody>
-        </table>
-      </div>
+        ),
+      })}
       ${
         problems.length > SHOWN_ERRORS
           ? html`<p class="dc-muted">${this.t('import.more', {
@@ -652,20 +649,20 @@ export class EntityImport {
     const { entity } = this.options;
     const rest = this.successes.length - SHOWN_CREATED;
     return html`
-      <div class="dc-table-scroll dc-import-created">
-        <table class="dc-table">
-          <thead><tr>
-            <th>${this.t('import.line')}</th>
-            <th>${this.t('import.createdName')}</th>
-          </tr></thead>
-          <tbody>
-            ${this.successes.slice(0, SHOWN_CREATED).map(success => {
-              const name = this.rowName(success.row) || success.id;
-              const id =
-                success.id && success.id !== name
-                  ? html` <span class="dc-muted">(${success.id})</span>`
-                  : '';
-              return html`<tr>
+      ${dataTable({
+        wrapperClassName: 'dc-import-created',
+        name: this.t('import.table.created'),
+        columns: [
+          { heading: this.t('import.line') },
+          { heading: this.t('import.createdName') },
+        ],
+        rows: this.successes.slice(0, SHOWN_CREATED).map(success => {
+          const name = this.rowName(success.row) || success.id;
+          const id =
+            success.id && success.id !== name
+              ? html` <span class="dc-muted">(${success.id})</span>`
+              : '';
+          return html`<tr>
                   <td>${success.row.line}</td>
                   <td class="dc-import-message">${
                     success.id
@@ -676,10 +673,8 @@ export class EntityImport {
                       : name
                   }${id}</td>
                 </tr>`;
-            })}
-          </tbody>
-        </table>
-      </div>
+        }),
+      })}
       ${
         rest > 0
           ? html`<p class="dc-muted">${this.t('import.moreCreated', {

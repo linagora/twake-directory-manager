@@ -150,6 +150,25 @@ describe('Password policies', () => {
       expect(markup.match(/dc-tag/g)).to.have.length(1);
     });
 
+    it('should name the table and make each name a button the keyboard presses', () => {
+      // Enter on the focused row opened the panel and submitted its form at
+      // once; Space did nothing (#207).
+      const markup = policyTableMarkup(en, [
+        policy,
+        { dn: 'cn=software', cn: 'software', isDefault: false },
+      ]).markup;
+      expect(markup)
+        .to.include(
+          '<caption class="dc-visually-hidden">Password policies</caption>'
+        )
+        .and.include('<th scope="col">Name</th>')
+        .and.include('<tr data-policy="software">')
+        .and.match(
+          /<button type="button" class="dc-row-link dc-row-button"\s+data-policy-open="software"\s+aria-label="Open the policy software">software<\/button>/
+        );
+      expect(markup).to.not.include('tabindex');
+    });
+
     it('should escape a policy name', () => {
       const markup = policyTableMarkup(en, [
         { dn: 'cn=x', cn: '<img src=x>', isDefault: false },

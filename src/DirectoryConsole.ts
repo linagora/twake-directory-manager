@@ -1278,6 +1278,7 @@ export class DirectoryConsole {
     const list = new EntityList({
       report: this.report,
       entity,
+      title: this.plural(entity),
       view,
       translator: this.translator,
       listable: !isLarge(entity),
@@ -3169,13 +3170,16 @@ export class DirectoryConsole {
       holder.querySelectorAll<HTMLElement>('[data-policy]')
     )) {
       const open = (): void => {
+        // Opened from anywhere on the row, the panel gives the focus back to
+        // the name's button when it closes, not to the page.
+        row.querySelector<HTMLElement>('[data-policy-open]')?.focus();
         const policy = policies.find(item => item.cn === row.dataset.policy);
         if (policy) this.openPolicyForm(policy, attributes);
       };
+      // The name is a button whose click, pressed or keyed, bubbles here.
+      // Opening on the row's keydown let the same Enter reach the panel's
+      // form and submit it, closing the panel at once (#207).
       row.addEventListener('click', open);
-      row.addEventListener('keydown', event => {
-        if (event.key === 'Enter') open();
-      });
     }
   }
 

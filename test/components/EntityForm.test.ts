@@ -28,6 +28,36 @@ describe('EntityForm', () => {
       onCancel: () => undefined,
     });
 
+  it('should group named fields in a fieldset, and the rest in a plain block', async () => {
+    // A fieldset with no legend was announced as a group with no name (#211).
+    const grouped: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          uid: { type: 'string', role: 'identifier', required: true },
+          description: {
+            type: 'string',
+            required: true,
+            group: { en: 'Details', fr: 'Détails' },
+          },
+        },
+      },
+    };
+    const container = stubContainer();
+    await new EntityForm({
+      entity: grouped,
+      translator: new Translator('en'),
+      pointerOptions: () => Promise.resolve([]),
+      onSubmit: () => Promise.resolve(),
+      onCancel: () => undefined,
+    }).render(container);
+    const html = container.innerHTML;
+    expect(html)
+      .to.include('<div class="dc-form-group">')
+      .and.include('<fieldset class="dc-form-group"><legend>Details</legend>');
+    expect(html.match(/<fieldset/g)).to.have.length(1);
+  });
+
   it('should say what an empty password does, on creating only', async () => {
     // Left empty, it gave an account nobody could sign in to (#164).
     const passworded: EntityDescriptor = {

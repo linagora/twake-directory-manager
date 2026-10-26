@@ -214,7 +214,9 @@ test.describe('NAV layout, navigation and language', () => {
     await expect(app.navItem('Utilisateurs')).toBeVisible();
 
     await app.navItem('Utilisateurs').click();
-    await expect(app.list().searchBox).toHaveAccessibleName('Rechercher');
+    await expect(app.list().searchBox).toHaveAccessibleName(
+      'Rechercher dans Utilisateurs'
+    );
     await expect(app.main).toContainText('dans');
     await expect(app.list().searchIn.locator('option').first()).toHaveText(
       'Tous les champs'

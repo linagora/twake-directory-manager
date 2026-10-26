@@ -62,6 +62,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── shared/background.ts    background(): work nobody waits for, reported
     ├── shared/dom.ts           escapeHtml and small DOM helpers
     ├── console/shell.ts        the sidebar's markup (the frame moves here, #220)
+    ├── ui/table.ts             dataTable: the one way to draw a table (#226)
     ├── assets.ts               inlined logos
     └── types.ts                wire types (ConfigResponse, Scope…) and domain types
 src/styles.css              one stylesheet, `dc-` prefix, no framework
