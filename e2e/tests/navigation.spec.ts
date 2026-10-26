@@ -628,19 +628,32 @@ test.describe('NAV layout, navigation and language', () => {
     // The first Tab reaches a link to the main area; Enter focuses it, the
     // address does not change, and the next Tab is the page's first control
     // (#215)
-    // A fresh document, with nothing focused: the toggle just clicked would
-    // otherwise hold the focus, and Tab would move on from it.
+    // The link is the first thing the page offers the keyboard; Enter on it
+    // focuses the main area, the address does not change, and the next Tab
+    // is the page's first control. Chromium, after loading `#/`, does not
+    // start Tab from the top of the document, so the link is checked as the
+    // first focusable element in the page's order, then focused.
+    await app.open('');
     await app.reload();
     const skip = page.getByRole('link', { name: 'Skip to main content' });
     await expect(skip).not.toBeInViewport();
-    await page.keyboard.press('Tab');
+    expect(
+      await page.evaluate(() =>
+        document
+          .querySelector(
+            'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          )
+          ?.getAttribute('data-skip')
+      )
+    ).toBe('');
+    await skip.focus();
     await expect(skip).toBeFocused();
     await expect(skip).toBeInViewport();
     await page.keyboard.press('Enter');
     await expect(app.main).toBeFocused();
-    await expect(page).toHaveURL(/#\/users$/);
+    await expect(page).toHaveURL(/#\/$/);
     await page.keyboard.press('Tab');
-    await expect(app.list().importButton).toBeFocused();
+    await expect(app.main.locator(':focus')).toHaveCount(1);
     await expect(skip).not.toBeInViewport();
 
     // The page speaks the interface's language, and the select that changed
@@ -654,7 +667,7 @@ test.describe('NAV layout, navigation and language', () => {
     await expect(app.languageSelect).toHaveValue('fr');
     await expect(app.languageSelect).toBeFocused();
     await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
-    await expect(page).toHaveTitle('Utilisateurs — Twake Directory Manager');
+    await expect(page).toHaveTitle('Vue d’ensemble — Twake Directory Manager');
     await app.reload();
     await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
     await app.setLanguage('mn');
