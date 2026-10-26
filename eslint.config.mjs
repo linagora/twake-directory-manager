@@ -17,7 +17,10 @@ const rules = {
   'prefer-const': 'error',
   'no-var': 'error',
   // A promise nobody waits for fails with nobody listening: it is started
-  // through `background` (src/shared/background.ts), which reports it.
+  // through `background` (src/shared/background.ts), which reports it. This
+  // refuses the `void` that marked such a start; a bare call statement it
+  // cannot tell from a synchronous one — that takes type-aware linting
+  // (`no-floating-promises`, #227).
   'no-restricted-syntax': [
     'error',
     {

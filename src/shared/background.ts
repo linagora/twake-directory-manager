@@ -31,7 +31,9 @@ export const logReporter: Reporter = (error, context): void => {
  * The task starts at once, on the caller's tick, as the bare promise did:
  * what it sets before its first `await` (a generation ticket, a busy flag)
  * is set when `background` returns. What it throws synchronously is reported
- * like a rejection.
+ * like a rejection. A reporter that throws is logged rather than thrown
+ * back: a rejection raised from inside the report would reach the page's
+ * global handlers, which report it again through the same reporter.
  *
  * @param task what to run; its value, if any, is dropped
  * @param context where the task was started, for the report
@@ -42,20 +44,30 @@ export function background(
   context: string,
   report: Reporter = logReporter
 ): void {
+  const tell = (err: unknown): void => {
+    try {
+      report(err, context);
+    } catch (failed) {
+      logReporter(failed, `${context} (reporting)`);
+    }
+  };
   let result: unknown;
   try {
     result = task();
   } catch (err) {
-    report(err, context);
+    tell(err);
     return;
   }
-  Promise.resolve(result).then(undefined, (err: unknown) => {
-    report(err, context);
-  });
+  Promise.resolve(result).then(undefined, tell);
 }
 
-/** The name the bundles carry, which a stack trace names in each frame. */
-const BUNDLE = 'twake-directory-manager';
+/**
+ * The bundles as the build names them (`rollup.config.mjs`), with or without
+ * a query string after: `twake-directory-manager.esm.js?v=…`, `.js`, `.min.js`.
+ * The name alone would also match a page served from a host or a path that
+ * carries it.
+ */
+const BUNDLE = /\btwake-directory-manager(?:\.esm|\.min)?\.js\b/;
 
 /**
  * Whether an error escaped from the console's own code, as far as its
@@ -65,7 +77,8 @@ const BUNDLE = 'twake-directory-manager';
  * rejections, to report what slipped past `background`. A page embedding
  * the console has errors of its own, which are none of the console's to
  * show: only an error whose stack names the console's bundle is taken. A
- * page that bundles the console under another name, or an error without a
+ * page that bundles the console under another name (an `import` from the
+ * npm package, through the page's own bundler), or an error without a
  * stack, is left alone — the global handlers then report nothing, and
  * `background` still reports what goes through it.
  *
@@ -74,5 +87,5 @@ const BUNDLE = 'twake-directory-manager';
  */
 export function fromConsole(error: unknown): boolean {
   const stack = (error as { stack?: unknown } | null)?.stack;
-  return typeof stack === 'string' && stack.includes(BUNDLE);
+  return typeof stack === 'string' && BUNDLE.test(stack);
 }

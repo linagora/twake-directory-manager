@@ -563,8 +563,9 @@ export class DirectoryConsole {
   constructor(options: ConsoleOptions) {
     this.options = options;
     this.api = new ConsoleApiClient(options.apiBaseUrl, options.apiPrefix);
-    this.api.onSessionEnded = (): void =>
-      background(() => signInAgain(), 'signInAgain', this.report);
+    this.api.onSessionEnded = (): void => {
+      signInAgain();
+    };
     this.translator = new Translator(options.language || this.storedLanguage());
   }
 
@@ -622,12 +623,18 @@ export class DirectoryConsole {
     );
     // What slips past `background` — a listener that throws, a promise
     // started without it — is reported too, when it is the console's: the
-    // page embedding the console has errors of its own, left to it.
+    // page embedding the console has errors of its own, left to it. An error
+    // taken is marked handled, so that the browser does not log it a second
+    // time next to the report; the page's own listeners still see it.
     window.addEventListener('unhandledrejection', event => {
-      if (fromConsole(event.reason)) this.report(event.reason, 'unhandled');
+      if (!fromConsole(event.reason)) return;
+      event.preventDefault();
+      this.report(event.reason, 'unhandled');
     });
     window.addEventListener('error', event => {
-      if (fromConsole(event.error)) this.report(event.error, 'unhandled');
+      if (!fromConsole(event.error)) return;
+      event.preventDefault();
+      this.report(event.error, 'unhandled');
     });
     document.addEventListener('keydown', event => this.panelKey(event));
     // A reload or a closed tab loses a form as surely as Escape: the
@@ -4591,7 +4598,7 @@ export class DirectoryConsole {
                 if (own()) this.panelGuard = null;
                 this.toast(err.message, true);
               }),
-          'api',
+          'api.resetPassword',
           this.report
         );
       });
@@ -4921,7 +4928,7 @@ export class DirectoryConsole {
                     true
                   )
                 ),
-            'api',
+            'api.move',
             this.report
           );
         });
@@ -5447,16 +5454,32 @@ export class DirectoryConsole {
    * embedding the console gets both through `ConsoleOptions.onError`, to
    * send wherever it collects its errors. A property rather than a method,
    * so that it is handed to the components bound.
+   *
+   * The failure is said in the server's own words when it has some: a
+   * refusal reaching here was not caught by the action that asked, and the
+   * reader's wording for a read (`readFailure`) could misdescribe it. The
+   * reporter is the last thing standing between a failure and silence, so
+   * nothing in it may throw: a rejection with no error at all, a toast
+   * element gone, a hook that throws, each is logged and the rest goes on.
    */
   private readonly report: Reporter = (error, context): void => {
-    const { message } = readFailure(error, this.translator);
-    this.toast(
-      message
-        ? this.translator.t('app.failed', { cause: message })
-        : this.translator.t('app.error'),
-      true
-    );
     console.error('[twake-directory-manager]', context, error);
+    const cause =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : '';
+    try {
+      this.toast(
+        cause
+          ? this.translator.t('app.failed', { cause })
+          : this.translator.t('app.error'),
+        true
+      );
+    } catch (shown) {
+      console.error('[twake-directory-manager] toast', shown);
+    }
     try {
       this.options.onError?.(error, context);
     } catch (hook) {

@@ -53,6 +53,35 @@ describe('background', () => {
     expect(log).to.deep.equal([[failure, 'wire']]);
   });
 
+  it('should log a reporter that throws rather than throw it back', async () => {
+    const original = console.error;
+    const logged: unknown[][] = [];
+    console.error = (...args: unknown[]): void => {
+      logged.push(args);
+    };
+    try {
+      const broken = new Error('the reporter is broken');
+      const report = (): void => {
+        throw broken;
+      };
+      background(() => Promise.reject(new Error('task')), 'later', report);
+      background(
+        () => {
+          throw new Error('now');
+        },
+        'now',
+        report
+      );
+      await tick();
+      expect(logged).to.deep.equal([
+        ['[twake-directory-manager]', 'now (reporting)', broken],
+        ['[twake-directory-manager]', 'later (reporting)', broken],
+      ]);
+    } finally {
+      console.error = original;
+    }
+  });
+
   it('should accept a task that returns no promise', async () => {
     const { log, report } = reported();
     background(() => undefined, 'nothing', report);
@@ -82,14 +111,25 @@ describe('background', () => {
   });
 
   it('should tell the console’s own errors from the page’s by their stack', () => {
-    const ours = new Error('ours');
-    ours.stack =
-      'Error: ours\n    at render (https://directory.example.org/static/console/twake-directory-manager.esm.js:12:3)';
-    const theirs = new Error('theirs');
-    theirs.stack =
-      'Error: theirs\n    at main (https://directory.example.org/app.js:1:1)';
-    expect(fromConsole(ours)).to.equal(true);
-    expect(fromConsole(theirs)).to.equal(false);
+    const at = (frame: string): Error =>
+      Object.assign(new Error('x'), { stack: `Error: x\n    at f (${frame})` });
+    const origin = 'https://directory.example.org/static/console';
+    // The bundles as served by the image, digest included, and from npm.
+    for (const file of [
+      'twake-directory-manager.esm.js?v=0123abcd',
+      'twake-directory-manager.js',
+      'twake-directory-manager.min.js',
+    ])
+      expect(fromConsole(at(`${origin}/${file}:12:3`)), file).to.equal(true);
+    // The page's own scripts, even on a host or a path named after the
+    // console, and a bundle of another name.
+    for (const frame of [
+      'https://directory.example.org/app.js:1:1',
+      'https://twake-directory-manager.example.org/app.js:1:1',
+      'https://example.org/twake-directory-manager/index.js:1:1',
+      'https://example.org/vendor.js:1:1',
+    ])
+      expect(fromConsole(at(frame)), frame).to.equal(false);
     // A rejection with no error, or an error with no stack, is left alone.
     expect(fromConsole('a string')).to.equal(false);
     expect(fromConsole(null)).to.equal(false);
@@ -140,7 +180,7 @@ describe('DirectoryConsole.report', () => {
     }
   });
 
-  it('should say what a refused or missing entry means, and survive a hook that throws', () => {
+  it('should say the failure in its own words, report what is no Error, and survive a hook that throws', () => {
     const toast = {
       textContent: '',
       hidden: true,
@@ -168,18 +208,23 @@ describe('DirectoryConsole.report', () => {
       const report = (
         app as unknown as { report(error: unknown, context: string): void }
       ).report;
+      // A refusal is said in the server's words, not in a read's wording.
       report(Object.assign(new Error('Forbidden'), { status: 403 }), 'x');
-      expect(toast.textContent).to.equal(
-        'Something went wrong: You may not see this entry'
-      );
+      expect(toast.textContent).to.equal('Something went wrong: Forbidden');
       // The hook's failure is logged, not thrown back into the boundary.
       expect(logged.map(args => args[0])).to.deep.equal([
         '[twake-directory-manager]',
         '[twake-directory-manager] onError',
       ]);
-      // A rejection that is no Error has no message to add.
+      // A rejection carrying a string shows it; one carrying nothing, or a
+      // thing that is no Error, is still reported, with nothing to add.
       report('a string', 'y');
-      expect(toast.textContent).to.equal('Something went wrong');
+      expect(toast.textContent).to.equal('Something went wrong: a string');
+      for (const reason of [undefined, null, 42, { status: 500 }]) {
+        report(reason, 'z');
+        expect(toast.textContent).to.equal('Something went wrong');
+      }
+      expect(logged.filter(args => args[1] === 'z')).to.have.length(4);
     } finally {
       console.error = original;
     }
