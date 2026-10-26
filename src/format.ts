@@ -10,7 +10,7 @@
  * @module twake-directory-manager/format
  */
 
-import { escapeHtml, toTitleCase } from './shared/dom';
+import { toTitleCase } from './shared/dom';
 
 import type { Translator } from './i18n';
 import type {
@@ -21,6 +21,7 @@ import type {
   Refusal,
   SchemaAttribute,
 } from './types';
+import { html, type SafeHtml } from './shared/html';
 
 /**
  * Pick the text for a language.
@@ -581,10 +582,13 @@ export function accountState(
  * @param shown its name
  * @returns the markup
  */
-export function stateMarkup(state: string | undefined, shown: string): string {
+export function stateMarkup(
+  state: string | undefined,
+  shown: string
+): SafeHtml {
   return state && BADGED_STATES.includes(state)
-    ? `<span class="dc-state dc-state-${state}">${escapeHtml(shown)}</span>`
-    : escapeHtml(shown);
+    ? html`<span class="dc-state dc-state-${state}">${shown}</span>`
+    : html`${shown}`;
 }
 
 /**

@@ -28,12 +28,31 @@ const rules = {
   // refuses the `void` that marked such a start; a bare call statement it
   // cannot tell from a synchronous one — that takes type-aware linting
   // (`no-floating-promises`, #227).
+  // Markup reaches the page through `html` and `render` (src/shared/html.ts),
+  // which escape every interpolation: a bare `innerHTML` is one escaping
+  // forgotten away from a stored XSS in an administrator's session.
   'no-restricted-syntax': [
     'error',
     {
       selector: "UnaryExpression[operator='void']",
       message:
         'Start work the caller does not wait for through background() from shared/background, which reports its failure.',
+    },
+    {
+      selector:
+        'AssignmentExpression[left.property.name=/^(innerHTML|outerHTML)$/]',
+      message:
+        'Write markup with render(element, html`…`) from shared/html, which escapes what it interpolates.',
+    },
+    {
+      selector: "CallExpression[callee.property.name='insertAdjacentHTML']",
+      message:
+        'Add markup with append(element, html`…`) from shared/html, which escapes what it interpolates.',
+    },
+    {
+      selector: "NewExpression[callee.name='SafeHtml']",
+      message:
+        'Markup is made by html`…`, or by trusted() for a constant of the console’s own; nothing else builds a SafeHtml.',
     },
   ],
   // TypeScript resolves names itself, DOM types included, which `no-undef`
@@ -46,10 +65,10 @@ const rules = {
 // when the file does; remove the file when it goes under the budget; never
 // add one.
 const oversized = {
-  'src/DirectoryConsole.ts': 4080,
+  'src/DirectoryConsole.ts': 4113,
   'src/components/EntityForm.ts': 1411,
   'src/i18n.ts': 1340,
-  'test/console.test.ts': 11447,
+  'test/console.test.ts': 11455,
 };
 
 // What the types tell on top: a promise nobody waits for or handles, a

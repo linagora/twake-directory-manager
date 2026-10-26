@@ -14,7 +14,6 @@
  * @module twake-directory-manager/components/EntityForm
  */
 
-import { escapeHtml } from '../shared/dom';
 import {
   attributeHint,
   attributeLabel,
@@ -38,6 +37,7 @@ import type {
   SchemaAttribute,
 } from '../types';
 import { background, type Reporter } from '../shared/background';
+import { append, html, render, type SafeHtml } from '../shared/html';
 
 /** An entry a pointer field may land on. */
 interface PointerCandidate {
@@ -528,27 +528,30 @@ export class EntityForm {
     const { shown, folded } = this.layout();
     const folds = [...folded.values()].flat().length;
 
-    container.innerHTML = `
+    render(
+      container,
+      html`
       <form class="dc-form" novalidate>
-        <p class="dc-form-required">${escapeHtml(translator.t('form.required'))}</p>
+        <p class="dc-form-required">${translator.t('form.required')}</p>
         ${this.groupsMarkup(shown)}
         ${
           folds
-            ? `<details class="dc-form-optional" data-optional>
-          <summary>${escapeHtml(translator.t('form.optional', { count: folds }))}</summary>
+            ? html`<details class="dc-form-optional" data-optional>
+          <summary>${translator.t('form.optional', { count: folds })}</summary>
           ${this.groupsMarkup(folded)}
         </details>`
             : ''
         }
         <div class="dc-form-actions">
-          <button type="button" class="dc-button" data-cancel>${escapeHtml(
-            translator.t('app.cancel')
+          <button type="button" class="dc-button" data-cancel>${translator.t(
+            'app.cancel'
           )}</button>
-          <button type="submit" class="dc-button dc-button-primary">${escapeHtml(
-            translator.t(this.options.entry ? 'app.save' : 'app.create')
+          <button type="submit" class="dc-button dc-button-primary">${translator.t(
+            this.options.entry ? 'app.save' : 'app.create'
           )}</button>
         </div>
-      </form>`;
+      </form>`
+    );
 
     this.drawn = container.querySelector('form');
     container.querySelector('form')?.addEventListener('input', event => {
@@ -612,28 +615,26 @@ export class EntityForm {
   /** Markup of groups of fields, one fieldset each. */
   private groupsMarkup(
     groups: Map<string, [string, SchemaAttribute][]>
-  ): string {
-    return [...groups.entries()]
-      .map(
-        ([group, fields]) => `
+  ): SafeHtml {
+    return html`${[...groups.entries()].map(
+      ([group, fields]) => html`
           <fieldset class="dc-form-group">
-            ${group ? `<legend>${escapeHtml(group)}</legend>` : ''}
-            ${fields.map(([name, attr]) => this.fieldMarkup(name, attr)).join('')}
+            ${group ? html`<legend>${group}</legend>` : ''}
+            ${fields.map(([name, attr]) => this.fieldMarkup(name, attr))}
           </fieldset>`
-      )
-      .join('');
+    )}`;
   }
 
   /** Markup of one field, chosen from its schema type. */
-  private fieldMarkup(name: string, attr: SchemaAttribute): string {
-    return `
-      <div class="dc-field" data-field="${escapeHtml(name)}">
+  private fieldMarkup(name: string, attr: SchemaAttribute): SafeHtml {
+    return html`
+      <div class="dc-field" data-field="${name}">
         ${this.fieldContent(name, attr)}
       </div>`;
   }
 
   /** What a field holds: redrawn alone when a select turns into a search. */
-  private fieldContent(name: string, attr: SchemaAttribute): string {
+  private fieldContent(name: string, attr: SchemaAttribute): SafeHtml {
     const id = `dc-field-${name}`;
     const { translator } = this.options;
     // The schema's hints speak of storage: "xGB, xMB, xKB", a notation and
@@ -650,7 +651,9 @@ export class EntityForm {
           : this.searches.has(name)
             ? undefined
             : attributeHint(attr, translator.language);
-    const required = attr.required ? ' <span class="dc-required">*</span>' : '';
+    const required = attr.required
+      ? html` <span class="dc-required">*</span>`
+      : '';
     const control = this.searches.has(name)
       ? this.pickerMarkup(name)
       : attr.type === 'array'
@@ -662,40 +665,40 @@ export class EntityForm {
             : this.inputMarkup(name, attr);
 
     const pointer = attr.type === 'pointer' || attr.items?.type === 'pointer';
-    const label = `<label for="${escapeHtml(id)}">${escapeHtml(this.label(name, attr))}${required}</label>`;
+    const label = html`<label for="${id}">${this.label(name, attr)}${required}</label>`;
     const help = resolveText(attr.help, this.options.translator.language);
     // Outside the label, which would hand a click on it to the control, and
     // shown on hover only: focusable, it took the focus a panel gives its
     // first field and opened with the form. The control is described by it
     // instead (see bind), which is how a screen reader hears it.
     const heading = help
-      ? `<div class="dc-label">
+      ? html`<div class="dc-label">
           ${label}
           <span class="dc-help" aria-hidden="true">?</span>
-          <span class="dc-tooltip" role="tooltip" id="dc-help-${escapeHtml(name)}">${escapeHtml(help)}</span>
+          <span class="dc-tooltip" role="tooltip" id="dc-help-${name}">${help}</span>
         </div>`
       : label;
-    return `
+    return html`
         ${heading}
         ${control}
-        ${hint ? `<p class="dc-hint" data-hint>${escapeHtml(hint)}</p>` : ''}
+        ${hint ? html`<p class="dc-hint" data-hint>${hint}</p>` : ''}
         ${
           this.identifierSource()?.field === name
-            ? `<p class="dc-hint" id="dc-identifier-${escapeHtml(name)}" data-identifier hidden></p>`
+            ? html`<p class="dc-hint" id="dc-identifier-${name}" data-identifier hidden></p>`
             : ''
         }
-        <p class="dc-error" id="dc-error-${escapeHtml(name)}" data-error hidden></p>
+        <p class="dc-error" id="dc-error-${name}" data-error hidden></p>
         ${
           // Why the branch offers nothing, when that is not the truth. Apart
           // from the validation message, which a save rewrites, and styled as
           // a hint without being one: a refusal hides `[data-hint]`.
           pointer
-            ? `<p class="dc-hint" id="dc-note-${escapeHtml(name)}" data-pointer-note role="status" hidden></p>`
+            ? html`<p class="dc-hint" id="dc-note-${name}" data-pointer-note role="status" hidden></p>`
             : ''
         }`;
   }
 
-  private inputMarkup(name: string, attr: SchemaAttribute): string {
+  private inputMarkup(name: string, attr: SchemaAttribute): SafeHtml {
     const value = this.values[name][0] ?? '';
     const type =
       attr.type === 'date' ? 'date' : attr.neverReturn ? 'password' : 'text';
@@ -709,9 +712,9 @@ export class EntityForm {
         : attr.normalize === 'byteSize'
           ? formatByteSize(value)
           : value;
-    const input = `<input id="dc-field-${escapeHtml(name)}" name="${escapeHtml(name)}"
-      type="${type}" class="dc-input" value="${escapeHtml(shown)}"
-      ${attr.neverReturn ? 'autocomplete="new-password"' : this.comboboxAttributes(name)} />`;
+    const input = html`<input id="dc-field-${name}" name="${name}"
+      type="${type}" class="dc-input" value="${shown}"
+      ${attr.neverReturn ? html`autocomplete="new-password"` : this.comboboxAttributes(name)} />`;
     return this.completionMarkup(name, input);
   }
 
@@ -720,52 +723,52 @@ export class EntityForm {
    * browser's own suggestions, the addresses typed in other forms, would
    * cover the domains'.
    */
-  private comboboxAttributes(name: string): string {
-    if (!this.addresses.has(name)) return '';
-    return `role="combobox" aria-autocomplete="list" aria-expanded="false"
-      aria-controls="dc-complete-${escapeHtml(name)}" autocomplete="off"`;
+  private comboboxAttributes(name: string): SafeHtml {
+    if (!this.addresses.has(name)) return html``;
+    return html`role="combobox" aria-autocomplete="list" aria-expanded="false"
+      aria-controls="dc-complete-${name}" autocomplete="off"`;
   }
 
   /**
    * An address box with the list its domains are offered in, under it as a
    * picker's suggestions are; the box alone for any other field.
    */
-  private completionMarkup(name: string, control: string): string {
+  private completionMarkup(name: string, control: SafeHtml): SafeHtml {
     if (!this.addresses.has(name)) return control;
-    return `
+    return html`
       <div class="dc-picker-box">
         ${control}
-        <ul class="dc-picker-results" id="dc-complete-${escapeHtml(name)}"
+        <ul class="dc-picker-results" id="dc-complete-${name}"
           role="listbox" data-completions hidden></ul>
       </div>`;
   }
 
-  private booleanMarkup(name: string): string {
+  private booleanMarkup(name: string): SafeHtml {
     const { translator } = this.options;
     const value = (this.values[name][0] ?? '').toUpperCase();
-    return `<select id="dc-field-${escapeHtml(name)}" name="${escapeHtml(name)}" class="dc-input">
-      <option value="">${escapeHtml(translator.t('form.none'))}</option>
-      <option value="TRUE"${value === 'TRUE' ? ' selected' : ''}>${escapeHtml(
-        translator.t('form.true')
+    return html`<select id="dc-field-${name}" name="${name}" class="dc-input">
+      <option value="">${translator.t('form.none')}</option>
+      <option value="TRUE"${value === 'TRUE' ? ' selected' : ''}>${translator.t(
+        'form.true'
       )}</option>
-      <option value="FALSE"${value === 'FALSE' ? ' selected' : ''}>${escapeHtml(
-        translator.t('form.false')
+      <option value="FALSE"${value === 'FALSE' ? ' selected' : ''}>${translator.t(
+        'form.false'
       )}</option>
     </select>`;
   }
 
-  private pointerMarkup(name: string, attr: SchemaAttribute): string {
+  private pointerMarkup(name: string, attr: SchemaAttribute): SafeHtml {
     const { translator } = this.options;
     const current = this.values[name][0] ?? '';
     const branch = (attr.branch || [])[0] || '';
     // Inert until `fillPointers` has answered: with the empty choice as the
     // only selectable option, the click that opens the list picks that choice
     // and silently clears the value the entry holds.
-    return `<select id="dc-field-${escapeHtml(name)}" name="${escapeHtml(name)}"
-      class="dc-input" data-pointer="${escapeHtml(branch)}"
-      ${attr.required ? 'data-required="true" ' : ''}disabled aria-busy="true">
-      <option value="" disabled>${escapeHtml(translator.t('form.choose'))}</option>
-      ${current ? `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>` : ''}
+    return html`<select id="dc-field-${name}" name="${name}"
+      class="dc-input" data-pointer="${branch}"
+      ${attr.required ? html`data-required="true" ` : ''}disabled aria-busy="true">
+      <option value="" disabled>${translator.t('form.choose')}</option>
+      ${current ? html`<option value="${current}" selected>${current}</option>` : ''}
     </select>`;
   }
 
@@ -774,18 +777,18 @@ export class EntityForm {
    * and a box that suggests entries as the operator types. A single-valued
    * attribute holds one token, which a new choice replaces.
    */
-  private pickerMarkup(name: string): string {
+  private pickerMarkup(name: string): SafeHtml {
     const { translator } = this.options;
     const listId = `dc-picker-${name}`;
-    return `
-      <div class="dc-tokens dc-picker" data-picker="${escapeHtml(name)}">
+    return html`
+      <div class="dc-tokens dc-picker" data-picker="${name}">
         <ul class="dc-token-list">${this.pickerItems(name)}</ul>
         <div class="dc-picker-box">
-          <input id="dc-field-${escapeHtml(name)}" type="search" class="dc-input"
+          <input id="dc-field-${name}" type="search" class="dc-input"
             data-picker-input autocomplete="off" role="combobox"
             aria-autocomplete="list" aria-expanded="false"
-            aria-controls="${escapeHtml(listId)}"
-            placeholder="${escapeHtml(
+            aria-controls="${listId}"
+            placeholder="${
               this.filtered.has(name)
                 ? translator.t('form.filterPointer')
                 : this.freeform.has(name)
@@ -793,28 +796,26 @@ export class EntityForm {
                   : translator.t('form.searchPointer', {
                       count: SEARCH_MINIMUM,
                     })
-            )}" />
-          <ul class="dc-picker-results" id="${escapeHtml(listId)}"
+            }" />
+          <ul class="dc-picker-results" id="${listId}"
             role="listbox" hidden></ul>
         </div>
       </div>`;
   }
 
-  private pickerItems(name: string): string {
+  private pickerItems(name: string): SafeHtml {
     const { translator } = this.options;
-    return this.values[name]
-      .map((dn, index) => {
-        const shown = this.picked.get(dn) || rdnValue(dn);
-        return `
+    return html`${this.values[name].map((dn, index) => {
+      const shown = this.picked.get(dn) || rdnValue(dn);
+      return html`
       <li class="dc-token">
-        <span title="${escapeHtml(dn)}">${escapeHtml(shown)}</span>
+        <span title="${dn}">${shown}</span>
         <button type="button" data-remove="${index}"
-          aria-label="${escapeHtml(
-            translator.t('form.removeValue', { value: shown })
-          )}">×</button>
+          aria-label="${translator.t('form.removeValue', {
+            value: shown,
+          })}">×</button>
       </li>`;
-      })
-      .join('');
+    })}`;
   }
 
   /**
@@ -822,54 +823,50 @@ export class EntityForm {
    * The instruction is explicit — a text box that silently swallows Enter is
    * the surest way to lose a value.
    */
-  private tokenMarkup(name: string, attr: SchemaAttribute): string {
+  private tokenMarkup(name: string, attr: SchemaAttribute): SafeHtml {
     const { translator } = this.options;
     const isPointer = attr.items?.type === 'pointer';
     const branch = (attr.items?.branch || [])[0] || '';
     // The id the field's label points at: without it, a screen reader names
     // the box by its placeholder, and the select by nothing at all.
     const id = `dc-field-${name}`;
-    return `
-      <div class="dc-tokens" data-tokens="${escapeHtml(name)}">
+    return html`
+      <div class="dc-tokens" data-tokens="${name}">
         <ul class="dc-token-list">${this.tokenItems(name)}</ul>
         ${
           isPointer
-            ? `<select id="${escapeHtml(id)}" class="dc-input" data-token-input data-pointer="${escapeHtml(branch)}"
-                 ${attr.required ? 'data-required="true" ' : ''}disabled aria-busy="true">
-                 <option value="" disabled>${escapeHtml(translator.t('form.choose'))}</option>
+            ? html`<select id="${id}" class="dc-input" data-token-input data-pointer="${branch}"
+                 ${attr.required ? html`data-required="true" ` : ''}disabled aria-busy="true">
+                 <option value="" disabled>${translator.t('form.choose')}</option>
                </select>`
             : this.completionMarkup(
                 name,
-                `<input id="${escapeHtml(id)}" class="dc-input" data-token-input type="text"
-                 placeholder="${escapeHtml(translator.t('form.addValue'))}"
+                html`<input id="${id}" class="dc-input" data-token-input type="text"
+                 placeholder="${translator.t('form.addValue')}"
                  ${this.comboboxAttributes(name)} />`
               )
         }
       </div>`;
   }
 
-  private tokenItems(name: string): string {
+  private tokenItems(name: string): SafeHtml {
     const { translator } = this.options;
     const attr = this.fields.find(([field]) => field === name)?.[1];
     // A DN is named the way its select offers it, the DN kept for the title.
     const pointer = attr?.items?.type === 'pointer';
-    return this.values[name]
-      .map((value, index) => {
-        const shown = pointer
-          ? this.picked.get(value) || rdnValue(value)
-          : value;
-        // Named after what it removes: a row of "Remove this value" buttons
-        // cannot be told apart by a screen reader, nor by voice.
-        return `
+    return html`${this.values[name].map((value, index) => {
+      const shown = pointer ? this.picked.get(value) || rdnValue(value) : value;
+      // Named after what it removes: a row of "Remove this value" buttons
+      // cannot be told apart by a screen reader, nor by voice.
+      return html`
       <li class="dc-token">
-        <span title="${escapeHtml(value)}">${escapeHtml(shown)}</span>
+        <span title="${value}">${shown}</span>
         <button type="button" data-remove="${index}"
-          aria-label="${escapeHtml(
-            translator.t('form.removeValue', { value: shown })
-          )}">×</button>
+          aria-label="${translator.t('form.removeValue', {
+            value: shown,
+          })}">×</button>
       </li>`;
-      })
-      .join('');
+    })}`;
   }
 
   /** Wire the controls up to the value map. */
@@ -1172,7 +1169,7 @@ export class EntityForm {
     let generation = 0;
 
     const redraw = (): void => {
-      tokens.innerHTML = this.pickerItems(name);
+      render(tokens, this.pickerItems(name));
     };
     const close = (): void => {
       results.hidden = true;
@@ -1182,23 +1179,24 @@ export class EntityForm {
     };
     const message = (text: string): void => {
       candidates = [];
-      results.innerHTML = `<li class="dc-picker-note">${escapeHtml(text)}</li>`;
+      render(results, html`<li class="dc-picker-note">${text}</li>`);
       results.hidden = false;
       input.setAttribute('aria-expanded', 'true');
     };
     const paint = (): void => {
       if (candidates.length === 0) return message(translator.t('list.noMatch'));
-      results.innerHTML = candidates
-        .map(
-          (candidate, index) => `
-        <li id="dc-picker-${escapeHtml(name)}-${index}" role="option"
+      render(
+        results,
+        html`${candidates.map(
+          (candidate, index) => html`
+        <li id="dc-picker-${name}-${index}" role="option"
           class="dc-picker-option${index === active ? ' dc-active' : ''}"
           aria-selected="${index === active ? 'true' : 'false'}"
-          data-candidate="${index}" title="${escapeHtml(candidate.dn)}">${escapeHtml(
+          data-candidate="${index}" title="${candidate.dn}">${
             candidate.label
-          )}</li>`
-        )
-        .join('');
+          }</li>`
+        )}`
+      );
       results.hidden = false;
       input.setAttribute('aria-expanded', 'true');
       // The last fields of a long form sit above the sticky actions: bring
@@ -1376,7 +1374,7 @@ export class EntityForm {
   private bindTokens(name: string, wrapper: HTMLElement): void {
     const redraw = (): void => {
       const list = wrapper.querySelector('.dc-token-list');
-      if (list) list.innerHTML = this.tokenItems(name);
+      if (list) render(list, this.tokenItems(name));
     };
 
     wrapper.addEventListener('click', event => {
@@ -1473,23 +1471,21 @@ export class EntityForm {
         // holds and put nothing in its place, and on a required field the form
         // refuses to save it.
         const empty = options.length > 0 && select.dataset.required !== 'true';
-        select.innerHTML =
-          `<option value=""${empty ? '' : ' disabled'}>` +
-          `${escapeHtml(this.options.translator.t('form.choose'))}</option>` +
-          options
-            .map(
-              option =>
-                `<option value="${escapeHtml(option.dn)}"${
-                  option.dn === current ? ' selected' : ''
-                }>${escapeHtml(option.label)}</option>`
-            )
-            .join('');
+        render(
+          select,
+          html`<option value=""${empty ? '' : ' disabled'}>${this.options.translator.t('form.choose')}</option>${options.map(
+            option =>
+              html`<option value="${option.dn}"${
+                option.dn === current ? ' selected' : ''
+              }>${option.label}</option>`
+          )}`
+        );
         if (current && !options.some(option => option.dn === current)) {
           // Keep a value the directory holds but the branch listing missed,
           // rather than silently dropping it on the next save.
-          select.insertAdjacentHTML(
-            'beforeend',
-            `<option value="${escapeHtml(current)}" selected>${escapeHtml(current)}</option>`
+          append(
+            select,
+            html`<option value="${current}" selected>${current}</option>`
           );
         }
         select.value = current;
@@ -1515,7 +1511,7 @@ export class EntityForm {
     const field = select.closest<HTMLElement>('[data-tokens]');
     const name = field?.dataset.tokens;
     const list = field?.querySelector('.dc-token-list');
-    if (name && list) list.innerHTML = this.tokenItems(name);
+    if (name && list) render(list, this.tokenItems(name));
   }
 
   /**
@@ -1546,7 +1542,7 @@ export class EntityForm {
         options.filter(option => option.label.toLowerCase().includes(text))
       );
     });
-    field.innerHTML = this.fieldContent(name, attr);
+    render(field, this.fieldContent(name, attr));
     this.bindPicker(name, field);
     return true;
   }
@@ -1591,15 +1587,16 @@ export class EntityForm {
       active = -1;
     };
     const paint = (): void => {
-      results.innerHTML = suggestions
-        .map(
-          (suggestion, index) => `
-        <li id="dc-complete-${escapeHtml(name)}-${index}" role="option"
+      render(
+        results,
+        html`${suggestions.map(
+          (suggestion, index) => html`
+        <li id="dc-complete-${name}-${index}" role="option"
           class="dc-picker-option${index === active ? ' dc-active' : ''}"
           aria-selected="${index === active ? 'true' : 'false'}"
-          data-suggestion="${index}">${escapeHtml(suggestion)}</li>`
-        )
-        .join('');
+          data-suggestion="${index}">${suggestion}</li>`
+        )}`
+      );
       results.hidden = false;
       input.setAttribute('aria-expanded', 'true');
       results.scrollIntoView?.({ block: 'nearest' });
@@ -1718,7 +1715,7 @@ export class EntityForm {
     const replaced = Boolean(fallback.search);
     if (fallback.search) {
       this.searches.set(name, fallback.search);
-      field.innerHTML = this.fieldContent(name, attr);
+      render(field, this.fieldContent(name, attr));
       this.bindPicker(name, field);
     }
     const note = field.querySelector<HTMLElement>('[data-pointer-note]');

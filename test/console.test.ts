@@ -74,6 +74,7 @@ import type {
   SchemaAttribute,
   Scope,
 } from '../src/types';
+import type { SafeHtml } from '../src/shared/html';
 
 const baseUrl = 'http://localhost:8099';
 
@@ -2076,7 +2077,7 @@ describe('Directory console', () => {
             : pointerLabel(entities, dn, language),
         onCreate,
         onOpen: () => undefined,
-      }).markup();
+      }).markup().markup;
 
     it('should show a person’s state as the lists do', () => {
       // The People and transit tables read "Disabled" like "Active" (#172).
@@ -2233,7 +2234,7 @@ describe('Directory console', () => {
         name: 'Sales',
         onListEveryone: () => undefined,
         onOpen: () => undefined,
-      }).markup();
+      }).markup().markup;
       expect(html).to.include(
         '<button type="button" class="dc-button" data-list-everyone>List everyone in Sales, sub-organizations included</button>'
       );
@@ -2823,7 +2824,7 @@ describe('Directory console', () => {
       const state = importer as unknown as {
         created: number;
         successes: { row: { values: Record<string, string> }; id: string }[];
-        doneMarkup(): string;
+        doneMarkup(): SafeHtml;
       };
       const created = (
         password?: string
@@ -2833,13 +2834,13 @@ describe('Directory console', () => {
       });
       state.created = 2;
       state.successes = [created(), created()];
-      expect(state.doneMarkup()).to.include(
+      expect(state.doneMarkup().markup).to.include(
         '2 accounts were created without a password: give each one from its card (Reset password)'
       );
       state.successes = [created('Typed-1!'), created('Typed-2!')];
-      expect(state.doneMarkup()).to.not.include('without a password');
+      expect(state.doneMarkup().markup).to.not.include('without a password');
       state.successes = [created('Typed-1!'), created()];
-      expect(state.doneMarkup()).to.include(
+      expect(state.doneMarkup().markup).to.include(
         '1 account was created without a password: give it one from its card'
       );
     });
@@ -2860,13 +2861,13 @@ describe('Directory console', () => {
           values: object;
           errors: string[];
         }[];
-        reviewMarkup(): string;
+        reviewMarkup(): SafeHtml;
       };
       state.rows = [
         { line: 2, cells: [], values: {}, errors: [] },
         { line: 3, cells: [], values: {}, errors: ['Nom est obligatoire'] },
       ];
-      expect(state.reviewMarkup())
+      expect(state.reviewMarkup().markup)
         .to.contain('prête à importer<')
         .and.contain('en erreur, non importée<')
         .and.contain('Importer 1 entrée<');
@@ -3001,7 +3002,7 @@ describe('Directory console', () => {
           errors: string[];
         }[];
         run(): Promise<void>;
-        doneMarkup(): string;
+        doneMarkup(): SafeHtml;
       };
       state.rows = [
         {
@@ -3013,7 +3014,7 @@ describe('Directory console', () => {
         { line: 3, cells: [], values: { uid: 'bob' }, errors: [] },
       ];
       await state.run();
-      const markup = state.doneMarkup();
+      const markup = state.doneMarkup().markup;
       expect(markup)
         .to.contain('href="#&#x2F;users&#x2F;amartin">Alice Martin</a>')
         .and.contain('(amartin)')
@@ -4942,7 +4943,7 @@ describe('Directory console', () => {
     it('should name the transit branch in the scope banner, tooltip included', () => {
       const app = consoleIn({}) as unknown as {
         scope: Scope;
-        scopeMarkup(): string;
+        scopeMarkup(): SafeHtml;
       };
       app.scope = {
         user: 'sophie.martin',
@@ -4959,7 +4960,7 @@ describe('Directory console', () => {
         entities: [],
         transit: 'ou=Transit,ou=organization,dc=example,dc=com',
       };
-      const markup = app.scopeMarkup();
+      const markup = app.scopeMarkup().markup;
       expect(markup).to.contain('title="Transit">Transit</a>');
       expect(markup).to.not.contain('title="ou=Transit');
       // "Transit Transit (1)" said it twice: the label goes (#171), and
@@ -4968,7 +4969,7 @@ describe('Directory console', () => {
         '<span class="dc-scope-label">Transit</span>'
       );
       app.scope.transit = 'ou=Mobility,ou=organization,dc=example,dc=com';
-      expect(app.scopeMarkup())
+      expect(app.scopeMarkup().markup)
         .to.contain('<span class="dc-scope-label">Transit</span>')
         .and.contain('title="Mobility">Mobility</a>');
     });
@@ -6022,7 +6023,7 @@ describe('Directory console', () => {
         readAccount(): Promise<unknown>;
         renderDashboard(main: unknown): void;
         drawShell(): void;
-        scopeMarkup(): string;
+        scopeMarkup(): SafeHtml;
       };
       const overview = async (): Promise<string> => {
         inner.account = await inner.readAccount();
@@ -6109,7 +6110,9 @@ describe('Directory console', () => {
         .and.not.include('data-open');
       // The server refuses such an account every read: none is asked
       expect(asked).to.deep.equal([]);
-      expect(app.scopeMarkup()).to.include('dc-scope-empty dc-scope-none');
+      expect(app.scopeMarkup().markup).to.include(
+        'dc-scope-empty dc-scope-none'
+      );
       expect(shell())
         .to.include('data-nav=""')
         .and.not.include('data-nav="users"')
@@ -6121,7 +6124,7 @@ describe('Directory console', () => {
           { dn: 'ou=Sales,dc=example,dc=com', read: true, write: true },
         ],
       });
-      expect(local.app.scopeMarkup()).to.not.include('dc-scope-none');
+      expect(local.app.scopeMarkup().markup).to.not.include('dc-scope-none');
       expect(local.shell())
         .to.include('data-nav="users"')
         .and.include('data-nav="mailboxTypes"');
@@ -8380,9 +8383,11 @@ describe('Directory console', () => {
     it('should keep the root and the leaf of a deep path', () => {
       // The separators the shortened form adds are literal; the ones inside a
       // short path come through the shared HTML escaper, which encodes `/`.
-      expect(EntityList.shortenPath('A / B / C / D')).to.equal('A / … / D');
-      expect(EntityList.shortenPath('A / B')).to.equal('A &#x2F; B');
-      expect(EntityList.shortenPath('A')).to.equal('A');
+      expect(EntityList.shortenPath('A / B / C / D').markup).to.equal(
+        'A / … / D'
+      );
+      expect(EntityList.shortenPath('A / B').markup).to.equal('A &#x2F; B');
+      expect(EntityList.shortenPath('A').markup).to.equal('A');
     });
 
     it('should not cut a path up with a scanner that squares its length', () => {
@@ -8394,12 +8399,12 @@ describe('Directory console', () => {
       // now.
       const path = `A / B${' '.repeat(100000)}x / C`;
       const started = Date.now();
-      expect(EntityList.shortenPath(path)).to.equal('A / … / C');
+      expect(EntityList.shortenPath(path).markup).to.equal('A / … / C');
       expect(Date.now() - started).to.be.below(1000);
     });
 
     it('should escape a path it shortens', () => {
-      expect(EntityList.shortenPath('<A> / B / <D>')).to.equal(
+      expect(EntityList.shortenPath('<A> / B / <D>').markup).to.equal(
         '&lt;A&gt; / … / &lt;D&gt;'
       );
     });
@@ -8589,16 +8594,16 @@ describe('Directory console', () => {
       expect(accountState(users, 'twakeAccountStatus', 'cn=gone')).to.equal(
         undefined
       );
-      expect(stateMarkup('enabled', 'Active')).to.equal('Active');
-      expect(stateMarkup('noAccess', 'Sans accès')).to.equal(
+      expect(stateMarkup('enabled', 'Active').markup).to.equal('Active');
+      expect(stateMarkup('noAccess', 'Sans accès').markup).to.equal(
         '<span class="dc-state dc-state-noAccess">Sans accès</span>'
       );
-      expect(stateMarkup('toDelete', '<b>')).to.equal(
+      expect(stateMarkup('toDelete', '<b>').markup).to.equal(
         '<span class="dc-state dc-state-toDelete">&lt;b&gt;</span>'
       );
       // A deployment's own state is said as it stands.
-      expect(stateMarkup('seconded', 'Seconded')).to.equal('Seconded');
-      expect(stateMarkup(undefined, 'Disabled')).to.equal('Disabled');
+      expect(stateMarkup('seconded', 'Seconded').markup).to.equal('Seconded');
+      expect(stateMarkup(undefined, 'Disabled').markup).to.equal('Disabled');
     });
 
     it('should name a nomenclature’s values, and keep the others as stored', async () => {
@@ -11514,7 +11519,11 @@ describe('Directory console', () => {
     it('should mark required fields and say what the mark means', async () => {
       const container = stubContainer();
       await build().render(container);
-      expect(container.innerHTML).to.include('dc-required');
+      // The mark is markup, not the text of its tag.
+      expect(container.innerHTML).to.include(
+        '<span class="dc-required">*</span>'
+      );
+      expect(container.innerHTML).to.not.include('&lt;span');
       expect(container.innerHTML).to.include(
         'Fields marked with * are required'
       );

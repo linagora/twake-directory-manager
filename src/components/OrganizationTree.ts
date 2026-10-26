@@ -9,11 +9,11 @@
  * @module twake-directory-manager/components/OrganizationTree
  */
 
-import { escapeHtml } from '../shared/dom';
 import { comparableDn, withinDn } from '../format';
 import type { Translator } from '../i18n';
 import type { OrganizationNode } from '../types';
 import { background, type Reporter } from '../shared/background';
+import { html, render, type SafeHtml } from '../shared/html';
 
 export interface TreeOptions {
   translator: Translator;
@@ -316,16 +316,19 @@ export class OrganizationTree {
     // A container rendered into again (or by another view in between) no
     // longer holds the header this tree built: build it afresh.
     if (!container.querySelector('[data-tree-list]')) {
-      container.innerHTML = `
+      render(
+        container,
+        html`
         <div class="dc-tree">
           <div class="dc-tree-header">
-            <h2>${escapeHtml(translator.t('tree.title'))}</h2>
+            <h2>${translator.t('tree.title')}</h2>
             <input type="search" class="dc-input" data-filter
-              value="${escapeHtml(this.filter)}"
-              placeholder="${escapeHtml(translator.t('tree.filter'))}" />
+              value="${this.filter}"
+              placeholder="${translator.t('tree.filter')}" />
           </div>
           <div data-tree-list></div>
-        </div>`;
+        </div>`
+      );
       const filter = container.querySelector<HTMLInputElement>('[data-filter]');
       filter?.addEventListener('input', () => {
         this.filter = filter.value.trim();
@@ -340,59 +343,59 @@ export class OrganizationTree {
     const list = this.container?.querySelector<HTMLElement>('[data-tree-list]');
     if (!list) return;
     const { translator } = this.options;
-    const loading = `<p class="dc-empty">${escapeHtml(
-      translator.t('app.loading')
+    const loading = html`<p class="dc-empty">${translator.t(
+      'app.loading'
     )}</p>`;
-    const none = (key: string): string =>
-      `<p class="dc-empty">${escapeHtml(
-        translator.t(key, { filter: this.filter })
-      )}</p>`;
+    const none = (key: string): SafeHtml =>
+      html`<p class="dc-empty">${translator.t(key, {
+        filter: this.filter,
+      })}</p>`;
     const everywhere = this.searchesEverywhere();
     if (!everywhere) this.cancelSearch();
     const whole = everywhere && this.tree ? this.wholeTree() : null;
     if (this.error)
-      list.innerHTML = `<p class="dc-empty dc-error-block">${escapeHtml(
-        this.error
-      )}</p>`;
-    else if (!this.tree) list.innerHTML = loading;
+      render(list, html`<p class="dc-empty dc-error-block">${this.error}</p>`);
+    else if (!this.tree) render(list, loading);
     else if (whole === undefined) {
       // The whole tree, being searched: until it is, saying "no match" would
       // be saying it of the branches opened only.
-      list.innerHTML = loading;
+      render(list, loading);
     } else if (whole) {
       const { found, truncated } = whole;
       // The matches kept are the first the server found, not the first in
       // reading order: sorted, they would pass for every one there is.
       const cut = truncated
-        ? `<p class="dc-tree-cut">${escapeHtml(
-            translator.t('tree.firstMatches', { count: found.length })
-          )}</p>`
+        ? html`<p class="dc-tree-cut">${translator.t('tree.firstMatches', {
+            count: found.length,
+          })}</p>`
         : '';
-      list.innerHTML = found.length
-        ? `<ul class="dc-tree-list dc-tree-found">${found
-            .map(
-              option => `
-            <li class="dc-tree-result" style="--depth:0">
+      render(
+        list,
+        found.length
+          ? html`<ul class="dc-tree-list dc-tree-found">${found.map(
+              option => html`
+            <li class="dc-tree-result">
               <div class="dc-tree-row">
-                <button type="button" class="dc-tree-label" data-found="${escapeHtml(
+                <button type="button" class="dc-tree-label" data-found="${
                   option.dn
-                )}" title="${escapeHtml(option.label)}">${escapeHtml(
-                  option.label
-                )}</button>
+                }" title="${option.label}">${option.label}</button>
               </div>
             </li>`
-            )
-            .join('')}</ul>${cut}`
-        : // Organizations left unread may hold one: absence is not proven.
-          none(whole.partial ? 'tree.noMatchOpened' : 'tree.noMatch');
+            )}</ul>${cut}`
+          : // Organizations left unread may hold one: absence is not proven.
+            none(whole.partial ? 'tree.noMatchOpened' : 'tree.noMatch')
+      );
     } else {
       // A short filter, or a tree that could not be searched whole, matches
       // the branches opened; matching none of them, it says so rather than
       // leave a blank where the tree was, and says of which.
       const nodes = this.nodeMarkup(this.tree, 0);
-      list.innerHTML = nodes
-        ? `<ul class="dc-tree-list">${nodes}</ul>`
-        : none('tree.noMatchOpened');
+      render(
+        list,
+        nodes.markup
+          ? html`<ul class="dc-tree-list">${nodes}</ul>`
+          : none('tree.noMatchOpened')
+      );
     }
     this.bind(list);
   }
@@ -558,10 +561,10 @@ export class OrganizationTree {
   }
 
   /** One node and, when it is open, its children. */
-  private nodeMarkup(node: OrganizationNode, depth: number): string {
+  private nodeMarkup(node: OrganizationNode, depth: number): SafeHtml {
     const open = this.expanded.has(node.dn);
     const matches = this.matches(node);
-    if (!matches) return '';
+    if (!matches) return html``;
     const hasChildren = !node.loaded || (node.children?.length ?? 0) > 0;
     const transit =
       !!this.options.transit &&
@@ -574,47 +577,47 @@ export class OrganizationTree {
       hasChildren ? (open ? 'tree.collapse' : 'tree.expand') : 'tree.leaf',
       { name: node.name }
     );
-    return `
+    return html`
       <li class="dc-tree-node${selected ? ' dc-selected' : ''}"
-          style="--depth:${depth}">
+          data-depth="${depth}">
         <div class="dc-tree-row">
-          <button type="button" class="dc-tree-toggle" data-toggle="${escapeHtml(node.dn)}"
+          <button type="button" class="dc-tree-toggle" data-toggle="${node.dn}"
             ${
               // A node known to hold nothing is neither open nor closed.
               hasChildren
-                ? `aria-expanded="${open ? 'true' : 'false'}"`
+                ? html`aria-expanded="${open ? 'true' : 'false'}"`
                 : 'disabled'
             }
-            aria-label="${escapeHtml(toggleName)}">
+            aria-label="${toggleName}">
             ${hasChildren ? (open ? '▾' : '▸') : '·'}
           </button>
-          <button type="button" class="dc-tree-label" data-select="${escapeHtml(node.dn)}"
-            ${selected ? 'aria-current="true" ' : ''}title="${escapeHtml(
+          <button type="button" class="dc-tree-label" data-select="${node.dn}"
+            ${selected ? html`aria-current="true" ` : ''}title="${
               node.path || node.dn
-            )}">${escapeHtml(node.name)}</button>
+            }">${node.name}</button>
           ${
             transit
-              ? `<span class="dc-tag dc-tag-transit">${escapeHtml(
-                  translator.t('transit.branch')
+              ? html`<span class="dc-tag dc-tag-transit">${translator.t(
+                  'transit.branch'
                 )}</span>`
               : ''
           }
           ${
             this.options.onCreateChild &&
             (this.options.canCreateChild?.(node) ?? true)
-              ? `<button type="button" class="dc-tree-add" data-add="${escapeHtml(node.dn)}"
-                   title="${escapeHtml(translator.t('tree.addChild'))}"
-                   aria-label="${escapeHtml(
-                     translator.t('tree.addUnder', { name: node.name })
-                   )}">+</button>`
+              ? html`<button type="button" class="dc-tree-add" data-add="${node.dn}"
+                   title="${translator.t('tree.addChild')}"
+                   aria-label="${translator.t('tree.addUnder', {
+                     name: node.name,
+                   })}">+</button>`
               : ''
           }
         </div>
         ${
           open && node.children?.length
-            ? `<ul class="dc-tree-list">${node.children
-                .map(child => this.nodeMarkup(child, depth + 1))
-                .join('')}</ul>`
+            ? html`<ul class="dc-tree-list">${node.children.map(child =>
+                this.nodeMarkup(child, depth + 1)
+              )}</ul>`
             : ''
         }
       </li>`;
@@ -634,6 +637,12 @@ export class OrganizationTree {
 
   /** Bind the buttons of a freshly written list; the filter binds itself. */
   private bind(container: HTMLElement): void {
+    // The depth indents the row (`--depth` in the stylesheet). Set here
+    // rather than in a style attribute, which a strict CSP refuses.
+    for (const node of Array.from(
+      container.querySelectorAll<HTMLElement>('[data-depth]')
+    ))
+      node.style.setProperty('--depth', node.dataset.depth as string);
     for (const button of Array.from(
       container.querySelectorAll<HTMLElement>('[data-toggle]')
     )) {

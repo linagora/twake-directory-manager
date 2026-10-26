@@ -10,8 +10,6 @@
  * @module twake-directory-manager/DirectoryConsole
  */
 
-import { escapeHtml } from './shared/dom';
-
 import {
   ConsoleApiClient,
   isDomainBranch,
@@ -70,6 +68,7 @@ import type {
   Scope,
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
+import { html, render, trusted, type SafeHtml } from './shared/html';
 
 /** The signed-in account, as the overview names it. */
 interface SignedIn {
@@ -160,18 +159,20 @@ function initial(label: string): string {
 }
 
 /** A chevron, turned by CSS when its section is open. */
-const CHEVRON_ICON =
+const CHEVRON_ICON = trusted(
   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" ' +
-  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-  '<path d="m6 4 4 4-4 4"/></svg>';
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="m6 4 4 4-4 4"/></svg>'
+);
 
 /** Four squares: the overview, which is every collection at once. */
-const OVERVIEW_ICON =
+const OVERVIEW_ICON = trusted(
   '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">' +
-  '<rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.6"/>' +
-  '<rect x="9" y="1.5" width="5.5" height="5.5" rx="1.6"/>' +
-  '<rect x="1.5" y="9" width="5.5" height="5.5" rx="1.6"/>' +
-  '<rect x="9" y="9" width="5.5" height="5.5" rx="1.6"/></svg>';
+    '<rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.6"/>' +
+    '<rect x="9" y="1.5" width="5.5" height="5.5" rx="1.6"/>' +
+    '<rect x="1.5" y="9" width="5.5" height="5.5" rx="1.6"/>' +
+    '<rect x="9" y="9" width="5.5" height="5.5" rx="1.6"/></svg>'
+);
 
 /** What Tab can reach in the side panel. */
 const FOCUSABLE = [
@@ -589,16 +590,18 @@ export class DirectoryConsole {
       throw new Error(`Container #${this.options.containerId} not found`);
     this.pageTitle = document.title || '';
 
-    this.container.innerHTML = `<p class="dc-empty">${escapeHtml(
-      this.translator.t('app.loading')
-    )}</p>`;
+    render(
+      this.container,
+      html`<p class="dc-empty">${this.translator.t('app.loading')}</p>`
+    );
 
     try {
       this.entities = await this.api.discover();
     } catch (err) {
-      this.container.innerHTML = `<p class="dc-empty dc-error-block">${escapeHtml(
-        (err as Error).message
-      )}</p>`;
+      render(
+        this.container,
+        html`<p class="dc-empty dc-error-block">${(err as Error).message}</p>`
+      );
       return;
     }
 
@@ -768,50 +771,48 @@ export class DirectoryConsole {
       : splitEntities(this.entities);
     const settings = this.settings(reference);
 
-    container.innerHTML = `
+    render(
+      container,
+      html`
       <div class="dc-app">
         <aside class="dc-sidebar">
           <div class="dc-brand">
             <span class="dc-brand-logo" aria-hidden="true">${CONSOLE_LOGO}</span>
-            <span class="dc-brand-name">${escapeHtml(t('app.title'))}</span>
+            <span class="dc-brand-name">${t('app.title')}</span>
           </div>
           <nav class="dc-nav">
             <button type="button" class="dc-nav-item" data-nav="">
               <span class="dc-nav-icon">${OVERVIEW_ICON}</span>
-              <span class="dc-nav-label">${escapeHtml(t('nav.dashboard'))}</span>
+              <span class="dc-nav-label">${t('nav.dashboard')}</span>
             </button>
-            ${primary
-              .map(
-                entity =>
-                  `<button type="button" class="dc-nav-item" data-nav="${escapeHtml(
-                    entity.key
-                  )}">
-                    <span class="dc-nav-icon" aria-hidden="true">${escapeHtml(
-                      initial(this.plural(entity))
+            ${primary.map(
+              entity =>
+                html`<button type="button" class="dc-nav-item" data-nav="${
+                  entity.key
+                }">
+                    <span class="dc-nav-icon" aria-hidden="true">${initial(
+                      this.plural(entity)
                     )}</span>
-                    <span class="dc-nav-label">${escapeHtml(this.plural(entity))}</span>
+                    <span class="dc-nav-label">${this.plural(entity)}</span>
                   </button>`
-              )
-              .join('')}
+            )}
             ${
               settings.length
-                ? `<div class="dc-nav-section">
+                ? html`<div class="dc-nav-section">
                     <button type="button" class="dc-nav-toggle" data-nav-toggle
                       aria-expanded="false" aria-controls="dc-nav-reference">
-                      <span>${escapeHtml(t('nav.reference'))}</span>
+                      <span>${t('nav.reference')}</span>
                       <span class="dc-nav-chevron">${CHEVRON_ICON}</span>
                     </button>
                     <div class="dc-nav-reference" id="dc-nav-reference" hidden>
-                      ${settings
-                        .map(
-                          ({ key, label }) =>
-                            `<button type="button" class="dc-nav-item dc-nav-item-reference" data-nav="${escapeHtml(
-                              key
-                            )}"><span class="dc-nav-label">${escapeHtml(
-                              label
-                            )}</span></button>`
-                        )
-                        .join('')}
+                      ${settings.map(
+                        ({ key, label }) =>
+                          html`<button type="button" class="dc-nav-item dc-nav-item-reference" data-nav="${
+                            key
+                          }"><span class="dc-nav-label">${
+                            label
+                          }</span></button>`
+                      )}
                     </div>
                   </div>`
                 : ''
@@ -819,16 +820,14 @@ export class DirectoryConsole {
           </nav>
           <div class="dc-sidebar-footer">
             <label class="dc-language">
-              <span>${escapeHtml(t('app.language'))}</span>
+              <span>${t('app.language')}</span>
               <select class="dc-input" data-language>
-                ${availableLanguages
-                  .map(
-                    code =>
-                      `<option value="${code}" lang="${code}"${
-                        code === this.translator.language ? ' selected' : ''
-                      }>${escapeHtml(languageName(code))}</option>`
-                  )
-                  .join('')}
+                ${availableLanguages.map(
+                  code =>
+                    html`<option value="${code}" lang="${code}"${
+                      code === this.translator.language ? ' selected' : ''
+                    }>${languageName(code)}</option>`
+                )}
               </select>
             </label>
           </div>
@@ -847,7 +846,7 @@ export class DirectoryConsole {
             <header class="dc-panel-header">
               <h2 id="dc-panel-title" data-panel-title></h2>
               <button type="button" class="dc-icon-button" data-panel-close
-                aria-label="${escapeHtml(t('app.close'))}">×</button>
+                aria-label="${t('app.close')}">×</button>
             </header>
             <div class="dc-panel-body" data-panel-body></div>
           </div>
@@ -855,7 +854,8 @@ export class DirectoryConsole {
         <div data-toast-region role="status" aria-live="polite" aria-atomic="true">
           <div class="dc-toast" data-toast hidden></div>
         </div>
-      </div>`;
+      </div>`
+    );
 
     for (const button of Array.from(
       container.querySelectorAll<HTMLElement>('[data-nav]')
@@ -887,11 +887,11 @@ export class DirectoryConsole {
   }
 
   /** The sign-out control, when the server offers a way to sign out. */
-  private logoutMarkup(): string {
+  private logoutMarkup(): SafeHtml {
     const url = this.api.logoutUrl;
-    if (!url) return '';
-    return `<a class="dc-button dc-logout" href="${escapeHtml(url)}">${escapeHtml(
-      this.translator.t('app.logout')
+    if (!url) return html``;
+    return html`<a class="dc-button dc-logout" href="${url}">${this.translator.t(
+      'app.logout'
     )}</a>`;
   }
 
@@ -901,61 +901,59 @@ export class DirectoryConsole {
    * In a local-administration model this is the single most useful thing on
    * the screen, and the interface this replaces showed it nowhere.
    */
-  private scopeMarkup(): string {
+  private scopeMarkup(): SafeHtml {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     if (this.scopeError)
-      return `<span class="dc-scope-error">${escapeHtml(
-        t('scope.unavailable', { error: this.scopeError })
-      )}</span>`;
+      return html`<span class="dc-scope-error">${t('scope.unavailable', {
+        error: this.scopeError,
+      })}</span>`;
     if (!this.scope)
-      return `<span class="dc-scope-empty">${escapeHtml(t('scope.unrestricted'))}</span>`;
+      return html`<span class="dc-scope-empty">${t('scope.unrestricted')}</span>`;
     if (this.scope.unrestricted)
-      return `<span class="dc-scope-empty">${escapeHtml(t('scope.unrestricted'))}</span>`;
+      return html`<span class="dc-scope-empty">${t('scope.unrestricted')}</span>`;
     if (this.scope.described === false)
-      return `<span class="dc-scope-empty">${escapeHtml(t('scope.undescribed'))}</span>`;
+      return html`<span class="dc-scope-empty">${t('scope.undescribed')}</span>`;
     // Grey, not the green of a scope in order: there is nothing to be had.
     if (this.scope.branches.length === 0)
-      return `<span class="dc-scope-empty dc-scope-none">${escapeHtml(
-        t('scope.none')
+      return html`<span class="dc-scope-empty dc-scope-none">${t(
+        'scope.none'
       )}</span>`;
 
-    return `
-      <span class="dc-scope-label">${escapeHtml(t('scope.title'))}</span>
+    return html`
+      <span class="dc-scope-label">${t('scope.title')}</span>
       <ul class="dc-scope">
-        ${this.scope.branches
-          .map(branch => {
-            const rights = [
-              branch.read ? t('scope.read') : '',
-              branch.write ? t('scope.write') : '',
-              branch.delete ? t('scope.delete') : '',
-            ]
-              .filter(Boolean)
-              .join(', ');
-            return `<li title="${escapeHtml(branch.path || branch.dn)}">
-              <strong>${escapeHtml(branch.name || branch.dn)}</strong>
-              <span class="dc-muted">${escapeHtml(rights)}</span>
+        ${this.scope.branches.map(branch => {
+          const rights = [
+            branch.read ? t('scope.read') : '',
+            branch.write ? t('scope.write') : '',
+            branch.delete ? t('scope.delete') : '',
+          ]
+            .filter(Boolean)
+            .join(', ');
+          return html`<li title="${branch.path || branch.dn}">
+              <strong>${branch.name || branch.dn}</strong>
+              <span class="dc-muted">${rights}</span>
             </li>`;
-          })
-          .join('')}
+        })}
       </ul>
       ${
         this.scope.transit
-          ? `${
+          ? html`${
               // "Transit Transit (1)" said its name twice: the label goes
               // when the branch's name is that word already.
               rdnValue(this.scope.transit).toLowerCase() ===
               t('transit.branch').toLowerCase()
                 ? ''
-                : `<span class="dc-scope-label">${escapeHtml(t('transit.branch'))}</span>`
+                : html`<span class="dc-scope-label">${t('transit.branch')}</span>`
             }
             <a class="dc-scope-transit" data-transit-link href="#/organizations/${encodeURIComponent(
               this.scope.transit
-            )}" title="${escapeHtml(
+            )}" title="${
               // Readable, like the branches' paths: the scope gives the
               // transit branch no path, and its name stands in for one.
               rdnValue(this.scope.transit)
-            )}">${escapeHtml(this.transitLabel())}</a>`
+            }">${this.transitLabel()}</a>`
           : ''
       }`;
   }
@@ -1286,10 +1284,8 @@ export class DirectoryConsole {
   }
 
   /** The notice standing in for a view the server would refuse whole. */
-  private nothingMarkup(): string {
-    return `<p class="dc-empty">${escapeHtml(
-      this.translator.t('scope.nothing')
-    )}</p>`;
+  private nothingMarkup(): SafeHtml {
+    return html`<p class="dc-empty">${this.translator.t('scope.nothing')}</p>`;
   }
 
   /**
@@ -1406,16 +1402,19 @@ export class DirectoryConsole {
     const sections = this.administersNothing()
       ? [this.noRightsMarkup()]
       : [
-          '<div data-transit-waiting></div>',
+          html`<div data-transit-waiting></div>`,
           this.manageMarkup(),
           this.referenceMarkup(),
         ];
-    main.innerHTML = `
+    render(
+      main,
+      html`
       <section class="dc-dashboard">
-        <h1>${escapeHtml(t('app.title'))}</h1>
+        <h1>${t('app.title')}</h1>
         ${this.welcomeMarkup()}
-        ${sections.join('')}
-      </section>`;
+        ${sections}
+      </section>`
+    );
 
     for (const button of Array.from(
       main.querySelectorAll<HTMLElement>('[data-open]')
@@ -1470,23 +1469,24 @@ export class DirectoryConsole {
         window.location.hash = href;
       },
     });
-    holder.innerHTML = `
+    render(
+      holder,
+      html`
       <section class="dc-transit-waiting" data-transit-section>
-        <h2>${escapeHtml(
-          t('transit.waiting', {
-            count: `${waiting.entries.length}${waiting.truncated ? '+' : ''}`,
-          })
-        )}</h2>
-        <p class="dc-muted">${escapeHtml(t('transit.waitingHelp'))}</p>
+        <h2>${t('transit.waiting', {
+          count: `${waiting.entries.length}${waiting.truncated ? '+' : ''}`,
+        })}</h2>
+        <p class="dc-muted">${t('transit.waitingHelp')}</p>
         ${tables.markup()}
-      </section>`;
+      </section>`
+    );
     tables.bind(holder);
   }
 
   /** Who is signed in: by name and address, else as the scope gives it. */
-  private welcomeMarkup(): string {
+  private welcomeMarkup(): SafeHtml {
     const user = this.scope?.user;
-    if (!user) return '';
+    if (!user) return html``;
     const account = this.account;
     const text = account?.email
       ? this.translator.t('dashboard.welcomeNamed', {
@@ -1496,59 +1496,55 @@ export class DirectoryConsole {
       : this.translator.t('dashboard.welcome', {
           user: account?.name || user,
         });
-    return `<p class="dc-muted">${escapeHtml(text)}</p>`;
+    return html`<p class="dc-muted">${text}</p>`;
   }
 
   /** The cards of the entities, with what can be done to them. */
-  private manageMarkup(): string {
+  private manageMarkup(): SafeHtml {
     const t = (key: string): string => this.translator.t(key);
     const { primary } = splitEntities(this.entities);
-    return `
-      <h2>${escapeHtml(t('dashboard.entities'))}</h2>
+    return html`
+      <h2>${t('dashboard.entities')}</h2>
       <ul class="dc-cards">
-        ${primary
-          .map(entity => {
-            const allowed = this.canCreate(entity);
-            return `<li class="dc-card">
+        ${primary.map(entity => {
+          const allowed = this.canCreate(entity);
+          return html`<li class="dc-card">
               <header class="dc-card-title">
-                <span class="dc-entity-icon" aria-hidden="true">${escapeHtml(
-                  initial(this.plural(entity))
+                <span class="dc-entity-icon" aria-hidden="true">${initial(
+                  this.plural(entity)
                 )}</span>
-                <h3>${escapeHtml(this.plural(entity))}</h3>
+                <h3>${this.plural(entity)}</h3>
               </header>
               <div class="dc-card-actions">
-                <button type="button" class="dc-button" data-open="${escapeHtml(
+                <button type="button" class="dc-button" data-open="${
                   entity.key
-                )}">${escapeHtml(t('list.open'))}</button>
+                }">${t('list.open')}</button>
                 ${
                   allowed
-                    ? `<button type="button" class="dc-button dc-button-primary" data-new="${escapeHtml(
+                    ? html`<button type="button" class="dc-button dc-button-primary" data-new="${
                         entity.key
-                      )}">${escapeHtml(this.createLabel(entity))}</button>`
-                    : `<span class="dc-muted">${escapeHtml(t('dashboard.noCreate'))}</span>`
+                      }">${this.createLabel(entity)}</button>`
+                    : html`<span class="dc-muted">${t('dashboard.noCreate')}</span>`
                 }
               </div>
             </li>`;
-          })
-          .join('')}
+        })}
       </ul>`;
   }
 
   /** The links to the reference data and the password policies. */
-  private referenceMarkup(): string {
+  private referenceMarkup(): SafeHtml {
     const settings = this.settings(splitEntities(this.entities).reference);
-    if (!settings.length) return '';
-    return `
-      <h2>${escapeHtml(this.translator.t('nav.reference'))}</h2>
+    if (!settings.length) return html``;
+    return html`
+      <h2>${this.translator.t('nav.reference')}</h2>
       <ul class="dc-reference">
-        ${settings
-          .map(
-            ({ key, label }) =>
-              `<li><button type="button" class="dc-reference-link" data-open="${escapeHtml(
-                key
-              )}">${escapeHtml(label)}</button></li>`
-          )
-          .join('')}
+        ${settings.map(
+          ({ key, label }) =>
+            html`<li><button type="button" class="dc-reference-link" data-open="${
+              key
+            }">${label}</button></li>`
+        )}
       </ul>`;
   }
 
@@ -1557,22 +1553,22 @@ export class DirectoryConsole {
    * opening on "nothing to manage", were three dead ends: this says it
    * once, and where to turn.
    */
-  private noRightsMarkup(): string {
+  private noRightsMarkup(): SafeHtml {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     const user = this.scope?.user || '';
     const logout = this.api.logoutUrl;
-    return `
+    return html`
       <div class="dc-no-rights" data-no-rights>
-        <h2>${escapeHtml(t('dashboard.noRightsTitle'))}</h2>
-        <p>${escapeHtml(
-          t('dashboard.noRightsBody', { name: this.account?.name || user })
-        )}</p>
+        <h2>${t('dashboard.noRightsTitle')}</h2>
+        <p>${t('dashboard.noRightsBody', {
+          name: this.account?.name || user,
+        })}</p>
         ${
           logout
-            ? `<a class="dc-button dc-button-primary" href="${escapeHtml(
+            ? html`<a class="dc-button dc-button-primary" href="${
                 logout
-              )}">${escapeHtml(t('app.logout'))}</a>`
+              }">${t('app.logout')}</a>`
             : ''
         }
       </div>`;
@@ -1585,13 +1581,16 @@ export class DirectoryConsole {
    */
   private renderNotFound(main: HTMLElement): void {
     const t = (key: string): string => this.translator.t(key);
-    main.innerHTML = `
+    render(
+      main,
+      html`
       <section class="dc-view">
         <div class="dc-empty" data-not-found>
-          <p>${escapeHtml(t('app.notFound'))}</p>
-          <a class="dc-button" href="#/">${escapeHtml(t('app.toOverview'))}</a>
+          <p>${t('app.notFound')}</p>
+          <a class="dc-button" href="#/">${t('app.toOverview')}</a>
         </div>
-      </section>`;
+      </section>`
+    );
   }
 
   /** The table of an entity. */
@@ -1602,22 +1601,24 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     const readOnly = this.readsReferenceOnly(entity);
-    main.innerHTML = `
+    render(
+      main,
+      html`
       <section class="dc-view">
         <header class="dc-view-header">
-          <h1>${escapeHtml(this.plural(entity))}</h1>
+          <h1>${this.plural(entity)}</h1>
           ${
             this.canCreate(entity)
-              ? `<div class="dc-view-actions">
+              ? html`<div class="dc-view-actions">
                   ${
                     entity.kind === 'flat'
-                      ? `<button type="button" class="dc-button" data-import>${escapeHtml(
-                          t('import.open')
+                      ? html`<button type="button" class="dc-button" data-import>${t(
+                          'import.open'
                         )}</button>`
                       : ''
                   }
-                  <button type="button" class="dc-button dc-button-primary" data-new>${escapeHtml(
-                    this.createLabel(entity)
+                  <button type="button" class="dc-button dc-button-primary" data-new>${this.createLabel(
+                    entity
                   )}</button>
                 </div>`
               : ''
@@ -1625,13 +1626,14 @@ export class DirectoryConsole {
         </header>
         ${
           readOnly && this.isReference(entity) && !this.administersNothing()
-            ? `<p class="dc-muted dc-view-notice" data-read-only>${escapeHtml(
-                t('reference.readOnly')
+            ? html`<p class="dc-muted dc-view-notice" data-read-only>${t(
+                'reference.readOnly'
               )}</p>`
             : ''
         }
         <div data-list></div>
-      </section>`;
+      </section>`
+    );
 
     main
       .querySelector('[data-new]')
@@ -1646,7 +1648,7 @@ export class DirectoryConsole {
       '[data-list]'
     ) as HTMLElement;
     if (this.administersNothing()) {
-      holder.innerHTML = this.nothingMarkup();
+      render(holder, this.nothingMarkup());
       return;
     }
     const named = await this.pointerNames(entity);
@@ -1682,10 +1684,10 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     if (this.administersNothing()) {
-      main.innerHTML = this.nothingMarkup();
+      render(main, this.nothingMarkup());
       return;
     }
-    main.innerHTML = `<p class="dc-empty">${escapeHtml(t('app.loading'))}</p>`;
+    render(main, html`<p class="dc-empty">${t('app.loading')}</p>`);
     const naming = this.pointerNames(entity);
     let entry: Entry;
     try {
@@ -1694,19 +1696,25 @@ export class DirectoryConsole {
     } catch (err) {
       if (!this.current(generation)) return;
       const failure = readFailure(err, this.translator);
-      main.innerHTML = `<p class="dc-empty${
-        failure.gone || failure.refused ? '' : ' dc-error-block'
-      }">${escapeHtml(failure.message)}</p>`;
+      render(
+        main,
+        html`<p class="dc-empty${
+          failure.gone || failure.refused ? '' : ' dc-error-block'
+        }">${failure.message}</p>`
+      );
       return;
     }
 
-    main.innerHTML = `
+    render(
+      main,
+      html`
       <section class="dc-view">
         <header class="dc-view-header">
-          <button type="button" class="dc-button" data-back>${escapeHtml(t('app.back'))}</button>
+          <button type="button" class="dc-button" data-back>${t('app.back')}</button>
         </header>
         <div data-detail></div>
-      </section>`;
+      </section>`
+    );
     main
       .querySelector('[data-back]')
       ?.addEventListener('click', () => this.go(entity.key));
@@ -2248,9 +2256,12 @@ export class DirectoryConsole {
       onCancel: (): void => this.closePanel(),
     });
     this.openPanel(t('bulk.addTitle', { count: members.length }), body => {
-      body.innerHTML = `${
-        leftOut ? `<p class="dc-hint">${escapeHtml(leftOut)}</p>` : ''
-      }<div data-bulk-picker></div>`;
+      render(
+        body,
+        html`${
+          leftOut ? html`<p class="dc-hint">${leftOut}</p>` : ''
+        }<div data-bulk-picker></div>`
+      );
       const holder = body.querySelector<HTMLElement>('[data-bulk-picker]');
       if (holder) picker.render(holder);
     });
@@ -2302,50 +2313,48 @@ export class DirectoryConsole {
       return false;
     const total = kept.length;
     this.openPanel(t('bulk.stateTitle', { count: total }), body => {
-      body.innerHTML = `
+      render(
+        body,
+        html`
           <form class="dc-form">
-            ${leftOut ? `<p class="dc-hint">${escapeHtml(leftOut)}</p>` : ''}
+            ${leftOut ? html`<p class="dc-hint">${leftOut}</p>` : ''}
             <fieldset class="dc-form-group" data-bulk-states>
-              <legend>${escapeHtml(t('status.choose'))}</legend>
-              ${Object.keys(states)
-                .map(state => {
-                  const field = `dc-state-${state}`;
-                  const line =
-                    described[state] ?? known(`status.help.${state}`);
-                  return `
+              <legend>${t('status.choose')}</legend>
+              ${Object.keys(states).map(state => {
+                const field = `dc-state-${state}`;
+                const line = described[state] ?? known(`status.help.${state}`);
+                return html`
                 <div class="dc-field dc-state-choice">
-                  <input type="radio" id="${escapeHtml(field)}" name="dc-state"
-                    value="${escapeHtml(state)}"${
-                      line
-                        ? ` aria-describedby="${escapeHtml(field)}-help"`
-                        : ''
+                  <input type="radio" id="${field}" name="dc-state"
+                    value="${state}"${
+                      line ? html` aria-describedby="${field}-help"` : ''
                     } />
-                  <label for="${escapeHtml(field)}">${escapeHtml(label(state))}</label>
+                  <label for="${field}">${label(state)}</label>
                   ${
                     line
-                      ? `<p id="${escapeHtml(field)}-help" class="dc-hint">${escapeHtml(line)}</p>`
+                      ? html`<p id="${field}-help" class="dc-hint">${line}</p>`
                       : ''
                   }
                 </div>`;
-                })
-                .join('')}
+              })}
             </fieldset>
             <div data-bulk-progress hidden>
               <p class="dc-hint" role="status"></p>
               <div class="dc-progress" role="progressbar" aria-valuemin="0"
                 aria-valuemax="${total}" aria-valuenow="0">
-                <div class="dc-progress-bar" style="width:0%"></div>
+                <div class="dc-progress-bar"></div>
               </div>
             </div>
             <div class="dc-form-actions">
-              <button type="button" class="dc-button" data-cancel>${escapeHtml(
-                t('app.cancel')
+              <button type="button" class="dc-button" data-cancel>${t(
+                'app.cancel'
               )}</button>
-              <button type="submit" class="dc-button dc-button-primary" disabled>${escapeHtml(
-                t('status.apply')
+              <button type="submit" class="dc-button dc-button-primary" disabled>${t(
+                'status.apply'
               )}</button>
             </div>
-          </form>`;
+          </form>`
+      );
     });
     if (!this.panelShown()) return false;
     const action = this.bulkPanel();
@@ -2427,19 +2436,22 @@ export class DirectoryConsole {
             return;
           }
           // Those refused, named with why, in place of the form.
-          body.innerHTML = `
+          render(
+            body,
+            html`
               <div class="dc-form">
-                ${leftOut ? `<p class="dc-hint">${escapeHtml(leftOut)}</p>` : ''}
-                <p>${escapeHtml(t('bulk.refused', { count: refused.length }))}</p>
-                <ul class="dc-confirm-items">${refused
-                  .map(line => `<li>${escapeHtml(line)}</li>`)
-                  .join('')}</ul>
+                ${leftOut ? html`<p class="dc-hint">${leftOut}</p>` : ''}
+                <p>${t('bulk.refused', { count: refused.length })}</p>
+                <ul class="dc-confirm-items">${refused.map(
+                  line => html`<li>${line}</li>`
+                )}</ul>
                 <div class="dc-form-actions">
-                  <button type="button" class="dc-button dc-button-primary" data-close>${escapeHtml(
-                    t('app.close')
+                  <button type="button" class="dc-button dc-button-primary" data-close>${t(
+                    'app.close'
                   )}</button>
                 </div>
-              </div>`;
+              </div>`
+          );
           body
             .querySelector('[data-close]')
             ?.addEventListener('click', () => this.closePanel(true));
@@ -2737,19 +2749,22 @@ export class DirectoryConsole {
     generation: number
   ): Promise<void> {
     if (this.administersNothing()) {
-      main.innerHTML = this.nothingMarkup();
+      render(main, this.nothingMarkup());
       return;
     }
     const entity = this.entities.find(item => item.kind === 'organization');
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    main.innerHTML = `
+    render(
+      main,
+      html`
       <section class="dc-split">
         <div class="dc-split-aside" data-tree></div>
         <div class="dc-split-main" data-org-detail>
-          <p class="dc-empty">${escapeHtml(t('tree.empty'))}</p>
+          <p class="dc-empty">${t('tree.empty')}</p>
         </div>
-      </section>`;
+      </section>`
+    );
 
     this.tree = new OrganizationTree(
       {
@@ -2891,9 +2906,10 @@ export class DirectoryConsole {
     // before looking for it: `#/organizations/zzz` read its refusal, in
     // English and red, where it names an entry that is simply not there.
     if (!isDnShaped(node.dn)) {
-      holder.innerHTML = `<p class="dc-empty">${escapeHtml(
-        this.translator.t('detail.notFound')
-      )}</p>`;
+      render(
+        holder,
+        html`<p class="dc-empty">${this.translator.t('detail.notFound')}</p>`
+      );
       return;
     }
     let entry: Entry;
@@ -2903,9 +2919,12 @@ export class DirectoryConsole {
     } catch (err) {
       if (!this.current(generation)) return;
       const failure = readFailure(err, this.translator);
-      holder.innerHTML = `<p class="dc-empty${
-        failure.gone || failure.refused ? '' : ' dc-error-block'
-      }">${escapeHtml(failure.message)}</p>`;
+      render(
+        holder,
+        html`<p class="dc-empty${
+          failure.gone || failure.refused ? '' : ' dc-error-block'
+        }">${failure.message}</p>`
+      );
       return;
     }
 
@@ -3288,7 +3307,7 @@ export class DirectoryConsole {
     this.panelDirty = null;
     panel.classList.toggle('dc-panel-modal', modal);
     panel.classList.toggle('dc-panel-wide', wide);
-    body.innerHTML = '';
+    render(body, html``);
     build(body);
     panel.hidden = false;
     // One body serves every form, and a hidden one keeps the offset the last
@@ -3319,7 +3338,7 @@ export class DirectoryConsole {
     panel.hidden = true;
     const body =
       this.container?.querySelector<HTMLElement>('[data-panel-body]');
-    if (body) body.innerHTML = '';
+    if (body) render(body, html``);
     const opener = this.panelOpener;
     this.panelOpener = null;
     if (opener?.isConnected) opener.focus();
@@ -3438,53 +3457,52 @@ export class DirectoryConsole {
       this.openPanel(
         question.title,
         inner => {
-          inner.innerHTML = `
+          render(
+            inner,
+            html`
             <div class="dc-confirm" id="dc-confirm-body" data-confirm-body>
-              ${question.lines
-                .map(line => `<p>${escapeHtml(line)}</p>`)
-                .join('')}
+              ${question.lines.map(line => html`<p>${line}</p>`)}
               ${
                 question.items?.length
-                  ? `<ul class="dc-confirm-items">${question.items
-                      .map(item => `<li>${escapeHtml(item)}</li>`)
-                      .join('')}</ul>`
+                  ? html`<ul class="dc-confirm-items">${question.items.map(
+                      item => html`<li>${item}</li>`
+                    )}</ul>`
                   : ''
               }
             </div>
             ${
               question.choices?.options.length
-                ? `<fieldset class="dc-confirm-choices">
-                    <legend>${escapeHtml(question.choices.title)}</legend>
-                    ${question.choices.options
-                      .map(
-                        (option, index) => `<label class="dc-field-inline">
+                ? html`<fieldset class="dc-confirm-choices">
+                    <legend>${question.choices.title}</legend>
+                    ${question.choices.options.map(
+                      (option, index) => html`<label class="dc-field-inline">
                           <input type="checkbox" data-confirm-choice="${index}"${
                             option.checked ? ' checked' : ''
                           } />
-                          <span>${escapeHtml(option.label)}</span>
+                          <span>${option.label}</span>
                         </label>`
-                      )
-                      .join('')}
+                    )}
                   </fieldset>`
                 : ''
             }
             ${
               question.alternative
-                ? `<p class="dc-confirm-alternative"><button type="button" class="dc-link" data-confirm-alternative>${escapeHtml(
+                ? html`<p class="dc-confirm-alternative"><button type="button" class="dc-link" data-confirm-alternative>${
                     question.alternative.label
-                  )}</button></p>`
+                  }</button></p>`
                 : ''
             }
             <div class="dc-form-actions">
-              <button type="button" class="dc-button" data-cancel>${escapeHtml(
-                this.translator.t('app.cancel')
+              <button type="button" class="dc-button" data-cancel>${this.translator.t(
+                'app.cancel'
               )}</button>
               <button type="button" class="dc-button ${
                 question.reversible
                   ? 'dc-button-primary'
                   : 'dc-button-destructive'
-              }" data-confirm>${escapeHtml(question.action)}</button>
-            </div>`;
+              }" data-confirm>${question.action}</button>
+            </div>`
+          );
           boxes = Array.from(
             inner.querySelectorAll<HTMLInputElement>('[data-confirm-choice]')
           );
@@ -3586,18 +3604,21 @@ export class DirectoryConsole {
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    main.innerHTML = `
+    render(
+      main,
+      html`
       <section class="dc-view">
         <header class="dc-view-header">
-          <h1>${escapeHtml(t('nav.policies'))}</h1>
+          <h1>${t('nav.policies')}</h1>
           <div class="dc-view-actions">
-            <button type="button" class="dc-button dc-button-primary" data-new>${escapeHtml(
-              t('policy.new')
+            <button type="button" class="dc-button dc-button-primary" data-new>${t(
+              'policy.new'
             )}</button>
           </div>
         </header>
-        <div data-list><p class="dc-empty">${escapeHtml(t('app.loading'))}</p></div>
-      </section>`;
+        <div data-list><p class="dc-empty">${t('app.loading')}</p></div>
+      </section>`
+    );
     let attributes: string[] | undefined;
     main
       .querySelector('[data-new]')
@@ -3614,13 +3635,16 @@ export class DirectoryConsole {
     } catch (err) {
       if (!this.current(generation)) return;
       const failure = readFailure(err, this.translator);
-      holder.innerHTML = `<p class="dc-empty${
-        failure.refused ? '' : ' dc-error-block'
-      }">${escapeHtml(failure.message)}</p>`;
+      render(
+        holder,
+        html`<p class="dc-empty${
+          failure.refused ? '' : ' dc-error-block'
+        }">${failure.message}</p>`
+      );
       return;
     }
     if (!this.current(generation)) return;
-    holder.innerHTML = policyTableMarkup(this.translator, policies);
+    render(holder, policyTableMarkup(this.translator, policies));
     for (const row of Array.from(
       holder.querySelectorAll<HTMLElement>('[data-policy]')
     )) {
@@ -3901,14 +3925,17 @@ export class DirectoryConsole {
       asking = document.createElement('div');
       asking.className = 'dc-form-leave';
       asking.setAttribute('data-discard', '');
-      asking.innerHTML = `
-        <p>${escapeHtml(t('form.discardQuestion'))}</p>
-        <button type="button" class="dc-button" data-discard-keep>${escapeHtml(
-          t('form.keepEditing')
+      render(
+        asking,
+        html`
+        <p>${t('form.discardQuestion')}</p>
+        <button type="button" class="dc-button" data-discard-keep>${t(
+          'form.keepEditing'
         )}</button>
-        <button type="button" class="dc-button dc-button-danger" data-discard-confirm>${escapeHtml(
-          t('form.discard')
-        )}</button>`;
+        <button type="button" class="dc-button dc-button-danger" data-discard-confirm>${t(
+          'form.discard'
+        )}</button>`
+      );
       row.after(asking);
       asking
         .querySelector('[data-discard-keep]')
@@ -3998,21 +4025,19 @@ export class DirectoryConsole {
           background(() => form.render(body), 'form.render', this.report);
           return;
         }
-        body.innerHTML = `
+        render(
+          body,
+          html`
           <div class="dc-field">
-            <label for="dc-organization-parent">${escapeHtml(t('tree.parent'))}</label>
+            <label for="dc-organization-parent">${t('tree.parent')}</label>
             <select id="dc-organization-parent" class="dc-input">
-              ${parents
-                .map(
-                  item =>
-                    `<option value="${escapeHtml(item.dn)}">${escapeHtml(
-                      item.label
-                    )}</option>`
-                )
-                .join('')}
+              ${parents.map(
+                item => html`<option value="${item.dn}">${item.label}</option>`
+              )}
             </select>
           </div>
-          <div data-organization-form></div>`;
+          <div data-organization-form></div>`
+        );
         picker = body.querySelector<HTMLSelectElement>(
           '#dc-organization-parent'
         );
@@ -4339,46 +4364,48 @@ export class DirectoryConsole {
     const name = this.personName(entity, entry, id);
 
     this.openPanel(t('status.panelTitle', { name }), body => {
-      body.innerHTML = `
+      render(
+        body,
+        html`
         <form class="dc-form">
           ${
             currentName
-              ? `<p class="dc-hint" data-current-state>${escapeHtml(
-                  t('status.current', { state: currentName })
+              ? html`<p class="dc-hint" data-current-state>${t(
+                  'status.current',
+                  { state: currentName }
                 )}</p>`
               : ''
           }
           <fieldset class="dc-form-group">
-            <legend>${escapeHtml(t('status.choose'))}</legend>
-            ${offered
-              .map(state => {
-                const field = `dc-state-${state}`;
-                const line = help(state);
-                return `
+            <legend>${t('status.choose')}</legend>
+            ${offered.map(state => {
+              const field = `dc-state-${state}`;
+              const line = help(state);
+              return html`
               <div class="dc-field dc-state-choice">
-                <input type="radio" id="${escapeHtml(field)}" name="dc-state"
-                  value="${escapeHtml(state)}"${
-                    line ? ` aria-describedby="${escapeHtml(field)}-help"` : ''
+                <input type="radio" id="${field}" name="dc-state"
+                  value="${state}"${
+                    line ? html` aria-describedby="${field}-help"` : ''
                   } />
-                <label for="${escapeHtml(field)}">${escapeHtml(label(state))}</label>
+                <label for="${field}">${label(state)}</label>
                 ${
                   line
-                    ? `<p id="${escapeHtml(field)}-help" class="dc-hint">${escapeHtml(line)}</p>`
+                    ? html`<p id="${field}-help" class="dc-hint">${line}</p>`
                     : ''
                 }
               </div>`;
-              })
-              .join('')}
+            })}
           </fieldset>
           <div class="dc-form-actions">
-            <button type="button" class="dc-button" data-cancel>${escapeHtml(
-              t('app.cancel')
+            <button type="button" class="dc-button" data-cancel>${t(
+              'app.cancel'
             )}</button>
-            <button type="submit" class="dc-button dc-button-primary" disabled>${escapeHtml(
-              t('status.apply')
+            <button type="submit" class="dc-button dc-button-primary" disabled>${t(
+              'status.apply'
             )}</button>
           </div>
-        </form>`;
+        </form>`
+      );
 
       const submit = body.querySelector<HTMLButtonElement>(
         'button[type="submit"]'
@@ -4498,28 +4525,31 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     this.openPanel(t('password.title'), body => {
-      body.innerHTML = `
+      render(
+        body,
+        html`
         <form class="dc-form">
           <div class="dc-field">
-            <label for="dc-new-password">${escapeHtml(t('password.choose'))}</label>
+            <label for="dc-new-password">${t('password.choose')}</label>
             <input id="dc-new-password" class="dc-input" type="password"
               autocomplete="new-password"
               aria-describedby="dc-new-password-hint" />
-            <p id="dc-new-password-hint" class="dc-hint">${escapeHtml(t('password.generateHint'))}</p>
+            <p id="dc-new-password-hint" class="dc-hint">${t('password.generateHint')}</p>
           </div>
           <div class="dc-field dc-field-inline">
             <input id="dc-force-change" type="checkbox" checked />
-            <label for="dc-force-change">${escapeHtml(t('password.forceChange'))}</label>
+            <label for="dc-force-change">${t('password.forceChange')}</label>
           </div>
           <div class="dc-form-actions">
-            <button type="button" class="dc-button" data-cancel>${escapeHtml(
-              t('app.cancel')
+            <button type="button" class="dc-button" data-cancel>${t(
+              'app.cancel'
             )}</button>
-            <button type="submit" class="dc-button dc-button-primary">${escapeHtml(
-              t('password.confirmButton')
+            <button type="submit" class="dc-button dc-button-primary">${t(
+              'password.confirmButton'
             )}</button>
           </div>
-        </form>`;
+        </form>`
+      );
 
       const form = body.querySelector('form');
       const send = body.querySelector<HTMLButtonElement>(
@@ -4708,35 +4738,38 @@ export class DirectoryConsole {
       t('password.generatedHelp', { name }),
       ...(mustChange ? [t('password.mustChange')] : []),
     ].join(' ');
-    body.innerHTML = `
+    render(
+      body,
+      html`
       <div class="dc-form">
         <div class="dc-field">
           <div class="dc-generated">
             <input id="dc-generated-password" class="dc-input dc-generated-password"
-              readonly value="${escapeHtml(password)}"
+              readonly value="${password}"
               aria-labelledby="dc-panel-title"
               aria-describedby="dc-generated-password-help" />
-            <button type="button" class="dc-button" data-copy-password>${escapeHtml(
-              t('detail.copy')
+            <button type="button" class="dc-button" data-copy-password>${t(
+              'detail.copy'
             )}</button>
           </div>
-          <p id="dc-generated-password-help" class="dc-hint">${escapeHtml(help)}</p>
+          <p id="dc-generated-password-help" class="dc-hint">${help}</p>
         </div>
         <div class="dc-generated-leave" data-leave hidden>
-          <p>${escapeHtml(t('password.leaveUncopied'))}</p>
-          <button type="button" class="dc-button" data-leave-back>${escapeHtml(
-            t('app.back')
+          <p>${t('password.leaveUncopied')}</p>
+          <button type="button" class="dc-button" data-leave-back>${t(
+            'app.back'
           )}</button>
-          <button type="button" class="dc-button dc-button-primary" data-leave-close>${escapeHtml(
-            t('app.close')
+          <button type="button" class="dc-button dc-button-primary" data-leave-close>${t(
+            'app.close'
           )}</button>
         </div>
         <div class="dc-form-actions" data-done-actions>
-          <button type="button" class="dc-button dc-button-primary" data-done>${escapeHtml(
-            t('password.done')
+          <button type="button" class="dc-button dc-button-primary" data-done>${t(
+            'password.done'
           )}</button>
         </div>
-      </div>`;
+      </div>`
+    );
 
     const field = body.querySelector<HTMLInputElement>(
       '#dc-generated-password'
@@ -4841,35 +4874,35 @@ export class DirectoryConsole {
       t('transit.claimTitle', { name }),
       body => {
         if (targets.length === 0) {
-          body.innerHTML = `<p class="dc-empty">${escapeHtml(t('transit.noTarget'))}</p>`;
+          render(body, html`<p class="dc-empty">${t('transit.noTarget')}</p>`);
           return;
         }
-        body.innerHTML = `
+        render(
+          body,
+          html`
           <form class="dc-form">
             <div class="dc-field">
-              <label for="dc-claim-target">${escapeHtml(t('transit.target'))}</label>
+              <label for="dc-claim-target">${t('transit.target')}</label>
               <select id="dc-claim-target" class="dc-input">
-                ${targets
-                  .map(
-                    target =>
-                      `<option value="${escapeHtml(target.dn)}">${escapeHtml(
-                        target.label
-                      )}</option>`
-                  )
-                  .join('')}
+                ${targets.map(
+                  target =>
+                    html`<option value="${target.dn}">${target.label}</option>`
+                )}
               </select>
             </div>
             <div class="dc-form-actions">
-              <button type="button" class="dc-button" data-cancel>${escapeHtml(
-                t('app.cancel')
+              <button type="button" class="dc-button" data-cancel>${t(
+                'app.cancel'
               )}</button>
-              <button type="submit" class="dc-button dc-button-primary">${escapeHtml(
-                t('transit.claimButton', {
+              <button type="submit" class="dc-button dc-button-primary">${t(
+                'transit.claimButton',
+                {
                   organization: this.pathLeaf(targets[0].label),
-                })
+                }
               )}</button>
             </div>
-          </form>`;
+          </form>`
+        );
 
         body
           .querySelector('[data-cancel]')

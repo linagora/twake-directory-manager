@@ -8,10 +8,10 @@
  * @module twake-directory-manager/components/PasswordPolicies
  */
 
-import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
 import type { PasswordPolicy } from '../types';
 import { background, type Reporter } from '../shared/background';
+import { html, render, type SafeHtml } from '../shared/html';
 
 type FieldKind = 'duration' | 'integer' | 'quality' | 'boolean' | 'text';
 
@@ -180,45 +180,43 @@ export function lockoutText(
 export function policyTableMarkup(
   translator: Translator,
   policies: PasswordPolicy[]
-): string {
+): SafeHtml {
   const t = (key: string, values?: Record<string, string | number>): string =>
     translator.t(key, values);
   if (policies.length === 0)
-    return `<p class="dc-empty">${escapeHtml(t('policy.empty'))}</p>`;
-  return `
+    return html`<p class="dc-empty">${t('policy.empty')}</p>`;
+  return html`
     <div class="dc-table-scroll">
       <table class="dc-table dc-policy-table">
         <thead>
           <tr>
-            <th>${escapeHtml(t('policy.name'))}</th>
-            <th>${escapeHtml(t('policy.column.maxAge'))}</th>
-            <th>${escapeHtml(t('policy.column.minLength'))}</th>
-            <th>${escapeHtml(t('policy.column.lockout'))}</th>
+            <th>${t('policy.name')}</th>
+            <th>${t('policy.column.maxAge')}</th>
+            <th>${t('policy.column.minLength')}</th>
+            <th>${t('policy.column.lockout')}</th>
           </tr>
         </thead>
         <tbody>
-          ${policies
-            .map(policy => {
-              const maxAge =
-                typeof policy.pwdMaxAge === 'number' ? policy.pwdMaxAge : 0;
-              return `<tr data-policy="${escapeHtml(policy.cn)}" tabindex="0">
-                <td>${escapeHtml(policy.cn)}${
+          ${policies.map(policy => {
+            const maxAge =
+              typeof policy.pwdMaxAge === 'number' ? policy.pwdMaxAge : 0;
+            return html`<tr data-policy="${policy.cn}" tabindex="0">
+                <td>${policy.cn}${
                   policy.isDefault
-                    ? ` <span class="dc-tag">${escapeHtml(t('policy.default'))}</span>`
+                    ? html` <span class="dc-tag">${t('policy.default')}</span>`
                     : ''
                 }</td>
-                <td>${escapeHtml(
+                <td>${
                   maxAge ? durationText(translator, maxAge) : t('policy.never')
-                )}</td>
-                <td>${escapeHtml(
+                }</td>
+                <td>${
                   typeof policy.pwdMinLength === 'number'
                     ? String(policy.pwdMinLength)
                     : '—'
-                )}</td>
-                <td>${escapeHtml(lockoutText(translator, policy))}</td>
+                }</td>
+                <td>${lockoutText(translator, policy)}</td>
               </tr>`;
-            })
-            .join('')}
+          })}
         </tbody>
       </table>
     </div>`;
@@ -271,37 +269,35 @@ export class PolicyForm {
       ),
     })).filter(group => group.fields.length > 0);
 
-    container.innerHTML = `
+    render(
+      container,
+      html`
       <form class="dc-form dc-policy-form" novalidate>
         ${
           policy
             ? ''
-            : `<div class="dc-field" data-field="cn">
-                <label for="dc-policy-cn">${escapeHtml(t('policy.name'))} <span class="dc-required">*</span></label>
+            : html`<div class="dc-field" data-field="cn">
+                <label for="dc-policy-cn">${t('policy.name')} <span class="dc-required">*</span></label>
                 <input id="dc-policy-cn" class="dc-input" type="text" autocomplete="off" />
                 <p class="dc-error" id="dc-policy-cn-error" data-error hidden></p>
               </div>`
         }
-        ${groups
-          .map(
-            group => `
+        ${groups.map(
+          group => html`
           <fieldset class="dc-form-group">
-            <legend>${escapeHtml(t(`policy.group.${group.key}`))}</legend>
-            ${group.fields.map(field => this.fieldMarkup(field)).join('')}
+            <legend>${t(`policy.group.${group.key}`)}</legend>
+            ${group.fields.map(field => this.fieldMarkup(field))}
           </fieldset>`
-          )
-          .join('')}
+        )}
         ${
           fixed.length
-            ? `<fieldset class="dc-form-group">
-                <legend>${escapeHtml(t('policy.group.directory'))}</legend>
+            ? html`<fieldset class="dc-form-group">
+                <legend>${t('policy.group.directory')}</legend>
                 <dl class="dc-policy-fixed">
-                  ${fixed
-                    .map(
-                      name => `<dt>${escapeHtml(t(`policy.attr.${name}`))}</dt>
-                        <dd><code>${escapeHtml(String(policy?.[name]))}</code></dd>`
-                    )
-                    .join('')}
+                  ${fixed.map(
+                    name => html`<dt>${t(`policy.attr.${name}`)}</dt>
+                        <dd><code>${String(policy?.[name])}</code></dd>`
+                  )}
                 </dl>
               </fieldset>`
             : ''
@@ -309,19 +305,20 @@ export class PolicyForm {
         <div class="dc-form-actions">
           ${
             policy && canDelete && !policy.isDefault
-              ? `<button type="button" class="dc-button dc-button-danger" data-delete>${escapeHtml(
-                  t('app.delete')
+              ? html`<button type="button" class="dc-button dc-button-danger" data-delete>${t(
+                  'app.delete'
                 )}</button>`
               : ''
           }
-          <button type="button" class="dc-button" data-cancel>${escapeHtml(
-            t('app.cancel')
+          <button type="button" class="dc-button" data-cancel>${t(
+            'app.cancel'
           )}</button>
-          <button type="submit" class="dc-button dc-button-primary">${escapeHtml(
-            t(policy ? 'app.save' : 'app.create')
+          <button type="submit" class="dc-button dc-button-primary">${t(
+            policy ? 'app.save' : 'app.create'
           )}</button>
         </div>
-      </form>`;
+      </form>`
+    );
 
     container
       .querySelector('[data-cancel]')
@@ -345,7 +342,7 @@ export class PolicyForm {
     return this.touched;
   }
 
-  private fieldMarkup(field: PolicyField): string {
+  private fieldMarkup(field: PolicyField): SafeHtml {
     const { translator, policy } = this.options;
     const t = (key: string, values?: Record<string, string | number>): string =>
       translator.t(key, values);
@@ -353,12 +350,12 @@ export class PolicyForm {
     const current = policy?.[field.name];
     const hinted = HINTED.includes(field.name);
     const hint = hinted
-      ? `<p class="dc-hint" id="${id}-hint">${escapeHtml(t(`policy.hint.${field.name}`))}</p>`
+      ? html`<p class="dc-hint" id="${id}-hint">${t(`policy.hint.${field.name}`)}</p>`
       : '';
-    return `
-      <div class="dc-field" data-field="${escapeHtml(field.name)}">
-        <label for="${id}">${escapeHtml(t(`policy.attr.${field.name}`))}
-          <code class="dc-policy-attribute">${escapeHtml(field.name)}</code></label>
+    return html`
+      <div class="dc-field" data-field="${field.name}">
+        <label for="${id}">${t(`policy.attr.${field.name}`)}
+          <code class="dc-policy-attribute">${field.name}</code></label>
         ${this.controlMarkup(field, id, current, hinted ? `${id}-hint` : undefined)}
         ${hint}
         <p class="dc-error" id="${id}-error" data-error hidden></p>
@@ -370,16 +367,20 @@ export class PolicyForm {
     id: string,
     current: unknown,
     hint?: string
-  ): string {
+  ): SafeHtml {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.options.translator.t(key, values);
-    const described = hint ? ` aria-describedby="${hint}"` : '';
-    const option = (value: string, label: string, selected: boolean): string =>
-      `<option value="${value}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+    const described = hint ? html` aria-describedby="${hint}"` : '';
+    const option = (
+      value: string,
+      label: string,
+      selected: boolean
+    ): SafeHtml =>
+      html`<option value="${value}"${selected ? ' selected' : ''}>${label}</option>`;
 
     switch (field.kind) {
       case 'boolean':
-        return `<select id="${id}" class="dc-input"${described}>
+        return html`<select id="${id}" class="dc-input"${described}>
           ${option(
             '',
             t('policy.boolean.unset', {
@@ -393,47 +394,45 @@ export class PolicyForm {
           ${option('FALSE', t('policy.boolean.no'), current === false)}
         </select>`;
       case 'quality':
-        return `<select id="${id}" class="dc-input"${described}>
+        return html`<select id="${id}" class="dc-input"${described}>
           ${option('', t('policy.quality.unset'), current === undefined)}
-          ${[0, 1, 2]
-            .map(level =>
-              option(
-                String(level),
-                t(`policy.quality.${level}`),
-                current === level
-              )
+          ${[0, 1, 2].map(level =>
+            option(
+              String(level),
+              t(`policy.quality.${level}`),
+              current === level
             )
-            .join('')}
+          )}
         </select>`;
       case 'text':
-        return `<textarea id="${id}" class="dc-input dc-policy-text" rows="6"
-          spellcheck="false"${described}>${escapeHtml(
+        return html`<textarea id="${id}" class="dc-input dc-policy-text" rows="6"
+          spellcheck="false"${described}>${
             typeof current === 'string' ? current : ''
-          )}</textarea>`;
+          }</textarea>`;
       case 'duration': {
         const split =
           typeof current === 'number'
             ? splitDuration(current, field.unit)
             : undefined;
-        return `<div class="dc-policy-duration">
+        return html`<div class="dc-policy-duration">
           <input id="${id}" class="dc-input" type="number" min="0" step="1"
             inputmode="numeric" value="${split ? split.amount : ''}"${described} />
           <select class="dc-input" data-unit
-            aria-label="${escapeHtml(
-              t('policy.unitOf', { field: t(`policy.attr.${field.name}`) })
-            )}">
+            aria-label="${t('policy.unitOf', {
+              field: t(`policy.attr.${field.name}`),
+            })}">
             ${UNITS.map(([unit]) =>
               option(
                 unit,
                 t(`policy.unit.${unit}`),
                 unit === (split?.unit ?? field.unit ?? 'days')
               )
-            ).join('')}
+            )}
           </select>
         </div>`;
       }
       default:
-        return `<input id="${id}" class="dc-input" type="number" min="0" step="1"
+        return html`<input id="${id}" class="dc-input" type="number" min="0" step="1"
           inputmode="numeric" value="${
             typeof current === 'number' ? current : ''
           }"${described} />`;
