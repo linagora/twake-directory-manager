@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-import { scanHere } from '../support/a11y';
+import { SCAN_EVERYWHERE, scanHere } from '../support/a11y';
 import { CONSOLE_PATH } from '../support/env';
 import { EntryPage } from './EntryPage';
 import { FormPanel } from './FormPanel';
@@ -80,7 +80,13 @@ export class ConsolePage {
    * fails at once rather than after a minute of reloads.
    */
   async scanLoaded(): Promise<void> {
-    await expect(this.mainHeading.or(this.nothingToManage)).toBeVisible();
+    if (!SCAN_EVERYWHERE) return;
+    // The view, not the "Loading…" that stands for it while it is read
+    await expect(
+      this.main.locator('p.dc-empty', {
+        hasText: /^(Loading|Chargement|Ачаалж)/,
+      })
+    ).toHaveCount(0);
     await scanHere(this.page);
   }
 
