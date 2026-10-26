@@ -38,13 +38,13 @@ src/index.ts                public exports: DirectoryConsole, four components
                             ConsoleApiClient, Translator, Rights and the scope helpers,
                             html/SafeHtml, types
 └── DirectoryConsole.ts     the controller: boot, routing, shell and sidebar,
-    │                       the views not moved yet (overview, lists, cards)
-    │                       and what they start themselves (Add to a group…,
-    │                       Add members…, the CSV import)
+    │                       the views not moved yet (overview, lists) and
+    │                       the CSV import the list starts
     ├── views/
     │   ├── policies.ts         the password policies page and its panel (#220's first view)
-    │   └── organizations.ts    the tree and the card of the organization selected, its
-    │                           people and groups; kept by the console, for the tree it holds
+    │   ├── organizations.ts    the tree and the card of the organization selected, its
+    │   │                       people and groups; kept by the console, for the tree it holds
+    │   └── entry.ts            an entry's card: its details, its relations, what it offers
     ├── actions/
     │   ├── passwords.ts        Reset password, the first password of an account created
     │   │                       without one, the generated password shown once
@@ -52,8 +52,10 @@ src/index.ts                public exports: DirectoryConsole, four components
     │   ├── transit.ts          Claim… into one of the caller's organizations, and Hand over,
     │   │                       the groups the caller writes offered to leave
     │   ├── deletion.ts         Delete, asked first: an entry, an organization, a selection
-    │   └── forms.ts            New… and Edit: an entry's form, an organization's with its
-    │                           parent, a refusal said under the field at fault
+    │   ├── forms.ts            New… and Edit: an entry's form, an organization's with its
+    │   │                       parent, a refusal said under the field at fault
+    │   └── groups.ts           Add to a group… and Add members…, the ×s of a card's
+    │                           relations, Add to a group… on a selection
     ├── components/
     │   ├── EntityList.ts       search, list, selection, CSV export
     │   ├── EntityDetail.ts     an entry's card, its relations and actions
@@ -82,6 +84,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── console/deps.ts         ConsoleDeps: what a test gives the console in place of what it builds
     ├── console/context.ts      ConsoleContext: what a view or an action is given of the console
     ├── console/bulk.ts         what the list's bulk actions share: the accounts written, the panel held
+    ├── console/relations.ts    an entry's members or groups, a group's type, a related entry's address
     ├── ui/table.ts             dataTable: the one way to draw a table (#226)
     ├── ui/search.ts            searchBox: a named search box, with the select of its scope
     ├── ui/announce.ts          the hidden live region: said to a screen reader, not shown
@@ -98,7 +101,7 @@ e2e/                        the Playwright suite, a package of its own
 scripts/qa-environment/     OpenLDAP + Dex + the image, for e2e and by hand
 ```
 
-`DirectoryConsole.ts` is far too large (over 2,400 lines) and takes in every
+`DirectoryConsole.ts` is far too large (about 1,700 lines) and takes in every
 feature; splitting it into views and actions behind a small shell is
 [#220](https://github.com/linagora/twake-directory-manager/issues/220), under
 way. A view is a class of `src/views/` given a `ConsoleContext`
@@ -106,26 +109,29 @@ way. A view is a class of `src/views/` given a `ConsoleContext`
 the dialog services, the toast and the reporter, the page's ticket, the
 entities — built once in `init()`, whose changing parts (the translator, the
 rights, the entities once discovered) are functions asked each time, never
-copies. The password policies are the first (`PoliciesView`), made anew
-each time as they hold nothing; the organizations the second
-(`OrganizationsView`), kept by the console from one drawing to the next for
-the tree it holds, which a page drawn again finds open where the reader
-left it. An action is a
+copies. The password policies are the first (`PoliciesView`), made anew each
+time as they hold nothing; the organizations the second (`OrganizationsView`),
+kept by the console from one drawing to the next for the tree it holds, which
+a page drawn again finds open where the reader left it; an entry's card the
+third (`EntryView`), made anew as it reads its entry again. An action is a
 class of `src/actions/` given the same context, for what a card, a list or a
 form starts and that opens a panel or writes — the password resets
-(`PasswordActions`), the state changes (`StateActions`), Claim… and Hand
-over (`TransitActions`), the deletions (`DeletionActions`) and the forms
-(`FormActions`), the last of #220's step 5; what the pages start themselves
-(Add to a group…, Add members…, the CSV import) moves with them. An action
-holds nothing between two calls, and `init()` makes one of each. What it
-needs of a page — the address, the organization tree, an entry's groups,
-the banner's count of what waits in transit, the label of a New button — it
-asks of the context, which the console answers until that page moves, and
-then asks the view (the tree is `OrganizationsView`'s); what it needs of
+(`PasswordActions`), the state changes (`StateActions`), Claim… and Hand over
+(`TransitActions`), the deletions (`DeletionActions`), the forms
+(`FormActions`), and the memberships of groups (`GroupActions`), which the
+card and the list's selection both start; the CSV import moves with the list.
+An action holds nothing between two calls, and `init()` makes one of each.
+What it needs of a page — the address, the organization tree, an entry's
+groups, the banner's count of what waits in transit, the label of a New button
+— it asks of the context, which the console answers until that page moves, and
+then asks the view (the tree is `OrganizationsView`'s), or a module of
+`src/console/` for what no page holds (an entry's groups, read by
+`console/relations.ts` for the card and Hand over alike); what it needs of
 another action (a change of state from a deletion, the first password of an
 account just created) it asks of the context too, and so does a view of an
-action it starts (the organization's form and its deletion), or of a page
-still in the console (the list of users opened on a department's path).
+action it starts (the organization's form and its deletion, everything an
+entry's card offers), or of a page still in the console (the list of users
+opened on a department's path).
 The console keeps a one-line method for each view, each action and the
 panel and dialog services while the other callers move, deleted at the last
 step, or as soon as no caller is left. ESLint keeps the direction: a view
@@ -264,7 +270,8 @@ refinements aside. Entity and attribute names are **not** translated here: they 
 - `npm test`: mocha over `test/`, which mirrors `src/`: `test/api/`,
   `test/components/`, one file per module, and `test/console/` for the
   console's own behaviours (helpers, organizations, the panel and the toast,
-  the shell and the overview, entries and their groups), `test/views/` and
+  the shell and the overview, the bulk actions a list offers and the group
+  picker's keyboard), `test/views/` and
   `test/actions/` for the views and actions moved out of it. A DOM
   (happy-dom, `test/support/dom.ts`) is registered before any test, and
   nothing reaches the network: the API is `nock`, with no connection allowed

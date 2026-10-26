@@ -659,12 +659,6 @@ describe('Directory console: the shell and the overview', () => {
       });
       const views = app as unknown as {
         renderList(main: unknown, entity: EntityDescriptor): Promise<void>;
-        renderDetail(
-          main: unknown,
-          entity: EntityDescriptor,
-          id: string,
-          generation: number
-        ): Promise<void>;
       };
       return { views, main, holder, asked };
     };
@@ -682,9 +676,8 @@ describe('Directory console: the shell and the overview', () => {
       const { views, main, holder, asked } = setup(nobody);
       await views.renderList(main, users);
       expect(holder.innerHTML).to.contain(notice).and.not.contain('error');
-      await views.renderDetail(main, users, 'bob', 0);
-      expect(main.innerHTML).to.contain(notice);
-      // The organizations page: in test/views/organizations.test.ts.
+      // The card: in test/views/entry.test.ts; the organizations page: in
+      // test/views/organizations.test.ts.
       expect(asked).to.deep.equal([]);
     });
 
@@ -693,12 +686,11 @@ describe('Directory console: the shell and the overview', () => {
         { ...nobody, unrestricted: true },
         { ...nobody, described: false },
       ]) {
-        const { views, main, holder, asked } = setup(scope);
+        const { views, main, holder } = setup(scope);
         await views.renderList(main, users);
         expect(holder.innerHTML).to.not.contain(notice);
-        await views.renderDetail(main, users, 'bob', 0);
-        // The organizations page's tree: in test/views/organizations.test.ts.
-        expect(asked).to.include.members(['get']);
+        // The card's read: in test/views/entry.test.ts; the organizations
+        // page's tree: in test/views/organizations.test.ts.
       }
     });
   });
