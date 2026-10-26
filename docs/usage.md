@@ -67,7 +67,12 @@ and log to the browser's console without one.
 
 An `apiBaseUrl` on another origin makes every call a cross-origin one, sent
 with credentials: that deployment has to allow the console's origin _and_
-credentials in its CORS policy, or the browser drops the answer. It also has
+credentials in its CORS policy, or the browser drops the answer. The page the
+image serves comes with a `Content-Security-Policy` whose `connect-src` is its
+own origin (`DM_STATIC_CSP` in the `Dockerfile`): a page of your own under
+that policy widens it to the API's origin. The console itself needs no inline
+script or style, and writes none: every value it shows goes through `html`
+(see _Exported pieces_), which escapes it. It also has
 to expose the `X-Result-Truncated` header (`Access-Control-Expose-Headers`),
 or the browser hides it and a truncated list reads as complete.
 

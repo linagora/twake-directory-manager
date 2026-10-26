@@ -5,34 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Twake Directory Manager</title>
     <link rel="icon" type="image/svg+xml" href="logo.svg" />
-    <!-- Relative, so the page works wherever it is mounted. -->
+    <!-- Relative, so the page works wherever it is mounted. No inline script
+         or style: the image serves this page with a Content-Security-Policy
+         that allows none. -->
     <link rel="stylesheet" href="twake-directory-manager.css" />
-    <style>
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        min-height: 100%;
-      }
-    </style>
+    <link rel="stylesheet" href="page.css" />
   </head>
   <body>
     <div id="directory-console"></div>
 
-    <script type="module">
-      import { DirectoryConsole } from './twake-directory-manager.esm.js';
-
-      // Everything the console shows — entities, attributes, labels, patterns,
-      // lifecycle states — comes from the server's own configuration, so this
-      // page has nothing to declare.
-      const console_ = new DirectoryConsole({
-        containerId: 'directory-console',
-      });
-
-      console_.init().catch(error => {
-        document.getElementById('directory-console').textContent =
-          `Cannot reach the API: ${error.message}`;
-      });
-    </script>
+    <script type="module" src="boot.js"></script>
   </body>
 </html>

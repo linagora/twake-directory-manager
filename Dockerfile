@@ -51,6 +51,13 @@ COPY docker/consoleRoot.mjs docker/consoleSettings.mjs /app/plugins/
 # otherwise answers "Cannot GET /". /app/plugins/consoleSettings.mjs passes
 # DM_CONSOLE_HIDDEN_ATTRIBUTES on to the console.
 #
+# DM_STATIC_CSP is the Content-Security-Policy ldap-rest's static plugin sends
+# with the console's page: scripts, styles and requests from the page's own
+# origin only, no inline script or style, images from the origin or inlined
+# (`data:`, the logos). A value written into the page cannot run under it, nor
+# can the page be framed by another origin. A deployment that serves the page
+# from one origin and the API from another widens `connect-src` here.
+#
 # Hidden by default, because nothing in the stack acts on them: the "other
 # mailboxes", which no plugin reads, and the delivery mode, which no plugin
 # applies — and its nomenclature with it.
@@ -59,6 +66,7 @@ ENV DM_CONSOLE_PLUGINS=core/static,/app/plugins/consoleRoot.mjs,/app/plugins/con
  DM_EXTRA_PLUGINS= \
  DM_CONSOLE_HIDDEN_ATTRIBUTES=twakeOtherMailbox,twakeDeliveryMode \
  DM_ALLOW_ANONYMOUS=false \
+ DM_STATIC_CSP="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'" \
  DM_LDAP_FLAT_SCHEMA=/app/node_modules/ldap-rest/static/schemas/twake/users.json,/app/node_modules/ldap-rest/static/schemas/twake/positions.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeTitle.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeAccountStatus.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeListType.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeMailboxType.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeDomain.json \
  DM_GROUP_SCHEMA=/app/node_modules/ldap-rest/static/schemas/twake/groups.json \
  DM_ORGANIZATION_SCHEMA=/app/node_modules/ldap-rest/static/schemas/twake/organizations.json
