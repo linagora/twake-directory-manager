@@ -189,8 +189,22 @@ describe('views/list', () => {
       await settled(root);
       expect(rows(root)).to.deep.equal(['staff']);
       // A type is named as its branch names it, not by its RDN.
-      const row = root.querySelector('[data-main] tbody tr')?.textContent;
-      expect(row).to.include('Anyone may write').and.not.include('open');
+      const row = root.querySelector<HTMLElement>('[data-main] tbody tr');
+      expect(row?.textContent)
+        .to.include('Anyone may write')
+        .and.not.include('open');
+      // The search named after the entity, the count said to a screen
+      // reader, and a row opening its card.
+      expect(
+        root
+          .querySelector('[data-main] [data-search]')
+          ?.getAttribute('aria-label')
+      ).to.equal('Search Groups');
+      await until(
+        () => root.querySelector('[data-announce]')?.textContent === '1–1 of 1'
+      );
+      row?.querySelector<HTMLElement>('td:last-child')?.click();
+      await until(() => window.location.hash === '#/groups/staff');
     });
 
     it('should offer New… and Import CSV to whoever creates, Import CSV on a flat entity only', async () => {
@@ -593,6 +607,43 @@ describe('views/list', () => {
       expect(callsOf(calls, 'get')).to.include('get(positions, Intern)');
       expect(rows(root)).to.deep.equal(['Intern']);
       expect(panelOf(root).panel.hidden).to.equal(false);
+    });
+
+    it('should draw no page again once the import ends on another', async () => {
+      const held = gate();
+      const { root, server, calls, idle } = await mountConsole({
+        hash: 'positions',
+        scope: null,
+        answers: answer => {
+          listed(answer);
+          answer
+            .get(/\/api\/v1\/ldap\/titles(\?.*)?$/)
+            .reply(200, { Mr: { cn: 'Mr' } });
+        },
+      });
+      const { body } = panelOf(root);
+      server.post('/api/v1/ldap/positions').reply(async () => {
+        await held.opened;
+        return [200, position('Intern')];
+      });
+      click(root, '[data-main] [data-import]');
+      choose(root, 'cn\nIntern\n', 'positions.csv');
+      await until(() => !!body.querySelector('[data-import-check]'));
+      click(body, '[data-import-check]');
+      await until(() => !!body.querySelector('[data-import-run]'));
+      click(body, '[data-import-run]');
+      await until(() => callsOf(calls, 'create').length === 1);
+      // Another page, while the row is being created: its list is read
+      // once, and not again when the import ends.
+      await visit(root, 'titles');
+      expect(reads(calls, 'titles')).to.equal(1);
+      held.open();
+      await idle();
+      await settled(root);
+      expect(window.location.hash).to.equal('#/titles');
+      expect(reads(calls, 'titles')).to.equal(1);
+      expect(rows(root)).to.deep.equal(['Mr']);
+      expect(callsOf(calls, 'get')).to.deep.equal([]);
     });
 
     it('should put the search back after an import that created nothing, and leave it otherwise', async () => {
