@@ -130,6 +130,8 @@ export interface HeldPanel {
   readonly dirty: (() => boolean) | null;
   readonly closed: (() => void) | null;
   readonly focus: HTMLElement | null;
+  /** The elements taken aside, given back as they are: those the question was asked in */
+  readonly parts: PanelParts;
 }
 
 /**
@@ -369,11 +371,13 @@ export class PanelService {
    * @returns what was taken, or nothing when the panel was closed
    */
   hold(): HeldPanel | undefined {
-    const { panel, heading, body } = this.parts();
+    const parts = this.parts();
+    const { panel, heading, body } = parts;
     const held =
       !panel || panel.hidden || !heading || !body
         ? undefined
         : {
+            parts,
             title: heading.textContent ?? '',
             nodes: Array.from(body.childNodes),
             modal: panel.classList.contains('dc-panel-modal'),
@@ -395,7 +399,7 @@ export class PanelService {
    * @param held what `hold` returned
    */
   restore(held: HeldPanel): void {
-    const { panel, heading, body, dialog } = this.parts();
+    const { panel, heading, body, dialog } = held.parts;
     if (heading) heading.textContent = held.title;
     panel?.classList.toggle('dc-panel-modal', held.modal);
     panel?.classList.toggle('dc-panel-wide', held.wide);

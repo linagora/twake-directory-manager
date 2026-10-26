@@ -44,7 +44,7 @@ const tree = (server: nock.Scope): void => {
  * @returns once the password is answered, which the page may not show yet
  */
 const create = async (
-  { root, server }: Mounted,
+  { root, server, idle }: Mounted,
   held?: Promise<void>
 ): Promise<{ answered: Promise<void> }> => {
   let answer = (): void => undefined;
@@ -75,14 +75,9 @@ const create = async (
   // The first match is the active one: Enter takes it, as the reader does.
   press('Enter');
   click(body, 'button[type="submit"]');
-  // Read by the console a few turns after nock answers it. Too short a wait
-  // fails the test — the password expected behind the panel is not there —
-  // rather than passing it.
-  return {
-    answered: answered.then(
-      () => new Promise(resolve => setTimeout(resolve, 20))
-    ),
-  };
+  // Read by the console once nock has answered it: what it does with the
+  // password shows nothing on the page while another panel is open.
+  return { answered: answered.then(idle) };
 };
 
 describe('Directory console: the side panel and the toast', () => {
