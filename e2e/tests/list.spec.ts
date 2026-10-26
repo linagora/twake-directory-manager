@@ -705,8 +705,9 @@ test.describe('LIST lists, search and bulk actions', () => {
     await expect(said).toHaveText('Selection cleared');
     await list.search('zzz');
     await expect(said).toHaveText('No entry matches this search');
+    // Emptied, the search lists everything again, and says so
     await list.search('');
-    await list.listEverything();
+    await expect(said).toHaveText(/^1–\d+ of \d+$/);
     await expect(list.columnHeaders.first()).toHaveAttribute('scope', 'col');
     await expect(list.selectAll).toHaveAccessibleName(
       'Select all rows on this page'

@@ -458,7 +458,7 @@ export class EntityList {
       if (generation === this.generation) {
         this.loading = false;
         this.draw();
-        if (!this.error) this.announceLoaded();
+        this.announceLoaded();
       }
     }
   }
@@ -471,6 +471,10 @@ export class EntityList {
   private announceLoaded(): void {
     const { translator, announce } = this.options;
     if (!announce) return;
+    if (this.error) {
+      announce(this.error);
+      return;
+    }
     if (this.entries.length === 0) {
       announce(
         this.under !== undefined && this.truncated
@@ -486,11 +490,12 @@ export class EntityList {
       to: Math.min(from + this.pageSize, total),
       total,
     });
-    announce(
-      this.truncated
-        ? `${translator.t('list.truncated', { count: total })} ${count}`
-        : count
-    );
+    // Cut to a department, a search finds no more of it: said as shown.
+    const truncated =
+      this.under !== undefined
+        ? translator.t('list.cutTruncated', { path: this.under })
+        : translator.t('list.truncated', { count: total });
+    announce(this.truncated ? `${truncated} ${count}` : count);
   }
 
   /** Said to a screen reader when the selection changes. */

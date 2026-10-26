@@ -211,7 +211,7 @@ test.describe('IMPORT CSV import', () => {
     await expect(panel.stat('with errors')).toHaveText('0');
     await expect(
       panel.dialog.getByRole('group', {
-        name: '2 ready to import, 0 with errors',
+        name: '2 ready to import, 0 with errors, not imported',
       })
     ).toBeFocused();
     await expect(panel.runButton).toHaveText('Import 2 entries');

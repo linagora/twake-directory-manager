@@ -45,7 +45,9 @@ export function announcer(
     region.textContent = '';
     timer = setTimeout(() => {
       timer = undefined;
-      region.textContent = text;
+      // Looked up again: the frame may have been drawn anew meanwhile.
+      const target = element();
+      if (target) target.textContent = text;
     }, ANNOUNCE_DELAY);
   };
 }

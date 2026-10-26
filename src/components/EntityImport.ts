@@ -117,6 +117,8 @@ export class EntityImport {
     step: null,
     error: '',
   };
+  /** A control the repaint replaces, to give the focus back to: a selector. */
+  private refocus: string | null = null;
 
   constructor(options: ImportOptions) {
     this.options = options;
@@ -131,6 +133,16 @@ export class EntityImport {
 
   private t(key: string, values?: Record<string, string | number>): string {
     return this.options.translator.t(key, values);
+  }
+
+  /**
+   * A summary said in one breath, "2 ready to import, 0 with errors": each
+   * figure with its label, which agrees with it as the tiles' labels do.
+   */
+  private summary(parts: [number, string][]): string {
+    return parts
+      .map(([count, key]) => `${count} ${this.t(key, { count })}`)
+      .join(', ');
   }
 
   private label(name: string): string {
@@ -160,12 +172,24 @@ export class EntityImport {
     this.bind(root);
     // Each step replaces the panel's content, and the focus fell to the page:
     // a screen reader heard nothing of "1 ready to import, 1 with errors"
-    // (#213). The step's lead takes the focus, once, when the step changes
-    // or an error appears; a repaint of the same step leaves it be.
+    // (#213). A control the repaint replaced gets the focus back (a column
+    // mapped otherwise, Stop); otherwise the step's lead takes it when the
+    // step changes, an error appears, or the focus was lost with the content.
     const changed =
       this.step !== this.painted.step || this.error !== this.painted.error;
     this.painted = { step: this.step, error: this.error };
-    if (changed) root.querySelector<HTMLElement>('[data-step-lead]')?.focus();
+    const back = this.refocus && root.querySelector<HTMLElement>(this.refocus);
+    this.refocus = null;
+    if (back) back.focus();
+    else if (changed || !this.holdsFocus(root))
+      root.querySelector<HTMLElement>('[data-step-lead]')?.focus();
+  }
+
+  /** Whether the focus is on something the import draws. */
+  private holdsFocus(root: HTMLElement): boolean {
+    if (typeof document === 'undefined') return true;
+    const active = document.activeElement;
+    return !!active && active !== document.body && root.contains(active);
   }
 
   private stepMarkup(): SafeHtml {
@@ -240,6 +264,14 @@ export class EntityImport {
     const table = this.table as CsvTable;
     const missing = unmappedRequired(this.mapping, this.fields);
     return html`
+      ${
+        // A check that failed comes back here, with what the server said.
+        this.error
+          ? html`<p class="dc-error" tabindex="-1" data-step-lead>${
+              this.error
+            }</p>`
+          : ''
+      }
       <p tabindex="-1" data-step-lead>${this.t('import.read', {
         count: table.rows.length,
         file: this.fileName,
@@ -320,6 +352,7 @@ export class EntityImport {
    * and only the values the file holds are then looked up, each on its own.
    */
   private async check(): Promise<void> {
+    this.error = '';
     this.step = 'checking';
     this.paint();
     const resolvers: Record<string, PointerResolver> = {};
@@ -384,10 +417,10 @@ export class EntityImport {
     const invalid = this.rows.filter(row => row.errors.length > 0);
     return html`
       <div class="dc-import-summary" role="group" tabindex="-1" data-step-lead
-        aria-label="${this.t('import.reviewSummary', {
-          ok: valid.length,
-          bad: invalid.length,
-        })}">
+        aria-label="${this.summary([
+          [valid.length, 'import.ready'],
+          [invalid.length, 'import.invalid'],
+        ])}">
         <div class="dc-import-stat dc-import-stat-ok">
           <strong>${valid.length}</strong>
           <span>${this.t('import.ready', { count: valid.length })}</span>
@@ -614,10 +647,10 @@ export class EntityImport {
     const skipped = this.total - this.processed;
     return html`
       <div class="dc-import-summary" role="group" tabindex="-1" data-step-lead
-        aria-label="${this.t('import.doneSummary', {
-          created: this.created,
-          refused: this.failures.length,
-        })}">
+        aria-label="${this.summary([
+          [this.created, 'import.created'],
+          [this.failures.length, 'import.refused'],
+        ])}">
         <div class="dc-import-stat dc-import-stat-ok">
           <strong>${this.created}</strong>
           <span>${this.t('import.created', { count: this.created })}</span>
@@ -751,6 +784,7 @@ export class EntityImport {
     ))
       select.addEventListener('change', () => {
         this.mapping[Number(select.dataset.importMap)] = select.value;
+        this.refocus = `[data-import-map="${select.dataset.importMap}"]`;
         this.paint();
       });
 
@@ -759,6 +793,7 @@ export class EntityImport {
       ?.addEventListener('click', () => {
         this.step = 'file';
         this.table = null;
+        this.error = '';
         this.paint();
       });
 
@@ -781,6 +816,7 @@ export class EntityImport {
 
     root.querySelector('[data-import-stop]')?.addEventListener('click', () => {
       this.stopping = true;
+      this.refocus = '[data-import-stop]';
       this.paint();
     });
 

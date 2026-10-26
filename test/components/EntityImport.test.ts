@@ -35,14 +35,50 @@ describe('EntityImport', () => {
     expect(lead?.textContent).to.include('x.csv');
     expect(lead?.getAttribute('tabindex')).to.equal('-1');
     expect(document.activeElement).to.equal(lead);
-    // A repaint of the same step (a column mapped otherwise) does not take
-    // the focus back to the lead
-    const select = root.querySelector<HTMLSelectElement>('[data-import-map]');
+    // A column mapped otherwise repaints the step: the select, drawn anew,
+    // keeps the focus rather than the lead or the page
+    const select = root.querySelector<HTMLSelectElement>(
+      '[data-import-map="0"]'
+    );
     if (!select) throw new Error('no mapping select');
     select.focus();
     select.dispatchEvent(new Event('change'));
-    expect(document.activeElement).to.not.equal(
-      root.querySelector('[data-step-lead]')
+    const fresh = root.querySelector('[data-import-map="0"]');
+    expect(fresh).to.not.equal(select);
+    expect(document.activeElement).to.equal(fresh);
+  });
+
+  it('should focus the error of an empty file, the second one too', async () => {
+    // The second empty file in a row changed nothing the paint could see,
+    // and the focus fell to the page with the input it replaced.
+    const { root, read } = drawn('fr');
+    await read('');
+    const lead = root.querySelector<HTMLElement>('p.dc-error[data-step-lead]');
+    expect(lead?.textContent).to.equal(
+      'Ce fichier ne contient aucune ligne à importer.'
+    );
+    expect(document.activeElement).to.equal(lead);
+    root.querySelector<HTMLElement>('[data-import-file]')?.focus();
+    await read('');
+    expect(document.activeElement).to.equal(
+      root.querySelector('p.dc-error[data-step-lead]')
+    );
+  });
+
+  it('should focus the error of an empty file, the second one too', async () => {
+    // The second empty file in a row changed nothing the paint could see,
+    // and the focus fell to the page with the input it replaced.
+    const { root, read } = drawn('fr');
+    await read('');
+    const lead = root.querySelector<HTMLElement>('p.dc-error[data-step-lead]');
+    expect(lead?.textContent).to.equal(
+      'Ce fichier ne contient aucune ligne à importer.'
+    );
+    expect(document.activeElement).to.equal(lead);
+    root.querySelector<HTMLElement>('[data-import-file]')?.focus();
+    await read('');
+    expect(document.activeElement).to.equal(
+      root.querySelector('p.dc-error[data-step-lead]')
     );
   });
 
