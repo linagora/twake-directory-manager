@@ -1,0 +1,15 @@
+{
+  "status": 409,
+  "headers": {
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "error": "The mail domain of \"contract.recorder@unmanaged.invalid\" is not one of the authorised domains (example.com)",
+    "code": "mailDomain",
+    "attribute": "mail",
+    "value": "contract.recorder@unmanaged.invalid",
+    "domains": [
+      "example.com"
+    ]
+  }
+}

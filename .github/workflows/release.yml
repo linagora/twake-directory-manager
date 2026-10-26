@@ -29,6 +29,9 @@ jobs:
   checks:
     name: Checks
     uses: ./.github/workflows/test.yml
+    with:
+      # The release ships the tested version; the floor is checked on pull requests.
+      ldap-rest: tested
 
   # The tag, package.json, the chart and the changelog have to agree before
   # anything is published under the tag's version: the version in

@@ -1,0 +1,52 @@
+{
+  "status": 200,
+  "headers": {
+    "x-result-truncated": "true",
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "admin": {
+      "dn": "uid=admin,ou=users,dc=example,dc=com",
+      "objectClass": [
+        "top",
+        "twakeAccount",
+        "twakeWhitePages"
+      ],
+      "uid": "admin",
+      "employeeNumber": "E0001",
+      "cn": "Ada Admin",
+      "givenName": "Ada",
+      "sn": "Admin",
+      "displayName": "Ada Admin",
+      "mail": "admin@example.com",
+      "title": "cn=Administrator,ou=positions,dc=example,dc=com",
+      "twakeDepartmentLink": "ou=organization,dc=example,dc=com",
+      "twakeDepartmentPath": "organization",
+      "twakeAccountStatus": "cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com",
+      "twakeDeliveryMode": "cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com"
+    },
+    "sophie.martin": {
+      "dn": "uid=sophie.martin,ou=users,dc=example,dc=com",
+      "objectClass": [
+        "top",
+        "twakeAccount",
+        "twakeWhitePages"
+      ],
+      "uid": "sophie.martin",
+      "employeeNumber": "E0002",
+      "cn": "Sophie Martin",
+      "givenName": "Sophie",
+      "sn": "Martin",
+      "displayName": "Sophie Martin",
+      "mail": "sophie.martin@example.com",
+      "personalTitle": "cn=Ms,ou=twakeTitle,ou=nomenclature,dc=example,dc=com",
+      "title": "cn=Sales Manager,ou=positions,dc=example,dc=com",
+      "telephoneNumber": "+33 1 23 45 67 01",
+      "l": "Paris",
+      "twakeDepartmentLink": "ou=Sales,ou=organization,dc=example,dc=com",
+      "twakeDepartmentPath": "Sales",
+      "twakeAccountStatus": "cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com",
+      "twakeDeliveryMode": "cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com"
+    }
+  }
+}

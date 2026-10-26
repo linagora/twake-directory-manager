@@ -161,17 +161,22 @@ name: 'France' })` gives `France <unique>`. Nothing is created in Sales nor Engi
 
 ### Recording the personas' scopes
 
-`test/rights.test.ts`, in the console's unit suite, reads the rights of each persona from the
-scope the real server describes rather than from one written by hand: `test/fixtures/scopes/*.json`
-and `test/fixtures/config.json`. `tests/record-scopes.spec.ts` writes them, against the running
-stack, and is skipped otherwise:
+`test/rights.test.ts` and `test/api/contract.test.ts`, in the console's unit suite, read what
+the real server answered rather than answers written by hand: the scopes of the personas
+(`test/fixtures/scopes/*.json`), the configuration (`test/fixtures/config.json`), a bounded list,
+an entry and the refusals the console explains (`test/fixtures/contract/*.json`), and which
+version answered (`test/fixtures/recorded.json`). `tests/record-scopes.spec.ts` writes them all,
+against the running stack, and is skipped otherwise:
 
 ```sh
 RECORD_SCOPES=1 npx playwright test record-scopes
 ```
 
 Run it again, and commit what changed, whenever `scripts/qa-environment/ldap/seed.ldif` or the
-authorization settings of `scripts/qa-environment/docker-compose.yaml` change.
+authorization settings of `scripts/qa-environment/docker-compose.yaml` change, and whenever the
+ldap-rest version the console is tested against (`ldapRest.tested` in `package.json`) moves: the
+recorder writes which version answered (`test/fixtures/recorded.json`), and the contract test
+holds the fixtures to it.
 
 ### Flakiness
 

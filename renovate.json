@@ -51,6 +51,14 @@
         "(?<depName>osixia/openldap|ghcr\\.io/dexidp/dex):(?<currentValue>[^\\s;]+)"
       ],
       "datasourceTemplate": "docker"
+    },
+    {
+      "description": "The ldap-rest version the console is tested against (package.json ldapRest.tested), bumped with the Dockerfile's image so that check-compat agrees",
+      "customType": "regex",
+      "managerFilePatterns": ["/^package\\.json$/"],
+      "matchStrings": ["\"tested\": \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""],
+      "depNameTemplate": "ghcr.io/linagora/ldap-rest",
+      "datasourceTemplate": "docker"
     }
   ]
 }
