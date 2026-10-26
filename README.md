@@ -211,20 +211,24 @@ Japan.
 
 ### ldap-rest version
 
-The image is built on `ghcr.io/linagora/ldap-rest`, at the version the
-`Dockerfile` names, and the console is tested against that version only. The
-base image is a build argument:
+The console supports ldap-rest from the floor `package.json` declares
+(`ldapRest.min`, 1.1.0: the first to serve the page's
+`Content-Security-Policy`) to the version the `Dockerfile` builds on and CI
+tests against (`ldapRest.tested`); a fallback for an older server is tagged
+`compat(ldap-rest<X.Y.Z)` where it stands and removed, by `npm run lint`,
+once the floor passes it. The base image is a build argument:
 
 ```sh
 docker build --build-arg LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:<version> \
   -t twake-directory-manager .
 ```
 
-An older ldap-rest serves the console as far as its API matches, but is not
-tested: one older than 0.25.0 lacks parts of the scope answer the console
-reads, and offers less; one that still reports a search too broad as a `500`
-(before 0.13.0) has large lists and pointer selects fail with a plain
-error, and no search offered in their place.
+An older ldap-rest serves the console as far as its API matches, but is
+neither tested nor supported: one older than 1.1.0 ignores the
+Content-Security-Policy setting, one older than 0.25.0 lacks parts of the
+scope answer the console reads, and offers less; one that still reports a
+search too broad as a `500` (before 0.13.0) has large lists and pointer
+selects fail with a plain error.
 
 ### Kubernetes
 

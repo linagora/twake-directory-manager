@@ -4,9 +4,10 @@
 #   docker build -t twake-directory-manager .
 #   docker build --build-arg LDAP_REST_IMAGE=ldap-rest:local -t … .
 #
-# The console is tested against the ldap-rest named here, and needs at least
-# one that serves the enterprise plugins (enterpriseRules, accountLifecycle,
-# authzScope) and the scope answer of 0.25.0.
+# The ldap-rest the console is tested against: `ldapRest.tested` in
+# package.json, which `npm run lint` checks this matches. The supported range
+# (`ldapRest.min` to it) is in the README; the console needs `--static-csp`
+# (1.1.0) for the policy set below, and the scope answer of 0.25.0.
 ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:1.1.0
 
 # The console builds to JavaScript and CSS, which are the same whatever the
@@ -62,13 +63,6 @@ ENV DM_CONSOLE_PLUGINS=core/static,/app/plugins/consoleRoot.mjs,/app/plugins/con
  DM_LDAP_FLAT_SCHEMA=/app/node_modules/ldap-rest/static/schemas/twake/users.json,/app/node_modules/ldap-rest/static/schemas/twake/positions.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeTitle.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeAccountStatus.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeListType.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeMailboxType.json,/app/node_modules/ldap-rest/static/schemas/twake/nomenclature/twakeDomain.json \
  DM_GROUP_SCHEMA=/app/node_modules/ldap-rest/static/schemas/twake/groups.json \
  DM_ORGANIZATION_SCHEMA=/app/node_modules/ldap-rest/static/schemas/twake/organizations.json
-
-# The quota the Twake Mail plugin (twake/james, through DM_EXTRA_PLUGINS)
-# pushes: the size the console sets, mailQuotaSize. ldap-rest defaults to it
-# since 0.17.0; set here all the same, so an image built on an older
-# ldap-rest (LDAP_REST_IMAGE) does not fall back to mailQuota, which the
-# Twake schemas do not define.
-ENV DM_QUOTA_ATTRIBUTE=mailQuotaSize
 
 EXPOSE 8081
 ENTRYPOINT ["twake-directory-manager"]
