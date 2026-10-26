@@ -72,6 +72,15 @@ export class ConsolePage {
     await expect(this.page).toHaveURL(new RegExp(`${CONSOLE_PATH}`));
     await expect(this.banner).toBeVisible();
     await expect(this.languageSelect).toBeVisible();
+  }
+
+  /**
+   * Scan the page once its view is drawn, when asked to scan everywhere:
+   * after the retries that load it, not inside them, so that a violation
+   * fails at once rather than after a minute of reloads.
+   */
+  async scanLoaded(): Promise<void> {
+    await expect(this.mainHeading.or(this.nothingToManage)).toBeVisible();
     await scanHere(this.page);
   }
 
@@ -81,6 +90,7 @@ export class ConsolePage {
       await this.page.goto(`${CONSOLE_PATH}#/${hash}`);
       await this.expectLoaded();
     }).toPass({ timeout: 45_000 });
+    await this.scanLoaded();
   }
 
   /** Full reload: the session cookie keeps the console signed in on the same address */
@@ -89,6 +99,7 @@ export class ConsolePage {
       await this.page.reload();
       await this.expectLoaded();
     }).toPass({ timeout: 45_000 });
+    await this.scanLoaded();
   }
 
   // ------------------------------------------------------------------ sidebar

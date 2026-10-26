@@ -77,7 +77,9 @@ export async function expectAccessible(
   // A panel sliding in, a token fading in: a colour measured mid-transition
   // is neither the one before nor the one after. Scanned once they are done.
   await page.evaluate(() =>
-    Promise.all(document.getAnimations().map(animation => animation.finished))
+    Promise.allSettled(
+      document.getAnimations().map(animation => animation.finished)
+    )
   );
   const results = await analyze(page, options);
   if (results.incomplete.length > 0)

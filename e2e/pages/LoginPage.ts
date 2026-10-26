@@ -57,6 +57,7 @@ export class LoginPage {
       await app.expectLoaded();
     }).toPass({ timeout: 60_000 });
     if (hash) await app.open(hash);
+    else await app.scanLoaded();
     return app;
   }
 }

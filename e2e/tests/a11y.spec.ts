@@ -130,7 +130,7 @@ for (const language of LANGUAGES)
         await expectAccessible(page);
       });
 
-      test(`A11Y-15 the CSV import, matched, checked and done`, async ({
+      test(`A11Y-15 the CSV import, matched, then checked`, async ({
         page,
       }) => {
         const app = await signIn(page, account, language, 'users');

@@ -111,8 +111,8 @@ wrongly on a custom widget is excluded with a comment saying why, and
 reviewed. What axe could not decide (a contrast over an overlap or a
 background image) is annotated on the test in the report, not failed. What
 axe cannot see — focus kept on a redraw, announcements, keyboard paths — is
-checked by the scenarios themselves (LIST-15, LIST-16, NAV-11 to NAV-13,
-IMPORT-03, ORG-01, POLICY-05); the primitives of `src/ui/` are where a new
+checked by the scenarios themselves (LIST-15, LIST-16, NAV-08, NAV-11 to
+NAV-13, IMPORT-03, ORG-01, ORG-12, POLICY-05); the primitives of `src/ui/` are where a new
 table, field, announcement or help is written.
 
 ## Pull requests

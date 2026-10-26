@@ -157,7 +157,7 @@ administrators do not.
 
 ## Accessibility
 
-The views and panels below, scanned by axe-core against WCAG 2.2 AA (`support/a11y.ts`), as the global administrator and as a local one, in English and in French (Mongolian is not scanned; the catalogue changes no markup) — `a11y.spec.ts`. The scan waits for the page to settle (`aria-busy`), then judges what is there at that moment: a section filled late (the overview's transit count) or a hover tint under the mouse is covered only when the run meets it. The panels of an action (edit, reset a password, claim, change a state, hand over) are not scanned yet. A view with a defect on file is marked `knownIssue` until it is fixed; a new defect fails the run.
+The views and panels below, scanned by axe-core against WCAG 2.2 AA (`support/a11y.ts`), as the global administrator and as a local one, in English and in French (Mongolian is not scanned; the catalogue changes no markup) — `a11y.spec.ts`. The scan waits for the page to settle (`aria-busy`), then judges what is there at that moment: a section filled late (the overview's transit count) or a hover tint under the mouse is covered only when the run meets it. The claim and hand-over dialogs are not scanned yet (they need an entry in transit). A view with a defect on file is marked `knownIssue` until it is fixed; a new defect fails the run.
 
 - [x] A11Y-01 (P1) Overview
 - [x] A11Y-02 (P1) Users list
