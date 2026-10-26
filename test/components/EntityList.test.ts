@@ -147,6 +147,50 @@ describe('EntityList', () => {
     );
   });
 
+  it('should name the search, its scope, the table and each row’s box', async () => {
+    // Ten boxes all read "Select this row", and the search box had only a
+    // placeholder, gone as soon as one typed (#211).
+    const listed = async (title?: string): Promise<string> => {
+      const container = stubContainer();
+      await new EntityList({
+        entity: users,
+        title,
+        translator: new Translator('en'),
+        view: {
+          search: 'IT',
+          searchAttribute: 'twakeDepartmentPath',
+          under: 'IT',
+        },
+        load: () =>
+          Promise.resolve({
+            entries: {
+              ann: { uid: 'ann', twakeDepartmentPath: 'it / Ops' },
+              // No identifier shown: the box is named after the id
+              zed: { twakeDepartmentPath: 'it / Ops' },
+            },
+            truncated: false,
+          }),
+        listable: false,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(false),
+        canDelete: false,
+      }).render(container);
+      return container.innerHTML;
+    };
+    const html = await listed('Users');
+    expect(html)
+      .to.include('aria-label="Search Users" title="Search Users"')
+      .and.include('aria-label="Search in"')
+      .and.include('<caption class="dc-visually-hidden">Users</caption>')
+      .and.include('<th scope="col" class="dc-checkbox-cell">')
+      .and.include('aria-label="Select all rows on this page"')
+      .and.include('aria-label="Select ann"')
+      .and.include('aria-label="Select zed"');
+    expect(html).to.not.include('Select this row');
+    // Without a title, the entity's plural name
+    expect(await listed()).to.include('aria-label="Search users"');
+  });
+
   it('should cut a department’s list to it and what lies under it', async () => {
     // A search of the path matches a substring: "Sales" found Presales.
     const container = stubContainer();

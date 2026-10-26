@@ -88,7 +88,6 @@ const en: Catalogue = {
   'list.export': 'Export selection',
   'list.deleteSelected': 'Delete selection',
   'list.selectAll': 'Select all rows on this page',
-  'list.selectRow': 'Select this row',
   'list.selectNamed': 'Select {name}',
 
   'detail.attributes': 'Details',
@@ -555,7 +554,6 @@ const fr: Catalogue = {
   'list.export': 'Exporter la sélection',
   'list.deleteSelected': 'Supprimer la sélection',
   'list.selectAll': 'Sélectionner toutes les lignes de la page',
-  'list.selectRow': 'Sélectionner cette ligne',
   'list.selectNamed': 'Sélectionner {name}',
 
   'detail.attributes': 'Fiche',
@@ -1024,7 +1022,6 @@ const mn: Catalogue = {
   'list.export': 'Сонгосныг экспортлох',
   'list.deleteSelected': 'Сонгосныг устгах',
   'list.selectAll': 'Энэ хуудасны бүх мөрийг сонгох',
-  'list.selectRow': 'Энэ мөрийг сонгох',
   'list.selectNamed': '{name}-г сонгох',
 
   'detail.attributes': 'Дэлгэрэнгүй',

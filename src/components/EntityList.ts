@@ -842,13 +842,15 @@ export class EntityList {
     // boxes all called "Select this row" told nobody which account they
     // ticked.
     const first = this.columns[0];
-    const name = (first && text(entryValue(entry, first))) || id;
+    const rowName = (first && text(entryValue(entry, first))) || id;
     return html`
       <tr data-id="${id}">
         <td class="dc-checkbox-cell">
           <input type="checkbox" data-select="${id}"
             ${this.selected.has(id) ? 'checked' : ''}
-            aria-label="${translator.t('list.selectNamed', { name })}" />
+            aria-label="${translator.t('list.selectNamed', {
+              name: rowName,
+            })}" />
         </td>
         ${this.columns.map((name, index) => {
           const attr = entity.schema.attributes[name];

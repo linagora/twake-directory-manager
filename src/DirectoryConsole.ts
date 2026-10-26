@@ -3215,6 +3215,9 @@ export class DirectoryConsole {
       holder.querySelectorAll<HTMLElement>('[data-policy]')
     )) {
       const open = (): void => {
+        // Opened from anywhere on the row, the panel gives the focus back to
+        // the name's button when it closes, not to the page.
+        row.querySelector<HTMLElement>('[data-policy-open]')?.focus();
         const policy = policies.find(item => item.cn === row.dataset.policy);
         if (policy) this.openPolicyForm(policy, attributes);
       };
