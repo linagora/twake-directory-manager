@@ -161,6 +161,11 @@ export default [
       ],
     },
   },
+  // The page's own script, a module run by the browser.
+  {
+    files: ['public/*.js'],
+    languageOptions: { sourceType: 'module', globals: globals.browser },
+  },
   {
     ignores: [
       'dist/',

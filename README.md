@@ -173,6 +173,7 @@ fill them in expecting one. The console does not show them:
 | Variable                       | Default                               | What it is                                                           |
 | ------------------------------ | ------------------------------------- | -------------------------------------------------------------------- |
 | `DM_CONSOLE_HIDDEN_ATTRIBUTES` | `twakeOtherMailbox,twakeDeliveryMode` | Attributes left out of the forms, the cards, the lists and CSV files |
+| `DM_STATIC_CSP`                | see the `Dockerfile`                  | The `Content-Security-Policy` sent with the console's page           |
 | `DM_JAMES_SYNC_FORWARDS`       | `false`                               | `true` to mirror `mailForwardingAddress` to Twake Mail forwards      |
 
 - `twakeOtherMailbox` (_Other mailboxes_) is read by no plugin, and by
@@ -186,6 +187,13 @@ fill them in expecting one. The console does not show them:
   `DM_FORWARD_ATTRIBUTE` (`mailForwardingAddress`) is then mirrored to them, and
   **the directory overwrites what users set in Twake Mail**, change after
   change, without being told of what they set there.
+
+The page is served with a strict `Content-Security-Policy`: scripts, styles
+and requests from its own origin only, no inline script or style, images from
+the origin or inlined. A value written into the directory cannot run in the
+console, whatever it holds. A deployment that serves the page from one origin
+and the API from another adds the API's origin to `connect-src` in
+`DM_STATIC_CSP` (ldap-rest's `--static-csp`); `off` sends none.
 
 Hidden attributes stay in the directory as they are: the console neither
 shows nor sends them. An empty `DM_CONSOLE_HIDDEN_ATTRIBUTES` shows them all
@@ -322,6 +330,10 @@ npx ldap-rest --plugin core/static --static-path ./dist --static-name console \
 
 End to end tests (Playwright, against the stack of `scripts/qa-environment/`):
 [`e2e/README.md`](e2e/README.md).
+
+How the code is put together: [ARCHITECTURE.md](ARCHITECTURE.md); how to
+change it, and how a release is cut: [CONTRIBUTING.md](CONTRIBUTING.md); the
+decisions behind it: [docs/adr/](docs/adr/).
 
 ## License
 

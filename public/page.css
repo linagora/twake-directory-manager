@@ -1,0 +1,9 @@
+/* The page around the console, which the console's own stylesheet leaves to
+   the page embedding it. A file rather than a <style> in index.html: the
+   Content-Security-Policy the image sends allows no inline style. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
