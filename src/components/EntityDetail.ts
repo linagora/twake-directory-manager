@@ -111,13 +111,13 @@ export interface DetailOptions {
   /** The entry waits in the transit branch, or is attached to nothing */
   inTransit?: boolean;
   /** Move it into an organization of the caller's, when they may */
-  onClaim?(): void;
+  onClaim?: () => void;
   /** Let it go into the transit branch, when they may */
-  onHandOver?(): void;
+  onHandOver?: () => void;
   /** Create an organization under this one, when they may */
-  onCreateChild?(): void;
+  onCreateChild?: () => void;
   /** Readable name of the entry a pointer lands on, when its schema has one */
-  pointerLabel?(dn: string): string | undefined;
+  pointerLabel?: (dn: string) => string | undefined;
   /** Entries pointing at this one, or pointed at by it */
   relations?: {
     title: string;
@@ -144,14 +144,14 @@ export interface DetailOptions {
    */
   relationHref?(dn: string): string | undefined;
   /** Add the account to groups, when the caller may write it */
-  onAddToGroups?(): void;
+  onAddToGroups?: () => void;
   /** Add members to the group, when the caller may write it */
-  onAddMembers?(): void;
+  onAddMembers?: () => void;
   /**
    * Take the account out of one of its groups, or a member out of the
    * group, offered where `removable`; settled once the server has answered
    */
-  onLeaveGroup?(id: string): Promise<void> | void;
+  onLeaveGroup?: (id: string) => Promise<void> | void;
   /**
    * The people and the groups attached to an organization, shown as tables
    * in place of the related entries

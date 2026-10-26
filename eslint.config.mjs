@@ -52,17 +52,34 @@ const oversized = {
   'test/console.test.ts': 11447,
 };
 
+// What the types tell on top: a promise nobody waits for or handles, a
+// method torn from its object, an assertion that changes nothing. Type-aware,
+// so for src/ only, where tsconfig.json covers every file.
+const typedRules = {
+  ...tseslint.configs['recommended-type-checked'].rules,
+  '@typescript-eslint/no-floating-promises': ['error', { ignoreVoid: false }],
+  '@typescript-eslint/no-misused-promises': 'error',
+  // Entry values come from the wire typed `unknown` and are strings, or
+  // arrays of strings, by the schema: `String(value)` is how they are read.
+  '@typescript-eslint/no-base-to-string': 'off',
+};
+
 export default [
   js.configs.recommended,
   {
     files: ['src/**/*.ts'],
     languageOptions: {
       parser: tsparser,
-      parserOptions: { ecmaVersion: 2020, sourceType: 'module' },
+      parserOptions: {
+        ecmaVersion: 2020,
+        sourceType: 'module',
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
       globals: globals.browser,
     },
     plugins: { '@typescript-eslint': tseslint, prettier },
-    rules,
+    rules: { ...typedRules, ...rules },
   },
   {
     files: ['test/**/*.ts'],
@@ -94,5 +111,12 @@ export default [
     files: ['*.mjs', 'docker/*.mjs', 'scripts/*.mjs'],
     languageOptions: { globals: globals.node },
   },
-  { ignores: ['dist/', 'node_modules/', 'coverage/'] },
+  {
+    ignores: [
+      'dist/',
+      'node_modules/',
+      'coverage/',
+      'docs/admin-guide/_build/',
+    ],
+  },
 ];

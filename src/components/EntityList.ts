@@ -185,13 +185,13 @@ export interface ListOptions {
     run(selected: [string, Entry][]): Promise<boolean>;
   }[];
   /** Readable name of the entry a pointer lands on, when its schema has one */
-  pointerLabel?(dn: string): string | undefined;
+  pointerLabel?: (dn: string) => string | undefined;
   /**
    * Read one entry, for the entries of an import: the create endpoint
    * answers little more than the identifier. Without it, the identifier is
    * all their rows show
    */
-  read?(id: string): Promise<Entry>;
+  read?: (id: string) => Promise<Entry>;
   /**
    * Where the reader left this list last time. The list starts from it and
    * keeps it up to date as they search and page, so a list drawn again —

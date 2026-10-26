@@ -521,7 +521,7 @@ export function prepareRows(
             // A pattern the browser cannot compile is the server's business.
           }
           const bad = regex
-            ? list.find(value => !(regex as RegExp).test(value))
+            ? list.find(value => !regex.test(value))
             : undefined;
           if (bad !== undefined) {
             refused.add(name);
