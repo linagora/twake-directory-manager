@@ -2,7 +2,8 @@
  * What a view or an action is given of the console, instead of reaching into
  * it: the client, the words, the rights, the entities, the panel and the
  * dialog, the toast and the reporter, the ticket of the page drawn, the
- * address, the tree, an entry's relations, the transit count (#220).
+ * address, the tree, an entry's relations, the transit count, the words of
+ * a creation and the first password of an account created (#220).
  *
  * @module twake-directory-manager/console/context
  */
@@ -43,8 +44,8 @@ export interface Relations {
  * keeps the context, not what it said.
  *
  * It holds what the views and actions moved out so far need (the password
- * policies; the password resets, the state changes, the transit and the
- * deletions), and grows with each view and action moved out of
+ * policies; the password resets, the state changes, the transit, the
+ * deletions and the forms), and grows with each view and action moved out of
  * `DirectoryConsole` (#220): add a member when a moved method needs one, not
  * before.
  */
@@ -140,4 +141,23 @@ export interface ConsoleContext {
     entry: Entry,
     preselect?: string
   ): Promise<void>;
+  /**
+   * What the button and the panel creating an entry of an entity read, as
+   * the Overview and the list name them
+   */
+  createLabel(entity: EntityDescriptor): string;
+  /**
+   * Give an account created without a password a generated one, shown in
+   * the form's panel before `next` (see `PasswordActions.give`): the forms'
+   * way to it, since an action calls no other action
+   *
+   * @returns whether the form's panel now shows a password, and stays
+   */
+  givePassword(
+    entity: EntityDescriptor,
+    values: Record<string, string | string[]>,
+    id: string,
+    next: () => void,
+    own?: () => boolean
+  ): Promise<boolean>;
 }

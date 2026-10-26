@@ -12,7 +12,6 @@
 
 import {
   ConsoleApiClient,
-  isDomainBranch,
   isLarge,
   roleAttribute,
 } from './api/ConsoleApiClient';
@@ -25,7 +24,6 @@ import {
   type AttachedKind,
 } from './components/AttachedTables';
 import { EntityDetail } from './components/EntityDetail';
-import { EntityForm } from './components/EntityForm';
 import { EntityImport } from './components/EntityImport';
 import {
   EntityList,
@@ -103,48 +101,18 @@ import { PasswordActions } from './actions/passwords';
 import { StateActions } from './actions/state';
 import { TransitActions } from './actions/transit';
 import { DeletionActions } from './actions/deletion';
+import { FormActions, createdEntryId } from './actions/forms';
 import { bulkPanel, bulkWritable } from './console/bulk';
 import { ToastController } from './ui/toast';
 
 // Kept importable from here, where they were first defined.
-export { ToastController };
+export { ToastController, createdEntryId };
 export type { Confirmation };
 
 /** The signed-in account, as the overview names it. */
 interface SignedIn {
   name: string;
   email?: string;
-}
-
-/**
- * Identifier of an entry the console has just created, to open it.
- *
- * A flat entity answers the entry, keyed with the schema's spelling — or with
- * the directory's, which is not always the same: reading `created[uid]`
- * straight threw on a directory answering `UID`, and the console reported an
- * error for an entry it had created. A group answers only `{success: true}`,
- * so its identifier is the one the form sent: without it the console opened
- * `#/groups/` and the operator never saw the group.
- *
- * @param entity entity the entry belongs to
- * @param created what the create endpoint answered
- * @param values what the form submitted
- * @returns the identifier, or an empty string when neither holds one
- */
-export function createdEntryId(
-  entity: EntityDescriptor,
-  created: unknown,
-  values: Record<string, string | string[]>
-): string {
-  const first = (value: unknown): string | undefined => {
-    const one = Array.isArray(value) ? (value[0] as unknown) : value;
-    return typeof one === 'string' && one !== '' ? one : undefined;
-  };
-  const answered =
-    created && typeof created === 'object'
-      ? first(entryValue(created as Entry, entity.mainAttribute))
-      : undefined;
-  return answered ?? first(values[entity.mainAttribute]) ?? '';
 }
 
 /**
@@ -248,6 +216,8 @@ export class DirectoryConsole {
   private transits!: TransitActions;
   /** The deletions, made by `init()` with the context: they hold nothing */
   private deletions!: DeletionActions;
+  /** The create and edit forms, made by `init()` with the context: they hold nothing */
+  private forms!: FormActions;
 
   /**
    * @param options what the page gives the console
@@ -297,6 +267,7 @@ export class DirectoryConsole {
     this.states = new StateActions(this.context);
     this.transits = new TransitActions(this.context);
     this.deletions = new DeletionActions(this.context);
+    this.forms = new FormActions(this.context);
 
     render(
       this.container,
@@ -412,6 +383,9 @@ export class DirectoryConsole {
       groupEntity: dn => this.groupEntity(dn),
       changeState: (entity, id, entry, preselect) =>
         this.changeState(entity, id, entry, preselect),
+      createLabel: entity => this.createLabel(entity),
+      givePassword: (entity, values, id, next, own) =>
+        this.passwords.give(entity, values, id, next, own),
     };
   }
 
@@ -2547,259 +2521,22 @@ export class DirectoryConsole {
     return new PoliciesView(this.context).render(main, generation);
   }
 
-  /**
-   * Create or edit an entry of a flat or group entity.
-   *
-   * @param entity the entity
-   * @param entry the entry to edit; none to create one
-   * @param here where a creation was asked for: what the new entry starts
-   *   with, and what to do once it exists instead of opening its card
-   */
+  /** Create or edit an entry of a flat or group entity (see `FormActions`). */
   private openForm(
     entity: EntityDescriptor,
     entry?: Entry,
     here?: { preset: Entry; created(): void }
   ): void {
-    // Organizations are written through their own endpoints, whatever offered
-    // the form. The dashboard's "New organization" button came through here,
-    // and this path reads the new entry's id from the create response, which
-    // the organizations endpoint does not return: the organization was
-    // created and the console then navigated to no entry at all.
-    if (entity.kind === 'organization')
-      return this.openOrganizationForm(entity, entry);
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    // Read once for the form, however many addresses it completes.
-    const domains = this.api.mailDomains(this.entities);
-    const form = new EntityForm({
-      report: this.report,
-      entity,
-      entry,
-      preset: here?.preset,
-      translator: this.translator,
-      typeAhead: (branch: string): boolean =>
-        isDomainBranch(this.entities, branch),
-      mailDomains: domains
-        ? (organization?: string): Promise<string[]> =>
-            domains.names(organization)
-        : undefined,
-      pointerOptions: (
-        branch: string
-      ): Promise<{ dn: string; label: string }[]> =>
-        this.api.pointerOptions(
-          branch,
-          this.entities,
-          this.translator.language
-        ),
-      pointerSearch: (
-        branch: string,
-        failed?: boolean
-      ):
-        | ((
-            query: string
-          ) => Promise<{ dn: string; label: string; token?: string }[]>)
-        | undefined => this.api.pointerSearch(branch, this.entities, failed),
-      memberSearch: (
-        role: 'members' | 'owners'
-      ):
-        | ((query: string) => Promise<{ dn: string; label: string }[]>)
-        | undefined => this.api.memberSearch(role, this.entities),
-      externalMembers: this.api.externalMembers,
-      teamMailboxesKeepDomain: this.api.teamMailboxesKeepDomain,
-      fullNameFormat: this.api.fullNameFormat,
-      onCancel: (): void => this.closePanel(),
-      onSubmit: async (
-        values: Record<string, string | string[]>,
-        cleared: string[]
-      ): Promise<void> => {
-        const id = entry
-          ? String(entryValue(entry, entity.mainAttribute) ?? '')
-          : createdEntryId(entity, undefined, values);
-        try {
-          if (entry) {
-            // The entry as stored: what a membership change is diffed against.
-            await this.api.update(entity, id, values, cleared, entry);
-            this.toast(t('save.done'));
-            this.closePanel(true);
-            await this.renderMain();
-          } else {
-            const created = await this.api.create(entity, values);
-            const createdId = createdEntryId(entity, created, values);
-            this.toast(this.createdToast(entity, values, createdId));
-            // Created from an organization's card, the entry joins its table
-            // there: the next one is often created right after it.
-            const next = (): void => {
-              if (here) here.created();
-              else
-                this.go(
-                  createdId
-                    ? `${entity.key}/${encodeURIComponent(createdId)}`
-                    : entity.key
-                );
-            };
-            if (
-              await this.givePassword(entity, values, createdId, next, () =>
-                form.isShown()
-              )
-            )
-              return;
-            // Gone elsewhere while the server answered, the creation or a
-            // failed reset: neither the panel now open nor the card are its
-            // own to take.
-            if (!form.isShown()) return;
-            this.closePanel(true);
-            next();
-          }
-        } catch (err) {
-          // Refused the rights to the organization it goes to, that is the
-          // one named; refused them to the entry itself, the entry.
-          const organization = this.organizationRefused(
-            entity,
-            values,
-            entry,
-            form
-          );
-          this.refuseSave(
-            err,
-            entity,
-            form,
-            organization?.name ??
-              (entry
-                ? this.personName(entity, entry, id)
-                : this.submittedName(entity, values, id)),
-            organization?.attribute
-          );
-        }
-      },
-    });
-
-    this.openPanel(
-      entry
-        ? `${t('app.edit')} — ${this.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
-        : this.createLabel(entity),
-      (body: HTMLElement): void => {
-        background(() => form.render(body), 'form.render', this.report);
-        this.guardDiscard(body, () => form.isDirty());
-      },
-      !form.wantsPanel
-    );
+    this.forms.open(entity, entry, here);
   }
 
-  /** Ask before a form loses what was typed in it (`PanelService.guardDiscard`). */
-  private guardDiscard(body: HTMLElement, dirty: () => boolean): void {
-    this.panel.guardDiscard(body, dirty);
-  }
-
-  /**
-   * Organizations live in the tree, so their form writes through the
-   * organization endpoints rather than the flat ones.
-   *
-   * A new one given no parent goes where the caller may create it: at the
-   * root when the scope allows it there, otherwise under their one written
-   * branch, or under the one they pick when they write several.
-   */
+  /** Create or edit an organization, through its own endpoints (see `FormActions`). */
   private openOrganizationForm(
     entity: EntityDescriptor,
     entry?: Entry,
     parentDn?: string
   ): void {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const parents =
-      entry || parentDn ? [] : this.rights.creationParents(entity);
-    if (parents.length === 1) parentDn = parents[0].dn;
-    let picker: HTMLSelectElement | null = null;
-    const parent = (): string | undefined =>
-      parents.length > 1
-        ? (parents.find(item => item.dn === picker?.value) ?? parents[0]).dn
-        : parentDn;
-    // Read once for the form, whichever parent is picked meanwhile.
-    const domains = this.rights.inheritsDomains(entity)
-      ? this.api.mailDomains(this.entities)
-      : undefined;
-    const form = new EntityForm({
-      report: this.report,
-      entity,
-      entry,
-      translator: this.translator,
-      typeAhead: (branch: string): boolean =>
-        isDomainBranch(this.entities, branch),
-      // The organization the new one goes under, or the one an edited one
-      // hangs from: the server walks up from there.
-      linkableDomains: domains
-        ? (): Promise<string[]> =>
-            domains.linked(
-              (entry?.dn ? parentOf(entry.dn) : parent()) ?? entity.base
-            )
-        : undefined,
-      pointerOptions: (
-        branch: string
-      ): Promise<{ dn: string; label: string }[]> =>
-        this.api.pointerOptions(
-          branch,
-          this.entities,
-          this.translator.language
-        ),
-      pointerSearch: (
-        branch: string,
-        failed?: boolean
-      ):
-        | ((
-            query: string
-          ) => Promise<{ dn: string; label: string; token?: string }[]>)
-        | undefined => this.api.pointerSearch(branch, this.entities, failed),
-      onCancel: (): void => this.closePanel(),
-      onSubmit: (
-        values: Record<string, string | string[]>,
-        cleared: string[]
-      ): Promise<void> =>
-        this.submitOrganization(entity, values, cleared, entry, parent(), form),
-    });
-
-    this.openPanel(
-      entry
-        ? `${t('app.edit')} — ${this.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
-        : this.createLabel(entity),
-      (body: HTMLElement): void => {
-        // The parent picked is outside the form, and as much typed in it.
-        let moved = false;
-        this.guardDiscard(body, () => moved || form.isDirty());
-        if (parents.length < 2) {
-          background(() => form.render(body), 'form.render', this.report);
-          return;
-        }
-        render(
-          body,
-          html`
-          <div class="dc-field">
-            <label for="dc-organization-parent">${t('tree.parent')}</label>
-            <select id="dc-organization-parent" class="dc-input">
-              ${parents.map(
-                item => html`<option value="${item.dn}">${item.label}</option>`
-              )}
-            </select>
-          </div>
-          <div data-organization-form></div>`
-        );
-        picker = body.querySelector<HTMLSelectElement>(
-          '#dc-organization-parent'
-        );
-        picker?.addEventListener('change', () => {
-          moved = true;
-        });
-        background(
-          () =>
-            form.render(
-              body.querySelector<HTMLElement>(
-                '[data-organization-form]'
-              ) as HTMLElement
-            ),
-          'form.render',
-          this.report
-        );
-      },
-      !form.wantsPanel
-    );
+    this.forms.openOrganization(entity, entry, parentDn);
   }
 
   /**
@@ -2876,183 +2613,6 @@ export class DirectoryConsole {
     return explainRefusal(err, entity.schema, this.translator, name, field);
   }
 
-  /**
-   * The organization a refusal of the caller's rights is about, when the
-   * write puts an entry in one.
-   *
-   * ldap-rest judges a new entry on the organization it is attached to, not
-   * on the entry: "You do not administer Alice Martin" said of an account
-   * that does not exist yet. A change of organization is judged on both
-   * ends — reading where the entry is, writing where it goes — and the scope
-   * says which the caller lacks; where it says nothing, the destination is
-   * the one asked more of. Any other change is judged on the entry, and
-   * none is returned.
-   *
-   * @param entity the entity of the entry written
-   * @param values what the form sent
-   * @param entry the entry as stored; none for a new one
-   * @param form the form, which names the organizations it offered
-   * @returns the organization by its path, and the field naming it
-   */
-  private organizationRefused(
-    entity: EntityDescriptor,
-    values: Record<string, string | string[]>,
-    entry?: Entry,
-    form?: EntityForm
-  ): { name: string; attribute: string } | undefined {
-    const link = entity.organizationLink;
-    const sent = link ? [values[link] ?? []].flat()[0]?.trim() : undefined;
-    if (!link || !sent) return undefined;
-    const named = (dn: string): string =>
-      form?.pointerName(dn) ??
-      pointerLabel(this.entities, dn, this.translator.language) ??
-      rdnValue(dn);
-    const stored = entry
-      ? String([entryValue(entry, link) ?? []].flat()[0] ?? '').trim()
-      : '';
-    if (!stored || !this.rights.restricted)
-      return { name: named(sent), attribute: link };
-    const writes = this.rights.writesWithin(sent);
-    return {
-      name: writes
-        ? (this.roleValue(entity, entry as Entry, 'organizationPath') ??
-          named(stored))
-        : named(sent),
-      attribute: link,
-    };
-  }
-
-  /**
-   * Say why a save was refused: under the field at fault when the form shows
-   * it, the toast then only pointing there — it disappears while the form
-   * stays open — and in the toast otherwise.
-   *
-   * @param err what the request threw
-   * @param entity the entity of the entry refused
-   * @param form the form that was saved
-   * @param name what a refusal of rights is about: the entry, or the
-   *   organization it goes to
-   * @param field the attribute naming that organization
-   */
-  private refuseSave(
-    err: unknown,
-    entity: EntityDescriptor,
-    form: EntityForm | undefined,
-    name: string,
-    field?: string
-  ): void {
-    const { message, attribute } = this.refusal(
-      err,
-      entity,
-      name || undefined,
-      field
-    );
-    if (attribute && form?.refuse(attribute, message))
-      this.toast(this.translator.t('refusal.seeField'), true);
-    else this.toast(message, true);
-  }
-
-  /**
-   * Write what the organization form submitted, then draw the view again
-   * with the organization on screen.
-   *
-   * Only the branch the change happened in is read again: the rest of the
-   * tree, and the branches the administrator had opened, stay as they were.
-   *
-   * @param entity the organization entity
-   * @param values what the form submitted
-   * @param cleared attributes the form emptied
-   * @param entry the organization edited; none for a new one
-   * @param parentDn where a new one goes; the server's default when omitted
-   * @param form the form submitted, to show a refusal under its field
-   */
-  private async submitOrganization(
-    entity: EntityDescriptor,
-    values: Record<string, string | string[]>,
-    cleared: string[],
-    entry?: Entry,
-    parentDn?: string,
-    form?: EntityForm
-  ): Promise<void> {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    try {
-      if (entry?.dn) {
-        const dn = String(entry.dn);
-        await this.api.updateOrganization(dn, values, cleared);
-        this.toast(t('save.done'));
-        this.closePanel(true);
-        // Its parent's children are read again, for a changed name. The
-        // address already names it, so the view drawn again shows its card,
-        // the tree open down to it.
-        const parent = this.tree?.parentOf(dn);
-        if (parent) await this.tree?.refresh(parent).catch(() => []);
-      } else {
-        await this.api.createOrganization(values, parentDn);
-        this.toast(
-          this.createdToast(
-            entity,
-            values,
-            createdEntryId(entity, undefined, values)
-          )
-        );
-        this.closePanel(true);
-        // The new organization is found among its parent's children by the
-        // name it was given, since the server answers no DN. From the tree,
-        // it is then shown and selected where it was created; from the
-        // overview, the overview stays.
-        const children =
-          (await this.tree?.refresh(parentDn).catch(() => [])) ?? [];
-        const raw = values[entity.mainAttribute];
-        const name = String(
-          (Array.isArray(raw) ? raw[0] : raw) ?? ''
-        ).toLowerCase();
-        const created = children.find(
-          child =>
-            rdnValue(child.dn).toLowerCase() === name ||
-            child.name.toLowerCase() === name
-        );
-        if (created && this.route.view !== 'dashboard')
-          this.record(`organizations/${encodeURIComponent(created.dn)}`);
-      }
-      await this.renderMain();
-    } catch (err) {
-      // Named as the panel's title names it. A new one is judged on the
-      // organization it goes under, which is the one named then.
-      const id = entry
-        ? String(entryValue(entry, entity.mainAttribute) ?? '')
-        : createdEntryId(entity, undefined, values);
-      const parent = parentDn ?? this.api.organizationRoot;
-      this.refuseSave(
-        err,
-        entity,
-        form,
-        entry
-          ? this.entryName(entity, id)
-          : parent
-            ? this.organizationName(entity, parent)
-            : this.submittedName(entity, values, id)
-      );
-    }
-  }
-
-  /**
-   * An organization by the name the console gives it elsewhere: its path,
-   * as the parent picker and the banner say it, else its name in the tree.
-   *
-   * @param entity the organizations
-   * @param dn the organization
-   */
-  private organizationName(entity: EntityDescriptor, dn: string): string {
-    return (
-      this.rights
-        .creationParents(entity)
-        .find(item => comparableDn(item.dn) === comparableDn(dn))?.label ??
-      this.tree?.nameOf(dn) ??
-      rdnValue(dn)
-    );
-  }
-
   /* --------------------------------------------------------------- actions */
 
   /** Change an account's state from its card (see `StateActions`). */
@@ -3068,17 +2628,6 @@ export class DirectoryConsole {
   /** Reset an account's password (see `PasswordActions`). */
   private resetPassword(entity: EntityDescriptor, id: string): void {
     this.passwords.reset(entity, id);
-  }
-
-  /** A first password for an account created without one (see `PasswordActions`). */
-  private givePassword(
-    entity: EntityDescriptor,
-    values: Record<string, string | string[]>,
-    id: string,
-    next: () => void,
-    own?: () => boolean
-  ): Promise<boolean> {
-    return this.passwords.give(entity, values, id, next, own);
   }
 
   /**
@@ -3119,25 +2668,6 @@ export class DirectoryConsole {
         this.translator.language
       ) || id
     );
-  }
-
-  /**
-   * What says an entry was created: named by its full name, else as its
-   * card names it. "Created" alone did not say what.
-   *
-   * @param entity the entity the entry belongs to
-   * @param values what the form sent
-   * @param id the entry's main attribute value; empty when unknown
-   */
-  private createdToast(
-    entity: EntityDescriptor,
-    values: Record<string, string | string[]>,
-    id: string
-  ): string {
-    const name = this.submittedName(entity, values, id);
-    return name
-      ? this.translator.t('create.doneNamed', { name })
-      : this.translator.t('create.done');
   }
 
   /**
