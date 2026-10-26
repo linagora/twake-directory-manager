@@ -621,6 +621,7 @@ test.describe('NAV layout, navigation and language', () => {
   }) => {
     // Fields outlined at 1.5:1 and a current place shown by a tint only left
     // low-vision readers to guess (#210).
+    await page.emulateMedia({ contrast: 'no-preference' });
     const app = await new LoginPage(page).loginAs(ADMIN, 'users');
     const box = app.sidebar.getByRole('checkbox', { name: 'High contrast' });
     const frame = page.locator('.dc-app');
@@ -674,7 +675,23 @@ test.describe('NAV layout, navigation and language', () => {
     await expect(frame).not.toHaveClass(/dc-contrast-high/);
     await app.reload();
     await expect(frame).not.toHaveClass(/dc-contrast-high/);
-    await page.emulateMedia({ contrast: 'no-preference' });
+
+    // A dark system asking for more contrast: the mode wins over the dark
+    // theme's own colours, white on blue on a primary button
+    await page.evaluate(() =>
+      localStorage.removeItem('ldap-rest.console.contrast')
+    );
+    await page.emulateMedia({ colorScheme: 'dark', contrast: 'more' });
+    await app.reload();
+    await expect(frame).toHaveClass(/dc-contrast-high/);
+    const primary = page.locator('.dc-skip-link');
+    await expect(primary).toHaveCSS('color', 'rgb(255, 255, 255)');
+    await expect(primary).toHaveCSS('background-color', 'rgb(0, 64, 160)');
+    await expect.poll(border).toBe('rgb(89, 89, 89)');
+    await page.emulateMedia({
+      colorScheme: 'light',
+      contrast: 'no-preference',
+    });
   });
 
   test('NAV-11 the frame for keyboard and screen-reader users: titles, skip link, lists, language', async ({

@@ -2683,6 +2683,13 @@ textarea.dc-policy-text {
   border-color: #595959;
 }
 
+/* A leaf's dot, not faded: grey at full opacity. */
+.dc-app.dc-contrast-high .dc-tree-toggle[disabled] {
+  opacity: 1;
+  color: #595959;
+  border-color: #595959;
+}
+
 /* The current place, shown by more than a colour. */
 .dc-app.dc-contrast-high .dc-nav-item[aria-current='page'],
 .dc-app.dc-contrast-high
