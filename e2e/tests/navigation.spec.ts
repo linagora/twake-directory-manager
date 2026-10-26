@@ -608,8 +608,11 @@ test.describe('NAV layout, navigation and language', () => {
       await expect(page).toHaveTitle(`${name} — Twake Directory Manager`);
     }
 
-    // The sidebar is a list, the reference data another once opened (#219)
+    // The sidebar is a list, the reference data another once opened (#219).
+    // Showing a reference page above opened its section; close it first.
     await app.open('users');
+    if ((await app.referenceToggle().getAttribute('aria-expanded')) === 'true')
+      await app.referenceToggle().click();
     await expect(app.nav.getByRole('list')).toHaveCount(1);
     await expect(app.nav.getByRole('list').getByRole('listitem')).toHaveCount(
       4

@@ -1001,6 +1001,32 @@ describe('Directory console: the shell and the overview', () => {
         );
       });
 
+      it('should close the reference section in one click after a reference page opened it', () => {
+        // The toggle read what the browser remembered (closed) and stored
+        // "open" first; the section, opened by the page shown, stayed open.
+        const { app, container } = drawn();
+        const toggle =
+          container.querySelector<HTMLElement>('[data-nav-toggle]');
+        const section =
+          container.querySelector<HTMLElement>('#dc-nav-reference');
+        if (!toggle || !section) throw new Error('no reference section');
+        expect(section.hidden).to.equal(true);
+        (
+          app as unknown as { showReference(open: boolean): void }
+        ).showReference(true);
+        expect(toggle.getAttribute('aria-expanded')).to.equal('true');
+        toggle.click();
+        expect(section.hidden).to.equal(true);
+        expect(
+          localStorage.getItem('ldap-rest.console.referenceOpen')
+        ).to.equal('');
+        toggle.click();
+        expect(section.hidden).to.equal(false);
+        expect(
+          localStorage.getItem('ldap-rest.console.referenceOpen')
+        ).to.equal('1');
+      });
+
       it('should title the tab after the page shown', () => {
         // Every page, not only a card, so that tabs and history tell them
         // apart (#214).

@@ -614,16 +614,18 @@ export class DirectoryConsole {
         this.main()?.focus();
       });
 
-    container
-      .querySelector<HTMLElement>('[data-nav-toggle]')
-      ?.addEventListener('click', () => {
-        const open = !this.referenceOpen();
-        try {
-          localStorage.setItem(REFERENCE_OPEN_KEY, open ? '1' : '');
-          // eslint-disable-next-line no-empty
-        } catch {}
-        this.showReference(open);
-      });
+    // The toggle reads its state from the page, not from what the browser
+    // remembers: a reference page opens the section without storing it, and
+    // the reader's click then closes it rather than storing "open" first.
+    const toggle = container.querySelector<HTMLElement>('[data-nav-toggle]');
+    toggle?.addEventListener('click', () => {
+      const open = toggle.getAttribute('aria-expanded') !== 'true';
+      try {
+        localStorage.setItem(REFERENCE_OPEN_KEY, open ? '1' : '');
+        // eslint-disable-next-line no-empty
+      } catch {}
+      this.showReference(open);
+    });
     this.showReference(this.referenceOpen());
 
     container
