@@ -1,54 +1,17 @@
 /**
- * What is left of the stub tests of the entries: the bulk actions a list
- * offers, until the list moves out of the console, and the keyboard of the
- * group picker. An entry's card is tested mounted in
- * test/views/entry.test.ts, the memberships of groups in
+ * What is left of the stub tests of the entries: the keyboard of the group
+ * picker. An entry's card is tested mounted in test/views/entry.test.ts,
+ * the list and the actions it offers on a selection in
+ * test/views/list.test.ts, the memberships of groups in
  * test/actions/groups.test.ts (#221).
  */
 import { expect } from 'chai';
 import nock from 'nock';
 import { GroupPicker } from '../../src/components/GroupPicker';
 import { Translator } from '../../src/i18n';
-import type { EntityDescriptor, Scope } from '../../src/types';
-import { consoleIn } from '../support/stubs';
-import { users, groups } from '../fixtures/entities';
 
 describe('Directory console: entries and their groups', () => {
   afterEach(() => nock.cleanAll());
-
-  describe('actions on a selection of accounts', () => {
-    const actions = (scope: Scope | null, entity: EntityDescriptor = users) => {
-      const app = consoleIn({});
-      Object.assign(app as unknown as object, {
-        scope,
-        entities: [users, groups],
-      });
-      Object.assign((app as unknown as { api: object }).api, {
-        groupSearch: () => async () => [],
-      });
-      return (
-        app as unknown as {
-          bulkActions(entity: EntityDescriptor): { label: string }[];
-        }
-      )
-        .bulkActions(entity)
-        .map(action => action.label);
-    };
-
-    it('should offer Add to a group… and Change state… on accounts to whoever writes', () => {
-      expect(actions(null)).to.deep.equal(['Add to a group…', 'Change state…']);
-      // Nor to someone who administers nothing, nor on another list.
-      const nobody: Scope = {
-        user: 'alice',
-        unrestricted: false,
-        described: true,
-        branches: [],
-        entities: [],
-      };
-      expect(actions(nobody)).to.deep.equal([]);
-      expect(actions(null, groups)).to.deep.equal([]);
-    });
-  });
 
   describe('an account’s groups', () => {
     describe('the panel Add to a group… opens', () => {

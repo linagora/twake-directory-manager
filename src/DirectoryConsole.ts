@@ -22,12 +22,6 @@ import {
   attachedClass,
   attachedEntity,
 } from './components/AttachedTables';
-import { EntityImport } from './components/EntityImport';
-import {
-  EntityList,
-  LIST_LIMIT,
-  SEARCH_MINIMUM,
-} from './components/EntityList';
 import {
   comparableDn,
   entryValue,
@@ -41,8 +35,6 @@ import {
 import { Translator } from './i18n';
 import { Rights, splitEntities } from './rights';
 import { signInAgain } from './session';
-import type { ListView } from './components/EntityList';
-import type { PointerLookup } from './importer';
 // Kept where embedders and the tests found them.
 export { readFailure } from './format';
 export {
@@ -62,7 +54,6 @@ import type {
   ConsoleOptions,
   EntityDescriptor,
   Entry,
-  EntryList,
   Scope,
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
@@ -86,48 +77,23 @@ import { announcer } from './ui/announce';
 import { PoliciesView } from './views/policies';
 import { OrganizationsView } from './views/organizations';
 import { EntryView } from './views/entry';
+import { ListsView } from './views/list';
 import { PasswordActions } from './actions/passwords';
 import { StateActions } from './actions/state';
 import { TransitActions } from './actions/transit';
 import { DeletionActions } from './actions/deletion';
-import { FormActions, createdEntryId } from './actions/forms';
+import { FormActions } from './actions/forms';
 import { GroupActions } from './actions/groups';
 import { ToastController } from './ui/toast';
 
 // Kept importable from here, where they were first defined.
-export { ToastController, createdEntryId };
+export { ToastController };
 export type { Confirmation };
 
 /** The signed-in account, as the overview names it. */
 interface SignedIn {
   name: string;
   email?: string;
-}
-
-/**
- * How the list of an entity fetches its entries: a search once the operator
- * typed enough of one, the whole branch otherwise.
- *
- * Asks for `LIST_LIMIT` entries at most either way (a server predating
- * `limit` ignores it): the whole branch is what "List without searching"
- * asks for, and a search as loose as three letters can match more
- * of a large directory than it lets one search return. The list says so when
- * the server left entries out.
- *
- * @param api client to ask
- * @param entity entity listed
- * @returns the loader `EntityList` calls
- */
-export function listLoader(
-  api: ConsoleApiClient,
-  entity: EntityDescriptor
-): (search: string, attribute: string, cut?: boolean) => Promise<EntryList> {
-  // A department's path is searched whatever its length: "IT" listed the
-  // whole directory, bounded, and cut it in the browser.
-  return (search, attribute, cut) =>
-    search.length >= SEARCH_MINIMUM || (cut && search)
-      ? api.listBounded(entity, search, attribute, LIST_LIMIT)
-      : api.listBounded(entity, undefined, undefined, LIST_LIMIT);
 }
 
 export class DirectoryConsole {
@@ -177,12 +143,6 @@ export class DirectoryConsole {
     this.container?.querySelector<HTMLElement>('[data-toast]')
   );
   /**
-   * Where the reader left the list of each entity, by key. A list is drawn
-   * anew each time its page is shown, and without this Back from a card
-   * found it empty, the search typed and the page reached gone.
-   */
-  private readonly listViews = new Map<string, ListView>();
-  /**
    * The side panel every form opens in, and what the form open asks of the
    * console: a guard on its close, a reload to warn of, what waits for it.
    */
@@ -214,6 +174,12 @@ export class DirectoryConsole {
    * forms and the deletion find as it was left
    */
   private organizationsView!: OrganizationsView;
+  /**
+   * The lists, made by `init()` with the context and kept between their
+   * drawings: they hold where the reader left each list, which Back from a
+   * card finds as it was left
+   */
+  private listsView!: ListsView;
 
   /**
    * @param options what the page gives the console
@@ -271,6 +237,8 @@ export class DirectoryConsole {
       this.context,
       this.organizationsView?.tree()
     );
+    // And where it left its lists.
+    this.listsView = new ListsView(this.context, this.listsView?.lists());
 
     render(
       this.container,
@@ -364,6 +332,7 @@ export class DirectoryConsole {
       t: (key, values) => this.translator.t(key, values),
       rights: () => this.rights,
       toast: (message, isError) => this.toast(message, isError),
+      announce: this.announce,
       report: this.report,
       panel: this.panel,
       dialog: this.dialog,
@@ -400,6 +369,11 @@ export class DirectoryConsole {
         this.groups.addMembers(entity, entry, id, name, held),
       removeMember: (entity, id, name, dn) =>
         this.groups.removeMember(entity, id, name, dn),
+      deleteSelection: (entity, ids) => this.deletions.many(entity, ids),
+      changeSelectionState: (entity, selected) =>
+        this.states.changeMany(entity, selected),
+      addSelectionToGroups: (entity, selected) =>
+        this.groups.addMany(entity, selected),
       createLabel: entity => this.createLabel(entity),
       givePassword: (entity, values, id, next, own) =>
         this.passwords.give(entity, values, id, next, own),
@@ -409,10 +383,7 @@ export class DirectoryConsole {
       readMembers: dn => this.readMembers(dn),
       relationHref: dn => relationHref(this.entities, dn),
       claimAction: () => this.claimAction(),
-      openList: (entity, view): void => {
-        this.listViews.set(entity.key, view);
-        this.go(entity.key);
-      },
+      openList: (entity, view) => this.listsView.open(entity, view),
       openForm: (entity, entry, here) => this.openForm(entity, entry, here),
       openOrganizationForm: (entity, entry, parentDn) =>
         this.forms.openOrganization(entity, entry, parentDn),
@@ -844,11 +815,6 @@ export class DirectoryConsole {
         });
   }
 
-  /** The notice standing in for a view the server would refuse whole. */
-  private nothingMarkup(): SafeHtml {
-    return html`<p class="dc-empty">${this.translator.t('scope.nothing')}</p>`;
-  }
-
   /**
    * Whether the caller manages the password policies. Who holds them is the
    * server's rule (`--authz-global-branches`), outside the tree the scope's
@@ -1138,90 +1104,15 @@ export class DirectoryConsole {
     );
   }
 
-  /** The table of an entity. */
-  private async renderList(
+  /**
+   * Draw an entity's list (see `ListsView`): kept for `renderMain` and the
+   * routing tests that replace it until #220's last step.
+   */
+  private renderList(
     main: HTMLElement,
     entity: EntityDescriptor
   ): Promise<void> {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const readOnly = this.rights.readsReferenceOnly(entity);
-    this.titlePage(this.plural(entity));
-    render(
-      main,
-      html`
-      <section class="dc-view">
-        <header class="dc-view-header">
-          <h1>${this.plural(entity)}</h1>
-          ${
-            this.rights.canCreate(entity)
-              ? html`<div class="dc-view-actions">
-                  ${
-                    entity.kind === 'flat'
-                      ? html`<button type="button" class="dc-button" data-import>${t(
-                          'import.open'
-                        )}</button>`
-                      : ''
-                  }
-                  <button type="button" class="dc-button dc-button-primary" data-new>${this.createLabel(
-                    entity
-                  )}</button>
-                </div>`
-              : ''
-          }
-        </header>
-        ${
-          readOnly &&
-          this.isReference(entity) &&
-          !this.rights.administersNothing()
-            ? html`<p class="dc-muted dc-view-notice" data-read-only>${t(
-                'reference.readOnly'
-              )}</p>`
-            : ''
-        }
-        <div data-list></div>
-      </section>`
-    );
-
-    main
-      .querySelector('[data-new]')
-      ?.addEventListener('click', () =>
-        background(() => this.openForm(entity), 'openForm', this.report)
-      );
-    main
-      .querySelector('[data-import]')
-      ?.addEventListener('click', () => this.openImport(entity));
-
-    const holder = main.querySelector<HTMLElement>(
-      '[data-list]'
-    ) as HTMLElement;
-    if (this.rights.administersNothing()) {
-      render(holder, this.nothingMarkup());
-      return;
-    }
-    const named = await this.pointerNames(entity);
-    const view = this.listViews.get(entity.key) ?? {};
-    this.listViews.set(entity.key, view);
-    const list = new EntityList({
-      report: this.report,
-      announce: this.announce,
-      entity,
-      title: this.plural(entity),
-      view,
-      translator: this.translator,
-      listable: !isLarge(entity),
-      load: listLoader(this.api, entity),
-      bulkActions: this.bulkActions(entity),
-      pathSeparator: this.api.organizationPathSeparator,
-      canDelete: this.rights.canDelete() && !readOnly,
-      pointerLabel: named,
-      read: (id: string): Promise<Entry> => this.api.get(entity, id),
-      onOpen: (id: string): void =>
-        this.go(`${entity.key}/${encodeURIComponent(id)}`),
-      onDelete: (ids: string[]): Promise<boolean> =>
-        this.deleteMany(entity, ids),
-    });
-    await list.render(holder);
+    return this.listsView.render(main, entity);
   }
 
   /**
@@ -1251,51 +1142,6 @@ export class DirectoryConsole {
   }
 
   /**
-   * What a list of accounts may give its selection at once: Add to a
-   * group… and Change state…, one action where it took a visit to each
-   * card — forty after an import of forty.
-   *
-   * @param entity the entity listed
-   * @returns the actions, none for another entity or a caller who writes
-   *   nothing
-   */
-  private bulkActions(entity: EntityDescriptor): {
-    label: string;
-    run(selected: [string, Entry][]): Promise<boolean>;
-  }[] {
-    if (
-      !this.rights.canWrite() ||
-      attachedEntity(this.entities, 'people')?.key !== entity.key
-    )
-      return [];
-    const t = (key: string): string => this.translator.t(key);
-    const actions: {
-      label: string;
-      run(selected: [string, Entry][]): Promise<boolean>;
-    }[] = [];
-    if (this.api.groupSearch(this.entities))
-      actions.push({
-        label: t('bulk.addToGroups'),
-        run: selected => this.groups.addMany(entity, selected),
-      });
-    const status = entity.accountStatus;
-    if (status && entity.schema.attributes[status]?.states)
-      actions.push({
-        label: t('bulk.changeState'),
-        run: selected => this.bulkChangeState(entity, selected),
-      });
-    return actions;
-  }
-
-  /** Change the state of the accounts selected (see `StateActions`). */
-  private bulkChangeState(
-    entity: EntityDescriptor,
-    selected: [string, Entry][]
-  ): Promise<boolean> {
-    return this.states.changeMany(entity, selected);
-  }
-
-  /**
    * Draw the organizations page (see `OrganizationsView`): kept for
    * `renderMain` and the routing tests that replace it until #220's last
    * step.
@@ -1305,15 +1151,6 @@ export class DirectoryConsole {
     generation: number
   ): Promise<void> {
     return this.organizationsView.render(main, generation);
-  }
-
-  /**
-   * Whether an entity is shown as reference data: what the sentence saying
-   * it is kept outside the console is about. A directory with no tree puts
-   * every collection forward, and its accounts are no reference data.
-   */
-  private isReference(entity: EntityDescriptor): boolean {
-    return splitEntities(this.entities).reference.includes(entity);
   }
 
   /**
@@ -1399,69 +1236,6 @@ export class DirectoryConsole {
   /** Ask before what cannot be taken back (`DialogService.confirm`). */
   private confirmAction(question: Confirmation): Promise<boolean> {
     return this.dialog.confirm(question);
-  }
-
-  /**
-   * Create entries of a flat entity from a CSV file. Each row goes through
-   * the create endpoint the form uses, so the server holds an imported entry
-   * to the same rules as one typed in.
-   */
-  private openImport(entity: EntityDescriptor): void {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    this.openPanel(
-      t('import.title', {
-        entities: this.plural(entity),
-        lowerEntities: this.plural(entity).toLocaleLowerCase(
-          this.translator.language
-        ),
-      }),
-      body => {
-        new EntityImport({
-          report: this.report,
-          entity,
-          translator: this.translator,
-          pointerOptions: (
-            branch: string
-          ): Promise<{ dn: string; label: string }[]> =>
-            this.api.pointerOptions(
-              branch,
-              this.entities,
-              this.translator.language
-            ),
-          pointerLookup: (branch: string): PointerLookup | undefined =>
-            this.api.pointerLookup(
-              branch,
-              this.entities,
-              this.translator.language
-            ),
-          create: async (
-            values: Record<string, string | string[]>
-          ): Promise<string> =>
-            createdEntryId(
-              entity,
-              await this.api.create(entity, values),
-              values
-            ),
-          onDone: (created: string[]): void => {
-            // The list shows what was just created, rather than its search:
-            // checking each new entry took a search of its own. An import
-            // that created nothing puts the search back, rather than leave
-            // the last one's entries looking like its own.
-            const view = this.listViews.get(entity.key) ?? {};
-            this.listViews.set(entity.key, view);
-            const shown = !!view.imported;
-            if (created.length) view.imported = { ids: created };
-            else delete view.imported;
-            if ((created.length || shown) && this.route.entity === entity.key)
-              background(() => this.renderMain(), 'renderMain', this.report);
-          },
-          onClose: (): void => this.closePanel(),
-        }).render(body);
-      },
-      false,
-      true
-    );
   }
 
   /**
@@ -1626,14 +1400,6 @@ export class DirectoryConsole {
       ? [entryValue(entry, attribute) ?? []].flat()[0]
       : undefined;
     return value && String(value).trim() ? String(value).trim() : undefined;
-  }
-
-  /** Delete a selection once asked (see `DeletionActions`): whether any went. */
-  private deleteMany(
-    entity: EntityDescriptor,
-    ids: string[]
-  ): Promise<boolean> {
-    return this.deletions.many(entity, ids);
   }
 
   /** Show a short message. */

@@ -2,7 +2,6 @@ import { expect } from 'chai';
 import nock from 'nock';
 import {
   claimRoots,
-  createdEntryId,
   readFailure,
   scopeRestricts,
   splitEntities,
@@ -12,7 +11,7 @@ import {
 import { ConsoleApiClient } from '../../src/api/ConsoleApiClient';
 import { EntityDetail } from '../../src/components/EntityDetail';
 import { OrganizationTree } from '../../src/components/OrganizationTree';
-import { rdnValue } from '../../src/format';
+import { createdEntryId, rdnValue } from '../../src/format';
 import { Translator } from '../../src/i18n';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
 import {

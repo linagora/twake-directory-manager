@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import nock from 'nock';
-import { listLoader } from '../../src/DirectoryConsole';
+import { listLoader } from '../../src/views/list';
 import { ConsoleApiClient } from '../../src/api/ConsoleApiClient';
 import { EntityDetail } from '../../src/components/EntityDetail';
 import { EntityImport } from '../../src/components/EntityImport';

@@ -11,6 +11,7 @@ import { EntityForm } from '../components/EntityForm';
 import type { ConsoleContext } from '../console/context';
 import {
   comparableDn,
+  createdEntryId,
   entryValue,
   explainRefusal,
   parentDn as parentOf,
@@ -20,37 +21,6 @@ import {
 import { background } from '../shared/background';
 import { html, render } from '../shared/html';
 import type { EntityDescriptor, Entry } from '../types';
-
-/**
- * Identifier of an entry the console has just created, to open it.
- *
- * A flat entity answers the entry, keyed with the schema's spelling — or with
- * the directory's, which is not always the same: reading `created[uid]`
- * straight threw on a directory answering `UID`, and the console reported an
- * error for an entry it had created. A group answers only `{success: true}`,
- * so its identifier is the one the form sent: without it the console opened
- * `#/groups/` and the operator never saw the group.
- *
- * @param entity entity the entry belongs to
- * @param created what the create endpoint answered
- * @param values what the form submitted
- * @returns the identifier, or an empty string when neither holds one
- */
-export function createdEntryId(
-  entity: EntityDescriptor,
-  created: unknown,
-  values: Record<string, string | string[]>
-): string {
-  const first = (value: unknown): string | undefined => {
-    const one = Array.isArray(value) ? (value[0] as unknown) : value;
-    return typeof one === 'string' && one !== '' ? one : undefined;
-  };
-  const answered =
-    created && typeof created === 'object'
-      ? first(entryValue(created as Entry, entity.mainAttribute))
-      : undefined;
-  return answered ?? first(values[entity.mainAttribute]) ?? '';
-}
 
 /**
  * The create and edit forms, in the side panel. A class given the context,
