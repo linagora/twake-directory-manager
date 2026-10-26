@@ -289,9 +289,10 @@ describe('actions/forms', () => {
       });
       save(root);
       await until(() => toast(root) !== '');
-      expect(toast(root)).to.match(
-        /“helene” is already used by another entry\.$/
+      expect(toast(root)).to.equal(
+        'Identifier “helene” is already used by another entry.'
       );
+      expect(root.querySelector('[data-error]:not([hidden])')).to.equal(null);
       expect(refused(root)).to.be.true;
       expect(panelOf(root).panel.hidden).to.be.false;
     });
@@ -429,6 +430,57 @@ describe('actions/forms', () => {
         `#/organizations/${encodeURIComponent(france)}`
       );
       expect(panelOf(root).panel.hidden).to.be.true;
+    });
+
+    it('should name by its own name an organization without a path that refuses the account', async () => {
+      // The card's preset holds the DN alone, which the form never named: a
+      // refusal falls back on the entry's name, not on its DN.
+      const subnodes =
+        (dn: string) =>
+        (uri: string): boolean =>
+          decodeURIComponent(uri) ===
+          `/api/v1/ldap/organizations/${dn}/subnodes?objectClass=organizationalUnit`;
+      const { root, server } = await mountConsole({
+        hash: `organizations/${encodeURIComponent(france)}`,
+        answers: server => {
+          server
+            .get('/api/v1/ldap/organizations/top')
+            .reply(200, { dn: top, ou: 'organization' });
+          server.get(subnodes(top)).reply(200, [{ dn: sales, ou: 'Sales' }]);
+          server
+            .get(subnodes(sales))
+            .reply(200, [{ dn: france, ou: 'France' }]);
+          server.get(subnodes(france)).reply(200, []);
+          server
+            .get(
+              uri =>
+                decodeURIComponent(uri) ===
+                `/api/v1/ldap/organizations/${france}`
+            )
+            .reply(200, { dn: france, ou: 'France' });
+        },
+      });
+      await until(
+        () =>
+          !!root.querySelector(
+            '[data-org-detail] [data-create-attached="people"]'
+          )
+      );
+      click(root, '[data-org-detail] [data-create-attached="people"]');
+      await drawn(root);
+      type(field(root, 'employeeNumber'), 'E0099');
+      type(field(root, 'sn'), 'Lefèvre');
+      type(field(root, 'givenName'), 'Hélène');
+      type(field(root, 'displayName'), 'Hélène Lefèvre');
+      type(field(root, 'mail'), 'helene@example.com');
+      type(field(root, 'userPassword'), 'Typed-1!');
+      server.post('/api/v1/ldap/users').reply(403, forbidden);
+      save(root);
+      await until(() => toast(root) !== '');
+      expect(fieldError(root, 'twakeDepartmentLink')).to.equal(
+        'You do not administer France: this change is not yours to make.'
+      );
+      expect(toast(root)).to.equal('Not saved: see the highlighted field');
     });
   });
 
