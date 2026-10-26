@@ -5,7 +5,7 @@
  * their schemas and their endpoints all come from `GET /v1/config`, and the
  * caller's own rights from `GET /v1/authz/scope`.
  *
- * @module browser/directory-console/api/ConsoleApiClient
+ * @module twake-directory-manager/api/ConsoleApiClient
  */
 
 import type {
@@ -739,8 +739,9 @@ export class ConsoleApiClient {
    *
    * Without a limit the server runs the search unbounded, and a directory
    * refuses one that matches more entries than its own size limit: ldap-rest
-   * then answers `422` — or `500`, before it learnt to tell that failure
-   * apart. With one, it answers the first `limit` entries and says in
+   * then answers `422` (an ldap-rest before 0.12.x answered `500`, which the
+   * console no longer reads as that refusal). With one, it answers the first
+   * `limit` entries and says in
    * `X-Result-Truncated` that there were more. A server that predates `limit`
    * ignores it and sends no such header, so its answer reads as complete,
    * which it is whenever it is an answer at all. Across origins the browser

@@ -1,7 +1,7 @@
 /**
  * Reading and writing CSV files, as spreadsheets produce and read them.
  *
- * @module csv
+ * @module twake-directory-manager/csv
  */
 
 /** A file read into its header row and its data rows. */

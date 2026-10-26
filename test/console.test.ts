@@ -7894,6 +7894,26 @@ describe('Directory console', () => {
       ]);
       nock(baseUrl).get('/api/v1/ldap/domains/org').reply(200, tree.org);
       expect(await lookup.read('org')).to.equal(undefined);
+
+      // A search refused as too broad says as little as an answer cut short;
+      // a failure of the server's own is no answer at all, and is thrown.
+      nock(baseUrl)
+        .get('/api/v1/ldap/domains')
+        .query(true)
+        .reply(422, { error: 'Size limit exceeded' });
+      expect(await lookup.search('o')).to.deep.equal({
+        options: [],
+        truncated: true,
+      });
+      nock(baseUrl)
+        .get('/api/v1/ldap/domains')
+        .query(true)
+        .reply(500, { error: 'Internal Server Error' });
+      const thrown = await lookup.search('o').then(
+        () => undefined,
+        (err: unknown) => err
+      );
+      expect(thrown).to.be.instanceOf(Error).with.property('status', 500);
     });
 
     it('should name an entry by the attribute its schema calls its display name', async () => {
@@ -8153,13 +8173,13 @@ describe('Directory console', () => {
         'Too many entries to show them all: narrow the search.'
       );
 
-      // A failure of the server's own is no search too broad: its words
-      // stay, for the operator to act on.
+      // A failure of the server's own is no search too broad, and the
+      // server's generic words tell the administrator nothing.
       nock(baseUrl).get('/api/v1/ldap/users').query(true).reply(500, {
         error: 'Internal Server Error',
         message: 'An error occurred',
       });
-      expect(await failure()).to.equal('Internal Server Error');
+      expect(await failure()).to.equal('The list could not be loaded');
     });
 
     it('should hedge a failure a broad search may explain', () => {
@@ -8170,12 +8190,16 @@ describe('Directory console', () => {
       // A proxy giving up on a slow unbounded search says nothing useful.
       expect(failed(502, '502 Bad Gateway')).to.equal(hedged);
       expect(failed(504, '504 Gateway Timeout')).to.equal(hedged);
-      // A 500 is the server's own failure, not a search too broad: it keeps
-      // its words, however little they say, so that it stays diagnosable.
-      expect(failed(500, '500 Internal Server Error')).to.equal(
-        '500 Internal Server Error'
+      // A 500 is the server's own failure, not a search too broad: said as
+      // such, in the interface language, and not as advice to narrow the
+      // search; a cause the server names is kept, so that it stays
+      // diagnosable.
+      const broken = translator.t('list.error');
+      expect(failed(500, '500 Internal Server Error')).to.equal(broken);
+      expect(failed(500, '500 ')).to.equal(broken);
+      expect(failed(500, 'Invalid DN syntax')).to.equal(
+        `${broken} (Invalid DN syntax)`
       );
-      expect(failed(500, 'Invalid DN syntax')).to.equal('Invalid DN syntax');
       // Any other failure keeps its own words; a refusal is said plainly.
       expect(failed(400, 'Unbalanced filter')).to.equal('Unbalanced filter');
       expect(
@@ -8989,7 +9013,8 @@ describe('Directory console', () => {
         message: 'An error occurred',
       });
       const failed = await drawnList('en');
-      expect(failed).to.contain('Internal Server Error');
+      expect(failed).to.contain('The list could not be loaded');
+      expect(failed).to.not.contain('Internal Server Error');
       expect(failed).to.not.contain('narrow the search');
 
       // A refusal is said plainly, not in the server's words for an API
@@ -9429,7 +9454,7 @@ describe('Directory console', () => {
         .get('/api/v1/ldap/users')
         .reply(500, { error: 'Internal Server Error' });
       const { error } = await check([['new1', 'bob', '']]);
-      expect(error).to.equal('Internal Server Error');
+      expect(error).to.equal('The list could not be loaded');
       expect(nock.isDone()).to.equal(true);
     });
 
@@ -11217,7 +11242,9 @@ describe('Directory console', () => {
             return search;
           }
         );
-        expect(broken).to.deep.equal({ message: 'Internal Server Error' });
+        expect(broken).to.deep.equal({
+          message: 'The list could not be loaded',
+        });
         expect(asked).to.equal(false);
         const refused = pointerFallback(
           failure(422, 'Size limit exceeded'),

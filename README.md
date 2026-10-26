@@ -212,17 +212,19 @@ Japan.
 ### ldap-rest version
 
 The image is built on `ghcr.io/linagora/ldap-rest`, at the version the
-`Dockerfile` names (1.1.0 today), and the console is tested against that
-version only. The base image is a build argument:
+`Dockerfile` names, and the console is tested against that version only. The
+base image is a build argument:
 
 ```sh
-docker build --build-arg LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:1.1.0 \
+docker build --build-arg LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:<version> \
   -t twake-directory-manager .
 ```
 
 An older ldap-rest serves the console as far as its API matches, but is not
-tested; one older than 0.25.0 lacks parts of the scope answer the console
-reads, and offers less.
+tested: one older than 0.25.0 lacks parts of the scope answer the console
+reads, and offers less; one that still reports a search too broad as a `500`
+(before 0.12.x) has large lists and pointer selects fail with a plain
+error, and no search offered in their place.
 
 ### Kubernetes
 

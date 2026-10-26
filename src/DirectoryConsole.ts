@@ -7,7 +7,7 @@
  * label is written here, so a deployment that names its things differently
  * gets its own interface without a change.
  *
- * @module browser/directory-console/DirectoryConsole
+ * @module twake-directory-manager/DirectoryConsole
  */
 
 import { escapeHtml } from './shared/dom';

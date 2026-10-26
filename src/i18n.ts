@@ -75,6 +75,7 @@ const en: Catalogue = {
   'list.tooMany': 'Too many entries to show them all: narrow the search.',
   'list.failed':
     'The list could not be loaded. If the directory holds many entries, narrow the search.',
+  'list.error': 'The list could not be loaded',
   'list.refused': 'You may not see these entries',
   'list.count': '{from}–{to} of {total}',
   'list.perPage': 'Per page',
@@ -531,6 +532,7 @@ const fr: Catalogue = {
     'Trop d’entrées pour les afficher toutes : affinez la recherche.',
   'list.failed':
     'La liste n’a pas pu être chargée. Si l’annuaire contient beaucoup d’entrées, affinez la recherche.',
+  'list.error': 'La liste n’a pas pu être chargée',
   'list.refused': 'Vous n’avez pas accès à ces entrées',
   'list.count': '{from}–{to} sur {total}',
   'list.perPage': 'Par page',
@@ -991,6 +993,7 @@ const mn: Catalogue = {
     'Бүгдийг харуулахад хэт олон бичлэг байна: хайлтаа нарийсгана уу.',
   'list.failed':
     'Жагсаалтыг ачаалж чадсангүй. Лавлахад олон бичлэг байгаа бол хайлтаа нарийсгана уу.',
+  'list.error': 'Жагсаалтыг ачаалж чадсангүй',
   'list.refused': 'Танд эдгээр бичлэгийг харах эрх байхгүй',
   'list.count': '{total}-с {from}–{to}',
   'list.perPage': 'Хуудсанд',

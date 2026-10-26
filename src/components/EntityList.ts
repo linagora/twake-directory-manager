@@ -18,6 +18,7 @@ import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
 import { hasRole, tooBroad } from '../api/ConsoleApiClient';
 import {
+  GENERIC_FAILURE,
   accountState,
   attributeLabel,
   displayValue,
@@ -63,8 +64,10 @@ export const LIST_LIMIT = 1000;
  * ends in (see `tooBroad`): `422` is ldap-rest saying so, with wording meant
  * for an API client, and `502` or `504` is a proxy giving up on the unbounded
  * search before the server did. Those two can have other causes, hence the
- * hedged wording. A `500` is the server's own failure and keeps its words,
- * so it stays diagnosable.
+ * hedged wording. A `500` is the server's own failure, and says so in the
+ * interface language rather than as "Internal Server Error", which an
+ * administrator cannot act on; a `500` that does name its cause keeps it,
+ * after those words, so that it stays diagnosable.
  *
  * @param err what the request threw
  * @param translator translator of the interface
@@ -74,9 +77,14 @@ export function listFailure(err: unknown, translator: Translator): string {
   const status = (err as { status?: number } | null)?.status;
   const message = err instanceof Error ? err.message : String(err);
   if (status === 403) return translator.t('list.refused');
-  if (!tooBroad(err)) return message;
+  if (!tooBroad(err) && status !== 500) return message;
   if (status === 422) return translator.t('list.tooMany');
-  return translator.t('list.failed');
+  if (tooBroad(err)) return translator.t('list.failed');
+  if (status !== 500) return message;
+  const cause = message.trim();
+  return GENERIC_FAILURE.test(cause)
+    ? translator.t('list.error')
+    : `${translator.t('list.error')} (${cause})`;
 }
 
 /**
