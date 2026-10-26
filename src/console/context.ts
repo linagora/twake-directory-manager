@@ -10,6 +10,7 @@ import type { ConsoleApiClient } from '../api/ConsoleApiClient';
 import type { Translator } from '../i18n';
 import type { Rights } from '../rights';
 import type { Reporter } from '../shared/background';
+import type { EntityDescriptor, Entry } from '../types';
 import type { DialogService } from './dialog';
 import type { PanelService } from './panel';
 
@@ -20,9 +21,10 @@ import type { PanelService } from './panel';
  * through a function, never copied: a view keeps the context, not what it
  * said.
  *
- * It holds what the views moved out so far need (the password policies), and
- * grows with each view and action moved out of `DirectoryConsole` (#220):
- * add a member when a moved method needs one, not before.
+ * It holds what the views and actions moved out so far need (the password
+ * policies; the password resets and the state changes), and grows with each
+ * view and action moved out of `DirectoryConsole` (#220): add a member when
+ * a moved method needs one, not before.
  */
 export interface ConsoleContext {
   /** The client of ldap-rest */
@@ -51,4 +53,21 @@ export interface ConsoleContext {
   titlePage(name?: string): void;
   /** Draw the page the address names again, after a change of what it shows */
   refresh(): Promise<void>;
+  /** The entities the directory serves, as discovered: none before */
+  entities(): EntityDescriptor[];
+  /**
+   * A person as a colleague names them: their full name, else as their card
+   * names them. The console's own until the names move out with the views
+   * that share them.
+   */
+  personName(entity: EntityDescriptor, entry: Entry, id: string): string;
+  /**
+   * A new entry named by its full name, else as its card names it; empty
+   * when the form gave none and the server named no entry.
+   */
+  submittedName(
+    entity: EntityDescriptor,
+    values: Record<string, string | string[]>,
+    id: string
+  ): string;
 }

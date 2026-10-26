@@ -114,7 +114,7 @@ const rules = {
 // when the file does; remove the file when it goes under the budget; never
 // add one.
 const oversized = {
-  'src/DirectoryConsole.ts': 3423,
+  'src/DirectoryConsole.ts': 2824,
   'src/components/EntityForm.ts': 1406,
 };
 
@@ -218,8 +218,9 @@ export default [
   },
   // The direction of #220's split: a view is drawn by the console, given a
   // ConsoleContext, and asks nothing of another view, which would bring
-  // that one's state and listeners with it; a component is given what it
-  // shows and never reaches up to a view or an action.
+  // that one's state and listeners with it; an action, given the same
+  // context, asks nothing of a view or of another action; a component is
+  // given what it shows and never reaches up to a view or an action.
   {
     files: ['src/views/**/*.ts'],
     rules: {
@@ -231,6 +232,23 @@ export default [
               regex: '^\\./|(^|/)views(/|$)',
               message:
                 'A view imports no other view: what two views share goes to src/console, src/ui or a component.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/actions/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^\\./|(^|/)(views|actions)(/|$)',
+              message:
+                'An action imports no view and no other action: what two share goes to src/console, src/ui, src/format.ts or a component.',
             },
           ],
         },
