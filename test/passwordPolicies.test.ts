@@ -142,7 +142,7 @@ describe('Password policies', () => {
       const markup = policyTableMarkup(en, [
         policy,
         { dn: 'cn=software', cn: 'software', isDefault: false },
-      ]);
+      ]).markup;
       expect(markup).to.include('365 days');
       expect(markup).to.include('After 3 failures, 2 minutes');
       expect(markup).to.include('Never');
@@ -153,7 +153,7 @@ describe('Password policies', () => {
     it('should escape a policy name', () => {
       const markup = policyTableMarkup(en, [
         { dn: 'cn=x', cn: '<img src=x>', isDefault: false },
-      ]);
+      ]).markup;
       expect(markup).not.to.include('<img');
     });
 

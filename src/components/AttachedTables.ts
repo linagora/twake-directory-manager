@@ -15,7 +15,6 @@
  * @module twake-directory-manager/components/AttachedTables
  */
 
-import { escapeHtml } from '../shared/dom';
 import {
   accountState,
   attributeLabel,
@@ -31,6 +30,7 @@ import type {
   AttachedEntry,
   EntityDescriptor,
 } from '../types';
+import { html, type SafeHtml } from '../shared/html';
 
 /** The two tables: accounts, and groups. */
 export type AttachedKind = 'people' | 'groups';
@@ -214,21 +214,20 @@ export class AttachedTables {
   }
 
   /** Both tables. */
-  markup(): string {
+  markup(): SafeHtml {
     const { failure } = this.options;
     if (failure !== undefined)
-      return `
+      return html`
       <section class="dc-card dc-attached" data-attached-failure>
-        <p class="dc-empty dc-error-block">${escapeHtml(failure)}</p>
+        <p class="dc-empty dc-error-block">${failure}</p>
       </section>`;
     const rows = this.rows();
-    return (['people', 'groups'] as const)
+    return html`${(['people', 'groups'] as const)
       .filter(
         kind =>
           rows[kind].length || (!this.options.hideEmpty && this.lead(kind))
       )
-      .map(kind => this.tableMarkup(kind, rows[kind], this.cut(kind, rows)))
-      .join('');
+      .map(kind => this.tableMarkup(kind, rows[kind], this.cut(kind, rows)))}`;
   }
 
   /**
@@ -262,7 +261,7 @@ export class AttachedTables {
     kind: AttachedKind,
     rows: AttachedEntry[],
     cut: { truncated: boolean; more?: number }
-  ): string {
+  ): SafeHtml {
     const { translator, name, onCreate, partial } = this.options;
     const lead = this.lead(kind);
     const roles = COLUMNS[kind].filter(
@@ -273,57 +272,52 @@ export class AttachedTables {
     // Fifty listed of more is not fifty.
     const count = truncated ? `${rows.length}+` : rows.length;
     const create = onCreate?.[kind];
-    return `
+    return html`
       <section class="dc-card dc-attached" data-attached="${kind}">
         <header class="dc-attached-header">
-          <h3>${escapeHtml(
-            translator.t(kind === 'people' ? 'org.people' : 'org.groups', {
-              count,
-            })
-          )}</h3>
+          <h3>${translator.t(kind === 'people' ? 'org.people' : 'org.groups', {
+            count,
+          })}</h3>
           ${
             kind === 'people' && this.options.onListEveryone
-              ? `<button type="button" class="dc-button" data-list-everyone>${escapeHtml(
-                  translator.t('org.listEveryone', { name })
+              ? html`<button type="button" class="dc-button" data-list-everyone>${translator.t(
+                  'org.listEveryone',
+                  { name }
                 )}</button>`
               : ''
           }
           ${
             create
-              ? `<button type="button" class="dc-button" data-create-attached="${kind}">${escapeHtml(
-                  translator.t(
-                    kind === 'people' ? 'org.newUserHere' : 'org.newGroupHere'
-                  )
+              ? html`<button type="button" class="dc-button" data-create-attached="${kind}">${translator.t(
+                  kind === 'people' ? 'org.newUserHere' : 'org.newGroupHere'
                 )}</button>`
               : ''
           }
         </header>
         ${
           rows.length === 0
-            ? `<p class="dc-muted">${escapeHtml(
-                translator.t(partial ? 'org.noneManaged' : 'org.nobody', {
+            ? html`<p class="dc-muted">${translator.t(
+                partial ? 'org.noneManaged' : 'org.nobody',
+                {
                   name,
-                })
+                }
               )}</p>`
-            : `<div class="dc-table-scroll">
+            : html`<div class="dc-table-scroll">
                 <table class="dc-table dc-attached-table">
                   <thead>
-                    <tr>${roles
-                      .map(
-                        role =>
-                          `<th>${escapeHtml(this.heading(lead, role))}</th>`
-                      )
-                      .join('')}${
+                    <tr>${roles.map(
+                      role => html`<th>${this.heading(lead, role)}</th>`
+                    )}${
                       this.options.rowAction
-                        ? `<th><span class="dc-visually-hidden">${escapeHtml(
-                            translator.t('detail.actions')
+                        ? html`<th><span class="dc-visually-hidden">${translator.t(
+                            'detail.actions'
                           )}</span></th>`
                         : ''
                     }</tr>
                   </thead>
-                  <tbody>${rows
-                    .map(entry => this.rowMarkup(entry, roles))
-                    .join('')}</tbody>
+                  <tbody>${rows.map(entry =>
+                    this.rowMarkup(entry, roles)
+                  )}</tbody>
                 </table>
               </div>`
         }
@@ -347,7 +341,7 @@ export class AttachedTables {
    * follows, as in the lists; the rest of the row stands in for it, for the
    * mouse. An entry no entity holds has no card to lead to.
    */
-  private rowMarkup(entry: AttachedEntry, roles: string[]): string {
+  private rowMarkup(entry: AttachedEntry, roles: string[]): SafeHtml {
     const entity = this.entityOf(entry);
     const href = entity ? EntityList.entryHref(entity, entry.label) : '';
     const name =
@@ -363,28 +357,22 @@ export class AttachedTables {
           : undefined;
       const content =
         index === 0 && href
-          ? `<a class="dc-row-link" href="${escapeHtml(href)}">${escapeHtml(
-              shown
-            )}</a>`
+          ? html`<a class="dc-row-link" href="${href}">${shown}</a>`
           : stateMarkup(state, shown);
-      return `<td title="${escapeHtml(shown)}">${content}</td>`;
+      return html`<td title="${shown}">${content}</td>`;
     });
     const action = this.options.rowAction;
     if (action)
       cells.push(
-        `<td class="dc-attached-action">${
+        html`<td class="dc-attached-action">${
           entity && action.offered(entry, entity)
-            ? `<button type="button" class="dc-button" data-row-action="${escapeHtml(
+            ? html`<button type="button" class="dc-button" data-row-action="${
                 entry.dn
-              )}" aria-label="${escapeHtml(action.named(name))}">${escapeHtml(
-                action.label
-              )}</button>`
+              }" aria-label="${action.named(name)}">${action.label}</button>`
             : ''
         }</td>`
       );
-    return `<tr${href ? ` data-href="${escapeHtml(href)}"` : ''}>${cells.join(
-      ''
-    )}</tr>`;
+    return html`<tr${href ? html` data-href="${href}"` : ''}>${cells}</tr>`;
   }
 
   /** A value as the lists show it: a pointer by the name of its target. */
@@ -407,13 +395,13 @@ export class AttachedTables {
    * What the server left out, said where the table stops: a department
    * whose card lists fifty names otherwise reads as a department of fifty.
    */
-  private moreMarkup(more: number | undefined): string {
+  private moreMarkup(more: number | undefined): SafeHtml {
     const { translator } = this.options;
-    return `<p class="dc-muted" role="status">${escapeHtml(
+    return html`<p class="dc-muted" role="status">${
       more === undefined
         ? translator.t('detail.moreUncounted')
         : translator.t('detail.more', { count: more })
-    )}</p>`;
+    }</p>`;
   }
 
   /**

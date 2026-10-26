@@ -29,10 +29,10 @@ import {
   type PointerResolver,
   type PreparedRow,
 } from '../importer';
-import { escapeHtml } from '../shared/dom';
 import { EntityList, listFailure } from './EntityList';
 import type { EntityDescriptor } from '../types';
 import { background, type Reporter } from '../shared/background';
+import { html, render, type SafeHtml } from '../shared/html';
 
 export interface ImportOptions {
   entity: EntityDescriptor;
@@ -145,19 +145,23 @@ export class EntityImport {
     // Closed, or its panel given to another form, a running import draws no
     // more: it filled the hidden panel row after row, or wrote over the form.
     if (!root || this.view?.isConnected === false) return;
-    root.innerHTML = `<div class="dc-import">${this.stepMarkup()}</div>`;
+    render(root, html`<div class="dc-import">${this.stepMarkup()}</div>`);
     this.view = root.querySelector<HTMLElement>('.dc-import');
+    // The bar's width is set here, not in a style attribute a strict CSP
+    // would refuse; `progress()` moves it as the rows go.
+    const bar = root.querySelector<HTMLElement>('.dc-progress-bar');
+    if (bar) bar.style.width = `${this.percent()}%`;
     this.bind(root);
   }
 
-  private stepMarkup(): string {
+  private stepMarkup(): SafeHtml {
     switch (this.step) {
       case 'file':
         return this.fileMarkup();
       case 'mapping':
         return this.mappingMarkup();
       case 'checking':
-        return `<p class="dc-empty">${escapeHtml(this.t('import.checking'))}</p>`;
+        return html`<p class="dc-empty">${this.t('import.checking')}</p>`;
       case 'review':
         return this.reviewMarkup();
       case 'running':
@@ -169,26 +173,26 @@ export class EntityImport {
 
   /* ------------------------------------------------------------------ file */
 
-  private fileMarkup(): string {
-    return `
-      <p>${escapeHtml(this.t('import.intro'))}</p>
+  private fileMarkup(): SafeHtml {
+    return html`
+      <p>${this.t('import.intro')}</p>
       <ul class="dc-import-notes">
-        <li>${escapeHtml(this.t('import.noteHeader'))}</li>
-        <li>${escapeHtml(this.t('import.noteMulti'))}</li>
-        <li>${escapeHtml(this.t('import.noteReference'))}</li>
+        <li>${this.t('import.noteHeader')}</li>
+        <li>${this.t('import.noteMulti')}</li>
+        <li>${this.t('import.noteReference')}</li>
       </ul>
-      ${this.error ? `<p class="dc-error">${escapeHtml(this.error)}</p>` : ''}
+      ${this.error ? html`<p class="dc-error">${this.error}</p>` : ''}
       <label class="dc-import-drop">
         <input type="file" accept=".csv,text/csv" data-import-file />
-        <span class="dc-import-drop-title">${escapeHtml(this.t('import.choose'))}</span>
-        <span class="dc-muted">${escapeHtml(this.t('import.chooseHint'))}</span>
+        <span class="dc-import-drop-title">${this.t('import.choose')}</span>
+        <span class="dc-muted">${this.t('import.chooseHint')}</span>
       </label>
       <div class="dc-form-actions">
-        <button type="button" class="dc-button" data-import-template>${escapeHtml(
-          this.t('import.template')
+        <button type="button" class="dc-button" data-import-template>${this.t(
+          'import.template'
         )}</button>
-        <button type="button" class="dc-button" data-import-close>${escapeHtml(
-          this.t('app.cancel')
+        <button type="button" class="dc-button" data-import-close>${this.t(
+          'app.cancel'
         )}</button>
       </div>`;
   }
@@ -210,68 +214,63 @@ export class EntityImport {
 
   /* --------------------------------------------------------------- mapping */
 
-  private mappingMarkup(): string {
+  private mappingMarkup(): SafeHtml {
     const table = this.table as CsvTable;
     const missing = unmappedRequired(this.mapping, this.fields);
-    return `
-      <p>${escapeHtml(
-        this.t('import.read', { count: table.rows.length, file: this.fileName })
-      )}</p>
-      <p class="dc-muted">${escapeHtml(this.t('import.mappingHelp'))}</p>
+    return html`
+      <p>${this.t('import.read', {
+        count: table.rows.length,
+        file: this.fileName,
+      })}</p>
+      <p class="dc-muted">${this.t('import.mappingHelp')}</p>
       <div class="dc-table-scroll">
         <table class="dc-table dc-import-mapping">
           <thead><tr>
-            <th>${escapeHtml(this.t('import.column'))}</th>
-            <th>${escapeHtml(this.t('import.example'))}</th>
-            <th>${escapeHtml(this.t('import.attribute'))}</th>
+            <th>${this.t('import.column')}</th>
+            <th>${this.t('import.example')}</th>
+            <th>${this.t('import.attribute')}</th>
           </tr></thead>
           <tbody>
-            ${table.headers
-              .map(
-                (header, index) => `<tr>
-                  <td>${escapeHtml(header)}</td>
-                  <td class="dc-muted" title="${escapeHtml(
+            ${table.headers.map(
+              (header, index) => html`<tr>
+                  <td>${header}</td>
+                  <td class="dc-muted" title="${
                     table.rows[0]?.[index] ?? ''
-                  )}">${escapeHtml(table.rows[0]?.[index] ?? '')}</td>
+                  }">${table.rows[0]?.[index] ?? ''}</td>
                   <td>
                     <select class="dc-input" data-import-map="${index}"
-                      aria-label="${escapeHtml(header)}">
-                      <option value="">${escapeHtml(this.t('import.ignore'))}</option>
-                      ${this.fields
-                        .map(
-                          ([name, attr]) =>
-                            `<option value="${escapeHtml(name)}"${
-                              this.mapping[index] === name ? ' selected' : ''
-                            }>${escapeHtml(this.label(name))}${
-                              attr.required ? ' *' : ''
-                            }</option>`
-                        )
-                        .join('')}
+                      aria-label="${header}">
+                      <option value="">${this.t('import.ignore')}</option>
+                      ${this.fields.map(
+                        ([name, attr]) =>
+                          html`<option value="${name}"${
+                            this.mapping[index] === name ? ' selected' : ''
+                          }>${this.label(name)}${
+                            attr.required ? ' *' : ''
+                          }</option>`
+                      )}
                     </select>
                   </td>
                 </tr>`
-              )
-              .join('')}
+            )}
           </tbody>
         </table>
       </div>
       ${
         missing.length
-          ? `<p class="dc-error">${escapeHtml(
-              this.t('import.unmapped', {
-                fields: missing.map(name => this.label(name)).join(', '),
-              })
-            )}</p>`
+          ? html`<p class="dc-error">${this.t('import.unmapped', {
+              fields: missing.map(name => this.label(name)).join(', '),
+            })}</p>`
           : ''
       }
       ${this.duplicateMarkup()}
       <div class="dc-form-actions">
-        <button type="button" class="dc-button" data-import-restart>${escapeHtml(
-          this.t('import.otherFile')
+        <button type="button" class="dc-button" data-import-restart>${this.t(
+          'import.otherFile'
         )}</button>
         <button type="button" class="dc-button dc-button-primary" data-import-check
-          ${missing.length || this.duplicates().length ? 'disabled' : ''}>${escapeHtml(
-            this.t('import.check')
+          ${missing.length || this.duplicates().length ? 'disabled' : ''}>${this.t(
+            'import.check'
           )}</button>
       </div>`;
   }
@@ -282,15 +281,13 @@ export class EntityImport {
     return [...new Set(used.filter((name, i) => used.indexOf(name) !== i))];
   }
 
-  private duplicateMarkup(): string {
+  private duplicateMarkup(): SafeHtml {
     const twice = this.duplicates();
     return twice.length
-      ? `<p class="dc-error">${escapeHtml(
-          this.t('import.twice', {
-            fields: twice.map(name => this.label(name)).join(', '),
-          })
-        )}</p>`
-      : '';
+      ? html`<p class="dc-error">${this.t('import.twice', {
+          fields: twice.map(name => this.label(name)).join(', '),
+        })}</p>`
+      : html``;
   }
 
   /**
@@ -362,73 +359,70 @@ export class EntityImport {
 
   /* ---------------------------------------------------------------- review */
 
-  private reviewMarkup(): string {
+  private reviewMarkup(): SafeHtml {
     const valid = this.rows.filter(row => row.errors.length === 0);
     const invalid = this.rows.filter(row => row.errors.length > 0);
-    return `
+    return html`
       <div class="dc-import-summary">
         <div class="dc-import-stat dc-import-stat-ok">
           <strong>${valid.length}</strong>
-          <span>${escapeHtml(this.t('import.ready', { count: valid.length }))}</span>
+          <span>${this.t('import.ready', { count: valid.length })}</span>
         </div>
         <div class="dc-import-stat${invalid.length ? ' dc-import-stat-bad' : ''}">
           <strong>${invalid.length}</strong>
-          <span>${escapeHtml(this.t('import.invalid', { count: invalid.length }))}</span>
+          <span>${this.t('import.invalid', { count: invalid.length })}</span>
         </div>
       </div>
       ${
         invalid.length
-          ? `<p class="dc-muted">${escapeHtml(this.t('import.invalidHelp'))}</p>
+          ? html`<p class="dc-muted">${this.t('import.invalidHelp')}</p>
             ${this.problemsMarkup(
               invalid.map(row => ({ row, message: row.errors.join(' — ') }))
             )}`
-          : `<p class="dc-muted">${escapeHtml(this.t('import.allValid'))}</p>`
+          : html`<p class="dc-muted">${this.t('import.allValid')}</p>`
       }
-      <p class="dc-muted">${escapeHtml(this.t('import.serverRules'))}</p>
+      <p class="dc-muted">${this.t('import.serverRules')}</p>
       <div class="dc-form-actions">
-        <button type="button" class="dc-button" data-import-back>${escapeHtml(
-          this.t('app.back')
+        <button type="button" class="dc-button" data-import-back>${this.t(
+          'app.back'
         )}</button>
         ${
           invalid.length
-            ? `<button type="button" class="dc-button" data-import-report>${escapeHtml(
-                this.t('import.downloadInvalid')
+            ? html`<button type="button" class="dc-button" data-import-report>${this.t(
+                'import.downloadInvalid'
               )}</button>`
             : ''
         }
         <button type="button" class="dc-button dc-button-primary" data-import-run
-          ${valid.length ? '' : 'disabled'}>${escapeHtml(
-            this.t('import.run', { count: valid.length })
-          )}</button>
+          ${valid.length ? '' : 'disabled'}>${this.t('import.run', {
+            count: valid.length,
+          })}</button>
       </div>`;
   }
 
-  private problemsMarkup(problems: Failure[]): string {
-    return `
+  private problemsMarkup(problems: Failure[]): SafeHtml {
+    return html`
       <div class="dc-table-scroll dc-import-problems">
         <table class="dc-table">
           <thead><tr>
-            <th>${escapeHtml(this.t('import.line'))}</th>
-            <th>${escapeHtml(this.t('import.problem'))}</th>
+            <th>${this.t('import.line')}</th>
+            <th>${this.t('import.problem')}</th>
           </tr></thead>
           <tbody>
-            ${problems
-              .slice(0, SHOWN_ERRORS)
-              .map(
-                problem => `<tr>
+            ${problems.slice(0, SHOWN_ERRORS).map(
+              problem => html`<tr>
                   <td>${problem.row.line}</td>
-                  <td class="dc-import-message">${escapeHtml(problem.message)}</td>
+                  <td class="dc-import-message">${problem.message}</td>
                 </tr>`
-              )
-              .join('')}
+            )}
           </tbody>
         </table>
       </div>
       ${
         problems.length > SHOWN_ERRORS
-          ? `<p class="dc-muted">${escapeHtml(
-              this.t('import.more', { count: problems.length - SHOWN_ERRORS })
-            )}</p>`
+          ? html`<p class="dc-muted">${this.t('import.more', {
+              count: problems.length - SHOWN_ERRORS,
+            })}</p>`
           : ''
       }`;
   }
@@ -455,32 +449,30 @@ export class EntityImport {
 
   /* --------------------------------------------------------------- running */
 
-  private progressMarkup(): string {
-    const percent = this.total
-      ? Math.round((this.processed / this.total) * 100)
-      : 0;
-    return `
-      <p>${escapeHtml(
-        this.t('import.progress', {
-          done: this.processed,
-          total: this.total,
-          count: this.total,
-        })
-      )}</p>
+  /** How far the import is, in whole percent. */
+  private percent(): number {
+    return this.total ? Math.round((this.processed / this.total) * 100) : 0;
+  }
+
+  private progressMarkup(): SafeHtml {
+    return html`
+      <p>${this.t('import.progress', {
+        done: this.processed,
+        total: this.total,
+        count: this.total,
+      })}</p>
       <div class="dc-progress" role="progressbar" aria-valuemin="0"
         aria-valuemax="${this.total}" aria-valuenow="${this.processed}">
-        <div class="dc-progress-bar" style="width:${percent}%"></div>
+        <div class="dc-progress-bar"></div>
       </div>
-      <p class="dc-muted">${escapeHtml(
-        this.t('import.progressDetail', {
-          created: this.created,
-          failed: this.failures.length,
-        })
-      )}</p>
+      <p class="dc-muted">${this.t('import.progressDetail', {
+        created: this.created,
+        failed: this.failures.length,
+      })}</p>
       <div class="dc-form-actions">
         <button type="button" class="dc-button dc-button-danger" data-import-stop
-          ${this.stopping ? 'disabled' : ''}>${escapeHtml(
-            this.t(this.stopping ? 'import.stopping' : 'import.stop')
+          ${this.stopping ? 'disabled' : ''}>${this.t(
+            this.stopping ? 'import.stopping' : 'import.stop'
           )}</button>
       </div>`;
   }
@@ -574,10 +566,7 @@ export class EntityImport {
       return;
     const bar = root.querySelector<HTMLElement>('.dc-progress-bar');
     if (!bar) return this.paint();
-    const percent = this.total
-      ? Math.round((this.processed / this.total) * 100)
-      : 0;
-    bar.style.width = `${percent}%`;
+    bar.style.width = `${this.percent()}%`;
     root
       .querySelector('.dc-progress')
       ?.setAttribute('aria-valuenow', String(this.processed));
@@ -597,23 +586,23 @@ export class EntityImport {
 
   /* ------------------------------------------------------------------ done */
 
-  private doneMarkup(): string {
+  private doneMarkup(): SafeHtml {
     const skipped = this.total - this.processed;
-    return `
+    return html`
       <div class="dc-import-summary">
         <div class="dc-import-stat dc-import-stat-ok">
           <strong>${this.created}</strong>
-          <span>${escapeHtml(this.t('import.created', { count: this.created }))}</span>
+          <span>${this.t('import.created', { count: this.created })}</span>
         </div>
         <div class="dc-import-stat${this.failures.length ? ' dc-import-stat-bad' : ''}">
           <strong>${this.failures.length}</strong>
-          <span>${escapeHtml(this.t('import.refused', { count: this.failures.length }))}</span>
+          <span>${this.t('import.refused', { count: this.failures.length })}</span>
         </div>
         ${
           skipped
-            ? `<div class="dc-import-stat">
+            ? html`<div class="dc-import-stat">
                 <strong>${skipped}</strong>
-                <span>${escapeHtml(this.t('import.notSent', { count: skipped }))}</span>
+                <span>${this.t('import.notSent', { count: skipped })}</span>
               </div>`
             : ''
         }
@@ -624,13 +613,13 @@ export class EntityImport {
       <div class="dc-form-actions">
         ${
           this.failures.length
-            ? `<button type="button" class="dc-button" data-import-report>${escapeHtml(
-                this.t('import.downloadRefused')
+            ? html`<button type="button" class="dc-button" data-import-report>${this.t(
+                'import.downloadRefused'
               )}</button>`
             : ''
         }
-        <button type="button" class="dc-button dc-button-primary" data-import-close>${escapeHtml(
-          this.t('app.close')
+        <button type="button" class="dc-button dc-button-primary" data-import-close>${this.t(
+          'app.close'
         )}</button>
       </div>`;
   }
@@ -639,17 +628,18 @@ export class EntityImport {
    * What the accounts created lack when the file gave no password: their
    * owners cannot sign in until each is given one, and "2 created" hid it.
    */
-  private passwordlessMarkup(): string {
+  private passwordlessMarkup(): SafeHtml {
     const password = this.options.entity.password;
-    if (!password) return '';
+    if (!password) return html``;
     // By row, not by column: a Password column left empty creates the
     // accounts without one all the same.
     const count = this.successes.filter(
       ({ row }) => ![row.values[password] ?? []].flat().some(Boolean)
     ).length;
-    if (!count) return '';
-    return `<p class="dc-list-notice" role="status">${escapeHtml(
-      this.t('import.noPassword', { count })
+    if (!count) return html``;
+    return html`<p class="dc-list-notice" role="status">${this.t(
+      'import.noPassword',
+      { count }
     )}</p>`;
   }
 
@@ -658,45 +648,43 @@ export class EntityImport {
    * its card, as the list links its rows. A count alone left the operator
    * searching for each one to check it.
    */
-  private createdMarkup(): string {
+  private createdMarkup(): SafeHtml {
     const { entity } = this.options;
     const rest = this.successes.length - SHOWN_CREATED;
-    return `
+    return html`
       <div class="dc-table-scroll dc-import-created">
         <table class="dc-table">
           <thead><tr>
-            <th>${escapeHtml(this.t('import.line'))}</th>
-            <th>${escapeHtml(this.t('import.createdName'))}</th>
+            <th>${this.t('import.line')}</th>
+            <th>${this.t('import.createdName')}</th>
           </tr></thead>
           <tbody>
-            ${this.successes
-              .slice(0, SHOWN_CREATED)
-              .map(success => {
-                const name = this.rowName(success.row) || success.id;
-                const id =
-                  success.id && success.id !== name
-                    ? ` <span class="dc-muted">(${escapeHtml(success.id)})</span>`
-                    : '';
-                return `<tr>
+            ${this.successes.slice(0, SHOWN_CREATED).map(success => {
+              const name = this.rowName(success.row) || success.id;
+              const id =
+                success.id && success.id !== name
+                  ? html` <span class="dc-muted">(${success.id})</span>`
+                  : '';
+              return html`<tr>
                   <td>${success.row.line}</td>
                   <td class="dc-import-message">${
                     success.id
-                      ? `<a class="dc-row-link" href="${escapeHtml(
-                          EntityList.entryHref(entity, success.id)
-                        )}">${escapeHtml(name)}</a>`
-                      : escapeHtml(name)
+                      ? html`<a class="dc-row-link" href="${EntityList.entryHref(
+                          entity,
+                          success.id
+                        )}">${name}</a>`
+                      : name
                   }${id}</td>
                 </tr>`;
-              })
-              .join('')}
+            })}
           </tbody>
         </table>
       </div>
       ${
         rest > 0
-          ? `<p class="dc-muted">${escapeHtml(
-              this.t('import.moreCreated', { count: rest })
-            )}</p>`
+          ? html`<p class="dc-muted">${this.t('import.moreCreated', {
+              count: rest,
+            })}</p>`
           : ''
       }`;
   }

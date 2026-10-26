@@ -14,7 +14,6 @@
  */
 
 import { csvCell, writeCsv } from '../csv';
-import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
 import { hasRole, tooBroad } from '../api/ConsoleApiClient';
 import {
@@ -34,6 +33,7 @@ import type {
   SchemaAttribute,
 } from '../types';
 import { background, type Reporter } from '../shared/background';
+import { html, render, type SafeHtml } from '../shared/html';
 
 // Kept importable from here, where it was first defined.
 export { csvCell };
@@ -616,42 +616,40 @@ export class EntityList {
     const from = this.page * this.pageSize;
     const slice = this.entries.slice(from, from + this.pageSize);
 
-    root.innerHTML = `
+    render(
+      root,
+      html`
       <div class="dc-list">
         <div class="dc-list-toolbar">
           ${
             this.imported
-              ? `<div class="dc-list-imported" data-imported>
-                  <strong>${escapeHtml(
-                    translator.t('list.imported', {
-                      count: this.imported.ids.length,
-                    })
-                  )}</strong>
-                  <button type="button" class="dc-button" data-leave-imported>${escapeHtml(
-                    translator.t('list.backToSearch')
+              ? html`<div class="dc-list-imported" data-imported>
+                  <strong>${translator.t('list.imported', {
+                    count: this.imported.ids.length,
+                  })}</strong>
+                  <button type="button" class="dc-button" data-leave-imported>${translator.t(
+                    'list.backToSearch'
                   )}</button>
                 </div>`
               : this.searchMarkup()
           }
           <div class="dc-bulk" ${this.selected.size ? '' : 'hidden'}>
-            <span>${escapeHtml(
-              translator.t('list.selected', { count: this.selected.size })
-            )}</span>
-            <button type="button" class="dc-button" data-export>${escapeHtml(
-              translator.t('list.export')
+            <span>${translator.t('list.selected', {
+              count: this.selected.size,
+            })}</span>
+            <button type="button" class="dc-button" data-export>${translator.t(
+              'list.export'
             )}</button>
-            ${(this.options.bulkActions ?? [])
-              .map(
-                (action, index) =>
-                  `<button type="button" class="dc-button" data-bulk-action="${index}">${escapeHtml(
-                    action.label
-                  )}</button>`
-              )
-              .join('')}
+            ${(this.options.bulkActions ?? []).map(
+              (action, index) =>
+                html`<button type="button" class="dc-button" data-bulk-action="${index}">${
+                  action.label
+                }</button>`
+            )}
             ${
               this.options.canDelete
-                ? `<button type="button" class="dc-button dc-button-danger" data-delete-selected>${escapeHtml(
-                    translator.t('list.deleteSelected')
+                ? html`<button type="button" class="dc-button dc-button-danger" data-delete-selected>${translator.t(
+                    'list.deleteSelected'
                   )}</button>`
                 : ''
             }
@@ -659,7 +657,8 @@ export class EntityList {
         </div>
         ${this.bodyMarkup(slice)}
         ${this.footerMarkup(total, from, slice.length)}
-      </div>`;
+      </div>`
+    );
 
     this.bind();
     this.restoreFocus(focus);
@@ -672,29 +671,29 @@ export class EntityList {
   }
 
   /** The search box and the field it searches in. */
-  private searchMarkup(): string {
+  private searchMarkup(): SafeHtml {
     const { translator } = this.options;
-    return `
+    return html`
       <div class="dc-search">
         <input type="search" class="dc-input" data-search
-          value="${escapeHtml(this.search)}"
-          placeholder="${escapeHtml(translator.t('list.search'))}" />
+          value="${this.search}"
+          placeholder="${translator.t('list.search')}" />
         <label class="dc-search-scope">
-          <span>${escapeHtml(translator.t('list.searchIn'))}</span>
+          <span>${translator.t('list.searchIn')}</span>
           <select class="dc-input" data-search-attribute>
             <option value="${SEARCH_ANYWHERE}"${
               this.searchAttribute === SEARCH_ANYWHERE ? ' selected' : ''
-            }>${escapeHtml(translator.t('list.searchAnywhere'))}</option>
-            ${this.scopeAttributes()
-              .map(
-                ([name, attr]) =>
-                  `<option value="${escapeHtml(name)}"${
-                    name === this.searchAttribute ? ' selected' : ''
-                  }>${escapeHtml(
-                    attributeLabel(name, attr, this.options.translator.language)
-                  )}</option>`
-              )
-              .join('')}
+            }>${translator.t('list.searchAnywhere')}</option>
+            ${this.scopeAttributes().map(
+              ([name, attr]) =>
+                html`<option value="${name}"${
+                  name === this.searchAttribute ? ' selected' : ''
+                }>${attributeLabel(
+                  name,
+                  attr,
+                  this.options.translator.language
+                )}</option>`
+            )}
           </select>
         </label>
       </div>`;
@@ -754,41 +753,41 @@ export class EntityList {
       }
   }
 
-  private bodyMarkup(slice: [string, Entry][]): string {
+  private bodyMarkup(slice: [string, Entry][]): SafeHtml {
     const { translator } = this.options;
     if (this.loading)
-      return `<p class="dc-empty">${escapeHtml(translator.t('app.loading'))}</p>`;
+      return html`<p class="dc-empty">${translator.t('app.loading')}</p>`;
     if (this.error)
-      return `<p class="dc-empty dc-error-block">${escapeHtml(this.error)}</p>`;
+      return html`<p class="dc-empty dc-error-block">${this.error}</p>`;
     if (
       !this.imported &&
       !this.listable() &&
       this.under === undefined &&
       this.query.length < SEARCH_MINIMUM
     )
-      return `<p class="dc-empty">${escapeHtml(
-        translator.t('list.searchGuard', { count: SEARCH_MINIMUM })
-      )}<br /><button type="button" class="dc-button" data-list-all>${escapeHtml(
-        translator.t('list.listEverything')
+      return html`<p class="dc-empty">${translator.t('list.searchGuard', {
+        count: SEARCH_MINIMUM,
+      })}<br /><button type="button" class="dc-button" data-list-all>${translator.t(
+        'list.listEverything'
       )}</button></p>`;
     if (this.entries.length === 0)
-      return `<p class="dc-empty">${escapeHtml(
+      return html`<p class="dc-empty">${
         // Nobody of the department in what the server kept is no proof
         // that nobody is in it.
         this.under !== undefined && this.truncated
           ? translator.t('list.cutTruncated', { path: this.under })
           : translator.t(this.query ? 'list.noMatch' : 'list.empty')
-      )}</p>`;
+      }</p>`;
 
     const attributes = this.options.entity.schema.attributes;
     // Checked when the whole page is, so that the next click clears the page
     // rather than selecting it once more.
     const whole =
       slice.length > 0 && slice.every(([id]) => this.selected.has(id));
-    return `
+    return html`
       ${
         this.truncated
-          ? `<p class="dc-list-notice" role="status">${escapeHtml(
+          ? html`<p class="dc-list-notice" role="status">${
               // What was received, not what was asked: a server may cap
               // lower than the console asked. Cut to a department, what is
               // shown is no longer what was received, and a search typed
@@ -798,7 +797,7 @@ export class EntityList {
                 : translator.t('list.truncated', {
                     count: this.entries.length,
                   })
-            )}</p>`
+            }</p>`
           : ''
       }
       <div class="dc-table-scroll">
@@ -807,82 +806,72 @@ export class EntityList {
             <tr>
               <th class="dc-checkbox-cell">
                 <input type="checkbox" data-select-all ${whole ? 'checked' : ''}
-                  aria-label="${escapeHtml(translator.t('list.selectAll'))}" />
+                  aria-label="${translator.t('list.selectAll')}" />
               </th>
-              ${this.columns
-                .map(
-                  name =>
-                    `<th>${escapeHtml(
-                      attributeLabel(
-                        name,
-                        attributes[name],
-                        translator.language
-                      )
-                    )}</th>`
-                )
-                .join('')}
+              ${this.columns.map(
+                name =>
+                  html`<th>${attributeLabel(
+                    name,
+                    attributes[name],
+                    translator.language
+                  )}</th>`
+              )}
             </tr>
           </thead>
           <tbody>
-            ${slice.map(([id, entry]) => this.rowMarkup(id, entry)).join('')}
+            ${slice.map(([id, entry]) => this.rowMarkup(id, entry))}
           </tbody>
         </table>
       </div>`;
   }
 
-  private rowMarkup(id: string, entry: Entry): string {
+  private rowMarkup(id: string, entry: Entry): SafeHtml {
     const { translator, entity } = this.options;
-    return `
-      <tr data-id="${escapeHtml(id)}">
+    return html`
+      <tr data-id="${id}">
         <td class="dc-checkbox-cell">
-          <input type="checkbox" data-select="${escapeHtml(id)}"
+          <input type="checkbox" data-select="${id}"
             ${this.selected.has(id) ? 'checked' : ''}
-            aria-label="${escapeHtml(translator.t('list.selectRow'))}" />
+            aria-label="${translator.t('list.selectRow')}" />
         </td>
-        ${this.columns
-          .map((name, index) => {
-            const attr = entity.schema.attributes[name];
-            const value = entryValue(entry, name);
-            const raw = text(value);
-            const shown = text(
-              (Array.isArray(value) ? value : [value])
-                .filter((v): v is string => v !== undefined)
-                .map(
-                  v =>
-                    ownValueLabel(
-                      entity,
-                      name,
-                      String(v),
-                      translator.language
-                    ) ||
-                    displayValue(
-                      attr,
-                      String(v),
-                      this.options.pointerLabel,
-                      translator.language
-                    )
-                )
-            );
-            const isPath = name === entity.organizationPath;
-            const state =
-              typeof value === 'string'
-                ? accountState(entity, name, value)
-                : undefined;
-            const content = isPath
-              ? EntityList.shortenPath(shown)
-              : stateMarkup(state, shown);
-            // The first column opens the entry: a link Tab reaches and Enter
-            // follows, which the browser also opens in a new tab. The rest of
-            // the row only stands in for it, for the mouse.
-            return `<td${isPath ? ' class="dc-path"' : ''} title="${escapeHtml(raw)}">${
-              index === 0
-                ? `<a class="dc-row-link" href="${escapeHtml(
-                    EntityList.entryHref(entity, id)
-                  )}">${content || escapeHtml(id)}</a>`
-                : content
-            }</td>`;
-          })
-          .join('')}
+        ${this.columns.map((name, index) => {
+          const attr = entity.schema.attributes[name];
+          const value = entryValue(entry, name);
+          const raw = text(value);
+          const shown = text(
+            (Array.isArray(value) ? value : [value])
+              .filter((v): v is string => v !== undefined)
+              .map(
+                v =>
+                  ownValueLabel(entity, name, String(v), translator.language) ||
+                  displayValue(
+                    attr,
+                    String(v),
+                    this.options.pointerLabel,
+                    translator.language
+                  )
+              )
+          );
+          const isPath = name === entity.organizationPath;
+          const state =
+            typeof value === 'string'
+              ? accountState(entity, name, value)
+              : undefined;
+          const content = isPath
+            ? EntityList.shortenPath(shown)
+            : stateMarkup(state, shown);
+          // The first column opens the entry: a link Tab reaches and Enter
+          // follows, which the browser also opens in a new tab. The rest of
+          // the row only stands in for it, for the mouse.
+          return html`<td${isPath ? html` class="dc-path"` : ''} title="${raw}">${
+            index === 0
+              ? html`<a class="dc-row-link" href="${EntityList.entryHref(
+                  entity,
+                  id
+                )}">${content || id}</a>`
+              : content
+          }</td>`;
+        })}
       </tr>`;
   }
 
@@ -904,7 +893,7 @@ export class EntityList {
    * @param path full path
    * @returns the shortened, escaped form
    */
-  static shortenPath(path: string): string {
+  static shortenPath(path: string): SafeHtml {
     // Split on the separator alone and trim the pieces, rather than on
     // `/\s*\/\s*/`: that pattern scans the run of blanks before every
     // position, so a path made of blanks — and a path is whatever the
@@ -913,41 +902,37 @@ export class EntityList {
       .split('/')
       .map(segment => segment.trim())
       .filter(Boolean);
-    if (segments.length <= 2) return escapeHtml(path);
-    return `${escapeHtml(segments[0])} / … / ${escapeHtml(
-      segments[segments.length - 1]
-    )}`;
+    if (segments.length <= 2) return html`${path}`;
+    return html`${segments[0]} / … / ${segments[segments.length - 1]}`;
   }
 
-  private footerMarkup(total: number, from: number, shown: number): string {
-    if (total === 0) return '';
+  private footerMarkup(total: number, from: number, shown: number): SafeHtml {
+    if (total === 0) return html``;
     const { translator } = this.options;
     const pages = Math.ceil(total / this.pageSize);
-    return `
+    return html`
       <div class="dc-list-footer">
         <label class="dc-page-size">
-          <span>${escapeHtml(translator.t('list.perPage'))}</span>
+          <span>${translator.t('list.perPage')}</span>
           <select class="dc-input" data-page-size>
             ${PAGE_SIZES.map(
               size =>
-                `<option value="${size}"${size === this.pageSize ? ' selected' : ''}>${size}</option>`
-            ).join('')}
+                html`<option value="${size}"${size === this.pageSize ? ' selected' : ''}>${size}</option>`
+            )}
           </select>
         </label>
-        <span class="dc-count">${escapeHtml(
-          translator.t('list.count', {
-            from: from + 1,
-            to: from + shown,
-            total,
-          })
-        )}</span>
+        <span class="dc-count">${translator.t('list.count', {
+          from: from + 1,
+          to: from + shown,
+          total,
+        })}</span>
         <div class="dc-pager">
           <button type="button" class="dc-button" data-page="-1" ${
             this.page === 0 ? 'disabled' : ''
-          }>${escapeHtml(translator.t('list.previous'))}</button>
+          }>${translator.t('list.previous')}</button>
           <button type="button" class="dc-button" data-page="1" ${
             this.page >= pages - 1 ? 'disabled' : ''
-          }>${escapeHtml(translator.t('list.next'))}</button>
+          }>${translator.t('list.next')}</button>
         </div>
       </div>`;
   }

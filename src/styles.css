@@ -2031,6 +2031,9 @@ select.dc-input {
 }
 
 .dc-progress-bar {
+  /* Empty until the script widens it: a style attribute would need a CSP
+     that allows inline styles. */
+  width: 0;
   height: 100%;
   border-radius: inherit;
   background: var(--dc-accent);

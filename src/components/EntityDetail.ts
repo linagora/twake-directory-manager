@@ -15,7 +15,6 @@
  * @module twake-directory-manager/components/EntityDetail
  */
 
-import { escapeHtml } from '../shared/dom';
 import {
   accountState,
   attributeLabel,
@@ -33,6 +32,7 @@ import type { AttachedTables } from './AttachedTables';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
 import { background, type Reporter } from '../shared/background';
+import { html, render, type SafeHtml } from '../shared/html';
 
 /**
  * The headings a field the schema puts in no group is shown under, in the
@@ -197,21 +197,23 @@ export class EntityDetail {
     const { translator, inTransit } = this.options;
     const { title, subtitle } = this.naming();
 
-    container.innerHTML = `
+    render(
+      container,
+      html`
       <article class="dc-detail">
         <header class="dc-detail-header">
           <div class="dc-detail-title">
-            <h2>${escapeHtml(title)}${
+            <h2>${title}${
               inTransit
-                ? ` <span class="dc-tag dc-tag-transit">${escapeHtml(
-                    translator.t('transit.badge')
+                ? html` <span class="dc-tag dc-tag-transit">${translator.t(
+                    'transit.badge'
                   )}</span>`
                 : ''
             }</h2>
             ${
               subtitle.length
-                ? `<p class="dc-detail-subtitle" data-subtitle>${subtitle
-                    .map(part => escapeHtml(part))
+                ? html`<p class="dc-detail-subtitle" data-subtitle>${subtitle
+                    .map(part => part)
                     .join(' · ')}</p>`
                 : ''
             }
@@ -220,20 +222,21 @@ export class EntityDetail {
         </header>
         ${
           this.options.notice
-            ? `<p class="dc-muted dc-detail-notice" data-notice>${escapeHtml(
+            ? html`<p class="dc-muted dc-detail-notice" data-notice>${
                 this.options.notice
-              )}</p>`
+              }</p>`
             : ''
         }
 
         <section class="dc-card">
-          <h3>${escapeHtml(translator.t('detail.attributes'))}</h3>
+          <h3>${translator.t('detail.attributes')}</h3>
           ${this.fieldsMarkup()}
           ${this.dnMarkup()}
         </section>
 
         ${this.options.attached?.markup() ?? this.relationsMarkup()}
-      </article>`;
+      </article>`
+    );
 
     this.bind(container);
   }
@@ -281,22 +284,22 @@ export class EntityDetail {
    * everyday buttons. Claim… stays first: an entry in transit is opened to be
    * claimed.
    */
-  private actionsMarkup(): string {
+  private actionsMarkup(): SafeHtml {
     const { entity, translator, canWrite, canDelete } = this.options;
     const { onClaim, onHandOver, onCreateChild } = this.options;
-    const button = (data: string, key: string, primary = false): string =>
-      `<button type="button" class="dc-button${
+    const button = (data: string, key: string, primary = false): SafeHtml =>
+      html`<button type="button" class="dc-button${
         primary ? ' dc-button-primary' : ''
-      }" ${data}>${escapeHtml(translator.t(key))}</button>`;
-    const item = (data: string, key: string, danger = false): string =>
-      `<button type="button" role="menuitem" class="dc-menu-item${
+      }" ${data}>${translator.t(key)}</button>`;
+    const item = (data: string, key: string, danger = false): SafeHtml =>
+      html`<button type="button" role="menuitem" class="dc-menu-item${
         danger ? ' dc-menu-item-danger' : ''
-      }" ${data}>${escapeHtml(translator.t(key))}</button>`;
+      }" ${data}>${translator.t(key)}</button>`;
     const more = [
       onHandOver ? item('data-hand-over', 'transit.handOver') : '',
       canDelete ? item('data-delete', 'app.delete', true) : '',
     ].filter(Boolean);
-    return [
+    return html`${[
       onClaim ? button('data-claim', 'transit.claim', true) : '',
       canWrite ? button('data-edit', 'app.edit', true) : '',
       // An everyday action of an organization's card, not a rare one: it
@@ -307,19 +310,15 @@ export class EntityDetail {
         : '',
       this.statusMarkup(),
       more.length
-        ? `<div class="dc-menu">
+        ? html`<div class="dc-menu">
               <button type="button" class="dc-button" data-more aria-haspopup="menu"
-                aria-expanded="false" aria-controls="dc-more-actions">${escapeHtml(
-                  translator.t('detail.moreActions')
+                aria-expanded="false" aria-controls="dc-more-actions">${translator.t(
+                  'detail.moreActions'
                 )}</button>
-              <div class="dc-menu-list" role="menu" id="dc-more-actions" data-more-menu hidden>${more.join(
-                ''
-              )}</div>
+              <div class="dc-menu-list" role="menu" id="dc-more-actions" data-more-menu hidden>${more}</div>
             </div>`
         : '',
-    ]
-      .filter(Boolean)
-      .join('\n            ');
+    ].filter(Boolean)}`;
   }
 
   /**
@@ -330,19 +329,19 @@ export class EntityDetail {
    * Few administrators need it, and it stood first on the card, where the
    * name should: it waits, folded, under _Technical details_.
    */
-  private dnMarkup(): string {
+  private dnMarkup(): SafeHtml {
     const { entry, translator } = this.options;
     const dn = entry.dn ? String(entry.dn) : '';
-    if (!dn) return '';
-    return `
+    if (!dn) return html``;
+    return html`
           <details class="dc-detail-fold" data-technical>
-            <summary>${escapeHtml(translator.t('detail.technical'))}</summary>
+            <summary>${translator.t('detail.technical')}</summary>
             <dl class="dc-attributes">
               <div class="dc-attribute dc-attribute-dn">
-                <dt>${escapeHtml(translator.t('detail.dn'))}</dt>
-                <dd><code class="dc-dn">${escapeHtml(dn)}</code>
-                  <button type="button" class="dc-button" data-copy-dn>${escapeHtml(
-                    translator.t('detail.copy')
+                <dt>${translator.t('detail.dn')}</dt>
+                <dd><code class="dc-dn">${dn}</code>
+                  <button type="button" class="dc-button" data-copy-dn>${translator.t(
+                    'detail.copy'
                   )}</button></dd>
               </div>
             </dl>
@@ -358,7 +357,7 @@ export class EntityDetail {
    * already shows, the department beside its path (the path names it, and
    * leads to it), a common name that is the full name again.
    */
-  private fieldsMarkup(): string {
+  private fieldsMarkup(): SafeHtml {
     const { entity, entry, translator } = this.options;
     const { title, byName } = this.naming();
     const display = roleAttribute(entity.schema, 'displayName');
@@ -386,13 +385,13 @@ export class EntityDetail {
         list[0] === title
       )
         continue;
-      const row = `
+      const row = html`
               <div class="dc-attribute">
-                <dt>${escapeHtml(this.label(name, attr))}</dt>
+                <dt>${this.label(name, attr)}</dt>
                 <dd>${
                   list.length === 0
-                    ? `<span class="dc-muted">${escapeHtml(translator.t('form.none'))}</span>`
-                    : list.map(value => this.valueMarkup(name, value)).join('')
+                    ? html`<span class="dc-muted">${translator.t('form.none')}</span>`
+                    : list.map(value => this.valueMarkup(name, value))
                 }</dd>
               </div>`;
       const heading = this.groupOf(name, attr);
@@ -402,11 +401,11 @@ export class EntityDetail {
         count++;
       }
     }
-    return `${this.groupsMarkup(shown)}${
+    return html`${this.groupsMarkup(shown)}${
       count
-        ? `
+        ? html`
           <details class="dc-detail-fold" data-empty>
-            <summary>${escapeHtml(translator.t('detail.showEmpty', { count }))}</summary>
+            <summary>${translator.t('detail.showEmpty', { count })}</summary>
             ${this.groupsMarkup(empty)}
           </details>`
         : ''
@@ -417,7 +416,7 @@ export class EntityDetail {
    * The headings of the card, each with no field yet, in the order they are
    * shown: those of the form's groups between Contact and Mailbox.
    */
-  private groups(): Map<string, string[]> {
+  private groups(): Map<string, SafeHtml[]> {
     const { entity, translator } = this.options;
     const named = (keys: string[]): string[] =>
       keys.map(key => translator.t(`detail.group.${key}`));
@@ -452,17 +451,16 @@ export class EntityDetail {
     return translator.t(`detail.group.${key}`);
   }
 
-  private groupsMarkup(groups: Map<string, string[]>): string {
-    return [...groups]
+  private groupsMarkup(groups: Map<string, SafeHtml[]>): SafeHtml {
+    return html`${[...groups]
       .filter(([, rows]) => rows.length)
       .map(
-        ([heading, rows]) => `
+        ([heading, rows]) => html`
             <div class="dc-detail-group">
-              <h4>${escapeHtml(heading)}</h4>
-              <dl class="dc-attributes">${rows.join('')}</dl>
+              <h4>${heading}</h4>
+              <dl class="dc-attributes">${rows}</dl>
             </div>`
-      )
-      .join('');
+      )}`;
   }
 
   private label(name: string, attr: SchemaAttribute): string {
@@ -489,7 +487,7 @@ export class EntityDetail {
    * so the owners of a group read as the accounts they are rather than as
    * DNs, and lead to them.
    */
-  private valueMarkup(name: string, value: string): string {
+  private valueMarkup(name: string, value: string): SafeHtml {
     const { entity, entry } = this.options;
     const attr = entity.schema.attributes[name];
     const link =
@@ -497,11 +495,9 @@ export class EntityDetail {
         ? values(entryValue(entry, entity.organizationLink))[0]
         : undefined;
     if (link)
-      return `<a href="#/organizations/${encodeURIComponent(
+      return html`<a href="#/organizations/${encodeURIComponent(
         link
-      )}" class="dc-path-link" title="${escapeHtml(value)}">${escapeHtml(
-        value
-      )}</a>`;
+      )}" class="dc-path-link" title="${value}">${value}</a>`;
     // An organization's managers and local administrators are accounts as
     // well, and lead to them: who administers a branch was only a name.
     if (RELATION_ROLES.some(role => hasRole(attr, role)) && isDnShaped(value))
@@ -514,13 +510,14 @@ export class EntityDetail {
     // 1073741824 is 1 GiB, which no decimal unit says exactly: the card
     // rounds it, and leaves the exact count in the tooltip.
     if (attr?.normalize === 'byteSize' && /^\d+$/.test(value.trim()))
-      return `<span class="dc-value" title="${escapeHtml(
-        this.options.translator.t('detail.bytes', { count: value.trim() })
-      )}">${escapeHtml(readableByteSize(value, language).text)}</span>`;
+      return html`<span class="dc-value" title="${this.options.translator.t(
+        'detail.bytes',
+        { count: value.trim() }
+      )}">${readableByteSize(value, language).text}</span>`;
     const shown =
       ownValueLabel(entity, name, value, language) ||
       displayValue(attr, value, this.options.pointerLabel, language);
-    return `<span class="dc-value" title="${escapeHtml(value)}">${stateMarkup(
+    return html`<span class="dc-value" title="${value}">${stateMarkup(
       accountState(entity, name, value),
       shown
     )}</span>`;
@@ -531,13 +528,13 @@ export class EntityDetail {
    * select: a select wrote the state as soon as its value changed, and an
    * arrow key on it was enough to lock a colleague out.
    */
-  private statusMarkup(): string {
+  private statusMarkup(): SafeHtml {
     const { entity, translator, canWrite } = this.options;
-    if (!canWrite || !entity.accountStatus) return '';
+    if (!canWrite || !entity.accountStatus) return html``;
     const states = entity.schema.attributes[entity.accountStatus]?.states;
-    if (!states || Object.keys(states).length === 0) return '';
-    return `<button type="button" class="dc-button" data-status>${escapeHtml(
-      translator.t('status.change')
+    if (!states || Object.keys(states).length === 0) return html``;
+    return html`<button type="button" class="dc-button" data-status>${translator.t(
+      'status.change'
     )}</button>`;
   }
 
@@ -546,9 +543,9 @@ export class EntityDetail {
    * to a group… beside the heading, and a × on each group the caller may
    * take the account out of, where it took a trip to each group's form.
    */
-  private relationsMarkup(): string {
+  private relationsMarkup(): SafeHtml {
     const { relations, translator, onAddToGroups, onAddMembers } = this.options;
-    if (!relations) return '';
+    if (!relations) return html``;
     // A group's members are counted, as its card is opened to manage them.
     const counted =
       relations.more !== undefined
@@ -557,28 +554,28 @@ export class EntityDetail {
     const title = relations.groups
       ? relations.title
       : `${relations.title} (${counted})`;
-    return `
+    return html`
       <section class="dc-card">
         <div class="dc-card-heading">
-          <h3>${escapeHtml(title)}</h3>
+          <h3>${title}</h3>
           ${
             relations.groups && onAddToGroups
-              ? `<button type="button" class="dc-button" data-add-groups>${escapeHtml(
-                  translator.t('groups.add')
+              ? html`<button type="button" class="dc-button" data-add-groups>${translator.t(
+                  'groups.add'
                 )}</button>`
               : !relations.groups && onAddMembers
-                ? `<button type="button" class="dc-button" data-add-members>${escapeHtml(
-                    translator.t('members.add')
+                ? html`<button type="button" class="dc-button" data-add-members>${translator.t(
+                    'members.add'
                   )}</button>`
                 : ''
           }
         </div>
         ${
           relations.items.length === 0
-            ? `<p class="dc-muted">${escapeHtml(translator.t('detail.emptyRelations'))}</p>`
-            : `<ul class="dc-relations">${relations.items
-                .map(item => this.relationMarkup(item))
-                .join('')}</ul>`
+            ? html`<p class="dc-muted">${translator.t('detail.emptyRelations')}</p>`
+            : html`<ul class="dc-relations">${relations.items.map(item =>
+                this.relationMarkup(item)
+              )}</ul>`
         }
         ${this.moreMarkup()}
       </section>`;
@@ -590,27 +587,27 @@ export class EntityDetail {
     label: string;
     note?: string;
     removable?: boolean;
-  }): string {
+  }): SafeHtml {
     const { translator, onLeaveGroup } = this.options;
     const link = this.relationLink(item.id, item.label);
     const removable = item.removable && onLeaveGroup;
-    if (!item.note && !removable) return `<li>${link}</li>`;
-    return `<li class="dc-relation">${link}${
+    if (!item.note && !removable) return html`<li>${link}</li>`;
+    return html`<li class="dc-relation">${link}${
       item.note
-        ? `<span class="dc-relation-note">· ${escapeHtml(item.note)}</span>`
+        ? html`<span class="dc-relation-note">· ${item.note}</span>`
         : ''
     }${
       removable
-        ? `<button type="button" class="dc-relation-remove" data-leave="${escapeHtml(
+        ? html`<button type="button" class="dc-relation-remove" data-leave="${
             item.id
-          )}" aria-label="${escapeHtml(
+          }" aria-label="${
             this.options.relations?.groups
               ? translator.t('groups.remove', { group: item.label })
               : translator.t('members.remove', {
                   member: item.label,
                   group: this.naming().title,
                 })
-          )}">×</button>`
+          }">×</button>`
         : ''
     }</li>`;
   }
@@ -624,30 +621,30 @@ export class EntityDetail {
    * @param label its name
    * @param title its tooltip, the DN where the name hides it
    */
-  private relationLink(dn: string, label: string, title?: string): string {
+  private relationLink(dn: string, label: string, title?: string): SafeHtml {
     const href = this.options.relationHref?.(dn);
-    const tip = title ? ` title="${escapeHtml(title)}"` : '';
+    const tip = title ? html` title="${title}"` : '';
     return href
-      ? `<a href="${escapeHtml(href)}" class="dc-link" data-relation="${escapeHtml(
+      ? html`<a href="${href}" class="dc-link" data-relation="${
           dn
-        )}"${tip}>${escapeHtml(label)}</a>`
-      : `<span class="dc-value" data-relation="${escapeHtml(dn)}"${tip}>${escapeHtml(
+        }"${tip}>${label}</a>`
+      : html`<span class="dc-value" data-relation="${dn}"${tip}>${
           label
-        )}</span>`;
+        }</span>`;
   }
 
   /**
    * What the list leaves out, said where it stops: a department whose card
    * lists fifty names otherwise reads as a department of fifty.
    */
-  private moreMarkup(): string {
+  private moreMarkup(): SafeHtml {
     const { relations, translator } = this.options;
-    if (!relations?.truncated) return '';
-    return `<p class="dc-muted" role="status">${escapeHtml(
+    if (!relations?.truncated) return html``;
+    return html`<p class="dc-muted" role="status">${
       relations.more === undefined
         ? translator.t('detail.moreUncounted')
         : translator.t('detail.more', { count: relations.more })
-    )}</p>`;
+    }</p>`;
   }
 
   private bind(container: HTMLElement): void {

@@ -9,10 +9,10 @@
  * @module twake-directory-manager/components/GroupPicker
  */
 
-import { escapeHtml } from '../shared/dom';
 import { SEARCH_MINIMUM, listFailure } from './EntityList';
 import type { Translator } from '../i18n';
 import { background, type Reporter } from '../shared/background';
+import { html, render } from '../shared/html';
 
 /** Wait after a keystroke before searching, as the form's pickers do. */
 const SEARCH_DELAY = 250;
@@ -76,12 +76,14 @@ export class GroupPicker {
     const { translator } = this.options;
     const t = (key: string, values?: Record<string, string | number>): string =>
       translator.t(key, values);
-    container.innerHTML = `
+    render(
+      container,
+      html`
       <form class="dc-form" data-group-picker>
         <div class="dc-field">
-          <label for="dc-group-search">${escapeHtml(
+          <label for="dc-group-search">${
             this.options.words?.field ?? t('groups.field')
-          )}</label>
+          }</label>
           <div class="dc-tokens dc-picker">
             <ul class="dc-token-list" data-chosen></ul>
             <div class="dc-picker-box">
@@ -93,21 +95,22 @@ export class GroupPicker {
                 role="listbox" hidden></ul>
             </div>
           </div>
-          <p class="dc-hint" id="dc-group-hint">${escapeHtml(
+          <p class="dc-hint" id="dc-group-hint">${
             this.options.words?.hint ??
-              t('groups.search', { count: SEARCH_MINIMUM })
-          )}</p>
+            t('groups.search', { count: SEARCH_MINIMUM })
+          }</p>
         </div>
         <p class="dc-error-block" role="alert" data-error hidden></p>
         <div class="dc-form-actions">
-          <button type="button" class="dc-button" data-cancel>${escapeHtml(
-            t('app.cancel')
+          <button type="button" class="dc-button" data-cancel>${t(
+            'app.cancel'
           )}</button>
-          <button type="submit" class="dc-button dc-button-primary" data-add disabled>${escapeHtml(
-            t('groups.confirm')
+          <button type="submit" class="dc-button dc-button-primary" data-add disabled>${t(
+            'groups.confirm'
           )}</button>
         </div>
-      </form>`;
+      </form>`
+    );
     this.bind(container);
   }
 
@@ -130,18 +133,19 @@ export class GroupPicker {
     let asked = '';
 
     const redraw = (): void => {
-      tokens.innerHTML = this.chosen
-        .map(
-          (group, index) => `
+      render(
+        tokens,
+        html`${this.chosen.map(
+          (group, index) => html`
         <li class="dc-token">
-          <span title="${escapeHtml(group.dn)}">${escapeHtml(group.name)}</span>
+          <span title="${group.dn}">${group.name}</span>
           <button type="button" data-remove="${index}"
-            aria-label="${escapeHtml(
-              translator.t('form.removeValue', { value: group.name })
-            )}">×</button>
+            aria-label="${translator.t('form.removeValue', {
+              value: group.name,
+            })}">×</button>
         </li>`
-        )
-        .join('');
+        )}`
+      );
       add.disabled = busy || this.chosen.length === 0;
     };
     const close = (): void => {
@@ -154,7 +158,10 @@ export class GroupPicker {
     const message = (text: string): void => {
       candidates = [];
       active = -1;
-      results.innerHTML = `<li class="dc-picker-note" role="presentation">${escapeHtml(text)}</li>`;
+      render(
+        results,
+        html`<li class="dc-picker-note" role="presentation">${text}</li>`
+      );
       results.hidden = false;
       input.setAttribute('aria-expanded', 'true');
       input.removeAttribute('aria-activedescendant');
@@ -164,17 +171,18 @@ export class GroupPicker {
         return message(
           this.options.emptyNote?.(asked) ?? translator.t('list.noMatch')
         );
-      results.innerHTML = candidates
-        .map(
-          (candidate, index) => `
+      render(
+        results,
+        html`${candidates.map(
+          (candidate, index) => html`
         <li id="dc-group-option-${index}" role="option"
           class="dc-picker-option${index === active ? ' dc-active' : ''}"
           aria-selected="${index === active ? 'true' : 'false'}"
-          data-candidate="${index}" title="${escapeHtml(candidate.dn)}">${escapeHtml(
+          data-candidate="${index}" title="${candidate.dn}">${
             candidate.label
-          )}</li>`
-        )
-        .join('');
+          }</li>`
+        )}`
+      );
       results.hidden = false;
       input.setAttribute('aria-expanded', 'true');
       if (active < 0) return;
