@@ -10,6 +10,7 @@ import type { EntityDescriptor, Entry } from '../../src/types';
 import { consoleIn, toastElement } from '../support/stubs';
 import { usersSchema, users } from '../fixtures/entities';
 import { mountConsole, settled, type Mounted } from '../support/mount';
+import { click, gate, panelOf, press, type, until } from '../support/act';
 
 /** Alice's entry, as the ldap-rest tested answers it. */
 const alice = (
@@ -20,64 +21,6 @@ const alice = (
     )
   ) as { body: Entry }
 ).body;
-
-/** The panel of a mounted console. */
-const parts = (root: HTMLElement) => {
-  const find = (selector: string): HTMLElement => {
-    const found = root.querySelector<HTMLElement>(selector);
-    if (!found) throw new Error(`no ${selector}`);
-    return found;
-  };
-  return {
-    panel: find('[data-panel]'),
-    title: find('[data-panel-title]'),
-    body: find('[data-panel-body]'),
-  };
-};
-
-/** Click what the selector finds, which must be there. */
-const click = (root: HTMLElement, selector: string): void => {
-  const found = root.querySelector<HTMLElement>(selector);
-  if (!found) throw new Error(`no ${selector}`);
-  found.click();
-};
-
-/** A key pressed wherever the focus is: the console listens on the document. */
-const press = (key: string, shiftKey = false): void => {
-  (document.activeElement ?? document.body).dispatchEvent(
-    new KeyboardEvent('keydown', {
-      key,
-      shiftKey,
-      bubbles: true,
-      cancelable: true,
-    })
-  );
-};
-
-/** Wait for what the console does once the server answers. */
-const until = async (done: () => boolean): Promise<void> => {
-  for (let i = 0; i < 200; i++) {
-    if (done()) return;
-    await new Promise(resolve => setTimeout(resolve, 5));
-  }
-  throw new Error('waited a second in vain');
-};
-
-/** An answer of the server held back until the test lets it go. */
-const gate = () => {
-  let open = (): void => undefined;
-  const opened = new Promise<void>(resolve => (open = resolve));
-  return { opened, open: () => open() };
-};
-
-/** Type a value into a field, as the reader does. */
-const type = (field: HTMLInputElement | null, value: string): void => {
-  if (!field) throw new Error('no field');
-  field.focus();
-  field.value = value;
-  field.dispatchEvent(new Event('input', { bubbles: true }));
-  field.dispatchEvent(new Event('change', { bubbles: true }));
-};
 
 const top = 'ou=organization,dc=example,dc=com';
 /** The organization tree the department picker searches, before the mount's empty one. */
@@ -116,7 +59,7 @@ const create = async (
   });
   click(root, '[data-main] [data-new]');
   await settled(root);
-  const { body } = parts(root);
+  const { body } = panelOf(root);
   const field = (name: string) =>
     body.querySelector<HTMLInputElement>(`[name="${name}"]`);
   type(field('employeeNumber'), 'E0099');
@@ -438,7 +381,7 @@ describe('Directory console: the side panel and the toast', () => {
         return [200, { generated: true, password: 's3cret' }];
       });
       click(root, '[data-main] [data-password]');
-      const { panel, body } = parts(root);
+      const { panel, body } = panelOf(root);
       const send = body.querySelector<HTMLButtonElement>(
         'button[type="submit"]'
       );
@@ -574,7 +517,7 @@ describe('Directory console: the side panel and the toast', () => {
       // An account created empty could not be signed in to (#164).
       const mounted = await mountConsole({ hash: 'users', answers: tree });
       const { root, calls } = mounted;
-      const { body, title, panel } = parts(root);
+      const { body, title, panel } = panelOf(root);
       await create(mounted);
       await until(() => !!body.querySelector('#dc-generated-password'));
       expect(
@@ -625,7 +568,7 @@ describe('Directory console: the side panel and the toast', () => {
     it('should wait behind the panel opened meanwhile, and open no card', async () => {
       const mounted = await mountConsole({ hash: 'users', answers: tree });
       const { root } = mounted;
-      const { body, title, panel } = parts(root);
+      const { body, title, panel } = panelOf(root);
       const created = gate();
       const { answered } = await create(mounted, created.opened);
       // The form is left while the server answers, and another panel opens.
@@ -653,7 +596,7 @@ describe('Directory console: the side panel and the toast', () => {
     it('should open the card only if the administrator stayed', async () => {
       const mounted = await mountConsole({ hash: 'users', answers: tree });
       const { root } = mounted;
-      const { body, panel } = parts(root);
+      const { body, panel } = panelOf(root);
       await create(mounted);
       await until(() => !!body.querySelector('#dc-generated-password'));
       // Gone elsewhere: the password stays until it is closed on purpose,
@@ -681,7 +624,7 @@ describe('Directory console: the side panel and the toast', () => {
       // it queued opened at some later close (#164).
       const mounted = await mountConsole({ hash: 'users', answers: tree });
       const { root } = mounted;
-      const { body, panel } = parts(root);
+      const { body, panel } = panelOf(root);
       const created = gate();
       await create(mounted, created.opened);
       press('Escape');

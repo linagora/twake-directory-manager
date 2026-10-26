@@ -34,7 +34,6 @@ import {
 } from './components/EntityList';
 import { GroupPicker, type GroupChoice } from './components/GroupPicker';
 import { OrganizationTree } from './components/OrganizationTree';
-import { PolicyForm, policyTableMarkup } from './components/PasswordPolicies';
 import {
   attributeLabel,
   comparableDn,
@@ -42,6 +41,7 @@ import {
   entryValue,
   explainRefusal,
   isDnShaped,
+  readFailure,
   parentDn as parentOf,
   ownValueLabel,
   pointerLabel,
@@ -59,6 +59,7 @@ import type {
 } from './components/OrganizationTree';
 import type { PointerLookup } from './importer';
 // Kept where embedders and the tests found them.
+export { readFailure } from './format';
 export {
   claimRoots,
   isPrimaryEntity,
@@ -78,11 +79,11 @@ import type {
   Entry,
   EntryList,
   OrganizationNode,
-  PasswordPolicy,
   Scope,
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
+import type { ConsoleContext } from './console/context';
 import type { ConsoleDeps } from './console/deps';
 import { DialogService } from './console/dialog';
 import { POLICIES_KEY, type Route, routeOf } from './console/route';
@@ -97,6 +98,7 @@ import {
   storedLanguage,
 } from './console/settings';
 import { announcer } from './ui/announce';
+import { PoliciesView } from './views/policies';
 import { ToastController } from './ui/toast';
 
 // Kept importable from here, where they were first defined.
@@ -107,41 +109,6 @@ export type { Confirmation };
 interface SignedIn {
   name: string;
   email?: string;
-}
-
-/**
- * What a failed read means for the reader.
- *
- * Only a `404` means what "no longer exists" says. A `401`, a `403` or a proxy
- * error is a different thing entirely, and telling the operator the entry is
- * gone sends them looking for the wrong problem — so every view that reads one
- * entry reads its failures here.
- *
- * A `403` is said plainly too: the server words it for an API client
- * ("Token does not have permission on this branch"), and a refusal is no
- * failure of the console to report as one.
- *
- * @param err failure raised by the API client
- * @param translator interface language
- * @returns the message to show, whether the entry is simply gone, and
- *   whether the reader was refused it
- */
-export function readFailure(
-  err: unknown,
-  translator: Translator
-): { gone: boolean; refused: boolean; message: string } {
-  const status = (err as { status?: number }).status;
-  const gone = status === 404;
-  const refused = status === 403;
-  return {
-    gone,
-    refused,
-    message: gone
-      ? translator.t('detail.notFound')
-      : refused
-        ? translator.t('detail.refused')
-        : (err as Error).message,
-  };
 }
 
 /**
@@ -266,6 +233,8 @@ export class DirectoryConsole {
   private readonly dialog = new DialogService(this.panel, key =>
     this.translator.t(key)
   );
+  /** What the views moved out of the console are given of it, built by `init()` */
+  private context!: ConsoleContext;
 
   /**
    * @param options what the page gives the console
@@ -310,6 +279,7 @@ export class DirectoryConsole {
     this.mounted.abort();
     this.mounted = new AbortController();
     const { signal } = this.mounted;
+    this.context = this.contextOf();
 
     render(
       this.container,
@@ -390,6 +360,27 @@ export class DirectoryConsole {
     if (this.route.view !== 'dashboard')
       background(() => this.readTransit(), 'readTransit', this.report);
     await this.renderMain();
+  }
+
+  /**
+   * The console as its views see it: what changes over its life — the
+   * translator, the scope and so the rights — asked of it each time.
+   */
+  private contextOf(): ConsoleContext {
+    return {
+      api: this.api,
+      translator: () => this.translator,
+      t: (key, values) => this.translator.t(key, values),
+      rights: () => this.rights,
+      toast: (message, isError) => this.toast(message, isError),
+      report: this.report,
+      panel: this.panel,
+      dialog: this.dialog,
+      current: generation => this.current(generation),
+      titlePage: name => this.titlePage(name),
+      refresh: () => this.renderMain(),
+      go: path => this.go(path),
+    };
   }
 
   /* ---------------------------------------------------------------- routing */
@@ -2771,162 +2762,15 @@ export class DirectoryConsole {
     );
   }
 
-  /** The table of the password policies. */
-  private async renderPolicies(
-    main: HTMLElement,
-    generation: number
-  ): Promise<void> {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    this.titlePage(t('nav.policies'));
-    render(
-      main,
-      html`
-      <section class="dc-view">
-        <header class="dc-view-header">
-          <h1>${t('nav.policies')}</h1>
-          <div class="dc-view-actions">
-            <button type="button" class="dc-button dc-button-primary" data-new>${t(
-              'policy.new'
-            )}</button>
-          </div>
-        </header>
-        <div data-list><p class="dc-empty">${t('app.loading')}</p></div>
-      </section>`
-    );
-    let attributes: string[] | undefined;
-    main
-      .querySelector('[data-new]')
-      ?.addEventListener('click', () =>
-        this.openPolicyForm(undefined, attributes)
-      );
-
-    const holder = main.querySelector<HTMLElement>(
-      '[data-list]'
-    ) as HTMLElement;
-    let policies: PasswordPolicy[];
-    try {
-      ({ policies, attributes } = await this.api.passwordPolicies());
-    } catch (err) {
-      if (!this.current(generation)) return;
-      const failure = readFailure(err, this.translator);
-      render(
-        holder,
-        html`<p class="dc-empty${
-          failure.refused ? '' : ' dc-error-block'
-        }">${failure.message}</p>`
-      );
-      return;
-    }
-    if (!this.current(generation)) return;
-    render(holder, policyTableMarkup(this.translator, policies));
-    for (const row of Array.from(
-      holder.querySelectorAll<HTMLElement>('[data-policy]')
-    )) {
-      const open = (): void => {
-        // Opened from anywhere on the row, the panel gives the focus back to
-        // the name's button when it closes, not to the page.
-        row.querySelector<HTMLElement>('[data-policy-open]')?.focus();
-        const policy = policies.find(item => item.cn === row.dataset.policy);
-        if (policy) this.openPolicyForm(policy, attributes);
-      };
-      // The name is a button whose click, pressed or keyed, bubbles here.
-      // Opening on the row's keydown let the same Enter reach the panel's
-      // form and submit it, closing the panel at once (#207).
-      row.addEventListener('click', open);
-    }
-  }
-
   /**
-   * Create a password policy, or edit one.
-   *
-   * @param attributes those the directory defines, all when unknown
+   * The password policies' page (`PoliciesView`). A view is made for each
+   * drawing: it holds nothing from one to the next, and a view made anew
+   * cannot draw with what an earlier page left in it. A view that keeps
+   * something between drawings, as the lists keep where the reader was, is
+   * kept by the console instead (#220).
    */
-  private openPolicyForm(policy?: PasswordPolicy, attributes?: string[]): void {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    this.openPanel(
-      policy
-        ? t('policy.title.edit', { name: policy.cn })
-        : t('policy.title.new'),
-      body => {
-        const form: PolicyForm = new PolicyForm({
-          report: this.report,
-          translator: this.translator,
-          policy,
-          attributes,
-          canDelete: this.rights.canDelete(),
-          onSave: async (cn, values): Promise<void> => {
-            try {
-              if (policy) await this.api.updatePasswordPolicy(cn, values);
-              else await this.api.createPasswordPolicy(cn, values);
-            } catch (err) {
-              // A new policy conflicts with nothing but one of its name.
-              if (!policy && (err as { status?: number }).status === 409)
-                form.refuse('cn', t('policy.error.taken', { name: cn }));
-              else this.toast(this.policyRefusal(err, cn), true);
-              return;
-            }
-            this.closePanel(true);
-            this.toast(t(policy ? 'policy.saved' : 'policy.created'));
-            await this.renderMain();
-          },
-          onDelete: (): void =>
-            background(
-              () => this.deletePolicy(policy as PasswordPolicy),
-              'deletePolicy',
-              this.report
-            ),
-          onCancel: (): void => this.closePanel(),
-        });
-        form.render(body);
-        this.guardDiscard(body, () => form.isDirty());
-      },
-      false,
-      true
-    );
-  }
-
-  private async deletePolicy(policy: PasswordPolicy): Promise<void> {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    // Asked over the policy's form, which comes back as it was on Cancel.
-    if (
-      !(await this.confirmAction({
-        title: t('policy.deleteTitle', { name: policy.cn }),
-        lines: [t('delete.irreversible')],
-        action: t('policy.deleteButton'),
-      }))
-    )
-      return;
-    try {
-      await this.api.deletePasswordPolicy(policy.cn);
-    } catch (err) {
-      // The server's refusal names the DN, in English: say it in words.
-      this.toast(
-        (err as { status?: number }).status === 409
-          ? t('policy.inUse', { name: policy.cn })
-          : this.policyRefusal(err, policy.cn),
-        true
-      );
-      return;
-    }
-    this.closePanel(true);
-    this.toast(t('policy.deleted'));
-    await this.renderMain();
-  }
-
-  /**
-   * A refusal of a password policy in the interface's language, as an
-   * entry's is said (see {@link explainRefusal}). A policy has no schema
-   * the console reads: the server's words name its attributes themselves.
-   *
-   * @param err what the request threw
-   * @param name the policy
-   */
-  private policyRefusal(err: unknown, name: string): string {
-    return explainRefusal(err, { attributes: {} }, this.translator, name)
-      .message;
+  private renderPolicies(main: HTMLElement, generation: number): Promise<void> {
+    return new PoliciesView(this.context).render(main, generation);
   }
 
   /**
