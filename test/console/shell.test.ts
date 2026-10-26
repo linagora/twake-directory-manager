@@ -1027,6 +1027,16 @@ describe('Directory console: the shell and the overview', () => {
         ).to.equal('1');
       });
 
+      it('should hold a hidden region that says to a screen reader what the eye reads at once', () => {
+        const { container } = drawn();
+        const region = container.querySelector(
+          '.dc-app > [data-announce].dc-visually-hidden'
+        );
+        expect(region?.getAttribute('role')).to.equal('status');
+        expect(region?.getAttribute('aria-live')).to.equal('polite');
+        expect(region?.getAttribute('aria-atomic')).to.equal('true');
+      });
+
       it('should title the tab after the page shown', () => {
         // Every page, not only a card, so that tabs and history tell them
         // apart (#214).

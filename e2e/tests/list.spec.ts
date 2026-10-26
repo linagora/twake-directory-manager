@@ -691,6 +691,22 @@ test.describe('LIST lists, search and bulk actions', () => {
     await expect(list.searchIn).toHaveAccessibleName('Search in');
     await list.listEverything();
     await expect(list.table).toHaveAccessibleName('Users');
+    // What the load brought, then each change of selection, is said to a
+    // screen reader (#212)
+    const said = page.locator('[data-announce]');
+    await expect(said).toHaveText(/^1–\d+ of \d+$/);
+    await list.rowCheckbox('alice').check();
+    await expect(said).toHaveText('1 selected');
+    await list.rowCheckbox('bob').check();
+    await expect(said).toHaveText('2 selected');
+    await list.rowCheckbox('alice').uncheck();
+    await expect(said).toHaveText('1 selected');
+    await list.rowCheckbox('bob').uncheck();
+    await expect(said).toHaveText('Selection cleared');
+    await list.search('zzz');
+    await expect(said).toHaveText('No entry matches this search');
+    await list.search('');
+    await list.listEverything();
     await expect(list.columnHeaders.first()).toHaveAttribute('scope', 'col');
     await expect(list.selectAll).toHaveAccessibleName(
       'Select all rows on this page'

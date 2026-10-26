@@ -2294,6 +2294,12 @@ select.dc-input {
   outline: none;
 }
 
+/* The lead of an import step takes the focus for the screen reader; it is
+   no control, and shows no ring. */
+[data-step-lead]:focus {
+  outline: none;
+}
+
 .dc-visually-hidden {
   position: absolute;
   width: 1px;

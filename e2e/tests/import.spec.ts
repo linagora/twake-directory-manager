@@ -202,14 +202,28 @@ test.describe('IMPORT CSV import', () => {
         ],
       ])
     );
+    // Each step moves the focus to what it says (#213)
+    await expect(panel.dialog.locator(':focus')).toHaveText(
+      /^2 rows read from /
+    );
     await panel.check();
     await expect(panel.stat('ready to import')).toHaveText('2');
     await expect(panel.stat('with errors')).toHaveText('0');
+    await expect(
+      panel.dialog.getByRole('group', {
+        name: '2 ready to import, 0 with errors',
+      })
+    ).toBeFocused();
     await expect(panel.runButton).toHaveText('Import 2 entries');
     await panel.runButton.click();
     await expect(panel.progress.or(panel.closeButton)).toBeVisible();
     await expect(panel.closeButton).toBeVisible({ timeout: 60_000 });
     await expect(panel.stat('created')).toHaveText('2');
+    await expect(
+      panel.dialog.getByRole('group', {
+        name: '2 created, 0 refused by the server',
+      })
+    ).toBeFocused();
     // no Password column: the accounts cannot sign in yet, and it says so (#164)
     await expect(panel.dialog).toContainText(
       '2 accounts were created without a password: give each one from its card (Reset password)'

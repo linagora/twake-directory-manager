@@ -82,6 +82,11 @@ import type {
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
+import { announcer, announcerMarkup } from './ui/announce';
+import { ToastController } from './ui/toast';
+
+// Kept importable from here, where it was first defined.
+export { ToastController };
 
 /** The signed-in account, as the overview names it. */
 interface SignedIn {
@@ -226,51 +231,6 @@ export function listLoader(
       : api.listBounded(entity, undefined, undefined, LIST_LIMIT);
 }
 
-/**
- * The console's one toast element: a message, then hidden after a while.
- *
- * Every message replaces the previous one, and so must its timer. A timer left
- * running from an earlier message hid the next one early. Nothing that cannot
- * be shown again goes here: a generated password stays in its panel.
- *
- * It sits in a live region drawn with the shell, so that a screen reader
- * says each message as it shows: a region that is hidden, or new, when its
- * text changes is not announced. A refusal interrupts; the others wait.
- */
-export class ToastController {
-  private timer: ReturnType<typeof setTimeout> | undefined;
-
-  /**
-   * @param element finds the toast element, which survives re-renders
-   * @param delay how long a message stays, in milliseconds
-   */
-  constructor(
-    private readonly element: () => HTMLElement | null | undefined,
-    private readonly delay = 5000
-  ) {}
-
-  /** Show a message. */
-  show(message: string, isError = false): void {
-    const toast = this.element();
-    if (!toast) return;
-    if (this.timer !== undefined) {
-      clearTimeout(this.timer);
-      this.timer = undefined;
-    }
-    toast
-      .closest?.('[data-toast-region]')
-      ?.setAttribute('aria-live', isError ? 'assertive' : 'polite');
-    toast.classList.toggle('dc-toast-error', isError);
-    // Shown before it is written, for the region to announce the text.
-    toast.hidden = false;
-    toast.textContent = message;
-    this.timer = setTimeout((): void => {
-      this.timer = undefined;
-      toast.hidden = true;
-    }, this.delay);
-  }
-}
-
 export class DirectoryConsole {
   private readonly options: ConsoleOptions;
   private readonly api: ConsoleApiClient;
@@ -307,6 +267,10 @@ export class DirectoryConsole {
   private viewGeneration = 0;
   /** The page's own title, which a card puts the entry's name before */
   private pageTitle = '';
+  /** Says a text to a screen reader, and nothing to the eye (#212). */
+  private readonly announce = announcer(() =>
+    this.container?.querySelector<HTMLElement>('[data-announce]')
+  );
   private route: Route = { view: 'dashboard' };
   private readonly toasts = new ToastController(() =>
     this.container?.querySelector<HTMLElement>('[data-toast]')
@@ -596,6 +560,7 @@ export class DirectoryConsole {
         <div data-toast-region role="status" aria-live="polite" aria-atomic="true">
           <div class="dc-toast" data-toast hidden></div>
         </div>
+        ${announcerMarkup()}
       </div>`
     );
 
@@ -1279,6 +1244,7 @@ export class DirectoryConsole {
     this.listViews.set(entity.key, view);
     const list = new EntityList({
       report: this.report,
+      announce: this.announce,
       entity,
       title: this.plural(entity),
       view,
@@ -3451,13 +3417,18 @@ export class DirectoryConsole {
       asking = document.createElement('div');
       asking.className = 'dc-form-leave';
       asking.setAttribute('data-discard', '');
+      // The question is read with the button it moves the focus to: "Keep
+      // editing" alone said nothing of why the form did not close (#217).
+      asking.setAttribute('role', 'group');
+      asking.setAttribute('aria-labelledby', 'dc-discard-question');
       render(
         asking,
         html`
-        <p>${t('form.discardQuestion')}</p>
-        <button type="button" class="dc-button" data-discard-keep>${t(
-          'form.keepEditing'
-        )}</button>
+        <p id="dc-discard-question">${t('form.discardQuestion')}</p>
+        <button type="button" class="dc-button" data-discard-keep
+          aria-describedby="dc-discard-question">${t(
+            'form.keepEditing'
+          )}</button>
         <button type="button" class="dc-button dc-button-danger" data-discard-confirm>${t(
           'form.discard'
         )}</button>`

@@ -589,6 +589,33 @@ test.describe('NAV layout, navigation and language', () => {
     await expect(app.mainHeading).toHaveText('Twake Directory Manager');
   });
 
+  test('NAV-12 the discard question is read with Keep editing', async ({
+    page,
+  }) => {
+    // A screen reader heard "Keep editing, button" and nothing of why the
+    // form had not closed (#217).
+    const app = await new LoginPage(page).loginAs(ADMIN, 'users/bob');
+    await app.entry().action('Edit').click();
+    const form = app.form();
+    await form.expectOpen('Edit — bob');
+    await form.fill('Employee ID', 'E9999');
+    await page.keyboard.press('Escape');
+    const question = form.dialog.getByRole('group', {
+      name: 'Discard what you typed?',
+    });
+    await expect(question).toBeVisible();
+    await expect(form.keepEditingButton).toBeFocused();
+    await expect(form.keepEditingButton).toHaveAccessibleDescription(
+      'Discard what you typed?'
+    );
+    await form.keepEditingButton.click();
+    await expect(form.dialog).toBeVisible();
+    await expect(question).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await form.discardButton.click();
+    await form.expectClosed();
+  });
+
   test('NAV-11 the frame for keyboard and screen-reader users: titles, skip link, lists, language', async ({
     page,
   }) => {

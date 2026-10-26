@@ -34,6 +34,7 @@ import type {
 } from '../types';
 import { background, type Reporter } from '../shared/background';
 import { html, render, type SafeHtml } from '../shared/html';
+import type { Announce } from '../ui/announce';
 import { dataTable } from '../ui/table';
 
 // Kept importable from here, where it was first defined.
@@ -160,6 +161,11 @@ export interface ListOptions {
    * (see `background`); the console's own reporter, or the log when absent
    */
   report?: Reporter;
+  /**
+   * Says to a screen reader what a load brought (the range shown, or that
+   * nothing matched) and how many rows are selected; the frame's announcer
+   */
+  announce?: Announce;
   /**
    * Fetch the entries; `search` is already known to be long enough. An
    * `EntryList` also says whether the server left entries out; a plain map,
@@ -452,8 +458,49 @@ export class EntityList {
       if (generation === this.generation) {
         this.loading = false;
         this.draw();
+        if (!this.error) this.announceLoaded();
       }
     }
+  }
+
+  /**
+   * Said to a screen reader once a load completes or a page turns, as the
+   * eye reads it at once: the range shown, or that nothing matched. Not on
+   * each keystroke: a load follows the debounce.
+   */
+  private announceLoaded(): void {
+    const { translator, announce } = this.options;
+    if (!announce) return;
+    if (this.entries.length === 0) {
+      announce(
+        this.under !== undefined && this.truncated
+          ? translator.t('list.cutTruncated', { path: this.under })
+          : translator.t(this.query ? 'list.noMatch' : 'list.empty')
+      );
+      return;
+    }
+    const total = this.entries.length;
+    const from = this.page * this.pageSize;
+    const count = translator.t('list.count', {
+      from: from + 1,
+      to: Math.min(from + this.pageSize, total),
+      total,
+    });
+    announce(
+      this.truncated
+        ? `${translator.t('list.truncated', { count: total })} ${count}`
+        : count
+    );
+  }
+
+  /** Said to a screen reader when the selection changes. */
+  private announceSelection(): void {
+    const { translator, announce } = this.options;
+    announce?.(
+      this.selected.size
+        ? translator.t('list.selected', { count: this.selected.size })
+        : translator.t('list.selectionCleared')
+    );
   }
 
   /**
@@ -585,7 +632,10 @@ export class EntityList {
         'showImported',
         this.options.report
       );
-    else this.draw();
+    else {
+      this.draw();
+      this.announceLoaded();
+    }
   }
 
   /** Back from the entries of the last import to the list's search. */
@@ -1018,6 +1068,7 @@ export class EntityList {
           else this.selected.delete(id);
         }
         this.draw();
+        this.announceSelection();
       });
 
     for (const box of Array.from(
@@ -1028,6 +1079,7 @@ export class EntityList {
         if (box.checked) this.selected.add(id);
         else this.selected.delete(id);
         this.draw();
+        this.announceSelection();
       });
     }
 

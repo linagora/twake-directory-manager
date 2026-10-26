@@ -63,6 +63,8 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── shared/dom.ts           escapeHtml and small DOM helpers
     ├── console/shell.ts        the sidebar's markup (the frame moves here, #220)
     ├── ui/table.ts             dataTable: the one way to draw a table (#226)
+    ├── ui/announce.ts          the hidden live region: said to a screen reader, not shown
+    ├── ui/toast.ts             the toast: shown for a moment, and said as it shows
     ├── assets.ts               inlined logos
     └── types.ts                wire types (ConfigResponse, Scope…) and domain types
 src/styles.css              one stylesheet, `dc-` prefix, no framework

@@ -112,6 +112,11 @@ export class EntityImport {
   private total = 0;
   private stopping = false;
   private error = '';
+  /** The step and error last painted: a new one moves the focus to its lead. */
+  private painted: { step: Step | null; error: string } = {
+    step: null,
+    error: '',
+  };
 
   constructor(options: ImportOptions) {
     this.options = options;
@@ -153,6 +158,14 @@ export class EntityImport {
     const bar = root.querySelector<HTMLElement>('.dc-progress-bar');
     if (bar) bar.style.width = `${this.percent()}%`;
     this.bind(root);
+    // Each step replaces the panel's content, and the focus fell to the page:
+    // a screen reader heard nothing of "1 ready to import, 1 with errors"
+    // (#213). The step's lead takes the focus, once, when the step changes
+    // or an error appears; a repaint of the same step leaves it be.
+    const changed =
+      this.step !== this.painted.step || this.error !== this.painted.error;
+    this.painted = { step: this.step, error: this.error };
+    if (changed) root.querySelector<HTMLElement>('[data-step-lead]')?.focus();
   }
 
   private stepMarkup(): SafeHtml {
@@ -162,7 +175,9 @@ export class EntityImport {
       case 'mapping':
         return this.mappingMarkup();
       case 'checking':
-        return html`<p class="dc-empty">${this.t('import.checking')}</p>`;
+        return html`<p class="dc-empty" tabindex="-1" data-step-lead>${this.t(
+          'import.checking'
+        )}</p>`;
       case 'review':
         return this.reviewMarkup();
       case 'running':
@@ -182,7 +197,13 @@ export class EntityImport {
         <li>${this.t('import.noteMulti')}</li>
         <li>${this.t('import.noteReference')}</li>
       </ul>
-      ${this.error ? html`<p class="dc-error">${this.error}</p>` : ''}
+      ${
+        this.error
+          ? html`<p class="dc-error" tabindex="-1" data-step-lead>${
+              this.error
+            }</p>`
+          : ''
+      }
       <label class="dc-import-drop">
         <input type="file" accept=".csv,text/csv" data-import-file />
         <span class="dc-import-drop-title">${this.t('import.choose')}</span>
@@ -219,7 +240,7 @@ export class EntityImport {
     const table = this.table as CsvTable;
     const missing = unmappedRequired(this.mapping, this.fields);
     return html`
-      <p>${this.t('import.read', {
+      <p tabindex="-1" data-step-lead>${this.t('import.read', {
         count: table.rows.length,
         file: this.fileName,
       })}</p>
@@ -362,7 +383,11 @@ export class EntityImport {
     const valid = this.rows.filter(row => row.errors.length === 0);
     const invalid = this.rows.filter(row => row.errors.length > 0);
     return html`
-      <div class="dc-import-summary">
+      <div class="dc-import-summary" role="group" tabindex="-1" data-step-lead
+        aria-label="${this.t('import.reviewSummary', {
+          ok: valid.length,
+          bad: invalid.length,
+        })}">
         <div class="dc-import-stat dc-import-stat-ok">
           <strong>${valid.length}</strong>
           <span>${this.t('import.ready', { count: valid.length })}</span>
@@ -459,7 +484,9 @@ export class EntityImport {
         count: this.total,
       })}</p>
       <div class="dc-progress" role="progressbar" aria-valuemin="0"
-        aria-valuemax="${this.total}" aria-valuenow="${this.processed}">
+        aria-valuemax="${this.total}" aria-valuenow="${this.processed}"
+        aria-label="${this.t('import.progressLabel')}" tabindex="-1"
+        data-step-lead>
         <div class="dc-progress-bar"></div>
       </div>
       <p class="dc-muted">${this.t('import.progressDetail', {
@@ -586,7 +613,11 @@ export class EntityImport {
   private doneMarkup(): SafeHtml {
     const skipped = this.total - this.processed;
     return html`
-      <div class="dc-import-summary">
+      <div class="dc-import-summary" role="group" tabindex="-1" data-step-lead
+        aria-label="${this.t('import.doneSummary', {
+          created: this.created,
+          refused: this.failures.length,
+        })}">
         <div class="dc-import-stat dc-import-stat-ok">
           <strong>${this.created}</strong>
           <span>${this.t('import.created', { count: this.created })}</span>

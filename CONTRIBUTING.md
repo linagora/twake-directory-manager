@@ -35,6 +35,11 @@ context, report)` (`src/shared/background.ts`), which reports a failure.
   from `src/ui/table.ts`, which heads every column and names the table (a
   hidden caption, or the heading above it). The shared primitives of #226
   live in `src/ui/`.
+- What a screen reader must hear while the eye reads it at once (a result
+  count, a selection) goes through the frame's announcer (`announce`, from
+  `src/ui/announce.ts`), passed to a component as an option; what everyone
+  sees for a moment is a toast (`src/ui/toast.ts`). A panel step that
+  replaces its content moves the focus to what it says (`EntityImport`).
 - A module stays under 1,200 lines (2,500 for a test file), comments aside;
   the files over it today are listed in `eslint.config.mjs` with the size
   they had, which may only shrink. A new page or action goes in a file of

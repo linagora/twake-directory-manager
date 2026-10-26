@@ -150,11 +150,13 @@ describe('EntityList', () => {
   it('should name the search, its scope, the table and each row’s box', async () => {
     // Ten boxes all read "Select this row", and the search box had only a
     // placeholder, gone as soon as one typed (#211).
+    const announced: string[] = [];
     const listed = async (title?: string): Promise<string> => {
       const container = stubContainer();
       await new EntityList({
         entity: users,
         title,
+        announce: text => announced.push(text),
         translator: new Translator('en'),
         view: {
           search: 'IT',
@@ -187,8 +189,27 @@ describe('EntityList', () => {
       .and.include('aria-label="Select ann"')
       .and.include('aria-label="Select zed"');
     expect(html).to.not.include('Select this row');
+    // What the load brought is said to a screen reader (#212)
+    expect(announced).to.deep.equal(['1–2 of 2']);
     // Without a title, the entity's plural name
     expect(await listed()).to.include('aria-label="Search users"');
+  });
+
+  it('should say to a screen reader that nothing matched', async () => {
+    const announced: string[] = [];
+    const container = stubContainer();
+    await new EntityList({
+      entity: users,
+      translator: new Translator('fr'),
+      view: { search: 'zzz', searchAttribute: 'uid' },
+      load: () => Promise.resolve({}),
+      listable: true,
+      announce: text => announced.push(text),
+      onOpen: () => undefined,
+      onDelete: () => Promise.resolve(false),
+      canDelete: false,
+    }).render(container);
+    expect(announced).to.deep.equal(['Aucune entrée ne correspond']);
   });
 
   it('should cut a department’s list to it and what lies under it', async () => {
@@ -801,6 +822,7 @@ describe('EntityList', () => {
       querySelectorAll: (selector: string) =>
         selector === '[data-select]' ? rows : [],
     });
+    const announced: string[] = [];
     const list = new EntityList({
       entity: users,
       translator: new Translator('en'),
@@ -810,6 +832,7 @@ describe('EntityList', () => {
           bob: { dn: 'uid=bob,ou=users,dc=example,dc=com', uid: 'bob' },
         }),
       listable: true,
+      announce: text => announced.push(text),
       onOpen: () => undefined,
       onDelete: () => Promise.resolve(false),
       canDelete: false,
@@ -851,6 +874,13 @@ describe('EntityList', () => {
     expect(selected.size).to.equal(0);
     expect(headerTag()).to.not.contain('checked');
     expect(header.indeterminate).to.be.false;
+    // Each change of selection is said to a screen reader (#212)
+    expect(announced).to.deep.equal([
+      '1–2 of 2',
+      '1 selected',
+      '2 selected',
+      'Selection cleared',
+    ]);
   });
 
   it('should show the entries just imported without a search', async () => {

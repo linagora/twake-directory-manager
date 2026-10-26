@@ -33,6 +33,7 @@ Conventions).
 - [x] NAV-09 (P3) Side panel opens at its top and closes when the page changes — `navigation.spec.ts`
 - [x] NAV-10 (P3) An unknown address says there is no page there, with a link to the Overview — `navigation.spec.ts` (`#/passwordPolicies`, `#/accountStates`; `#/` and the bare console still open the Overview)
 - [x] NAV-11 (P2) The frame for keyboard and screen-reader users: a title per page (#214), a skip link to the main area (#215), the sidebar as lists (#219), the page's `lang` and the focus kept on the Language select (#209) — `navigation.spec.ts`
+- [x] NAV-12 (P2) The discard question of a changed form is read with the Keep editing button it focuses (a group named by the question, the button described by it) — `navigation.spec.ts` (#217)
 
 ## Scope banner and authorization
 
@@ -59,7 +60,7 @@ Conventions).
 - [x] LIST-12 (P2) A keyboard user opens an entry from a list: Tab reaches a link in each row, Enter opens the card — `list.spec.ts` (#135; not in the plan)
 - [x] LIST-13 (P3) The LINAGORA badge covers no row — `list.spec.ts`
 - [x] LIST-14 (P2) The selection joins a group, and changes state, in one action — `list.spec.ts` (#170)
-- [x] LIST-15 (P2) The search ("Search Users"), its scope ("Search in"), the table and each row's box ("Select alice") are named for a screen reader, in French too — `list.spec.ts` (#211)
+- [x] LIST-15 (P2) The search ("Search Users"), its scope ("Search in"), the table and each row's box ("Select alice") are named for a screen reader, in French too — `list.spec.ts` (#211; what a load brings and each change of selection are said to a screen reader through the frame's hidden live region, #212)
 
 ## User accounts
 
@@ -120,7 +121,7 @@ Conventions).
 
 - [x] IMPORT-01 (P2) Import panel and empty template — `import.spec.ts`
 - [x] IMPORT-02 (P2) Column matching — `import.spec.ts`
-- [x] IMPORT-03 (P1) Check and import valid rows — `import.spec.ts` (the result names each created account, linked to its card; once closed, the list shows them as "Just imported (2)" until Back to search)
+- [x] IMPORT-03 (P1) Check and import valid rows — `import.spec.ts` (the result names each created account, linked to its card; once closed, the list shows them as "Just imported (2)" until Back to search; each step moves the focus to what it says: the rows read, the review summary, the result, #213)
 - [x] IMPORT-04 (P2) Rows with errors and refused rows — `import.spec.ts` (a repeated address reads "is already on line N", the plan's "repeats line N" predates it; the address the server refuses is said in the console's words, on screen and in the refused rows file)
 - [x] IMPORT-05 (P2) Import respects the scope — `import.spec.ts`
 - [x] IMPORT-06 (P3) Stop an import — `import.spec.ts` (150 rows)
