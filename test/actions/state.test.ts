@@ -393,5 +393,39 @@ describe('actions/state', () => {
       expect(body.querySelector('.dc-confirm-items')).to.equal(null);
       expect(body.querySelector('[name="sn"]')).to.not.equal(null);
     });
+
+    it('should hold its panel through a page left while it works, then close it', async () => {
+      const held = gate();
+      const mounted = await selection({
+        alice: account('alice', 'Alice Martin'),
+      });
+      const { root, body, panel, server, calls } = mounted;
+      server.post('/api/v1/ldap/users/alice/status').reply(async () => {
+        await held.opened;
+        return [200, {}];
+      });
+      server.get(/\/api\/v1\/ldap\/groups\?/).reply(200, {});
+      pick(body, 'disabled');
+      click(body, 'button[type="submit"]');
+      // The address changes while the work runs: a page left closes a form,
+      // not work under way, whose guard holds the panel over the new page.
+      window.location.hash = '#/groups';
+      await settled(root);
+      expect(window.location.hash).to.equal('#/groups');
+      expect(panel.hidden).to.be.false;
+      expect(
+        body.querySelector('[data-bulk-progress] [role="status"]')?.textContent
+      ).to.equal('0 of 1 account');
+      // Done, it says so and closes, the page reached left as it is.
+      held.open();
+      await until(() => toast(root) !== '');
+      expect(toast(root)).to.match(/^1 account is now /);
+      expect(calls).to.include('setStatus(users, alice, disabled)');
+      await until(() => panel.hidden);
+      expect(window.location.hash).to.equal('#/groups');
+      expect(root.querySelector('[data-main] [data-bulk-progress]')).to.equal(
+        null
+      );
+    });
   });
 });

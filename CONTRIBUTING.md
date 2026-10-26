@@ -89,7 +89,8 @@ through it. It holds nothing between two calls, so `init()` makes one with
 the context and the console's caller asks it; what it waits for is the
 panel's (`ctx.panel.setGuard`, `setDirty`, `whenClosed`, `afterClose`,
 `whenFree`). After a write it closes the panel, then says so in a toast,
-then draws the page again (`ctx.refresh()`). Its tests mount the console
+then, when what the page shows changed, draws it again (`ctx.refresh()`);
+a list's bulk action leaves the redraw to the list. Its tests mount the console
 where the action is offered and press it (`test/actions/`).
 
 **A reusable widget.** A class in `src/components/` taking an options object

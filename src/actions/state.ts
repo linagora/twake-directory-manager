@@ -339,7 +339,8 @@ export class StateActions {
             ctx.toast(
               t('bulk.stateDone', { count: moved, state: label(state) })
             );
-          // The panel closed meanwhile, by a page left: another may be open.
+          // The panel was taken meanwhile, by another opened over it: a page
+          // left does not close work under way (bulkPanel's guard).
           if (!action.own()) return;
           if (!refused.length) {
             ctx.panel.close(true);

@@ -1,7 +1,7 @@
 /**
  * What a view or an action is given of the console, instead of reaching into
- * it: the client, the words, the rights, the panel and the dialog, the toast
- * and the reporter, the ticket of the page drawn (#220).
+ * it: the client, the words, the rights, the entities, the panel and the
+ * dialog, the toast and the reporter, the ticket of the page drawn (#220).
  *
  * @module twake-directory-manager/console/context
  */
@@ -17,9 +17,9 @@ import type { PanelService } from './panel';
 /**
  * The console as a view sees it, built once in `init()` from its own fields
  * and methods. What changes over the console's life — the translator after
- * a language switch, the rights once the scope is read — is asked each time
- * through a function, never copied: a view keeps the context, not what it
- * said.
+ * a language switch, the rights once the scope is read, the entities once the
+ * directory is — is asked each time through a function, never copied: a view
+ * keeps the context, not what it said.
  *
  * It holds what the views and actions moved out so far need (the password
  * policies; the password resets and the state changes), and grows with each
