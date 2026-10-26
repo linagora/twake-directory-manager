@@ -24,7 +24,7 @@ import {
   attachedEntity,
   type AttachedKind,
 } from './components/AttachedTables';
-import { EntityDetail, stateLabel } from './components/EntityDetail';
+import { EntityDetail } from './components/EntityDetail';
 import { EntityForm } from './components/EntityForm';
 import { EntityImport } from './components/EntityImport';
 import {
@@ -99,6 +99,9 @@ import {
 } from './console/settings';
 import { announcer } from './ui/announce';
 import { PoliciesView } from './views/policies';
+import { PasswordActions } from './actions/passwords';
+import { StateActions } from './actions/state';
+import { bulkPanel, bulkWritable } from './console/bulk';
 import { ToastController } from './ui/toast';
 
 // Kept importable from here, where they were first defined.
@@ -235,6 +238,10 @@ export class DirectoryConsole {
   );
   /** What the views moved out of the console are given of it, built by `init()` */
   private context!: ConsoleContext;
+  /** The password resets, made by `init()` with the context: they hold nothing */
+  private passwords!: PasswordActions;
+  /** The changes of state, made by `init()` with the context: they hold nothing */
+  private states!: StateActions;
 
   /**
    * @param options what the page gives the console
@@ -280,6 +287,8 @@ export class DirectoryConsole {
     this.mounted = new AbortController();
     const { signal } = this.mounted;
     this.context = this.contextOf();
+    this.passwords = new PasswordActions(this.context);
+    this.states = new StateActions(this.context);
 
     render(
       this.container,
@@ -379,6 +388,10 @@ export class DirectoryConsole {
       current: generation => this.current(generation),
       titlePage: name => this.titlePage(name),
       refresh: () => this.renderMain(),
+      entities: () => this.entities,
+      personName: (entity, entry, id) => this.personName(entity, entry, id),
+      submittedName: (entity, values, id) =>
+        this.submittedName(entity, values, id),
     };
   }
 
@@ -1577,72 +1590,9 @@ export class DirectoryConsole {
     return actions;
   }
 
-  /**
-   * The accounts selected that the caller writes, and how many others were
-   * left out: an account in transit, or in a branch only read, is listed
-   * as well, and its card offers neither action.
-   */
-  private bulkWritable(
-    entity: EntityDescriptor,
-    selected: [string, Entry][]
-  ): { kept: [string, Entry][]; leftOut: string | undefined } {
-    const kept = selected.filter(
-      ([, entry]) => entry.dn && this.rights.writes(entity, entry)
-    );
-    const count = selected.length - kept.length;
-    return {
-      kept,
-      leftOut: count ? this.translator.t('bulk.leftOut', { count }) : undefined,
-    };
-  }
-
   /** Whether the side panel is open: one opened needs a page to be in. */
   private panelShown(): boolean {
     return this.panel.isOpen();
-  }
-
-  /**
-   * Opened for one action: the panel's close, or its replacement, settles
-   * it unless its work is under way, which settles it once done.
-   *
-   * @returns `own`, whether the panel is still the action's, `start` and
-   *   `finish` around the work, and `settled`, its outcome once known
-   */
-  private bulkPanel(): {
-    own(): boolean;
-    start(): void;
-    finish(changed: boolean): void;
-    settled: Promise<boolean>;
-  } {
-    let closed = false;
-    let running = false;
-    let changed = false;
-    let settle = (_changed: boolean): void => undefined;
-    const settled = new Promise<boolean>(resolve => (settle = resolve));
-    this.panel.whenClosed((): void => {
-      closed = true;
-      if (!running) settle(changed);
-    });
-    return {
-      own: () => !closed,
-      start: (): void => {
-        running = true;
-        // Escape and Cancel would leave the work going, unseen; a reload
-        // would stop it halfway, and the browser asks first.
-        this.panel.setGuard((): boolean => !running);
-        this.panel.setDirty((): boolean => running);
-      },
-      finish: (done: boolean): void => {
-        running = false;
-        changed ||= done;
-        if (closed) settle(changed);
-        else {
-          this.panel.setGuard(null);
-          this.panel.setDirty(null);
-        }
-      },
-      settled,
-    };
   }
 
   /**
@@ -1656,7 +1606,12 @@ export class DirectoryConsole {
     entity: EntityDescriptor,
     selected: [string, Entry][]
   ): Promise<boolean> {
-    const { kept, leftOut } = this.bulkWritable(entity, selected);
+    const { kept, leftOut } = bulkWritable(
+      this.rights,
+      this.translator,
+      entity,
+      selected
+    );
     const members = kept.map(([, entry]) => String(entry.dn));
     const search = this.api.groupSearch(this.entities, found =>
       this.rights.writes(found.entity, found.entry)
@@ -1768,200 +1723,16 @@ export class DirectoryConsole {
       if (holder) picker.render(holder);
     });
     if (!this.panelShown()) return Promise.resolve(false);
-    const action = this.bulkPanel();
+    const action = bulkPanel(this.panel);
     return action.settled;
   }
 
-  /**
-   * Move the accounts selected to one state, one after the other, the
-   * panel counting them as it goes; those refused are listed, with why.
-   *
-   * @returns whether any account changed state, once the panel is closed
-   */
-  private async bulkChangeState(
+  /** Change the state of the accounts selected (see `StateActions`). */
+  private bulkChangeState(
     entity: EntityDescriptor,
     selected: [string, Entry][]
   ): Promise<boolean> {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const known = (key: string): string | undefined => {
-      const shown = t(key);
-      return shown === key ? undefined : shown;
-    };
-    const attribute = entity.accountStatus;
-    const states = attribute
-      ? entity.schema.attributes[attribute]?.states
-      : undefined;
-    if (!states) return false;
-    const { kept, leftOut } = this.bulkWritable(entity, selected);
-    if (!kept.length) {
-      if (leftOut) this.toast(leftOut, true);
-      return false;
-    }
-    const { language } = this.translator;
-    const label = (state: string): string =>
-      pointerLabel(this.entities, states[state], language) ??
-      stateLabel(this.translator, state);
-    const address =
-      typeof window === 'undefined' ? undefined : window.location.hash;
-    const described = await this.stateDescriptions(states);
-    // Gone elsewhere, or another panel opened, while the states were read:
-    // not opened over it.
-    if (
-      (typeof window !== 'undefined' && window.location.hash !== address) ||
-      this.panelShown()
-    )
-      return false;
-    const total = kept.length;
-    this.openPanel(t('bulk.stateTitle', { count: total }), body => {
-      render(
-        body,
-        html`
-          <form class="dc-form">
-            ${leftOut ? html`<p class="dc-hint">${leftOut}</p>` : ''}
-            <fieldset class="dc-form-group" data-bulk-states>
-              <legend>${t('status.choose')}</legend>
-              ${Object.keys(states).map(state => {
-                const field = `dc-state-${state}`;
-                const line = described[state] ?? known(`status.help.${state}`);
-                return html`
-                <div class="dc-field dc-state-choice">
-                  <input type="radio" id="${field}" name="dc-state"
-                    value="${state}"${
-                      line ? html` aria-describedby="${field}-help"` : ''
-                    } />
-                  <label for="${field}">${label(state)}</label>
-                  ${
-                    line
-                      ? html`<p id="${field}-help" class="dc-hint">${line}</p>`
-                      : ''
-                  }
-                </div>`;
-              })}
-            </fieldset>
-            <div data-bulk-progress hidden>
-              <p class="dc-hint" role="status"></p>
-              <div class="dc-progress" role="progressbar" aria-valuemin="0"
-                aria-valuemax="${total}" aria-valuenow="0">
-                <div class="dc-progress-bar"></div>
-              </div>
-            </div>
-            <div class="dc-form-actions">
-              <button type="button" class="dc-button" data-cancel>${t(
-                'app.cancel'
-              )}</button>
-              <button type="submit" class="dc-button dc-button-primary" disabled>${t(
-                'status.apply'
-              )}</button>
-            </div>
-          </form>`
-      );
-    });
-    if (!this.panelShown()) return false;
-    const action = this.bulkPanel();
-    const body =
-      this.container?.querySelector<HTMLElement>('[data-panel-body]');
-    if (!body) return action.settled;
-    const submit = body.querySelector<HTMLButtonElement>(
-      'button[type="submit"]'
-    );
-    const cancel = body.querySelector<HTMLButtonElement>('[data-cancel]');
-    const fieldset =
-      body.querySelector<HTMLFieldSetElement>('[data-bulk-states]');
-    const progress = body.querySelector<HTMLElement>('[data-bulk-progress]');
-    const count = (done: number): void => {
-      if (!progress) return;
-      progress.hidden = false;
-      const line = progress.querySelector<HTMLElement>('[role="status"]');
-      if (line) line.textContent = t('bulk.progress', { done, count: total });
-      progress
-        .querySelector('.dc-progress')
-        ?.setAttribute('aria-valuenow', String(done));
-      const bar = progress.querySelector<HTMLElement>('.dc-progress-bar');
-      if (bar) bar.style.width = `${Math.round((done / total) * 100)}%`;
-    };
-    const chosen = (): string | undefined =>
-      body.querySelector<HTMLInputElement>('input[name="dc-state"]:checked')
-        ?.value;
-    let running = false;
-    for (const radio of Array.from(
-      body.querySelectorAll<HTMLInputElement>('input[name="dc-state"]')
-    ))
-      radio.addEventListener('change', () => {
-        const state = chosen();
-        if (!submit || !state || running) return;
-        submit.disabled = false;
-        submit.textContent =
-          known(`status.action.${state}`) ?? t('status.apply');
-      });
-    cancel?.addEventListener('click', () => this.closePanel());
-    body.querySelector('form')?.addEventListener('submit', event => {
-      event.preventDefault();
-      const state = chosen();
-      if (!state || running) return;
-      running = true;
-      if (submit) submit.disabled = true;
-      if (cancel) cancel.disabled = true;
-      if (fieldset) fieldset.disabled = true;
-      action.start();
-      background(
-        async (): Promise<void> => {
-          const refused: string[] = [];
-          let done = 0;
-          try {
-            for (const [id, entry] of kept) {
-              if (action.own()) count(done);
-              const name = this.personName(entity, entry, id);
-              try {
-                await this.api.setStatus(entity, id, state);
-              } catch (err) {
-                refused.push(
-                  `${name}: ${this.refusal(err, entity, name).message}`
-                );
-              }
-              done++;
-            }
-            if (action.own()) count(done);
-          } finally {
-            action.finish(done > refused.length);
-          }
-          const moved = total - refused.length;
-          if (moved)
-            this.toast(
-              t('bulk.stateDone', { count: moved, state: label(state) })
-            );
-          // The panel closed meanwhile, by a page left: another may be open.
-          if (!action.own()) return;
-          if (!refused.length) {
-            this.closePanel(true);
-            return;
-          }
-          // Those refused, named with why, in place of the form.
-          render(
-            body,
-            html`
-              <div class="dc-form">
-                ${leftOut ? html`<p class="dc-hint">${leftOut}</p>` : ''}
-                <p>${t('bulk.refused', { count: refused.length })}</p>
-                <ul class="dc-confirm-items">${refused.map(
-                  line => html`<li>${line}</li>`
-                )}</ul>
-                <div class="dc-form-actions">
-                  <button type="button" class="dc-button dc-button-primary" data-close>${t(
-                    'app.close'
-                  )}</button>
-                </div>
-              </div>`
-          );
-          body
-            .querySelector('[data-close]')
-            ?.addEventListener('click', () => this.closePanel(true));
-        },
-        'bulkChangeState',
-        this.report
-      );
-    });
-    return action.settled;
+    return this.states.changeMany(entity, selected);
   }
 
   /**
@@ -3279,506 +3050,30 @@ export class DirectoryConsole {
 
   /* --------------------------------------------------------------- actions */
 
-  /**
-   * Change an account's state, once a state is picked and the button naming
-   * it pressed. The select this replaces wrote the state as soon as its value
-   * changed, and an arrow key on it was enough to lock a colleague out.
-   *
-   * The states are named as the card and the lists name them: by the label
-   * the reference data gives the entry each one points at.
-   */
-  private async changeState(
+  /** Change an account's state from its card (see `StateActions`). */
+  private changeState(
     entity: EntityDescriptor,
     id: string,
     entry: Entry,
     preselect?: string
   ): Promise<void> {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    /** A key of the catalogue, or nothing when it has none for this state */
-    const known = (key: string): string | undefined => {
-      const shown = t(key);
-      return shown === key ? undefined : shown;
-    };
-    const attribute = entity.accountStatus;
-    const states = attribute
-      ? entity.schema.attributes[attribute]?.states
-      : undefined;
-    if (!attribute || !states) return;
-    const { language } = this.translator;
-    const label = (state: string): string =>
-      pointerLabel(this.entities, states[state], language) ??
-      stateLabel(this.translator, state);
-
-    const stored = [entryValue(entry, attribute) ?? []].flat()[0];
-    const current = Object.keys(states).find(
-      state =>
-        stored !== undefined &&
-        comparableDn(states[state]) === comparableDn(String(stored))
-    );
-    const currentName = current
-      ? label(current)
-      : stored === undefined
-        ? undefined
-        : (pointerLabel(this.entities, String(stored), language) ??
-          rdnValue(String(stored)));
-    const offered = Object.keys(states).filter(state => state !== current);
-    const described = await this.stateDescriptions(states);
-    const help = (state: string): string | undefined =>
-      described[state] ?? known(`status.help.${state}`);
-    const name = this.personName(entity, entry, id);
-
-    this.openPanel(t('status.panelTitle', { name }), body => {
-      render(
-        body,
-        html`
-        <form class="dc-form">
-          ${
-            currentName
-              ? html`<p class="dc-hint" data-current-state>${t(
-                  'status.current',
-                  { state: currentName }
-                )}</p>`
-              : ''
-          }
-          <fieldset class="dc-form-group">
-            <legend>${t('status.choose')}</legend>
-            ${offered.map(state => {
-              const field = `dc-state-${state}`;
-              const line = help(state);
-              return html`
-              <div class="dc-field dc-state-choice">
-                <input type="radio" id="${field}" name="dc-state"
-                  value="${state}"${
-                    line ? html` aria-describedby="${field}-help"` : ''
-                  } />
-                <label for="${field}">${label(state)}</label>
-                ${
-                  line
-                    ? html`<p id="${field}-help" class="dc-hint">${line}</p>`
-                    : ''
-                }
-              </div>`;
-            })}
-          </fieldset>
-          <div class="dc-form-actions">
-            <button type="button" class="dc-button" data-cancel>${t(
-              'app.cancel'
-            )}</button>
-            <button type="submit" class="dc-button dc-button-primary" disabled>${t(
-              'status.apply'
-            )}</button>
-          </div>
-        </form>`
-      );
-
-      const submit = body.querySelector<HTMLButtonElement>(
-        'button[type="submit"]'
-      );
-      const chosen = (): string | undefined =>
-        body.querySelector<HTMLInputElement>('input[name="dc-state"]:checked')
-          ?.value;
-      // Picking a state, by click or arrow key, only names the button: the
-      // button writes.
-      for (const radio of Array.from(
-        body.querySelectorAll<HTMLInputElement>('input[name="dc-state"]')
-      )) {
-        radio.addEventListener('change', () => {
-          const state = chosen();
-          if (!submit || !state) return;
-          submit.disabled = false;
-          submit.textContent =
-            known(`status.action.${state}`) ?? t('status.apply');
-        });
-      }
-      body
-        .querySelector('[data-cancel]')
-        ?.addEventListener('click', () => this.closePanel());
-      body.querySelector('form')?.addEventListener('submit', event => {
-        event.preventDefault();
-        const state = chosen();
-        if (state)
-          background(
-            () => this.setStatus(entity, id, state, name, label(state)),
-            'setStatus',
-            this.report
-          );
-      });
-    });
-    // Asked for by name, from the deletion's tip: picked, and focused, but
-    // still written only by the button.
-    if (!preselect) return;
-    const picked = Array.from(
-      this.container?.querySelectorAll<HTMLInputElement>(
-        '[data-panel-body] input[name="dc-state"]'
-      ) ?? []
-    ).find(radio => radio.value === preselect);
-    if (picked) {
-      picked.checked = true;
-      picked.dispatchEvent(new Event('change'));
-      picked.focus();
-    }
+    return this.states.change(entity, id, entry, preselect);
   }
 
-  /**
-   * What each state means, as the reference entry it points at describes it:
-   * the deployment's own words before the catalogue's. A list that cannot be
-   * read leaves the catalogue's.
-   *
-   * @param states the states, as the schema declares them
-   * @returns the descriptions, by state, of the entries that have one
-   */
-  private async stateDescriptions(
-    states: Record<string, string>
-  ): Promise<Record<string, string>> {
-    const described: Record<string, string> = {};
-    const parent = parentOf(Object.values(states)[0] ?? '');
-    const owner = parent
-      ? this.entities.find(
-          candidate =>
-            candidate.base &&
-            comparableDn(candidate.base) === comparableDn(parent)
-        )
-      : undefined;
-    if (!owner) return described;
-    let entries: Record<string, Entry>;
-    try {
-      entries = await this.api.list(owner);
-    } catch {
-      return described;
-    }
-    for (const [state, dn] of Object.entries(states)) {
-      const key = rdnValue(dn).toLowerCase();
-      const found = Object.entries(entries).find(
-        ([id]) => id.toLowerCase() === key
-      )?.[1];
-      const text = [entryValue(found, 'description') ?? []].flat()[0];
-      if (text && String(text).trim()) described[state] = String(text).trim();
-    }
-    return described;
-  }
-
-  /** Write a state chosen in the panel, and say whose it now is. */
-  private async setStatus(
-    entity: EntityDescriptor,
-    id: string,
-    state: string,
-    name: string,
-    label: string
-  ): Promise<void> {
-    try {
-      await this.api.setStatus(entity, id, state);
-      this.closePanel();
-      this.toast(
-        this.translator.t('status.changedFor', { name, state: label })
-      );
-      await this.renderMain();
-    } catch (err) {
-      this.toast(this.refusal(err, entity, name).message, true);
-    }
-  }
-
-  /**
-   * Reset a password. A generated one is shown once, in the panel that asked
-   * for it: it cannot be read back afterwards. So the panel is sent once and
-   * stays while the server answers: closed in the meantime, it had the
-   * password shown over whatever opened next, or a typed one close it. Only
-   * Cancel closes it then, should the server never answer; a password
-   * generated all the same gets a panel of its own.
-   */
+  /** Reset an account's password (see `PasswordActions`). */
   private resetPassword(entity: EntityDescriptor, id: string): void {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    this.openPanel(t('password.title'), body => {
-      render(
-        body,
-        html`
-        <form class="dc-form">
-          <div class="dc-field">
-            <label for="dc-new-password">${t('password.choose')}</label>
-            <input id="dc-new-password" class="dc-input" type="password"
-              autocomplete="new-password"
-              aria-describedby="dc-new-password-hint" />
-            <p id="dc-new-password-hint" class="dc-hint">${t('password.generateHint')}</p>
-          </div>
-          <div class="dc-field dc-field-inline">
-            <input id="dc-force-change" type="checkbox" checked />
-            <label for="dc-force-change">${t('password.forceChange')}</label>
-          </div>
-          <div class="dc-form-actions">
-            <button type="button" class="dc-button" data-cancel>${t(
-              'app.cancel'
-            )}</button>
-            <button type="submit" class="dc-button dc-button-primary">${t(
-              'password.confirmButton'
-            )}</button>
-          </div>
-        </form>`
-      );
-
-      const form = body.querySelector('form');
-      const send = body.querySelector<HTMLButtonElement>(
-        'button[type="submit"]'
-      );
-      let pending = false;
-      body
-        .querySelector('[data-cancel]')
-        ?.addEventListener('click', () => this.closePanel(pending));
-      // Whether the panel still holds this form; a guard it set is its own.
-      const own = (): boolean => !!form?.isConnected;
-      form?.addEventListener('submit', event => {
-        event.preventDefault();
-        // A second reset would answer another password, and the one shown
-        // might not be the one the server kept.
-        if (pending) return;
-        pending = true;
-        if (send) send.disabled = true;
-        // Tied to the request, not set for good: a confirmation asked over
-        // the panel meanwhile gives this guard back once it is answered.
-        this.panel.setGuard((): boolean => !pending);
-        const password =
-          body.querySelector<HTMLInputElement>('#dc-new-password')?.value || '';
-        const force =
-          body.querySelector<HTMLInputElement>('#dc-force-change')?.checked ??
-          true;
-        background(
-          () =>
-            this.api
-              .resetPassword(entity, id, password || undefined, force)
-              .then(result => {
-                pending = false;
-                const generated = result.generated
-                  ? result.password
-                  : undefined;
-                if (own()) {
-                  this.panel.setGuard(null);
-                  if (generated)
-                    this.showGeneratedPassword(
-                      body,
-                      id,
-                      generated,
-                      result.forceChange ?? force
-                    );
-                  else {
-                    this.closePanel();
-                    this.toast(t('password.set'));
-                  }
-                  return;
-                }
-                // Shut by force all the same: the password, the only copy there
-                // is, gets a panel of its own rather than none, once the panel
-                // opened meanwhile, if any, is closed: replaced, it lost what it
-                // held, another password perhaps.
-                if (!generated) {
-                  this.toast(t('password.set'));
-                  return;
-                }
-                this.panel.whenFree(() =>
-                  this.openPanel(t('password.title'), inner =>
-                    this.showGeneratedPassword(inner, id, generated, force)
-                  )
-                );
-              })
-              .catch((err: Error) => {
-                pending = false;
-                if (send) send.disabled = false;
-                if (own()) this.panel.setGuard(null);
-                this.toast(err.message, true);
-              }),
-          'api.resetPassword',
-          this.report
-        );
-      });
-    });
+    this.passwords.reset(entity, id);
   }
 
-  /**
-   * A first password for an account just created without one: generated
-   * and shown in the form's panel, as Reset password shows one, before the
-   * account's card opens. An account created empty could not be signed in
-   * to, and only a call from its owner said so.
-   *
-   * The panel may have been closed, or given to another form, while the
-   * server answered: the password, the only copy there is, then gets a
-   * panel of its own, once the one open meanwhile is closed, and the card is
-   * not opened over where the administrator went.
-   *
-   * @param entity the entity created
-   * @param values what the form sent
-   * @param id the new entry, empty when the server named none
-   * @param next what the creation does once the panel is closed
-   * @param own whether the panel still holds the form
-   * @returns whether the form's panel now shows a password, and stays
-   */
-  private async givePassword(
+  /** A first password for an account created without one (see `PasswordActions`). */
+  private givePassword(
     entity: EntityDescriptor,
     values: Record<string, string | string[]>,
     id: string,
     next: () => void,
-    own: () => boolean = () => true
+    own?: () => boolean
   ): Promise<boolean> {
-    const field = entity.password;
-    if (!field || [values[field] ?? []].flat().some(Boolean)) return false;
-    const name = this.submittedName(entity, values, id);
-    if (!id) {
-      this.toast(this.translator.t('create.noPassword', { name }), true);
-      return false;
-    }
-    const reset = roleAttribute(entity.schema, 'passwordReset');
-    // A generated password is meant to be changed, unless told otherwise.
-    const force =
-      !reset || String([values[reset] ?? []].flat()[0] ?? '') !== 'FALSE';
-    const address =
-      typeof window === 'undefined' ? undefined : window.location.hash;
-    let result: {
-      generated: boolean;
-      password?: string;
-      forceChange?: boolean;
-    };
-    try {
-      result = await this.api.resetPassword(entity, id, undefined, force);
-    } catch {
-      this.toast(this.translator.t('create.noPassword', { name }), true);
-      return false;
-    }
-    const password = result.password;
-    if (!result.generated || !password) return false;
-    // What the server did, not what was asked: an entity with no reset
-    // attribute flags nothing.
-    const mustChange = result.forceChange ?? force;
-    const body =
-      this.container?.querySelector<HTMLElement>('[data-panel-body]');
-    if (own() && body) {
-      this.panel.setDirty(null);
-      // Its card, unless the administrator has gone elsewhere since.
-      this.panel.afterClose(() => {
-        if (typeof window === 'undefined' || window.location.hash === address)
-          next();
-      });
-      this.showGeneratedPassword(body, name, password, mustChange);
-      return true;
-    }
-    this.panel.whenFree(() =>
-      this.openPanel(this.translator.t('password.title'), inner =>
-        this.showGeneratedPassword(inner, name, password, mustChange)
-      )
-    );
-    return true;
-  }
-
-  /**
-   * The password the server generated, in place of the form that asked for
-   * it. It is the one value the console cannot fetch again: a toast lost it
-   * to the click that began selecting it, and to the next message. So it
-   * stays until the panel is closed on purpose, and closing it uncopied asks
-   * first, in the panel rather than in a native dialog.
-   *
-   * @param body the panel's body, the Reset password form's or a new one's
-   * @param name the account, as the panel names it
-   * @param password the generated password
-   * @param mustChange whether a change is required at the next sign-in
-   */
-  private showGeneratedPassword(
-    body: HTMLElement,
-    name: string,
-    password: string,
-    mustChange: boolean
-  ): void {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const heading =
-      this.container?.querySelector<HTMLElement>('[data-panel-title]');
-    if (heading) heading.textContent = t('password.generatedTitle', { name });
-    const help = [
-      t('password.generatedHelp', { name }),
-      ...(mustChange ? [t('password.mustChange')] : []),
-    ].join(' ');
-    render(
-      body,
-      html`
-      <div class="dc-form">
-        <div class="dc-field">
-          <div class="dc-generated">
-            <input id="dc-generated-password" class="dc-input dc-generated-password"
-              readonly value="${password}"
-              aria-labelledby="dc-panel-title"
-              aria-describedby="dc-generated-password-help" />
-            <button type="button" class="dc-button" data-copy-password>${t(
-              'detail.copy'
-            )}</button>
-          </div>
-          <p id="dc-generated-password-help" class="dc-hint">${help}</p>
-        </div>
-        <div class="dc-generated-leave" data-leave hidden>
-          <p>${t('password.leaveUncopied')}</p>
-          <button type="button" class="dc-button" data-leave-back>${t(
-            'app.back'
-          )}</button>
-          <button type="button" class="dc-button dc-button-primary" data-leave-close>${t(
-            'app.close'
-          )}</button>
-        </div>
-        <div class="dc-form-actions" data-done-actions>
-          <button type="button" class="dc-button dc-button-primary" data-done>${t(
-            'password.done'
-          )}</button>
-        </div>
-      </div>`
-    );
-
-    const field = body.querySelector<HTMLInputElement>(
-      '#dc-generated-password'
-    );
-    const leave = body.querySelector<HTMLElement>('[data-leave]');
-    const done = body.querySelector<HTMLElement>('[data-done-actions]');
-    let copied = false;
-    // Asked once per attempt to close: a second Escape, or Close, goes.
-    const ask = (shown: boolean): void => {
-      if (leave) leave.hidden = !shown;
-      if (done) done.hidden = shown;
-    };
-    this.panel.setGuard((): boolean => {
-      if (copied || (leave && !leave.hidden)) return true;
-      ask(true);
-      body.querySelector<HTMLElement>('[data-leave-close]')?.focus();
-      return false;
-    });
-
-    field?.addEventListener('focus', () => field.select());
-    const copy = body.querySelector<HTMLElement>('[data-copy-password]');
-    copy?.addEventListener('click', () => {
-      // Absent outside a secure context, or refused: the password is
-      // selected for the reader to copy by hand.
-      const said = (key: string): void => {
-        copy.textContent = t(key);
-        setTimeout(() => {
-          copy.textContent = t('detail.copy');
-        }, 2000);
-      };
-      const failed = (): void => {
-        field?.focus();
-        field?.select();
-        said('password.copyFailed');
-      };
-      if (!navigator.clipboard) return failed();
-      navigator.clipboard.writeText(password).then(() => {
-        copied = true;
-        ask(false);
-        said('detail.copied');
-      }, failed);
-    });
-    body
-      .querySelector('[data-done]')
-      ?.addEventListener('click', () => this.closePanel());
-    body.querySelector('[data-leave-back]')?.addEventListener('click', () => {
-      ask(false);
-      field?.focus();
-    });
-    body
-      .querySelector('[data-leave-close]')
-      ?.addEventListener('click', () => this.closePanel(true));
-    // Said by a screen reader with its name and its help, from the field.
-    field?.focus();
+    return this.passwords.give(entity, values, id, next, own);
   }
 
   /**

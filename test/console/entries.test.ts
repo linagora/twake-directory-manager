@@ -336,77 +336,29 @@ describe('Directory console: entries and their groups', () => {
 
     const alice = 'uid=alice,ou=users,dc=example,dc=com';
     const bob = 'uid=bob,ou=users,dc=example,dc=com';
-    /** A console whose panel draws what a bulk action opens */
-    const bench = (language = 'en') => {
+    /** A console whose panel draws what Add to a group… opens */
+    const bench = () => {
       const toast = toastElement();
       const holder = stubContainer();
-      const radios = Object.keys(
-        usersSchema.attributes.twakeAccountStatus?.states ?? {}
-      ).map(value => {
-        const radio = {
-          value,
-          checked: false,
-          listener: undefined as (() => void) | undefined,
-          addEventListener: (_type: string, callback: () => void) => {
-            radio.listener = callback;
-          },
-        };
-        return radio;
-      });
-      const submit = { disabled: true, textContent: '' };
-      const cancel = { disabled: false, addEventListener: () => undefined };
-      const progress = {
-        hidden: true,
-        line: { textContent: '' },
-        querySelector(selector: string): unknown {
-          return selector === '[role="status"]' ? this.line : null;
-        },
-      };
-      let send: ((event: unknown) => void) | undefined;
-      const form = {
-        addEventListener: (
-          _type: string,
-          callback: (event: unknown) => void
-        ) => {
-          send = callback;
-        },
-      };
       const body = {
         innerHTML: '',
         scrollTop: 0,
         querySelector: (selector: string): unknown =>
-          ({
-            '[data-bulk-picker]': holder,
-            'button[type="submit"]': submit,
-            '[data-cancel]': cancel,
-            '[data-bulk-progress]': progress,
-            form,
-            'input[name="dc-state"]:checked':
-              radios.find(radio => radio.checked) ?? null,
-          })[selector] ?? null,
-        querySelectorAll: (selector: string) =>
-          selector === 'input[name="dc-state"]' ? radios : [],
+          selector === '[data-bulk-picker]' ? holder : null,
+        querySelectorAll: () => [],
       };
       const title = { textContent: '' };
       const panel = { hidden: true, classList: { toggle: () => undefined } };
-      const app = consoleIn(
-        {
-          '[data-panel]': panel,
-          '[data-panel-title]': title,
-          '[data-panel-body]': body,
-          '[data-toast]': toast,
-        },
-        language
-      ) as unknown as {
+      const app = consoleIn({
+        '[data-panel]': panel,
+        '[data-panel-title]': title,
+        '[data-panel-body]': body,
+        '[data-toast]': toast,
+      }) as unknown as {
         scope: Scope | null;
         entities: EntityDescriptor[];
         api: object;
-        stateDescriptions(): Promise<Record<string, string>>;
         bulkAddToGroups(
-          entity: EntityDescriptor,
-          selected: [string, Entry][]
-        ): Promise<boolean>;
-        bulkChangeState(
           entity: EntityDescriptor,
           selected: [string, Entry][]
         ): Promise<boolean>;
@@ -415,24 +367,7 @@ describe('Directory console: entries and their groups', () => {
       };
       app.scope = null;
       app.entities = [users, groups];
-      app.stateDescriptions = async () => ({});
-      const pick = (value: string): void => {
-        for (const radio of radios) radio.checked = radio.value === value;
-        radios.find(radio => radio.value === value)?.listener?.();
-      };
-      const press = (): void => send?.({ preventDefault: () => undefined });
-      return {
-        app,
-        toast,
-        body,
-        title,
-        panel,
-        submit,
-        cancel,
-        progress,
-        pick,
-        press,
-      };
+      return { app, toast, body, title, panel };
     };
     const settled = (promise: Promise<boolean>) => {
       let value: boolean | undefined;
@@ -570,101 +505,6 @@ describe('Directory console: entries and their groups', () => {
       const done = settled(outcome);
       app.openPanel('Edit — alice', () => undefined);
       expect(await done()).to.equal(false);
-    });
-
-    it('should move each account to the state, list those refused, and hold its panel meanwhile', async () => {
-      const {
-        app,
-        toast,
-        body,
-        panel,
-        title,
-        submit,
-        cancel,
-        progress,
-        pick,
-        press,
-      } = bench();
-      const asked: string[] = [];
-      let release = (): void => undefined;
-      Object.assign(app.api, {
-        setStatus: async (_entity: unknown, id: string, state: string) => {
-          asked.push(`${id} ${state}`);
-          if (id === 'alice')
-            await new Promise<void>(resolve => (release = resolve));
-          if (id === 'carol') throw new Error('Forbidden');
-        },
-      });
-      const done = settled(
-        app.bulkChangeState(users, [
-          ['alice', { dn: alice, uid: 'alice', cn: 'Alice Martin' }],
-          ['bob', { dn: bob, uid: 'bob', cn: 'Bob Durand' }],
-          [
-            'carol',
-            {
-              dn: 'uid=carol,ou=users,dc=example,dc=com',
-              uid: 'carol',
-              cn: 'Carol <b>Diaz</b>',
-            },
-          ],
-          ['ghost', { uid: 'ghost' }],
-        ])
-      );
-      await new Promise(resolve => setTimeout(resolve, 0));
-      expect(title.textContent).to.equal('Change state — 3 accounts');
-      pick('disabled');
-      press();
-      // A second press, or another state picked, sends nothing more.
-      pick('enabled');
-      press();
-      expect(submit.disabled).to.equal(true);
-      expect(cancel.disabled).to.equal(true);
-      expect(progress.line.textContent).to.equal('0 of 3 accounts');
-      // Escape while it runs: the panel stays, the work going on in it.
-      app.closePanel();
-      expect(panel.hidden).to.equal(false);
-      release();
-      await new Promise(resolve => setTimeout(resolve, 0));
-      expect(asked).to.deep.equal([
-        'alice disabled',
-        'bob disabled',
-        'carol disabled',
-      ]);
-      expect(toast.textContent).to.equal('2 accounts are now Disabled');
-      expect(body.innerHTML).to.include('1 account was refused:');
-      // The one left out is still said beside them.
-      expect(body.innerHTML).to.include(
-        '1 account you do not administer is left out.'
-      );
-      expect(body.innerHTML).to.include(
-        '<li>Carol &lt;b&gt;Diaz&lt;&#x2F;b&gt;: Forbidden</li>'
-      );
-      expect(await done()).to.equal(undefined);
-      app.closePanel(true);
-      expect(await done()).to.equal(true);
-    });
-
-    it('should count one account in the singular, and not write over a panel opened since', async () => {
-      const { app, toast, title, progress, pick, press } = bench('fr');
-      let release = (): void => undefined;
-      Object.assign(app.api, {
-        setStatus: () => new Promise<void>(resolve => (release = resolve)),
-      });
-      const done = settled(
-        app.bulkChangeState(users, [['alice', { dn: alice, uid: 'alice' }]])
-      );
-      await new Promise(resolve => setTimeout(resolve, 0));
-      expect(title.textContent).to.equal('Changer l’état — 1 compte');
-      pick('disabled');
-      press();
-      expect(progress.line.textContent).to.equal('0 sur 1 compte');
-      // A page left closes it by force: the work ends, then settles it.
-      app.closePanel(true);
-      app.openPanel('Nouvel utilisateur', () => undefined);
-      expect(await done()).to.equal(undefined);
-      release();
-      expect(await done()).to.equal(true);
-      expect(toast.textContent).to.match(/^1 compte est maintenant /);
     });
   });
 
