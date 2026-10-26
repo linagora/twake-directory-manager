@@ -33,6 +33,7 @@ import type {
   EntryList,
   SchemaAttribute,
 } from '../types';
+import { background, type Reporter } from '../shared/background';
 
 // Kept importable from here, where it was first defined.
 export { csvCell };
@@ -151,6 +152,11 @@ export interface ListView {
 export interface ListOptions {
   entity: EntityDescriptor;
   translator: Translator;
+  /**
+   * Told of a failure in work the component starts without waiting for it
+   * (see `background`); the console's own reporter, or the log when absent
+   */
+  report?: Reporter;
   /**
    * Fetch the entries; `search` is already known to be long enough. An
    * `EntryList` also says whether the server left entries out; a plain map,
@@ -570,7 +576,12 @@ export class EntityList {
 
   /** Draw the page now shown, reading it first for an import's entries. */
   private turnPage(): void {
-    if (this.imported) void this.showImported();
+    if (this.imported)
+      background(
+        () => this.showImported(),
+        'showImported',
+        this.options.report
+      );
     else this.draw();
   }
 
@@ -952,7 +963,10 @@ export class EntityList {
       this.under = undefined;
       this.remember();
       if (this.searchTimer) clearTimeout(this.searchTimer);
-      this.searchTimer = setTimeout(() => void this.reload(), 250);
+      this.searchTimer = setTimeout(
+        () => background(() => this.reload(), 'reload', this.options.report),
+        250
+      );
     });
 
     root
@@ -961,7 +975,7 @@ export class EntityList {
         this.searchAttribute = (event.target as HTMLSelectElement).value;
         this.under = undefined;
         this.remember();
-        void this.reload();
+        background(() => this.reload(), 'reload', this.options.report);
       });
 
     root
@@ -1028,11 +1042,17 @@ export class EntityList {
 
     root
       .querySelector('[data-leave-imported]')
-      ?.addEventListener('click', () => void this.leaveImported());
+      ?.addEventListener('click', () =>
+        background(
+          () => this.leaveImported(),
+          'leaveImported',
+          this.options.report
+        )
+      );
 
     root.querySelector('[data-list-all]')?.addEventListener('click', () => {
       this.listEverything = true;
-      void this.reload();
+      background(() => this.reload(), 'reload', this.options.report);
     });
 
     root.querySelector('[data-export]')?.addEventListener('click', () => {
@@ -1050,17 +1070,26 @@ export class EntityList {
         if (!action || this.bulkRunning) return;
         const selected = this.entries.filter(([id]) => this.selected.has(id));
         this.bulkRunning = true;
-        void action
-          .run(selected)
-          .finally(() => (this.bulkRunning = false))
-          .then(changed => {
-            // Nor read again once another page replaced the list.
-            if (!changed || root.isConnected === false) return;
-            this.selected.clear();
-            void this.reload(true);
-          })
-          // An action says its own failures; nothing is left to tell.
-          .catch(() => undefined);
+        background(
+          () =>
+            action
+              .run(selected)
+              .finally(() => (this.bulkRunning = false))
+              .then(changed => {
+                // Nor read again once another page replaced the list.
+                if (!changed || root.isConnected === false) return;
+                this.selected.clear();
+                background(
+                  () => this.reload(true),
+                  'reload',
+                  this.options.report
+                );
+              })
+              // An action says its own failures; nothing is left to tell.
+              .catch(() => undefined),
+          'bulkAction',
+          this.options.report
+        );
       });
 
     root
@@ -1068,9 +1097,14 @@ export class EntityList {
       ?.addEventListener('click', () => {
         // Read again only once something went: a Cancel leaves the page,
         // the selection and the focus, back on this button, as they were.
-        void this.options
-          .onDelete([...this.selected])
-          .then(deleted => (deleted ? this.reload() : undefined));
+        background(
+          () =>
+            this.options
+              .onDelete([...this.selected])
+              .then(deleted => (deleted ? this.reload() : undefined)),
+          'options.onDelete',
+          this.options.report
+        );
       });
   }
 

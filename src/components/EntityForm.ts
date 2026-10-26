@@ -37,6 +37,7 @@ import type {
   ExternalMembers,
   SchemaAttribute,
 } from '../types';
+import { background, type Reporter } from '../shared/background';
 
 /** An entry a pointer field may land on. */
 interface PointerCandidate {
@@ -60,6 +61,11 @@ type Values = Record<string, string[]>;
 export interface FormOptions {
   entity: EntityDescriptor;
   translator: Translator;
+  /**
+   * Told of a failure in work the component starts without waiting for it
+   * (see `background`); the console's own reporter, or the log when absent
+   */
+  report?: Reporter;
   /** Existing entry when editing; absent when creating */
   entry?: Entry;
   /**
@@ -877,7 +883,7 @@ export class EntityForm {
 
     root.querySelector('form')?.addEventListener('submit', event => {
       event.preventDefault();
-      void this.submit();
+      background(() => this.submit(), 'submit', this.options.report);
     });
 
     this.bindFullName(root);
@@ -1617,23 +1623,28 @@ export class EntityForm {
       if (at < 0) return close();
       const local = value.slice(0, at);
       const typed = value.slice(at + 1).toLowerCase();
-      void this.domainsOf(name).then(domains => {
-        if (ticket !== generation) return;
-        // A domain typed whole needs no offer, nor the longer ones it is
-        // part of; otherwise, those the typed text begins come first, then
-        // those it is part of.
-        const matching = domains.includes(typed)
-          ? []
-          : domains.filter(domain => domain.includes(typed));
-        const starts = matching.filter(domain => domain.startsWith(typed));
-        suggestions = [
-          ...starts,
-          ...matching.filter(domain => !starts.includes(domain)),
-        ].map(domain => `${local}@${domain}`);
-        active = 0;
-        if (suggestions.length === 0) close();
-        else paint();
-      });
+      background(
+        () =>
+          this.domainsOf(name).then(domains => {
+            if (ticket !== generation) return;
+            // A domain typed whole needs no offer, nor the longer ones it is
+            // part of; otherwise, those the typed text begins come first, then
+            // those it is part of.
+            const matching = domains.includes(typed)
+              ? []
+              : domains.filter(domain => domain.includes(typed));
+            const starts = matching.filter(domain => domain.startsWith(typed));
+            suggestions = [
+              ...starts,
+              ...matching.filter(domain => !starts.includes(domain)),
+            ].map(domain => `${local}@${domain}`);
+            active = 0;
+            if (suggestions.length === 0) close();
+            else paint();
+          }),
+        'domainsOf',
+        this.options.report
+      );
     });
 
     // `mousedown`, not `click`: the box's blur closes the list first.

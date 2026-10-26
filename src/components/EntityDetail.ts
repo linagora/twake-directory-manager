@@ -32,6 +32,7 @@ import { hasRole, roleAttribute } from '../api/ConsoleApiClient';
 import type { AttachedTables } from './AttachedTables';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
+import { background, type Reporter } from '../shared/background';
 
 /**
  * The headings a field the schema puts in no group is shown under, in the
@@ -89,6 +90,11 @@ export interface DetailOptions {
   entity: EntityDescriptor;
   entry: Entry;
   translator: Translator;
+  /**
+   * Told of a failure in work the component starts without waiting for it
+   * (see `background`); the console's own reporter, or the log when absent
+   */
+  report?: Reporter;
   canWrite: boolean;
   canDelete: boolean;
   onEdit(): void;
@@ -707,9 +713,14 @@ export class EntityDetail {
       button.addEventListener('click', () => {
         if (button.getAttribute('aria-disabled') === 'true') return;
         button.setAttribute('aria-disabled', 'true');
-        void Promise.resolve(
-          this.options.onLeaveGroup?.(button.dataset.leave as string)
-        ).finally(() => button.removeAttribute('aria-disabled'));
+        background(
+          () =>
+            Promise.resolve(
+              this.options.onLeaveGroup?.(button.dataset.leave as string)
+            ).finally(() => button.removeAttribute('aria-disabled')),
+          'options.onLeaveGroup',
+          this.options.report
+        );
       });
     }
   }

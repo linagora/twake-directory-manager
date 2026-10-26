@@ -32,10 +32,16 @@ import {
 import { escapeHtml } from '../shared/dom';
 import { EntityList, listFailure } from './EntityList';
 import type { EntityDescriptor } from '../types';
+import { background, type Reporter } from '../shared/background';
 
 export interface ImportOptions {
   entity: EntityDescriptor;
   translator: Translator;
+  /**
+   * Told of a failure in work the component starts without waiting for it
+   * (see `background`); the console's own reporter, or the log when absent
+   */
+  report?: Reporter;
   /** Candidates of a pointer attribute, as the form lists them */
   pointerOptions(branch: string): Promise<{ dn: string; label: string }[]>;
   /**
@@ -718,7 +724,12 @@ export class EntityImport {
       .querySelector<HTMLInputElement>('[data-import-file]')
       ?.addEventListener('change', event => {
         const file = (event.target as HTMLInputElement).files?.[0];
-        if (file) void this.readFile(file);
+        if (file)
+          background(
+            () => this.readFile(file),
+            'readFile',
+            this.options.report
+          );
       });
 
     for (const select of Array.from(
@@ -739,7 +750,9 @@ export class EntityImport {
 
     root
       .querySelector('[data-import-check]')
-      ?.addEventListener('click', () => void this.check());
+      ?.addEventListener('click', () =>
+        background(() => this.check(), 'check', this.options.report)
+      );
 
     root.querySelector('[data-import-back]')?.addEventListener('click', () => {
       this.step = 'mapping';
@@ -748,7 +761,9 @@ export class EntityImport {
 
     root
       .querySelector('[data-import-run]')
-      ?.addEventListener('click', () => void this.run());
+      ?.addEventListener('click', () =>
+        background(() => this.run(), 'run', this.options.report)
+      );
 
     root.querySelector('[data-import-stop]')?.addEventListener('click', () => {
       this.stopping = true;

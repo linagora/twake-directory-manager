@@ -69,6 +69,7 @@ import type {
   PasswordPolicy,
   Scope,
 } from './types';
+import { background, fromConsole, type Reporter } from './shared/background';
 
 /** The signed-in account, as the overview names it. */
 interface SignedIn {
@@ -562,7 +563,9 @@ export class DirectoryConsole {
   constructor(options: ConsoleOptions) {
     this.options = options;
     this.api = new ConsoleApiClient(options.apiBaseUrl, options.apiPrefix);
-    this.api.onSessionEnded = (): void => void signInAgain();
+    this.api.onSessionEnded = (): void => {
+      signInAgain();
+    };
     this.translator = new Translator(options.language || this.storedLanguage());
   }
 
@@ -615,7 +618,24 @@ export class DirectoryConsole {
     ]);
 
     this.readRoute();
-    window.addEventListener('hashchange', () => void this.followHash());
+    window.addEventListener('hashchange', () =>
+      background(() => this.followHash(), 'followHash', this.report)
+    );
+    // What slips past `background` — a listener that throws, a promise
+    // started without it — is reported too, when it is the console's: the
+    // page embedding the console has errors of its own, left to it. An error
+    // taken is marked handled, so that the browser does not log it a second
+    // time next to the report; the page's own listeners still see it.
+    window.addEventListener('unhandledrejection', event => {
+      if (!fromConsole(event.reason)) return;
+      event.preventDefault();
+      this.report(event.reason, 'unhandled');
+    });
+    window.addEventListener('error', event => {
+      if (!fromConsole(event.error)) return;
+      event.preventDefault();
+      this.report(event.error, 'unhandled');
+    });
     document.addEventListener('keydown', event => this.panelKey(event));
     // A reload or a closed tab loses a form as surely as Escape: the
     // browser's own question then.
@@ -629,7 +649,8 @@ export class DirectoryConsole {
     this.drawShell();
     // The Overview reads it for its own section; any other first page has
     // the banner count it.
-    if (this.route.view !== 'dashboard') void this.readTransit();
+    if (this.route.view !== 'dashboard')
+      background(() => this.readTransit(), 'readTransit', this.report);
     await this.renderMain();
   }
 
@@ -731,7 +752,7 @@ export class DirectoryConsole {
       this.container
         ?.querySelector<HTMLElement>('[data-panel]')
         ?.replaceWith(kept);
-    void this.renderMain();
+    background(() => this.renderMain(), 'renderMain', this.report);
   }
 
   /** Draw the permanent frame: sidebar, scope, main area, side panel. */
@@ -1010,10 +1031,15 @@ export class DirectoryConsole {
       named: name => this.translator.t('transit.claimTitle', { name }),
       offered: (entry, entity) => this.claimable(entry, entity),
       run: (entry, entity) =>
-        void this.claim(
-          entity,
-          entry.label,
-          entry.values?.displayName || entry.label
+        background(
+          () =>
+            this.claim(
+              entity,
+              entry.label,
+              entry.values?.displayName || entry.label
+            ),
+          'claim',
+          this.report
         ),
     };
   }
@@ -1402,9 +1428,14 @@ export class DirectoryConsole {
     ))
       button.addEventListener('click', () => {
         const entity = this.entity(button.dataset.new as string);
-        if (entity) void this.openForm(entity);
+        if (entity)
+          background(() => this.openForm(entity), 'openForm', this.report);
       });
-    void this.showTransitWaiting(main, generation);
+    background(
+      () => this.showTransitWaiting(main, generation),
+      'showTransitWaiting',
+      this.report
+    );
   }
 
   /**
@@ -1604,7 +1635,9 @@ export class DirectoryConsole {
 
     main
       .querySelector('[data-new]')
-      ?.addEventListener('click', () => void this.openForm(entity));
+      ?.addEventListener('click', () =>
+        background(() => this.openForm(entity), 'openForm', this.report)
+      );
     main
       .querySelector('[data-import]')
       ?.addEventListener('click', () => this.openImport(entity));
@@ -1620,6 +1653,7 @@ export class DirectoryConsole {
     const view = this.listViews.get(entity.key) ?? {};
     this.listViews.set(entity.key, view);
     const list = new EntityList({
+      report: this.report,
       entity,
       view,
       translator: this.translator,
@@ -1703,6 +1737,7 @@ export class DirectoryConsole {
       this.writes(entity, entry) &&
       !!this.api.groupSearch(this.entities);
     const detail: EntityDetail = new EntityDetail({
+      report: this.report,
       entity,
       entry,
       translator: this.translator,
@@ -1715,24 +1750,45 @@ export class DirectoryConsole {
       inTransit: transit.inTransit,
       onClaim: transit.claim
         ? (): void =>
-            void this.claim(entity, id, this.personName(entity, entry, id))
+            background(
+              () => this.claim(entity, id, this.personName(entity, entry, id)),
+              'claim',
+              this.report
+            )
         : undefined,
       onHandOver: transit.handOver
-        ? (): void => void this.handOver(entity, id, entry)
+        ? (): void =>
+            background(
+              () => this.handOver(entity, id, entry),
+              'handOver',
+              this.report
+            )
         : undefined,
       pointerLabel: named,
       relations,
       onEdit: (): void => {
-        void this.openForm(entity, entry);
+        background(() => this.openForm(entity, entry), 'openForm', this.report);
       },
       onDelete: (): void => {
-        void this.confirmDelete(entity, id, entry, canWrite);
+        background(
+          () => this.confirmDelete(entity, id, entry, canWrite),
+          'confirmDelete',
+          this.report
+        );
       },
       onStatus: (): void => {
-        void this.changeState(entity, id, entry);
+        background(
+          () => this.changeState(entity, id, entry),
+          'changeState',
+          this.report
+        );
       },
       onResetPassword: (): void => {
-        void this.resetPassword(entity, id);
+        background(
+          () => this.resetPassword(entity, id),
+          'resetPassword',
+          this.report
+        );
       },
       relationHref: (dn: string): string | undefined => this.relationHref(dn),
       onAddToGroups:
@@ -2107,6 +2163,7 @@ export class DirectoryConsole {
     // whole request, the others with it.
     const holds = new Map<string, Set<string>>();
     const picker = new GroupPicker({
+      report: this.report,
       translator: this.translator,
       search: async (query: string): Promise<GroupChoice[]> =>
         (await search(query)).map(found => {
@@ -2337,39 +2394,40 @@ export class DirectoryConsole {
       if (cancel) cancel.disabled = true;
       if (fieldset) fieldset.disabled = true;
       action.start();
-      void (async (): Promise<void> => {
-        const refused: string[] = [];
-        let done = 0;
-        try {
-          for (const [id, entry] of kept) {
-            if (action.own()) count(done);
-            const name = this.personName(entity, entry, id);
-            try {
-              await this.api.setStatus(entity, id, state);
-            } catch (err) {
-              refused.push(
-                `${name}: ${this.refusal(err, entity, name).message}`
-              );
+      background(
+        async (): Promise<void> => {
+          const refused: string[] = [];
+          let done = 0;
+          try {
+            for (const [id, entry] of kept) {
+              if (action.own()) count(done);
+              const name = this.personName(entity, entry, id);
+              try {
+                await this.api.setStatus(entity, id, state);
+              } catch (err) {
+                refused.push(
+                  `${name}: ${this.refusal(err, entity, name).message}`
+                );
+              }
+              done++;
             }
-            done++;
+            if (action.own()) count(done);
+          } finally {
+            action.finish(done > refused.length);
           }
-          if (action.own()) count(done);
-        } finally {
-          action.finish(done > refused.length);
-        }
-        const moved = total - refused.length;
-        if (moved)
-          this.toast(
-            t('bulk.stateDone', { count: moved, state: label(state) })
-          );
-        // The panel closed meanwhile, by a page left: another may be open.
-        if (!action.own()) return;
-        if (!refused.length) {
-          this.closePanel(true);
-          return;
-        }
-        // Those refused, named with why, in place of the form.
-        body.innerHTML = `
+          const moved = total - refused.length;
+          if (moved)
+            this.toast(
+              t('bulk.stateDone', { count: moved, state: label(state) })
+            );
+          // The panel closed meanwhile, by a page left: another may be open.
+          if (!action.own()) return;
+          if (!refused.length) {
+            this.closePanel(true);
+            return;
+          }
+          // Those refused, named with why, in place of the form.
+          body.innerHTML = `
               <div class="dc-form">
                 ${leftOut ? `<p class="dc-hint">${escapeHtml(leftOut)}</p>` : ''}
                 <p>${escapeHtml(t('bulk.refused', { count: refused.length }))}</p>
@@ -2382,10 +2440,13 @@ export class DirectoryConsole {
                   )}</button>
                 </div>
               </div>`;
-        body
-          .querySelector('[data-close]')
-          ?.addEventListener('click', () => this.closePanel(true));
-      })();
+          body
+            .querySelector('[data-close]')
+            ?.addEventListener('click', () => this.closePanel(true));
+        },
+        'bulkChangeState',
+        this.report
+      );
     });
     return action.settled;
   }
@@ -2414,6 +2475,7 @@ export class DirectoryConsole {
       this.translator.t(key, values);
     const owners = new Map<string, EntityDescriptor>();
     const picker = new GroupPicker({
+      report: this.report,
       translator: this.translator,
       search: async (query: string): Promise<GroupChoice[]> =>
         (await search(query)).map(found => {
@@ -2501,6 +2563,7 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     const picker = new GroupPicker({
+      report: this.report,
       translator: this.translator,
       words: {
         field: t('members.field'),
@@ -2691,6 +2754,7 @@ export class DirectoryConsole {
     this.tree = new OrganizationTree(
       {
         translator: this.translator,
+        report: this.report,
         root: (): Promise<OrganizationNode | null> =>
           this.api.organizationTop(),
         children: (dn: string): Promise<OrganizationNode[]> =>
@@ -2698,7 +2762,11 @@ export class DirectoryConsole {
         transit: this.scope?.transit || undefined,
         onSelect: (node: OrganizationNode): void => {
           this.record(`organizations/${encodeURIComponent(node.dn)}`);
-          void this.showOrganization(node);
+          background(
+            () => this.showOrganization(node),
+            'showOrganization',
+            this.report
+          );
         },
         // A "+" on a node asks a different question from the card on the
         // overview: the card creates where the scope's `organizations.create`
@@ -2710,7 +2778,11 @@ export class DirectoryConsole {
         onCreateChild:
           entity && this.canWrite()
             ? (node: OrganizationNode): void => {
-                void this.openOrganizationForm(entity, undefined, node.dn);
+                background(
+                  () => this.openOrganizationForm(entity, undefined, node.dn),
+                  'openOrganizationForm',
+                  this.report
+                );
               }
             : undefined,
         canCreateChild: (node: OrganizationNode): boolean =>
@@ -2875,6 +2947,7 @@ export class DirectoryConsole {
           branch.write && comparableDn(branch.dn) === comparableDn(node.dn)
       );
     const card = new EntityDetail({
+      report: this.report,
       entity,
       entry,
       translator: this.translator,
@@ -2911,16 +2984,28 @@ export class DirectoryConsole {
       }),
       relationHref: (dn: string): string | undefined => this.relationHref(dn),
       onEdit: (): void => {
-        void this.openOrganizationForm(entity, entry);
+        background(
+          () => this.openOrganizationForm(entity, entry),
+          'openOrganizationForm',
+          this.report
+        );
       },
       onDelete: (): void => {
-        void this.confirmDeleteOrganization(entity, entry, node.dn);
+        background(
+          () => this.confirmDeleteOrganization(entity, entry, node.dn),
+          'confirmDeleteOrganization',
+          this.report
+        );
       },
       // What the tree's "+" does, said in words where the reader is looking:
       // the "+" shows on a row only once it is pointed at or selected.
       onCreateChild: this.createsUnder(node.dn)
         ? (): void => {
-            void this.openOrganizationForm(entity, undefined, node.dn);
+            background(
+              () => this.openOrganizationForm(entity, undefined, node.dn),
+              'openOrganizationForm',
+              this.report
+            );
           }
         : undefined,
       onStatus: (): void => undefined,
@@ -3075,17 +3160,29 @@ export class DirectoryConsole {
       if (target.organizationPath && path)
         preset[target.organizationPath] = path;
       offered[kind] = (): void =>
-        void this.openForm(target, undefined, {
-          preset,
-          // The card is drawn anew, button included: the focus goes back to
-          // the new one, for the next creation, rather than to the page.
-          created: (): void =>
-            void this.showOrganization(node).then(() =>
-              this.container
-                ?.querySelector<HTMLElement>(`[data-create-attached="${kind}"]`)
-                ?.focus()
-            ),
-        });
+        background(
+          () =>
+            this.openForm(target, undefined, {
+              preset,
+              // The card is drawn anew, button included: the focus goes back to
+              // the new one, for the next creation, rather than to the page.
+              created: (): void =>
+                background(
+                  () =>
+                    this.showOrganization(node).then(() =>
+                      this.container
+                        ?.querySelector<HTMLElement>(
+                          `[data-create-attached="${kind}"]`
+                        )
+                        ?.focus()
+                    ),
+                  'showOrganization',
+                  this.report
+                ),
+            }),
+          'openForm',
+          this.report
+        );
     }
     return offered;
   }
@@ -3436,6 +3533,7 @@ export class DirectoryConsole {
       }),
       body => {
         new EntityImport({
+          report: this.report,
           entity,
           translator: this.translator,
           pointerOptions: (
@@ -3471,7 +3569,7 @@ export class DirectoryConsole {
             if (created.length) view.imported = { ids: created };
             else delete view.imported;
             if ((created.length || shown) && this.route.entity === entity.key)
-              void this.renderMain();
+              background(() => this.renderMain(), 'renderMain', this.report);
           },
           onClose: (): void => this.closePanel(),
         }).render(body);
@@ -3551,6 +3649,7 @@ export class DirectoryConsole {
         : t('policy.title.new'),
       body => {
         const form: PolicyForm = new PolicyForm({
+          report: this.report,
           translator: this.translator,
           policy,
           attributes,
@@ -3571,7 +3670,11 @@ export class DirectoryConsole {
             await this.renderMain();
           },
           onDelete: (): void =>
-            void this.deletePolicy(policy as PasswordPolicy),
+            background(
+              () => this.deletePolicy(policy as PasswordPolicy),
+              'deletePolicy',
+              this.report
+            ),
           onCancel: (): void => this.closePanel(),
         });
         form.render(body);
@@ -3649,6 +3752,7 @@ export class DirectoryConsole {
     // Read once for the form, however many addresses it completes.
     const domains = this.api.mailDomains(this.entities);
     const form = new EntityForm({
+      report: this.report,
       entity,
       entry,
       preset: here?.preset,
@@ -3754,7 +3858,7 @@ export class DirectoryConsole {
         ? `${t('app.edit')} — ${this.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
         : this.createLabel(entity),
       (body: HTMLElement): void => {
-        void form.render(body);
+        background(() => form.render(body), 'form.render', this.report);
         this.guardDiscard(body, () => form.isDirty());
       },
       !form.wantsPanel
@@ -3844,6 +3948,7 @@ export class DirectoryConsole {
       ? this.api.mailDomains(this.entities)
       : undefined;
     const form = new EntityForm({
+      report: this.report,
       entity,
       entry,
       translator: this.translator,
@@ -3890,7 +3995,7 @@ export class DirectoryConsole {
         let moved = false;
         this.guardDiscard(body, () => moved || form.isDirty());
         if (parents.length < 2) {
-          void form.render(body);
+          background(() => form.render(body), 'form.render', this.report);
           return;
         }
         body.innerHTML = `
@@ -3914,10 +4019,15 @@ export class DirectoryConsole {
         picker?.addEventListener('change', () => {
           moved = true;
         });
-        void form.render(
-          body.querySelector<HTMLElement>(
-            '[data-organization-form]'
-          ) as HTMLElement
+        background(
+          () =>
+            form.render(
+              body.querySelector<HTMLElement>(
+                '[data-organization-form]'
+              ) as HTMLElement
+            ),
+          'form.render',
+          this.report
         );
       },
       !form.wantsPanel
@@ -4295,7 +4405,12 @@ export class DirectoryConsole {
       body.querySelector('form')?.addEventListener('submit', event => {
         event.preventDefault();
         const state = chosen();
-        if (state) void this.setStatus(entity, id, state, name, label(state));
+        if (state)
+          background(
+            () => this.setStatus(entity, id, state, name, label(state)),
+            'setStatus',
+            this.report
+          );
       });
     });
     // Asked for by name, from the deletion's tip: picked, and focused, but
@@ -4434,51 +4549,58 @@ export class DirectoryConsole {
         const force =
           body.querySelector<HTMLInputElement>('#dc-force-change')?.checked ??
           true;
-        void this.api
-          .resetPassword(entity, id, password || undefined, force)
-          .then(result => {
-            pending = false;
-            const generated = result.generated ? result.password : undefined;
-            if (own()) {
-              this.panelGuard = null;
-              if (generated)
-                this.showGeneratedPassword(
-                  body,
-                  id,
-                  generated,
-                  result.forceChange ?? force
-                );
-              else {
-                this.closePanel();
-                this.toast(t('password.set'));
-              }
-              return;
-            }
-            // Shut by force all the same: the password, the only copy there
-            // is, gets a panel of its own rather than none, once the panel
-            // opened meanwhile, if any, is closed: replaced, it lost what it
-            // held, another password perhaps.
-            if (!generated) {
-              this.toast(t('password.set'));
-              return;
-            }
-            const show = (): void =>
-              this.openPanel(t('password.title'), inner =>
-                this.showGeneratedPassword(inner, id, generated, force)
-              );
-            if (
-              this.container?.querySelector<HTMLElement>('[data-panel]')
-                ?.hidden === false
-            )
-              this.afterPanel.push(show);
-            else show();
-          })
-          .catch((err: Error) => {
-            pending = false;
-            if (send) send.disabled = false;
-            if (own()) this.panelGuard = null;
-            this.toast(err.message, true);
-          });
+        background(
+          () =>
+            this.api
+              .resetPassword(entity, id, password || undefined, force)
+              .then(result => {
+                pending = false;
+                const generated = result.generated
+                  ? result.password
+                  : undefined;
+                if (own()) {
+                  this.panelGuard = null;
+                  if (generated)
+                    this.showGeneratedPassword(
+                      body,
+                      id,
+                      generated,
+                      result.forceChange ?? force
+                    );
+                  else {
+                    this.closePanel();
+                    this.toast(t('password.set'));
+                  }
+                  return;
+                }
+                // Shut by force all the same: the password, the only copy there
+                // is, gets a panel of its own rather than none, once the panel
+                // opened meanwhile, if any, is closed: replaced, it lost what it
+                // held, another password perhaps.
+                if (!generated) {
+                  this.toast(t('password.set'));
+                  return;
+                }
+                const show = (): void =>
+                  this.openPanel(t('password.title'), inner =>
+                    this.showGeneratedPassword(inner, id, generated, force)
+                  );
+                if (
+                  this.container?.querySelector<HTMLElement>('[data-panel]')
+                    ?.hidden === false
+                )
+                  this.afterPanel.push(show);
+                else show();
+              })
+              .catch((err: Error) => {
+                pending = false;
+                if (send) send.disabled = false;
+                if (own()) this.panelGuard = null;
+                this.toast(err.message, true);
+              }),
+          'api.resetPassword',
+          this.report
+        );
       });
     });
   }
@@ -4778,29 +4900,37 @@ export class DirectoryConsole {
             body.querySelector<HTMLSelectElement>('#dc-claim-target');
           const target = targets.find(item => item.dn === select?.value);
           if (!target) return;
-          void this.api
-            .move(entity, id, target.dn)
-            .then(async () => {
-              this.closePanel();
-              this.toast(
-                t('transit.claimed', { name, organization: target.label })
-              );
-              // To its card, where its position and its groups wait to be
-              // put right: the Overview's toast left it to be searched for.
-              const here =
-                this.route.view === 'entity' &&
-                this.route.entity === entity.key &&
-                this.route.id === id;
-              if (here) await this.afterTransitMove();
-              else {
-                this.go(`${entity.key}/${encodeURIComponent(id)}`);
-                await this.readTransit();
-              }
-            })
-            // Claiming is judged on the organization chosen alone.
-            .catch((err: unknown) =>
-              this.toast(this.refusal(err, entity, target.label).message, true)
-            );
+          background(
+            () =>
+              this.api
+                .move(entity, id, target.dn)
+                .then(async () => {
+                  this.closePanel();
+                  this.toast(
+                    t('transit.claimed', { name, organization: target.label })
+                  );
+                  // To its card, where its position and its groups wait to be
+                  // put right: the Overview's toast left it to be searched for.
+                  const here =
+                    this.route.view === 'entity' &&
+                    this.route.entity === entity.key &&
+                    this.route.id === id;
+                  if (here) await this.afterTransitMove();
+                  else {
+                    this.go(`${entity.key}/${encodeURIComponent(id)}`);
+                    await this.readTransit();
+                  }
+                })
+                // Claiming is judged on the organization chosen alone.
+                .catch((err: unknown) =>
+                  this.toast(
+                    this.refusal(err, entity, target.label).message,
+                    true
+                  )
+                ),
+            'api.move',
+            this.report
+          );
         });
       },
       true
@@ -5128,7 +5258,11 @@ export class DirectoryConsole {
         ? {
             label: t('delete.preferDisable'),
             run: (): void =>
-              void this.changeState(entity, id, entry, 'disabled'),
+              background(
+                () => this.changeState(entity, id, entry, 'disabled'),
+                'changeState',
+                this.report
+              ),
           }
         : undefined,
     };
@@ -5311,4 +5445,47 @@ export class DirectoryConsole {
   private toast(message: string, isError = false): void {
     this.toasts.show(message, isError);
   }
+
+  /**
+   * Where the work the console does not wait for ends when it fails (see
+   * `background`): the administrator is told, in a toast, that something
+   * went wrong and what the failure said; the browser's console gets the
+   * failure with the name of what started it, for the operator; and the page
+   * embedding the console gets both through `ConsoleOptions.onError`, to
+   * send wherever it collects its errors. A property rather than a method,
+   * so that it is handed to the components bound.
+   *
+   * The failure is said in the server's own words when it has some: a
+   * refusal reaching here was not caught by the action that asked, and the
+   * reader's wording for a read (`readFailure`) could misdescribe it. The
+   * reporter is the last thing standing between a failure and silence, so
+   * nothing in it may throw: a rejection with no error at all, a toast
+   * element gone, a hook that throws, each is logged and the rest goes on.
+   */
+  private readonly report: Reporter = (error, context): void => {
+    try {
+      console.error('[twake-directory-manager]', context, error);
+      const cause =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : '';
+      this.toast(
+        cause
+          ? this.translator.t('app.failed', { cause })
+          : this.translator.t('app.error'),
+        true
+      );
+    } catch (shown) {
+      // A `message` getter that throws, a toast element gone: logged.
+      console.error('[twake-directory-manager] toast', shown);
+    }
+    try {
+      this.options.onError?.(error, context);
+    } catch (hook) {
+      // The hook's own failure is not reported through itself.
+      console.error('[twake-directory-manager] onError', hook);
+    }
+  };
 }

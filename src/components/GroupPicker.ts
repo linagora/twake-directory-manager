@@ -12,6 +12,7 @@
 import { escapeHtml } from '../shared/dom';
 import { SEARCH_MINIMUM, listFailure } from './EntityList';
 import type { Translator } from '../i18n';
+import { background, type Reporter } from '../shared/background';
 
 /** Wait after a keystroke before searching, as the form's pickers do. */
 const SEARCH_DELAY = 250;
@@ -27,6 +28,11 @@ export interface GroupChoice {
 
 export interface GroupPickerOptions {
   translator: Translator;
+  /**
+   * Told of a failure in work the component starts without waiting for it
+   * (see `background`); the console's own reporter, or the log when absent
+   */
+  report?: Reporter;
   /**
    * The groups matching what was typed that may be offered: those the
    * caller writes, the account is not in yet
@@ -305,21 +311,26 @@ export class GroupPicker {
       error.hidden = true;
       redraw();
       const groups = [...this.chosen];
-      void this.options
-        .onAdd(groups)
-        .catch((err: unknown) => ({
-          left: groups,
-          error: err instanceof Error ? err.message : String(err),
-        }))
-        .then(({ left, error: why }) => {
-          busy = false;
-          this.chosen = left;
-          redraw();
-          if (why) {
-            error.textContent = why;
-            error.hidden = false;
-          }
-        });
+      background(
+        () =>
+          this.options
+            .onAdd(groups)
+            .catch((err: unknown) => ({
+              left: groups,
+              error: err instanceof Error ? err.message : String(err),
+            }))
+            .then(({ left, error: why }) => {
+              busy = false;
+              this.chosen = left;
+              redraw();
+              if (why) {
+                error.textContent = why;
+                error.hidden = false;
+              }
+            }),
+        'options.onAdd',
+        this.options.report
+      );
     });
   }
 }

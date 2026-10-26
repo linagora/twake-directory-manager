@@ -11,6 +11,7 @@
 import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
 import type { PasswordPolicy } from '../types';
+import { background, type Reporter } from '../shared/background';
 
 type FieldKind = 'duration' | 'integer' | 'quality' | 'boolean' | 'text';
 
@@ -225,6 +226,11 @@ export function policyTableMarkup(
 
 export interface PolicyFormOptions {
   translator: Translator;
+  /**
+   * Told of a failure in work the component starts without waiting for it
+   * (see `background`); the console's own reporter, or the log when absent
+   */
+  report?: Reporter;
   /** The policy to edit; none to create one */
   policy?: PasswordPolicy;
   /**
@@ -326,7 +332,7 @@ export class PolicyForm {
     const form = container.querySelector('form');
     form?.addEventListener('submit', event => {
       event.preventDefault();
-      void this.submit();
+      background(() => this.submit(), 'submit', this.options.report);
     });
     for (const type of ['input', 'change'])
       form?.addEventListener(type, () => {

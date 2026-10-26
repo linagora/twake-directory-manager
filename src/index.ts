@@ -26,6 +26,7 @@ export { EntityList, SEARCH_MINIMUM, csvCell } from './components/EntityList';
 export { EntityDetail } from './components/EntityDetail';
 export { OrganizationTree } from './components/OrganizationTree';
 export { Translator, availableLanguages } from './i18n';
+export type { Reporter } from './shared/background';
 export type {
   ConsoleOptions,
   EntityDescriptor,
