@@ -5,8 +5,12 @@ coverage/
 helm/
 e2e/playwright-report/
 e2e/test-results/
+# Agents' worktrees, checkouts of their own under the main one.
+.claude/
 e2e/blob-report/
 e2e/.generated/
 # Recorded from the QA server by e2e/tests/record-scopes.spec.ts, as it answered.
 test/fixtures/
 test-results/
+# Agents' worktrees, checkouts of their own under the main one.
+.claude/

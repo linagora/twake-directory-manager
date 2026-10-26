@@ -283,6 +283,9 @@ export default [
       'node_modules/',
       'coverage/',
       'docs/admin-guide/_build/',
+      // Agents' worktrees, checkouts of their own under the main one: lint
+      // walks into them and reports their files as this checkout's.
+      '.claude/',
     ],
   },
 ];
