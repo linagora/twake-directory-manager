@@ -639,6 +639,7 @@ test.describe('NAV layout, navigation and language', () => {
     // #595959 on white: 7:1, where the default border measured 1.5:1
     await expect.poll(border).toBe('rgb(89, 89, 89)');
     await expect(app.navItem('Users')).toHaveCSS('font-weight', '700');
+    await app.list().listEverything();
     await expect(app.list().rows.first().getByRole('link')).toHaveCSS(
       'text-decoration-line',
       'underline'
