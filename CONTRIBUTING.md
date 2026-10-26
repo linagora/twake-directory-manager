@@ -62,9 +62,23 @@ apart (`key.one`, `key.other`), and as the plain key where the noun does not
 change after a number; `test/i18n.test.ts` fails when a catalogue lacks a key
 the others have.
 
-**A compatibility fallback for an older ldap-rest.** Say in a comment which
-version it serves; once [ADR 0004](docs/adr/0004-ldap-rest-compatibility.md)
-is accepted (#225) the form is `compat(ldap-rest<X.Y.Z)`, checked by lint.
+**A compatibility fallback for an older ldap-rest.** Tag it where it stands,
+`compat(ldap-rest<X.Y.Z)`, X.Y.Z being the first version that needs it no
+more: `npm run lint` (`scripts/check-compat.mjs`) refuses the tag once the
+floor `package.json` declares (`ldapRest.min`) passes it, so that the
+fallback goes with the servers it served
+([ADR 0004](docs/adr/0004-ldap-rest-compatibility.md)). Moving the tested
+version is the `Dockerfile`'s image and `ldapRest.tested` in `package.json`
+(Renovate bumps both together), then a recording of the fixtures against the
+new stack (below); moving the floor is `ldapRest.min`, the README's and the
+`Dockerfile`'s sentence on why, and a line in the changelog.
+
+**A new answer of the server to rely on.** Add a `save(...)` of it to
+`e2e/tests/record-scopes.spec.ts` and a replay to `test/api/contract.test.ts`,
+then record: `RECORD_SCOPES=1 npx playwright test record-scopes` in `e2e/`
+against the running QA stack writes `test/fixtures/`, which that test and
+`test/rights.test.ts` read. The recorder writes which version answered, and
+the contract test holds the fixtures to `ldapRest.tested`.
 
 **A decision.** When something in [docs/adr/](docs/adr/) changes, add a
 record that supersedes the old one; do not edit the old one.
