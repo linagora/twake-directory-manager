@@ -868,7 +868,7 @@ export class EntityList {
               ? html`<a class="dc-row-link" href="${EntityList.entryHref(
                   entity,
                   id
-                )}">${content || id}</a>`
+                )}">${content.markup ? content : id}</a>`
               : content
           }</td>`;
         })}

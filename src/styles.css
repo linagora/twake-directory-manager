@@ -1310,7 +1310,7 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-left: calc(var(--depth) * 16px);
+  margin-left: calc(var(--depth, 0) * 16px);
   border-radius: 8px;
   transition: background-color 0.12s;
 }

@@ -651,7 +651,9 @@ export class EntityForm {
           : this.searches.has(name)
             ? undefined
             : attributeHint(attr, translator.language);
-    const required = attr.required ? ' <span class="dc-required">*</span>' : '';
+    const required = attr.required
+      ? html` <span class="dc-required">*</span>`
+      : '';
     const control = this.searches.has(name)
       ? this.pickerMarkup(name)
       : attr.type === 'array'

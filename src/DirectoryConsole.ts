@@ -166,12 +166,13 @@ const CHEVRON_ICON = trusted(
 );
 
 /** Four squares: the overview, which is every collection at once. */
-const OVERVIEW_ICON =
+const OVERVIEW_ICON = trusted(
   '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">' +
-  '<rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.6"/>' +
-  '<rect x="9" y="1.5" width="5.5" height="5.5" rx="1.6"/>' +
-  '<rect x="1.5" y="9" width="5.5" height="5.5" rx="1.6"/>' +
-  '<rect x="9" y="9" width="5.5" height="5.5" rx="1.6"/></svg>';
+    '<rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.6"/>' +
+    '<rect x="9" y="1.5" width="5.5" height="5.5" rx="1.6"/>' +
+    '<rect x="1.5" y="9" width="5.5" height="5.5" rx="1.6"/>' +
+    '<rect x="9" y="9" width="5.5" height="5.5" rx="1.6"/></svg>'
+);
 
 /** What Tab can reach in the side panel. */
 const FOCUSABLE = [

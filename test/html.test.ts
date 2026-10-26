@@ -46,4 +46,13 @@ describe('html', () => {
     expect(element.innerHTML).to.equal('<p>&lt;x&gt;</p>');
     expect(html``).to.be.instanceOf(SafeHtml);
   });
+
+  it('should refuse to be read as a string', () => {
+    // Joined, concatenated or put in a plain template, markup would read
+    // "[object Object]" or be escaped on its way in: it fails where it is.
+    const piece = html`<b>x</b>`;
+    expect(() => `${piece}`).to.throw(/SafeHtml used as a string/);
+    expect(() => [piece].join('')).to.throw(/SafeHtml used as a string/);
+    expect(() => String(piece)).to.throw(/SafeHtml used as a string/);
+  });
 });
