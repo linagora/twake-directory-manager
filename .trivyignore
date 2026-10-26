@@ -1,0 +1,4 @@
+# CVEs the image scan (test.yml, e2e job) leaves out: one per line, with why
+# and until when, as SECURITY.md says. Example:
+#   # until 2026-12-31: in ldap-rest's base image, asked on linagora/ldap-rest#NNN
+#   CVE-2026-00000

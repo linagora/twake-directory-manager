@@ -1,0 +1,74 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "timezone": "Europe/Paris",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "One pull request a week for the build and test toolchain",
+      "matchFileNames": ["package.json"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "dev dependencies (non-major)"
+    },
+    {
+      "description": "The e2e package is a project of its own",
+      "matchFileNames": ["e2e/**"],
+      "groupName": "e2e"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
+    },
+    {
+      "description": "ldap-rest is what the console runs on: a new major changes the supported range (#225) and waits for a go on the dashboard",
+      "matchDepNames": ["ghcr.io/linagora/ldap-rest", "ldap-rest"],
+      "groupName": "ldap-rest"
+    },
+    {
+      "matchDepNames": ["ghcr.io/linagora/ldap-rest", "ldap-rest"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "The OpenLDAP and Dex images of the QA stack",
+      "matchDepNames": ["osixia/openldap", "ghcr.io/dexidp/dex"],
+      "groupName": "qa images"
+    },
+    {
+      "matchDepNames": ["helm/helm"],
+      "groupName": "helm"
+    }
+  ],
+  "customManagers": [
+    {
+      "description": "The ldap-rest image the Dockerfile builds on",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Dockerfile$/"],
+      "matchStrings": [
+        "ARG LDAP_REST_IMAGE=(?<depName>[^:\\s]+):(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "The images build.sh pulls for the QA stack (docker-compose.yaml has a manager of its own)",
+      "customType": "regex",
+      "managerFilePatterns": ["/^scripts/qa-environment/build\\.sh$/"],
+      "matchStrings": [
+        "(?<depName>osixia/openldap|ghcr\\.io/dexidp/dex):(?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "docker"
+    },
+    {
+      "description": "The Helm version azure/setup-helm installs",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      "matchStrings": [
+        "uses: azure/setup-helm@[^\\n]*\\n\\s+with:\\n\\s+version: (?<currentValue>v\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "helm/helm",
+      "datasourceTemplate": "github-releases"
+    }
+  ]
+}
