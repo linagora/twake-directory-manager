@@ -65,10 +65,9 @@ for (const language of LANGUAGES)
       });
 
       test(`A11Y-06 a group's card`, async ({ page }) => {
-        const app = await signIn(page, account, language, 'groups');
-        await app.list().listEverything();
-        const first = await app.list().ids().first().textContent();
-        await app.list().open((first ?? '').trim());
+        // A seed group of the global branch, which both personas read; the
+        // list's first row would depend on what parallel tests created.
+        const app = await signIn(page, account, language, 'groups/sales-team');
         await expect(app.entry().heading).toBeVisible();
         await expectAccessible(page);
       });

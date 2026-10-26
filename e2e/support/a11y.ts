@@ -1,51 +1,84 @@
 import AxeBuilder from '@axe-core/playwright';
-import { type Page, expect } from '@playwright/test';
+import { type Page, expect, test } from '@playwright/test';
+import type { AxeResults, Result } from 'axe-core';
+
+/** What a scan may leave out: a selector, with a comment saying why. */
+export interface ScanOptions {
+  exclude?: string[];
+}
 
 /**
- * What axe-core finds against WCAG 2.2 AA on the page as it stands: one line
- * per rule broken, with how many elements and the first of them, so that a
- * failure names what to fix. Rules outside the WCAG tags (best practices) are
- * left out: the gate is the standard, not axe's opinions.
+ * Run axe-core against WCAG 2.2 AA on the page as it stands. A rule runs when
+ * it carries one of the listed tags, so every level and version up to 2.2 AA
+ * is named: a rule tagged only `wcag21a` (label in name, 2.5.3) would
+ * otherwise never run. Rules outside the WCAG tags (best practices) are left
+ * out: the gate is the standard, not axe's opinions.
  */
-export async function violations(
-  page: Page,
-  options: { exclude?: string[] } = {}
-): Promise<string[]> {
+async function analyze(page: Page, options: ScanOptions): Promise<AxeResults> {
   let builder = new AxeBuilder({ page }).withTags([
     'wcag2a',
     'wcag2aa',
+    'wcag21a',
     'wcag21aa',
+    'wcag22a',
     'wcag22aa',
   ]);
   for (const selector of options.exclude ?? [])
     builder = builder.exclude(selector);
-  const results = await builder.analyze();
-  return results.violations.map(violation => {
-    const targets = violation.nodes
-      .slice(0, 3)
-      .map(node => {
-        // What axe measured, for a contrast: the colours and the ratio.
-        const data = node.any[0]?.data as
-          | { fgColor?: string; bgColor?: string; contrastRatio?: number }
-          | undefined;
-        const measured = data?.contrastRatio
-          ? ` (${data.fgColor} on ${data.bgColor}: ${data.contrastRatio})`
-          : '';
-        return node.target.join(' ') + measured;
-      })
-      .join(', ');
-    return `${violation.id} [${violation.impact ?? '?'}]: ${violation.help} — ${violation.nodes.length} × ${targets}`;
-  });
+  return builder.analyze();
 }
 
 /**
- * The page passes axe-core's WCAG 2.2 AA rules. Exclude a selector only with a
- * comment that says why (a false positive on a custom widget), and review the
- * exclusions.
+ * One line for a rule: how many elements and the first of them, so that a
+ * failure names what to fix.
+ */
+function line(result: Result): string {
+  const targets = result.nodes
+    .slice(0, 3)
+    .map(node => {
+      // What axe measured, for a contrast: the colours and the ratio.
+      const data = node.any[0]?.data as
+        | { fgColor?: string; bgColor?: string; contrastRatio?: number }
+        | undefined;
+      const measured = data?.contrastRatio
+        ? ` (${data.fgColor} on ${data.bgColor}: ${data.contrastRatio})`
+        : '';
+      return node.target.join(' ') + measured;
+    })
+    .join(', ');
+  return `${result.id} [${result.impact ?? '?'}]: ${result.help} — ${result.nodes.length} × ${targets}`;
+}
+
+/**
+ * What axe-core finds broken on the page, one line per rule.
+ */
+export async function violations(
+  page: Page,
+  options: ScanOptions = {}
+): Promise<string[]> {
+  return (await analyze(page, options)).violations.map(line);
+}
+
+/**
+ * The page passes axe-core's WCAG 2.2 AA rules. The scan waits for nothing on
+ * the page to say it is busy (a select filled after the form is drawn says
+ * `aria-busy`, and a disabled control is exempt from the contrast rule), so
+ * that what it judges is the settled page, every time. What axe could not
+ * decide — a contrast over an overlap, over a background image — is neither a
+ * pass nor a failure: it is annotated on the test, for a reader of the report.
+ * Exclude a selector only with a comment that says why (a false positive on a
+ * custom widget), and review the exclusions.
  */
 export async function expectAccessible(
   page: Page,
-  options: { exclude?: string[] } = {}
+  options: ScanOptions = {}
 ): Promise<void> {
-  expect(await violations(page, options), 'axe violations').toEqual([]);
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  const results = await analyze(page, options);
+  if (results.incomplete.length > 0)
+    test.info().annotations.push({
+      type: 'axe incomplete',
+      description: results.incomplete.map(line).join('; '),
+    });
+  expect(results.violations.map(line), 'axe violations').toEqual([]);
 }
