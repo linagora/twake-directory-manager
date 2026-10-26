@@ -102,16 +102,18 @@ record that supersedes the old one; do not edit the old one.
 
 ## Accessibility
 
-`e2e/tests/a11y.spec.ts` scans the views and panels `e2e/e2e.md` lists with
-axe-core against WCAG 2.2 AA, in English and in French, as the global
-administrator and as a local one, and fails on a violation. A new view or
-panel gets a scan there. A rule axe reports wrongly on a custom widget is
-excluded with a comment saying why, and reviewed. What axe could not decide
-(a contrast over an overlap or a background image) is annotated on the test
-in the report, not failed. What axe cannot see — focus kept on a redraw,
-announcements, keyboard paths, the page's `lang` after a language change — is
-the subject of the open accessibility issues (#207 to #219) and of the shared
-primitives #226 asks for.
+`e2e/tests/a11y.spec.ts` scans the views, panels and dialogs `e2e/e2e.md`
+lists with axe-core against WCAG 2.2 AA, in English and in French, as the
+global administrator and as a local one, and fails on a violation. A new view,
+panel or dialog gets a scan there; with `E2E_A11Y_EVERYWHERE=1`, every
+scenario also scans each state its page objects reach. A rule axe reports
+wrongly on a custom widget is excluded with a comment saying why, and
+reviewed. What axe could not decide (a contrast over an overlap or a
+background image) is annotated on the test in the report, not failed. What
+axe cannot see — focus kept on a redraw, announcements, keyboard paths — is
+checked by the scenarios themselves (LIST-15, LIST-16, NAV-11 to NAV-13,
+IMPORT-03, ORG-01, POLICY-05); the primitives of `src/ui/` are where a new
+table, field, announcement or help is written.
 
 ## Pull requests
 

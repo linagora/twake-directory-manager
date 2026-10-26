@@ -1,10 +1,13 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { scanHere } from '../support/a11y';
+
 /**
  * Reset password, in the side panel: a password to set or none to generate
  * one, then the generated one in the same panel
  */
 export class ResetPasswordDialog {
+  readonly page: Page;
   readonly dialog: Locator;
   readonly title: Locator;
   readonly passwordInput: Locator;
@@ -23,6 +26,7 @@ export class ResetPasswordDialog {
   readonly leaveClose: Locator;
 
   constructor(page: Page) {
+    this.page = page;
     this.dialog = page.getByRole('dialog');
     this.title = this.dialog.getByRole('heading', { level: 2 });
     this.passwordInput = this.dialog.locator('#dc-new-password');
@@ -42,6 +46,7 @@ export class ResetPasswordDialog {
   async expectOpen(): Promise<void> {
     await expect(this.dialog).toBeVisible();
     await expect(this.passwordInput).toBeVisible();
+    await scanHere(this.page);
   }
 
   /** Close the generated password without copying it, as asked */
@@ -54,6 +59,7 @@ export class ResetPasswordDialog {
 
 /** Claim…, in the side panel: the organization to take an entry in transit into */
 export class ClaimDialog {
+  readonly page: Page;
   readonly dialog: Locator;
   readonly title: Locator;
   readonly target: Locator;
@@ -63,6 +69,7 @@ export class ClaimDialog {
   readonly cancelButton: Locator;
 
   constructor(page: Page) {
+    this.page = page;
     this.dialog = page.getByRole('dialog');
     this.title = this.dialog.getByRole('heading', { level: 2 });
     this.target = this.dialog.locator('#dc-claim-target');
@@ -89,6 +96,7 @@ export class ClaimDialog {
  * Located by the console's `data-*` hooks, whose names do not change with the language.
  */
 export class ConfirmDialog {
+  readonly page: Page;
   readonly dialog: Locator;
   readonly title: Locator;
   /** The paragraphs and the list under the question */
@@ -105,6 +113,7 @@ export class ConfirmDialog {
   readonly cancelButton: Locator;
 
   constructor(page: Page) {
+    this.page = page;
     this.dialog = page.getByRole('alertdialog');
     this.title = this.dialog.getByRole('heading', { level: 2 });
     this.message = this.dialog.locator('[data-confirm-body]');
@@ -121,6 +130,7 @@ export class ConfirmDialog {
   async expectOpen(title?: string): Promise<void> {
     await expect(this.dialog).toBeVisible();
     if (title !== undefined) await expect(this.title).toHaveText(title);
+    await scanHere(this.page);
   }
 
   /** Confirms, and waits for the dialog to go */
@@ -141,6 +151,7 @@ export class ConfirmDialog {
  * administrator writes, the groups chosen as tokens, and Add
  */
 export class AddToGroupsDialog {
+  readonly page: Page;
   readonly dialog: Locator;
   readonly title: Locator;
   readonly search: Locator;
@@ -158,6 +169,7 @@ export class AddToGroupsDialog {
   readonly cancelButton: Locator;
 
   constructor(page: Page) {
+    this.page = page;
     this.dialog = page.getByRole('dialog');
     this.title = this.dialog.getByRole('heading', { level: 2 });
     this.search = this.dialog.getByRole('combobox');
@@ -174,6 +186,7 @@ export class AddToGroupsDialog {
     await expect(this.dialog).toBeVisible();
     await expect(this.search).toBeVisible();
     if (title !== undefined) await expect(this.title).toHaveText(title);
+    await scanHere(this.page);
   }
 
   /** The suggestion of a group, by its name */

@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { scanHere } from '../support/a11y';
 import { CONSOLE_PATH } from '../support/env';
 import { EntryPage } from './EntryPage';
 import { FormPanel } from './FormPanel';
@@ -71,6 +72,7 @@ export class ConsolePage {
     await expect(this.page).toHaveURL(new RegExp(`${CONSOLE_PATH}`));
     await expect(this.banner).toBeVisible();
     await expect(this.languageSelect).toBeVisible();
+    await scanHere(this.page);
   }
 
   /** Opens an address of the console (`users/alice`, `groups`, '' for the overview) */

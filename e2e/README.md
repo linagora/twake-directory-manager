@@ -48,6 +48,10 @@ trace, a video and a screenshot under `test-results/artifacts/`; reports go to
 `playwright-report/` (HTML) and `test-results/junit.xml`. The `globalSetup` refuses to start
 when the stack does not answer, with the command to run.
 
+`E2E_A11Y_EVERYWHERE=1` makes every scenario scan, with axe-core, each state its page
+objects reach (a panel opened, a card shown, the console loaded), on top of the states
+`a11y.spec.ts` scans on its own; off by default, each scan costing about half a second.
+
 ### The stack
 
 `scripts/start.sh` runs the QA environment's own `scripts/qa-environment/start.sh` (OpenLDAP

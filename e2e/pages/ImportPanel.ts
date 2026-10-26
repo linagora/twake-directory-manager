@@ -5,6 +5,8 @@ import {
   type Page,
 } from '@playwright/test';
 
+import { scanHere } from '../support/a11y';
+
 /** A CSV file as the tests write it: a heading row and data rows, `;`-separated by default */
 export function csv(rows: string[][], separator = ';'): string {
   return rows.map(row => row.join(separator)).join('\n') + '\n';
@@ -80,6 +82,7 @@ export class ImportPanel {
     await expect(this.title).toHaveText(
       /^(Import Users|Importer des utilisateurs)$/
     );
+    await scanHere(this.page);
   }
 
   /** Hands a file to the panel, as choosing it would */

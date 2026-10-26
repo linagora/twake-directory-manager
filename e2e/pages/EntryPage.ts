@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { scanHere } from '../support/a11y';
+
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -221,6 +223,7 @@ export class EntryPage {
 
   async expectName(name: string): Promise<void> {
     await expect(this.heading).toHaveText(exactly(name));
+    await scanHere(this.page);
   }
 
   /** The states the Change state panel offers, by their names */

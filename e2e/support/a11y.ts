@@ -82,3 +82,21 @@ export async function expectAccessible(
     });
   expect(results.violations.map(line), 'axe violations').toEqual([]);
 }
+
+/**
+ * Whether every scenario scans the states it reaches, through the page
+ * objects: `E2E_A11Y_EVERYWHERE=1`. Off by default, since each scan costs
+ * about half a second and `a11y.spec.ts` scans the states on its own; on, a
+ * run says where a view a scenario reaches breaks a rule (#226, step 4).
+ */
+export const SCAN_EVERYWHERE = process.env.E2E_A11Y_EVERYWHERE === '1';
+
+/**
+ * Scan the page where a page object has just found the state it expects, when
+ * asked to scan everywhere; nothing otherwise.
+ *
+ * @param page the page
+ */
+export async function scanHere(page: Page): Promise<void> {
+  if (SCAN_EVERYWHERE) await expectAccessible(page);
+}

@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { scanHere } from '../support/a11y';
+
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -51,6 +53,7 @@ export class FormPanel {
     await expect(this.title).toHaveText(title);
     // the selects of reference data are filled after the form is drawn
     await expect(this.dialog.locator('[aria-busy=true]')).toHaveCount(0);
+    await scanHere(this.page);
   }
 
   async expectClosed(): Promise<void> {

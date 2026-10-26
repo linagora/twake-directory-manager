@@ -1,5 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
+import { scanHere } from '../support/a11y';
+
 /**
  * Reference data → Password policies (`#/password-policies`), which only the administrators the
  * server lets read them are offered: the table of OpenLDAP's policies, and the side panel
@@ -55,6 +57,7 @@ export class PoliciesPage {
 
 /** The side panel creating or editing a password policy */
 export class PolicyPanel {
+  readonly page: Page;
   readonly dialog: Locator;
   readonly title: Locator;
   /** The name, asked of a new policy only */
@@ -65,6 +68,7 @@ export class PolicyPanel {
   readonly cancelButton: Locator;
 
   constructor(page: Page) {
+    this.page = page;
     this.dialog = page.getByRole('dialog');
     this.title = this.dialog.getByRole('heading', { level: 2 });
     this.nameInput = this.dialog.locator('#dc-policy-cn');
@@ -76,6 +80,7 @@ export class PolicyPanel {
   async expectOpen(title: string): Promise<void> {
     await expect(this.dialog).toBeVisible();
     await expect(this.title).toHaveText(title);
+    await scanHere(this.page);
   }
 
   /** The block of an attribute's field: label, control, unit, hint, error */

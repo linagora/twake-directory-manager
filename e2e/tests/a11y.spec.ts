@@ -1,6 +1,14 @@
 import { type Page } from '@playwright/test';
 
-import { type ConsolePage, LoginPage, PolicyPanel } from '../pages';
+import {
+  AddToGroupsDialog,
+  ConfirmDialog,
+  type ConsolePage,
+  csv,
+  LoginPage,
+  PolicyPanel,
+  ResetPasswordDialog,
+} from '../pages';
 import { type Account, ADMIN, ORG, SOPHIE } from '../support/accounts';
 import { expectAccessible } from '../support/a11y';
 import { expect, test } from '../support/fixtures';
@@ -83,6 +91,70 @@ for (const language of LANGUAGES)
         const app = await signIn(page, account, language, 'users');
         await app.list().importButton.click();
         await expect(app.importPanel().dialog).toBeVisible();
+        await expectAccessible(page);
+      });
+
+      test(`A11Y-10 the edit panel of a user`, async ({ page }) => {
+        const app = await signIn(page, account, language, 'users/alice');
+        await app.entry().action(t(language, 'app.edit')).click();
+        await expect(app.form().dialog).toBeVisible();
+        await expectAccessible(page);
+      });
+
+      test(`A11Y-11 the reset password dialog`, async ({ page }) => {
+        const app = await signIn(page, account, language, 'users/alice');
+        await app.entry().action(t(language, 'password.title')).click();
+        await new ResetPasswordDialog(page).expectOpen();
+        await expectAccessible(page);
+      });
+
+      test(`A11Y-12 the delete confirmation`, async ({ page }) => {
+        const app = await signIn(page, account, language, 'users/alice');
+        // In the More menu, which opens first
+        await app.entry().perform(t(language, 'app.delete'));
+        await new ConfirmDialog(page).expectOpen();
+        await expectAccessible(page);
+      });
+
+      test(`A11Y-13 the Add to a group dialog`, async ({ page }) => {
+        const app = await signIn(page, account, language, 'users/alice');
+        await app.entry().addToGroup().click();
+        await new AddToGroupsDialog(page).expectOpen();
+        await expectAccessible(page);
+      });
+
+      test(`A11Y-14 the change of state`, async ({ page }) => {
+        const app = await signIn(page, account, language, 'users/alice');
+        await app.entry().changeState.click();
+        await expect(app.entry().statePanel).toBeVisible();
+        await expectAccessible(page);
+      });
+
+      test(`A11Y-15 the CSV import, matched, checked and done`, async ({
+        page,
+      }) => {
+        const app = await signIn(page, account, language, 'users');
+        await app.list().importButton.click();
+        const panel = app.importPanel();
+        await expect(panel.dialog).toBeVisible();
+        // Every required column matched, with one row that fails its check
+        await panel.feed(
+          csv([
+            [
+              'Employee ID',
+              'Last name',
+              'First name',
+              'Full name',
+              'Email',
+              'Department',
+            ],
+            ['A11Y-1', 'Scan', 'Axe', 'Axe Scan', 'not-an-address', 'Nowhere'],
+          ])
+        );
+        await expect(panel.readLine).toBeVisible();
+        await expectAccessible(page);
+        await panel.checkButton.click();
+        await expect(panel.stats.first()).toBeVisible();
         await expectAccessible(page);
       });
 

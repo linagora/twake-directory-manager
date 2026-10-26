@@ -168,3 +168,11 @@ The views and panels below, scanned by axe-core against WCAG 2.2 AA (`support/a1
 - [x] A11Y-07 (P1) Organizations with a card open
 - [x] A11Y-08 (P1) The CSV import panel
 - [x] A11Y-09 (P1) Password policies with the form open (global administrator)
+- [x] A11Y-10 (P1) The edit panel of a user
+- [x] A11Y-11 (P1) The reset password dialog
+- [x] A11Y-12 (P2) The delete confirmation
+- [x] A11Y-13 (P2) The Add to a group dialog
+- [x] A11Y-14 (P2) The change of state
+- [x] A11Y-15 (P1) The CSV import with its columns matched, then checked (one row in error)
+
+With `E2E_A11Y_EVERYWHERE=1`, every scenario scans each state its page objects reach (`support/a11y.ts`, `scanHere`), off by default (#226, step 4).
