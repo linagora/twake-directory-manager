@@ -70,6 +70,13 @@ export function background(
 const BUNDLE = /\btwake-directory-manager(?:\.esm|\.min)?\.js\b/;
 
 /**
+ * A frame of a stack trace, as V8 and Firefox write one: `at` opening a
+ * line, or `@` before the location. The first line of a V8 stack is the
+ * message, which could name the bundle without coming from it.
+ */
+const FRAME = /^\s+at\s|@/;
+
+/**
  * Whether an error escaped from the console's own code, as far as its
  * stack trace tells.
  *
@@ -87,5 +94,8 @@ const BUNDLE = /\btwake-directory-manager(?:\.esm|\.min)?\.js\b/;
  */
 export function fromConsole(error: unknown): boolean {
   const stack = (error as { stack?: unknown } | null)?.stack;
-  return typeof stack === 'string' && BUNDLE.test(stack);
+  return (
+    typeof stack === 'string' &&
+    stack.split('\n').some(line => FRAME.test(line) && BUNDLE.test(line))
+  );
 }

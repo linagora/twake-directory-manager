@@ -5463,14 +5463,14 @@ export class DirectoryConsole {
    * element gone, a hook that throws, each is logged and the rest goes on.
    */
   private readonly report: Reporter = (error, context): void => {
-    console.error('[twake-directory-manager]', context, error);
-    const cause =
-      error instanceof Error
-        ? error.message
-        : typeof error === 'string'
-          ? error
-          : '';
     try {
+      console.error('[twake-directory-manager]', context, error);
+      const cause =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : '';
       this.toast(
         cause
           ? this.translator.t('app.failed', { cause })
@@ -5478,6 +5478,7 @@ export class DirectoryConsole {
         true
       );
     } catch (shown) {
+      // A `message` getter that throws, a toast element gone: logged.
       console.error('[twake-directory-manager] toast', shown);
     }
     try {

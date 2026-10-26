@@ -130,6 +130,14 @@ describe('background', () => {
       'https://example.org/vendor.js:1:1',
     ])
       expect(fromConsole(at(frame)), frame).to.equal(false);
+    // A message naming the bundle, from the page's own frames, is the page's.
+    const named = new Error('Failed to load twake-directory-manager.esm.js');
+    named.stack = `Error: ${named.message}\n    at load (https://example.org/app.js:1:1)`;
+    expect(fromConsole(named)).to.equal(false);
+    // Firefox writes its frames with an `@`.
+    const firefox = new Error('x');
+    firefox.stack = `render@${origin}/twake-directory-manager.esm.js:12:3\nmain@https://example.org/app.js:1:1`;
+    expect(fromConsole(firefox)).to.equal(true);
     // A rejection with no error, or an error with no stack, is left alone.
     expect(fromConsole('a string')).to.equal(false);
     expect(fromConsole(null)).to.equal(false);
@@ -225,6 +233,17 @@ describe('DirectoryConsole.report', () => {
         expect(toast.textContent).to.equal('Something went wrong');
       }
       expect(logged.filter(args => args[1] === 'z')).to.have.length(4);
+      // An error whose message itself throws is logged, and the hook still told.
+      const cursed = new Error('x');
+      Object.defineProperty(cursed, 'message', {
+        get: () => {
+          throw new Error('no message');
+        },
+      });
+      expect(() => report(cursed, 'cursed')).to.not.throw();
+      expect(
+        logged.filter(args => args[0] === '[twake-directory-manager] toast')
+      ).to.have.length(1);
     } finally {
       console.error = original;
     }
