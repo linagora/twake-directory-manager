@@ -25,6 +25,17 @@ export { EntityDetail } from './components/EntityDetail';
 export { OrganizationTree } from './components/OrganizationTree';
 export { Translator, availableLanguages } from './i18n';
 export type { Reporter } from './shared/background';
+export {
+  Rights,
+  claimRoots,
+  isPrimaryEntity,
+  splitEntities,
+  organizationParents,
+  scopeRestricts,
+  transitState,
+  writesEntry,
+  type TransitState,
+} from './rights';
 export { SafeHtml, append, html, join, render, trusted } from './shared/html';
 export type {
   ConsoleOptions,

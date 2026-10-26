@@ -49,6 +49,7 @@ import {
   withinDn,
 } from './format';
 import { availableLanguages, languageName, Translator } from './i18n';
+import { Rights, splitEntities } from './rights';
 import { signInAgain } from './session';
 import type { ListView } from './components/EntityList';
 import type {
@@ -56,6 +57,17 @@ import type {
   OrganizationMatches,
 } from './components/OrganizationTree';
 import type { PointerLookup } from './importer';
+// Kept where embedders and the tests found them.
+export {
+  claimRoots,
+  isPrimaryEntity,
+  organizationParents,
+  scopeRestricts,
+  splitEntities,
+  transitState,
+  writesEntry,
+  type TransitState,
+} from './rights';
 import type {
   AttachedEntries,
   AttachedEntry,
@@ -110,44 +122,6 @@ export interface Confirmation {
 const LANGUAGE_KEY = 'ldap-rest.console.language';
 const POLICIES_KEY = 'password-policies';
 const REFERENCE_OPEN_KEY = 'ldap-rest.console.referenceOpen';
-
-/**
- * Whether a collection is one an administrator works in every day.
- *
- * What an administrator manages lives in the organization tree: the tree
- * itself, and the entries attached to a node of it — accounts, groups. What is
- * attached to no node is what those entries point at — positions, titles,
- * account states, mail domains — reference data, set up once and rarely
- * touched. The schema already says which is which, through the
- * `organizationLink` role, so the console needs no list of names to tell them
- * apart.
- *
- * @param entity collection to classify
- * @returns true for the tree and the entries attached to it
- */
-export function isPrimaryEntity(entity: EntityDescriptor): boolean {
-  return entity.kind === 'organization' || !!entity.organizationLink;
-}
-
-/**
- * The collections to put forward and the ones to tuck away. A directory with
- * no organization tree has nothing to tell apart: every collection is then
- * put forward rather than all of them hidden.
- *
- * @param entities every collection the server serves
- * @returns both lists, in the order the server gave them
- */
-export function splitEntities(entities: EntityDescriptor[]): {
-  primary: EntityDescriptor[];
-  reference: EntityDescriptor[];
-} {
-  const primary = entities.filter(isPrimaryEntity);
-  if (primary.length === 0) return { primary: entities, reference: [] };
-  return {
-    primary,
-    reference: entities.filter(entity => !isPrimaryEntity(entity)),
-  };
-}
 
 /**
  * The letter standing for a collection in the navigation and on its card.
@@ -248,177 +222,6 @@ export function createdEntryId(
       ? first(entryValue(created as Entry, entity.mainAttribute))
       : undefined;
   return answered ?? first(values[entity.mainAttribute]) ?? '';
-}
-
-/**
- * Whether the scope decides which actions the console offers.
- *
- * It does not when there is none — a server without `authzScope` — when it is
- * unrestricted, or when the server could not describe it. Each action is then
- * offered and the server answers it. An undescribed scope carries no branch
- * and no entity, and reading that as "no right" left a deployment gating its
- * routes with `authzPerRoute` a read-only console.
- *
- * @param scope what `GET /v1/authz/scope` answered
- * @returns true when the scope's branches and entities are the rights
- */
-export function scopeRestricts(scope: Scope | null): scope is Scope {
-  return !!scope && !scope.unrestricted && scope.described !== false;
-}
-
-/** Where an entry stands with the transit branch, and what the caller may do. */
-export interface TransitState {
-  /** Waiting for an administrator to claim it */
-  inTransit: boolean;
-  /** The caller may move it into an organization of theirs */
-  claim: boolean;
-  /** The caller may let it go into the transit branch */
-  handOver: boolean;
-  /**
-   * What the caller may do to an entry in transit besides moving it. The
-   * server judges those changes on the transit branch, or on the entry's
-   * parent when it is attached to nothing, so an entry is usually claimed
-   * first. Absent when the entry is not in transit
-   */
-  rights?: { write: boolean; delete: boolean };
-}
-
-/**
- * The transit moves offered on an entry.
- *
- * ldap-rest also counts an entry attached to no organization as in transit,
- * but `transit: null` does not tell a server judging by attachment without a
- * transit branch from one not judging by attachment at all, where nobody may
- * claim such an entry. The console therefore speaks of transit only when the
- * server names a transit branch.
- *
- * `POST /groups/:cn/move` refuses a group attached to no organization, so
- * such a group is in transit but cannot be claimed.
- *
- * @param scope what `GET /v1/authz/scope` answered
- * @param entity entity the entry belongs to
- * @param entry the entry as read
- * @returns whether it is in transit, and the moves offered
- */
-export function transitState(
-  scope: Scope | null,
-  entity: EntityDescriptor,
-  entry: Entry
-): TransitState {
-  const none = { inTransit: false, claim: false, handOver: false };
-  if (!scopeRestricts(scope) || !scope.transit || !entity.organizationLink)
-    return none;
-  const raw = entryValue(entry, entity.organizationLink);
-  const link = String((Array.isArray(raw) ? raw[0] : raw) ?? '');
-  if (!link || comparableDn(link) === comparableDn(scope.transit)) {
-    // The parent: everything up to the first comma the DN does not escape.
-    const judged =
-      link || String(entry.dn ?? '').replace(/^(?:\\.|[^,\\])*,/, '');
-    const grants = (right: 'write' | 'delete'): boolean =>
-      !!judged &&
-      scope.branches.some(
-        branch => branch[right] && withinDn(judged, branch.dn)
-      );
-    return {
-      inTransit: true,
-      claim:
-        (!!link || entity.kind !== 'group') &&
-        scope.branches.some(branch => branch.write),
-      handOver: false,
-      rights: { write: grants('write'), delete: grants('delete') },
-    };
-  }
-  return {
-    inTransit: false,
-    claim: false,
-    handOver: scope.branches.some(
-      branch => branch.write && withinDn(link, branch.dn)
-    ),
-  };
-}
-
-/**
- * Whether the caller may change one entry, as the server judges it.
- *
- * ldap-rest judges a change on the organization the entry is attached to
- * only when it filters entries by attachment — always under `authzLinid1`,
- * under the other plugins only with `--authz-filter-attached-entries`, off
- * by default — and on the entry's parent otherwise: `ou=groups` for every
- * group. The scope does not say which, but a transit branch is named only
- * where entries are judged by attachment. Without one, either is taken, so
- * that nothing the server allows is hidden: what it refuses after all is
- * said in the console's words.
- *
- * An entry in transit is judged as {@link transitState} judges it: a local
- * administrator changes nothing in it before claiming it.
- *
- * @param scope what `GET /v1/authz/scope` answered
- * @param entity entity the entry belongs to
- * @param entry the entry as read
- * @returns false only when the scope says the server would refuse
- */
-export function writesEntry(
-  scope: Scope | null,
-  entity: EntityDescriptor,
-  entry: Entry
-): boolean {
-  if (!scopeRestricts(scope)) return true;
-  const transit = transitState(scope, entity, entry);
-  if (transit.rights) return transit.rights.write;
-  const writes = (dn: string | undefined): boolean =>
-    !!dn &&
-    scope.branches.some(branch => branch.write && withinDn(dn, branch.dn));
-  const raw = entity.organizationLink
-    ? entryValue(entry, entity.organizationLink)
-    : undefined;
-  const link = String((Array.isArray(raw) ? raw[0] : raw) ?? '').trim();
-  const parent = parentOf(String(entry.dn ?? ''));
-  if (scope.transit) return writes(link || parent);
-  return writes(link) || writes(parent);
-}
-
-/**
- * The branches an entry in transit can be claimed into: those the caller
- * writes, each standing for its subtree.
- *
- * @param scope what `GET /v1/authz/scope` answered
- * @returns the roots to offer the organizations of
- */
-export function claimRoots(scope: Scope): OrganizationNode[] {
-  return scope.branches
-    .filter(branch => branch.write)
-    .map(branch => ({
-      dn: branch.dn,
-      name: branch.name || rdnValue(branch.dn),
-      path: branch.path,
-    }));
-}
-
-/**
- * The branches a new organization can go under: the organizations the caller
- * writes, each standing for its subtree. The server judges a creation on the
- * parent it is given, so these are the parents it would accept.
- *
- * The transit branch is left out: every administrator writes it to hand
- * entries over, which makes it no organization of theirs to grow. One a
- * written branch above it holds is still covered by that branch.
- *
- * @param scope what `GET /v1/authz/scope` answered
- * @param top the root of the organization tree
- * @returns the branches, as the scope names them
- */
-export function organizationParents(
-  scope: Scope,
-  top: string
-): Scope['branches'] {
-  const transit = scope.transit;
-  return scope.branches.filter(
-    branch =>
-      branch.write &&
-      !!top &&
-      withinDn(branch.dn, top) &&
-      !(transit && withinDn(branch.dn, transit))
-  );
 }
 
 /**
@@ -766,7 +569,7 @@ export class DirectoryConsole {
       this.translator.t(key, values);
     // An account administering nothing finds only "nothing to manage" behind
     // each entry: the overview says it once, and the entries are not offered.
-    const { primary, reference } = this.administersNothing()
+    const { primary, reference } = this.rights.administersNothing()
       ? { primary: [], reference: [] }
       : splitEntities(this.entities);
     const settings = this.settings(reference);
@@ -904,26 +707,25 @@ export class DirectoryConsole {
   private scopeMarkup(): SafeHtml {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    if (this.scopeError)
+    const summary = this.rights.summary;
+    if (summary.kind === 'error')
       return html`<span class="dc-scope-error">${t('scope.unavailable', {
-        error: this.scopeError,
+        error: summary.error,
       })}</span>`;
-    if (!this.scope)
+    if (summary.kind === 'unrestricted')
       return html`<span class="dc-scope-empty">${t('scope.unrestricted')}</span>`;
-    if (this.scope.unrestricted)
-      return html`<span class="dc-scope-empty">${t('scope.unrestricted')}</span>`;
-    if (this.scope.described === false)
+    if (summary.kind === 'undescribed')
       return html`<span class="dc-scope-empty">${t('scope.undescribed')}</span>`;
     // Grey, not the green of a scope in order: there is nothing to be had.
-    if (this.scope.branches.length === 0)
+    if (summary.kind === 'nothing')
       return html`<span class="dc-scope-empty dc-scope-none">${t(
         'scope.none'
       )}</span>`;
-
+    const transit = summary.transit;
     return html`
       <span class="dc-scope-label">${t('scope.title')}</span>
       <ul class="dc-scope">
-        ${this.scope.branches.map(branch => {
+        ${summary.branches.map(branch => {
           const rights = [
             branch.read ? t('scope.read') : '',
             branch.write ? t('scope.write') : '',
@@ -937,25 +739,25 @@ export class DirectoryConsole {
             </li>`;
         })}
       </ul>
-      ${
-        this.scope.transit
-          ? html`${
-              // "Transit Transit (1)" said its name twice: the label goes
-              // when the branch's name is that word already.
-              rdnValue(this.scope.transit).toLowerCase() ===
-              t('transit.branch').toLowerCase()
-                ? ''
-                : html`<span class="dc-scope-label">${t('transit.branch')}</span>`
-            }
+            ${
+              transit
+                ? html`${
+                    // "Transit Transit (1)" said its name twice: the label goes
+                    // when the branch's name is that word already.
+                    rdnValue(transit).toLowerCase() ===
+                    t('transit.branch').toLowerCase()
+                      ? ''
+                      : html`<span class="dc-scope-label">${t('transit.branch')}</span>`
+                  }
             <a class="dc-scope-transit" data-transit-link href="#/organizations/${encodeURIComponent(
-              this.scope.transit
+              transit
             )}" title="${
               // Readable, like the branches' paths: the scope gives the
               // transit branch no path, and its name stands in for one.
-              rdnValue(this.scope.transit)
+              rdnValue(transit)
             }">${this.transitLabel()}</a>`
-          : ''
-      }`;
+                : ''
+            }`;
   }
 
   /**
@@ -964,7 +766,7 @@ export class DirectoryConsole {
    * of a hand-over without thinking of looking.
    */
   private transitLabel(): string {
-    const transit = this.scope?.transit;
+    const transit = this.rights.transit;
     if (!transit) return '';
     const name = rdnValue(transit);
     const waiting = this.transitWaiting;
@@ -983,15 +785,15 @@ export class DirectoryConsole {
    * @returns what waits there, or null when there is nothing to read
    */
   private async readTransit(): Promise<AttachedEntries | null> {
-    const scope = this.scope;
-    if (!scopeRestricts(scope) || !scope.transit || this.administersNothing())
-      return null;
+    const rights = this.rights;
+    const transit = rights.transit;
+    if (!transit || rights.administersNothing()) return null;
     // Read again after every hand-over and claim: an answer arriving after
     // a later one's is older, and must not count over it.
     const read = ++this.transitReads;
     let waiting: AttachedEntries | null;
     try {
-      waiting = await this.readMembers(scope.transit);
+      waiting = await this.readMembers(transit);
     } catch {
       waiting = null;
     }
@@ -1004,19 +806,6 @@ export class DirectoryConsole {
     return waiting;
   }
 
-  /**
-   * Whether the caller may claim an entry listed in transit: as its card
-   * would say, from the entity holding it, attached to the transit branch.
-   */
-  private claimable(entry: AttachedEntry, entity: EntityDescriptor): boolean {
-    const transit = this.scope?.transit;
-    if (!transit || !entity.organizationLink) return false;
-    return transitState(this.scope, entity, {
-      dn: entry.dn,
-      [entity.organizationLink]: transit,
-    }).claim;
-  }
-
   /** Claim…, at the end of each row listing what waits in transit. */
   private claimAction(): {
     label: string;
@@ -1027,7 +816,7 @@ export class DirectoryConsole {
     return {
       label: this.translator.t('transit.claim'),
       named: name => this.translator.t('transit.claimTitle', { name }),
-      offered: (entry, entity) => this.claimable(entry, entity),
+      offered: (entry, entity) => this.rights.claimable(entry, entity),
       run: (entry, entity) =>
         background(
           () =>
@@ -1106,7 +895,7 @@ export class DirectoryConsole {
     if (this.route.view === 'organizations')
       return this.renderOrganizations(main, generation);
     if (this.route.view === 'policies')
-      return this.managesPolicies()
+      return this.rights.managesPolicies()
         ? this.renderPolicies(main, generation)
         : this.renderDashboard(main);
 
@@ -1173,116 +962,6 @@ export class DirectoryConsole {
         });
   }
 
-  /** Whether the caller may create an entry of this entity. */
-  private canCreate(entity: EntityDescriptor): boolean {
-    if (this.scopeError) return false;
-    if (!scopeRestricts(this.scope)) return true;
-    const declared = this.scope.entities.find(
-      item => item.name === entity.pluralName
-    );
-    // The server enumerates every entity it serves, so an entity it did not
-    // name is one it does not know: its add hook is what would answer, and it
-    // would answer 403.
-    if (!declared) return false;
-    return declared.create || this.creationParents(entity).length > 0;
-  }
-
-  /**
-   * Where a new organization goes when the caller may not create one at the
-   * root of the tree.
-   *
-   * `organizations.create` answers for a creation without a parent, which
-   * lands at the root: a global administrator appointed one level below it
-   * read "Creation not allowed here", though the server accepts the
-   * organization under any branch they write. Those branches are offered
-   * instead, by the name the banner gives them.
-   *
-   * @param entity the entity about to be created
-   * @returns the parents to offer, sorted; none when the root is allowed,
-   *   when the scope restricts nothing, or for any other entity
-   */
-  private creationParents(
-    entity: EntityDescriptor
-  ): { dn: string; label: string }[] {
-    if (entity.kind !== 'organization' || !scopeRestricts(this.scope))
-      return [];
-    const declared = this.scope.entities.find(
-      item => item.name === entity.pluralName
-    );
-    if (!declared || declared.create) return [];
-    return organizationParents(this.scope, entity.base)
-      .map(branch => ({
-        dn: branch.dn,
-        label: branch.path || branch.name || branch.dn,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }
-
-  /**
-   * Whether the caller links an organization only to the mail domains one
-   * above it links already. ldap-rest's authorization holds every caller to
-   * that (`authzLinid1`, "Mail domains") but the one who writes the top
-   * organization, who hands each organization its domains; a scope that
-   * restricts nothing leaves it to the server to say.
-   *
-   * The server says so itself in `linksAnyDomain`: the administrators of
-   * `--authz-global-organization`, the functional root right under a bare
-   * top, link any domain too, and read from the branches they were offered
-   * none. Only a server that predates it is read the old way.
-   *
-   * @param entity the organizations
-   * @returns true when the domains offered are to be narrowed
-   */
-  private inheritsDomains(entity: EntityDescriptor): boolean {
-    if (this.scopeError || !scopeRestricts(this.scope) || !entity.base)
-      return false;
-    const any = (this.scope as { linksAnyDomain?: unknown }).linksAnyDomain;
-    if (typeof any === 'boolean') return !any;
-    const top = entity.base;
-    return !this.scope.branches.some(
-      branch => branch.write && withinDn(top, branch.dn)
-    );
-  }
-
-  /**
-   * Whether the caller may create an organization under this one.
-   *
-   * Every written branch counts here, not only the organizations among
-   * them: a branch written above the root of the tree, as an administrator
-   * of the whole directory has, covers every node. The transit branch is
-   * still no organization of theirs to grow.
-   *
-   * @param dn the organization a new one would hang from
-   */
-  private createsUnder(dn: string): boolean {
-    if (!this.canWrite()) return false;
-    if (!scopeRestricts(this.scope)) return true;
-    const transit = this.scope.transit;
-    return this.scope.branches.some(
-      branch =>
-        branch.write &&
-        !(transit && withinDn(branch.dn, transit)) &&
-        withinDn(dn, branch.dn)
-    );
-  }
-
-  /** Whether the caller may write anywhere at all. */
-  private canWrite(): boolean {
-    if (this.scopeError) return false;
-    if (!scopeRestricts(this.scope)) return true;
-    return this.scope.branches.some(branch => branch.write);
-  }
-
-  /**
-   * Whether the caller administers no branch at all. The server then refuses
-   * every read, so the views say so calmly rather than ask and show each
-   * refusal as an error. An unrestricted or undescribed scope names no
-   * branch either, but restricts nothing.
-   */
-  private administersNothing(): boolean {
-    return scopeRestricts(this.scope) && this.scope.branches.length === 0;
-  }
-
   /** The notice standing in for a view the server would refuse whole. */
   private nothingMarkup(): SafeHtml {
     return html`<p class="dc-empty">${this.translator.t('scope.nothing')}</p>`;
@@ -1301,9 +980,8 @@ export class DirectoryConsole {
    */
   private async readsPolicies(): Promise<boolean> {
     if (!this.api.servesPasswordPolicies) return false;
-    const told = this.scope?.passwordPolicies;
-    if (typeof told === 'boolean' && this.scope?.described !== false)
-      return told;
+    const told = this.rights.policiesTold;
+    if (told !== undefined) return told;
     try {
       await this.api.passwordPolicies();
       return true;
@@ -1329,10 +1007,10 @@ export class DirectoryConsole {
    *   words for it, when they are no DN
    */
   private async readAccount(): Promise<SignedIn | null> {
-    const dn = this.scope?.user;
+    const dn = this.rights.user;
     if (!dn || !isDnShaped(dn)) return null;
     const identifier = { name: rdnValue(dn) };
-    if (this.administersNothing()) return identifier;
+    if (this.rights.administersNothing()) return identifier;
     const owner = this.entities.find(
       entity =>
         entity.kind === 'flat' &&
@@ -1371,20 +1049,10 @@ export class DirectoryConsole {
         key: entity.key,
         label: this.plural(entity),
       })),
-      ...(this.managesPolicies()
+      ...(this.rights.managesPolicies()
         ? [{ key: POLICIES_KEY, label: this.translator.t('nav.policies') }]
         : []),
     ];
-  }
-
-  private managesPolicies(): boolean {
-    return this.policiesReadable;
-  }
-
-  private canDelete(): boolean {
-    if (this.scopeError) return false;
-    if (!scopeRestricts(this.scope)) return true;
-    return this.scope.branches.some(branch => branch.delete);
   }
 
   /**
@@ -1399,7 +1067,7 @@ export class DirectoryConsole {
     const generation = this.viewGeneration;
     // What waits in transit goes first, once read: it is what may need
     // doing today.
-    const sections = this.administersNothing()
+    const sections = this.rights.administersNothing()
       ? [this.noRightsMarkup()]
       : [
           html`<div data-transit-waiting></div>`,
@@ -1461,7 +1129,7 @@ export class DirectoryConsole {
       entities: this.entities,
       members: waiting,
       translator: this.translator,
-      name: rdnValue(this.scope?.transit || ''),
+      name: rdnValue(this.rights.transit || ''),
       pointerLabel: names,
       hideEmpty: true,
       rowAction: this.claimAction(),
@@ -1485,7 +1153,7 @@ export class DirectoryConsole {
 
   /** Who is signed in: by name and address, else as the scope gives it. */
   private welcomeMarkup(): SafeHtml {
-    const user = this.scope?.user;
+    const user = this.rights.user;
     if (!user) return html``;
     const account = this.account;
     const text = account?.email
@@ -1507,7 +1175,7 @@ export class DirectoryConsole {
       <h2>${t('dashboard.entities')}</h2>
       <ul class="dc-cards">
         ${primary.map(entity => {
-          const allowed = this.canCreate(entity);
+          const allowed = this.rights.canCreate(entity);
           return html`<li class="dc-card">
               <header class="dc-card-title">
                 <span class="dc-entity-icon" aria-hidden="true">${initial(
@@ -1556,7 +1224,7 @@ export class DirectoryConsole {
   private noRightsMarkup(): SafeHtml {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    const user = this.scope?.user || '';
+    const user = this.rights.user || '';
     const logout = this.api.logoutUrl;
     return html`
       <div class="dc-no-rights" data-no-rights>
@@ -1600,7 +1268,7 @@ export class DirectoryConsole {
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    const readOnly = this.readsReferenceOnly(entity);
+    const readOnly = this.rights.readsReferenceOnly(entity);
     render(
       main,
       html`
@@ -1608,7 +1276,7 @@ export class DirectoryConsole {
         <header class="dc-view-header">
           <h1>${this.plural(entity)}</h1>
           ${
-            this.canCreate(entity)
+            this.rights.canCreate(entity)
               ? html`<div class="dc-view-actions">
                   ${
                     entity.kind === 'flat'
@@ -1625,7 +1293,9 @@ export class DirectoryConsole {
           }
         </header>
         ${
-          readOnly && this.isReference(entity) && !this.administersNothing()
+          readOnly &&
+          this.isReference(entity) &&
+          !this.rights.administersNothing()
             ? html`<p class="dc-muted dc-view-notice" data-read-only>${t(
                 'reference.readOnly'
               )}</p>`
@@ -1647,7 +1317,7 @@ export class DirectoryConsole {
     const holder = main.querySelector<HTMLElement>(
       '[data-list]'
     ) as HTMLElement;
-    if (this.administersNothing()) {
+    if (this.rights.administersNothing()) {
       render(holder, this.nothingMarkup());
       return;
     }
@@ -1663,7 +1333,7 @@ export class DirectoryConsole {
       load: listLoader(this.api, entity),
       bulkActions: this.bulkActions(entity),
       pathSeparator: this.api.organizationPathSeparator,
-      canDelete: this.canDelete() && !readOnly,
+      canDelete: this.rights.canDelete() && !readOnly,
       pointerLabel: named,
       read: (id: string): Promise<Entry> => this.api.get(entity, id),
       onOpen: (id: string): void =>
@@ -1683,7 +1353,7 @@ export class DirectoryConsole {
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    if (this.administersNothing()) {
+    if (this.rights.administersNothing()) {
       render(main, this.nothingMarkup());
       return;
     }
@@ -1724,9 +1394,10 @@ export class DirectoryConsole {
       this.relations(entity, entry),
     ]);
     if (!this.current(generation)) return;
-    const transit = transitState(this.scope, entity, entry);
-    const readOnly = this.readsReferenceOnly(entity);
-    const canWrite = !readOnly && (transit.rights?.write ?? this.canWrite());
+    const transit = this.rights.transitOf(entity, entry);
+    const readOnly = this.rights.readsReferenceOnly(entity);
+    const canWrite =
+      !readOnly && (transit.rights?.write ?? this.rights.canWrite());
     const groups = relations?.groups && entry.dn ? relations.items : undefined;
     // A group's members, managed from its card as an account's groups are
     // from the account's: the whole form was the only way to change one.
@@ -1736,13 +1407,13 @@ export class DirectoryConsole {
       relations &&
       !relations.groups &&
       entity.kind === 'group' &&
-      this.writes(entity, entry)
+      this.rights.writes(entity, entry)
         ? relations
         : undefined;
     if (members) for (const item of members.items) item.removable = true;
     const joins =
       !!groups &&
-      this.writes(entity, entry) &&
+      this.rights.writes(entity, entry) &&
       !!this.api.groupSearch(this.entities);
     const detail: EntityDetail = new EntityDetail({
       report: this.report,
@@ -1750,7 +1421,8 @@ export class DirectoryConsole {
       entry,
       translator: this.translator,
       canWrite,
-      canDelete: !readOnly && (transit.rights?.delete ?? this.canDelete()),
+      canDelete:
+        !readOnly && (transit.rights?.delete ?? this.rights.canDelete()),
       notice:
         readOnly && this.isReference(entity)
           ? this.translator.t('reference.readOnly')
@@ -1948,7 +1620,7 @@ export class DirectoryConsole {
         return {
           ...item,
           ...(note ? { note } : {}),
-          removable: this.writes(owner, group),
+          removable: this.rights.writes(owner, group),
         };
       })
     );
@@ -1986,14 +1658,6 @@ export class DirectoryConsole {
       dn => pointerLabel(this.entities, dn, language),
       language
     );
-  }
-
-  /**
-   * Whether the caller may change an entry, judged on the entry itself
-   * rather than on the scope as a whole (see {@link writesEntry}).
-   */
-  private writes(entity: EntityDescriptor, entry: Entry): boolean {
-    return this.canWrite() && writesEntry(this.scope, entity, entry);
   }
 
   /** The card of a related entry, in whichever entity owns its DN. */
@@ -2049,7 +1713,7 @@ export class DirectoryConsole {
     run(selected: [string, Entry][]): Promise<boolean>;
   }[] {
     if (
-      !this.canWrite() ||
+      !this.rights.canWrite() ||
       attachedEntity(this.entities, 'people')?.key !== entity.key
     )
       return [];
@@ -2082,7 +1746,7 @@ export class DirectoryConsole {
     selected: [string, Entry][]
   ): { kept: [string, Entry][]; leftOut: string | undefined } {
     const kept = selected.filter(
-      ([, entry]) => entry.dn && this.writes(entity, entry)
+      ([, entry]) => entry.dn && this.rights.writes(entity, entry)
     );
     const count = selected.length - kept.length;
     return {
@@ -2157,7 +1821,7 @@ export class DirectoryConsole {
     const { kept, leftOut } = this.bulkWritable(entity, selected);
     const members = kept.map(([, entry]) => String(entry.dn));
     const search = this.api.groupSearch(this.entities, found =>
-      this.writes(found.entity, found.entry)
+      this.rights.writes(found.entity, found.entry)
     );
     if (!search) return Promise.resolve(false);
     if (!members.length) {
@@ -2479,7 +2143,7 @@ export class DirectoryConsole {
       this.entities,
       found =>
         !holds.has(comparableDn(found.dn)) &&
-        this.writes(found.entity, found.entry)
+        this.rights.writes(found.entity, found.entry)
     );
     if (!search || !entry.dn) return;
     const member = String(entry.dn);
@@ -2748,7 +2412,7 @@ export class DirectoryConsole {
     main: HTMLElement,
     generation: number
   ): Promise<void> {
-    if (this.administersNothing()) {
+    if (this.rights.administersNothing()) {
       render(main, this.nothingMarkup());
       return;
     }
@@ -2774,7 +2438,7 @@ export class DirectoryConsole {
           this.api.organizationTop(),
         children: (dn: string): Promise<OrganizationNode[]> =>
           this.api.organizationChildren(dn),
-        transit: this.scope?.transit || undefined,
+        transit: this.rights.transit,
         onSelect: (node: OrganizationNode): void => {
           this.record(`organizations/${encodeURIComponent(node.dn)}`);
           background(
@@ -2791,7 +2455,7 @@ export class DirectoryConsole {
         // offered it on the root to an administrator of a branch below it,
         // and creating there was refused.
         onCreateChild:
-          entity && this.canWrite()
+          entity && this.rights.canWrite()
             ? (node: OrganizationNode): void => {
                 background(
                   () => this.openOrganizationForm(entity, undefined, node.dn),
@@ -2801,7 +2465,7 @@ export class DirectoryConsole {
               }
             : undefined,
         canCreateChild: (node: OrganizationNode): boolean =>
-          this.createsUnder(node.dn),
+          this.rights.createsUnder(node.dn),
         // Walked, or searched, from the root the tree is drawn from: the
         // server roots a local administrator's tree at their branch, and the
         // filter finds what the tree can open down to, no more. A server
@@ -2945,8 +2609,8 @@ export class DirectoryConsole {
     ]);
     if (!this.current(generation)) return;
 
-    const rights = this.organizationRights(node.dn);
-    const transit = this.scope?.transit;
+    const organization = this.rights.organizationRights(node.dn);
+    const transit = this.rights.transit;
     const name =
       [entryValue(entry, entity.mainAttribute) ?? []].flat()[0] ||
       rdnValue(node.dn);
@@ -2956,22 +2620,18 @@ export class DirectoryConsole {
     // nor on the transit branch, which every administrator writes.
     const above = parentOf(node.dn);
     const changedAbove =
-      !rights.write &&
-      scopeRestricts(this.scope) &&
+      !organization.write &&
       !!above &&
       withinDn(above, entity.base) &&
       !(transit && withinDn(node.dn, transit)) &&
-      this.scope.branches.some(
-        branch =>
-          branch.write && comparableDn(branch.dn) === comparableDn(node.dn)
-      );
+      this.rights.administersExactly(node.dn);
     const card = new EntityDetail({
       report: this.report,
       entity,
       entry,
       translator: this.translator,
-      canWrite: rights.write,
-      canDelete: rights.delete,
+      canWrite: organization.write,
+      canDelete: organization.delete,
       notice: changedAbove
         ? this.translator.t('org.changedAbove', { name })
         : undefined,
@@ -2995,7 +2655,7 @@ export class DirectoryConsole {
           transit && comparableDn(transit) === comparableDn(node.dn)
             ? this.claimAction()
             : undefined,
-        partial: !this.readsWhole(node.dn),
+        partial: !this.rights.readsWhole(node.dn),
         failure,
         onOpen: (href: string): void => {
           window.location.hash = href;
@@ -3018,7 +2678,7 @@ export class DirectoryConsole {
       },
       // What the tree's "+" does, said in words where the reader is looking:
       // the "+" shows on a row only once it is pointed at or selected.
-      onCreateChild: this.createsUnder(node.dn)
+      onCreateChild: this.rights.createsUnder(node.dn)
         ? (): void => {
             background(
               () => this.openOrganizationForm(entity, undefined, node.dn),
@@ -3035,94 +2695,12 @@ export class DirectoryConsole {
   }
 
   /**
-   * What the caller may do to an organization itself, judged as the server
-   * judges it: by its parent, on the most specific branch holding it, a
-   * branch naming the organization itself granting the right as well, and
-   * for Delete every branch at or below it. The administrator of Sales
-   * changes what Sales holds, not Sales itself.
-   *
-   * Writing anywhere was enough to be offered Edit and Delete on any card,
-   * the transit branch's included. Every administrator writes the transit
-   * branch, to hand entries over, and that gives them no right to change it:
-   * Save was refused at the end. On it and below it, only a branch written
-   * above it counts — the global administrator's — as the rights on an
-   * entry in transit are read from the scope (see {@link transitState}).
-   *
-   * @param dn the organization
-   * @returns whether Edit and Delete are offered
-   */
-  private organizationRights(dn: string): { write: boolean; delete: boolean } {
-    const scope = this.scope;
-    if (!scopeRestricts(scope))
-      return { write: this.canWrite(), delete: this.canDelete() };
-    const transit = scope.transit;
-    if (transit && withinDn(dn, transit)) {
-      const above = (right: 'write' | 'delete'): boolean =>
-        !this.scopeError &&
-        scope.branches.some(
-          branch =>
-            branch[right] &&
-            withinDn(dn, branch.dn) &&
-            !withinDn(branch.dn, transit)
-        );
-      return { write: above('write'), delete: above('delete') };
-    }
-    // Offered on Sales to its administrator, Edit ended in "You do not
-    // administer Sales" once the form was typed in.
-    const parent = parentOf(dn);
-    // RDNs, by the commas no backslash escapes.
-    const depth = (branch: string): number =>
-      (comparableDn(branch).match(/(?:^|[^\\]),/g) ?? []).length + 1;
-    const holding = parent
-      ? scope.branches
-          .filter(branch => withinDn(parent, branch.dn))
-          .sort((a, b) => depth(b.dn) - depth(a.dn))[0]
-      : undefined;
-    const judged = (right: 'write' | 'delete'): boolean =>
-      !this.scopeError &&
-      !!holding?.[right] &&
-      !scope.branches.some(
-        branch =>
-          !branch[right] &&
-          (comparableDn(branch.dn) === comparableDn(dn) ||
-            (right === 'delete' && withinDn(branch.dn, dn)))
-      );
-    return { write: judged('write'), delete: judged('delete') };
-  }
-
-  /**
    * Whether an entity is shown as reference data: what the sentence saying
    * it is kept outside the console is about. A directory with no tree puts
    * every collection forward, and its accounts are no reference data.
    */
   private isReference(entity: EntityDescriptor): boolean {
     return splitEntities(this.entities).reference.includes(entity);
-  }
-
-  /**
-   * Whether the caller only reads the entries of a reference entity:
-   * positions, states, mail domains. They lie outside every department, and
-   * the server judges them on their branch, which a local administrator does
-   * not administer; the scope says so of each entity in `create`. A scope
-   * that restricts nothing leaves it to the server.
-   */
-  private readsReferenceOnly(entity: EntityDescriptor): boolean {
-    // A scope the console could not read withholds every action already,
-    // and the banner says why: this is no reason to give.
-    if (this.scopeError) return false;
-    return !isPrimaryEntity(entity) && !this.changesReference(entity);
-  }
-
-  /**
-   * Whether the scope lets the caller write a reference entity. It says
-   * so in `create`, the right to write its branch; it names no right to
-   * delete there, and the same answer stands for Delete.
-   */
-  private changesReference(entity: EntityDescriptor): boolean {
-    if (this.scopeError) return false;
-    if (!scopeRestricts(this.scope)) return true;
-    return !!this.scope.entities.find(item => item.name === entity.pluralName)
-      ?.create;
   }
 
   /**
@@ -3163,8 +2741,11 @@ export class DirectoryConsole {
     const offered: Partial<Record<AttachedKind, () => void>> = {};
     // The global administrator writes above the transit branch, and may
     // grow it, but an account is handed over into it, not created there.
-    const transit = this.scope?.transit;
-    if (!this.createsUnder(node.dn) || (transit && withinDn(node.dn, transit)))
+    const transit = this.rights.transit;
+    if (
+      !this.rights.createsUnder(node.dn) ||
+      (transit && withinDn(node.dn, transit))
+    )
       return offered;
     // The path names the department in the form's picker, as it does on an
     // entry being edited: the DN alone would show its last name only.
@@ -3174,7 +2755,7 @@ export class DirectoryConsole {
     for (const kind of ['people', 'groups'] as const) {
       const target = attachedEntity(this.entities, kind);
       const link = target?.organizationLink;
-      if (!target || !link || !this.canCreate(target)) continue;
+      if (!target || !link || !this.rights.canCreate(target)) continue;
       const preset: Entry = { [link]: node.dn };
       if (target.organizationPath && path)
         preset[target.organizationPath] = path;
@@ -3247,22 +2828,6 @@ export class DirectoryConsole {
         ])
       ),
     };
-  }
-
-  /**
-   * Whether the server lists the caller everything attached to an
-   * organization. It lists only the entries of the branches they
-   * administer, so on another administrator's organization an empty table
-   * says only that none of theirs is there. The transit branch is every
-   * administrator's to read.
-   *
-   * @param dn the organization
-   */
-  private readsWhole(dn: string): boolean {
-    const scope = this.scope;
-    if (!scopeRestricts(scope)) return true;
-    if (scope.transit && withinDn(dn, scope.transit)) return true;
-    return scope.branches.some(branch => withinDn(dn, branch.dn));
   }
 
   /* ------------------------------------------------------------ side panel */
@@ -3677,7 +3242,7 @@ export class DirectoryConsole {
           translator: this.translator,
           policy,
           attributes,
-          canDelete: this.canDelete(),
+          canDelete: this.rights.canDelete(),
           onSave: async (cn, values): Promise<void> => {
             try {
               if (policy) await this.api.updatePasswordPolicy(cn, values);
@@ -3963,7 +3528,8 @@ export class DirectoryConsole {
   ): void {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    const parents = entry || parentDn ? [] : this.creationParents(entity);
+    const parents =
+      entry || parentDn ? [] : this.rights.creationParents(entity);
     if (parents.length === 1) parentDn = parents[0].dn;
     let picker: HTMLSelectElement | null = null;
     const parent = (): string | undefined =>
@@ -3971,7 +3537,7 @@ export class DirectoryConsole {
         ? (parents.find(item => item.dn === picker?.value) ?? parents[0]).dn
         : parentDn;
     // Read once for the form, whichever parent is picked meanwhile.
-    const domains = this.inheritsDomains(entity)
+    const domains = this.rights.inheritsDomains(entity)
       ? this.api.mailDomains(this.entities)
       : undefined;
     const form = new EntityForm({
@@ -4167,11 +3733,9 @@ export class DirectoryConsole {
     const stored = entry
       ? String([entryValue(entry, link) ?? []].flat()[0] ?? '').trim()
       : '';
-    if (!stored || !scopeRestricts(this.scope))
+    if (!stored || !this.rights.restricted)
       return { name: named(sent), attribute: link };
-    const writes = this.scope.branches.some(
-      branch => branch.write && withinDn(sent, branch.dn)
-    );
+    const writes = this.rights.writesWithin(sent);
     return {
       name: writes
         ? (this.roleValue(entity, entry as Entry, 'organizationPath') ??
@@ -4304,9 +3868,9 @@ export class DirectoryConsole {
    */
   private organizationName(entity: EntityDescriptor, dn: string): string {
     return (
-      this.creationParents(entity).find(
-        item => comparableDn(item.dn) === comparableDn(dn)
-      )?.label ??
+      this.rights
+        .creationParents(entity)
+        .find(item => comparableDn(item.dn) === comparableDn(dn))?.label ??
       this.tree?.nameOf(dn) ??
       rdnValue(dn)
     );
@@ -4857,14 +4421,14 @@ export class DirectoryConsole {
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    const scope = this.scope;
-    if (!scopeRestricts(scope) || !scope.transit) return;
-    const transit = comparableDn(scope.transit);
+    const rights = this.rights;
+    if (!rights.transit) return;
+    const transit = comparableDn(rights.transit);
     let targets: { dn: string; label: string }[];
     try {
-      targets = (await this.api.organizationOptions(claimRoots(scope))).filter(
-        target => comparableDn(target.dn) !== transit
-      );
+      targets = (
+        await this.api.organizationOptions(rights.claimRoots())
+      ).filter(target => comparableDn(target.dn) !== transit);
     } catch (err) {
       this.toast((err as Error).message, true);
       return;
@@ -4988,7 +4552,7 @@ export class DirectoryConsole {
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
-    const transit = this.scope?.transit;
+    const transit = this.rights.transit;
     if (!transit) return;
     const name = this.personName(entity, entry, id);
     const organization = this.roleValue(entity, entry, 'organizationPath');
@@ -5474,6 +5038,14 @@ export class DirectoryConsole {
   /** Show a short message. */
   private toast(message: string, isError = false): void {
     this.toasts.show(message, isError);
+  }
+
+  /**
+   * What the caller may do, read from the scope each time: the tests set the
+   * scope after construction, and a view asks at the moment it draws.
+   */
+  private get rights(): Rights {
+    return new Rights(this.scope, this.scopeError, this.policiesReadable);
   }
 
   /**
