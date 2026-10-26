@@ -24,7 +24,6 @@ import {
 } from './components/AttachedTables';
 import {
   comparableDn,
-  createdEntryId,
   entryValue,
   isDnShaped,
   ownValueLabel,
@@ -88,8 +87,7 @@ import { GroupActions } from './actions/groups';
 import { ToastController } from './ui/toast';
 
 // Kept importable from here, where they were first defined.
-export { ToastController, createdEntryId };
-export { listLoader } from './views/list';
+export { ToastController };
 export type { Confirmation };
 
 /** The signed-in account, as the overview names it. */

@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { createdEntryId } from '../src/DirectoryConsole';
+import { createdEntryId } from '../src/format';
 import { EntityImport } from '../src/components/EntityImport';
 import { attributeLabel, resolveText } from '../src/format';
 import { Translator, availableLanguages } from '../src/i18n';

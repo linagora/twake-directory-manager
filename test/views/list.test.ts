@@ -241,6 +241,23 @@ describe('views/list', () => {
       );
     });
 
+    it('should say on reference data the caller only reads that it is kept outside the console', async () => {
+      // Sophie Martin creates no position: the list says why it offers
+      // nothing; the card's notice is in test/views/entry.test.ts.
+      const { root } = await mountConsole({
+        hash: 'positions',
+        scope: 'sophie.martin',
+      });
+      expect(
+        root.querySelector('[data-main] [data-read-only]')?.textContent
+      ).to.include(
+        'Reference data is kept outside the console: you can read it and use it in forms'
+      );
+      // Not on the accounts she writes.
+      await visit(root, 'users');
+      expect(root.querySelector('[data-main] [data-read-only]')).to.equal(null);
+    });
+
     it('should open the form of a new entry on New…', async () => {
       const { root } = await mountConsole({ hash: 'positions', scope: null });
       const { panel, title, body } = panelOf(root);
