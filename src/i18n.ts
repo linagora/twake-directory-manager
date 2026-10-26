@@ -1364,6 +1364,18 @@ const catalogues: Record<string, Catalogue> = { en, fr, mn };
 export const availableLanguages = Object.keys(catalogues);
 
 /**
+ * The keys a catalogue holds, for the test that keeps the catalogues
+ * complete: a key present in one and missing from another is the
+ * mixed-language interface the catalogues replace.
+ *
+ * @param code language code
+ * @returns its keys, in the catalogue's order
+ */
+export function catalogueKeys(code: string): string[] {
+  return Object.keys(catalogues[code] ?? {});
+}
+
+/**
  * What a language is called in itself, the way a reader looks for theirs:
  * "Монгол" says something to whoever reads it, "mn" to almost nobody. Each
  * catalogue names its own language, so a new one brings its name with it.

@@ -14,10 +14,12 @@ almost daily.
 
 `e2e/` is a Playwright suite, a package of its own, run against the image
 built from the tree, behind a real OpenLDAP and Dex (`scripts/qa-environment/`),
-with page objects and seeded LDAP data per test. It runs on every pull
+with page objects, a shared read-only seed and the entries each test creates
+and removes through its fixtures. It runs on every pull
 request and every tag (`test.yml`, called by `release.yml`): nothing is
 published unless it passes. Scenarios are numbered and tracked in
-`e2e/e2e.md`; a known defect is marked `knownIssue('#N')` until fixed. In
+`e2e/e2e.md`; a known defect is marked `knownIssue('<slug>')`, after its file
+in the QA campaign, until fixed. In
 CI a test that passes only on retry fails the run.
 
 ## Consequences

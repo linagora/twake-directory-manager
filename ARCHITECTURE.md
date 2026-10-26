@@ -16,20 +16,25 @@ comes from ldap-rest at run time, and every change goes back through its REST
 API to the directory. Authentication is ldap-rest's (OpenID Connect in the
 image); the console only follows the redirects and signs in again on a `401`.
 
-The one design choice everything else follows from: **the console ships no
-entity name, attribute name or label.** `GET /v1/config` describes the
-entities, their schemas and their endpoints; `GET /v1/authz/scope` says what
-the signed-in administrator may do; the console builds its lists, cards and
-forms from that. A deployment with other schemas gets its own interface
-without a change here ([ADR 0001](docs/adr/0001-built-from-the-server.md)).
+The one design choice everything else follows from: **the console ships no entity name, attribute name or label it can read from the server.**
+`GET /v1/config` describes the entities, their schemas and their endpoints;
+`GET /v1/authz/scope` says what the signed-in administrator may do; the
+console builds its lists, cards and forms from that. A deployment with other
+schemas gets its own interface without a change here
+([ADR 0001](docs/adr/0001-built-from-the-server.md)). The exceptions are the
+two entities ldap-rest describes only by their plugins, groups and
+organizations, which `ConsoleApiClient` builds itself with `cn` and `ou` as
+defaults, the `mail` fallback for an external member's name, and the LDAP
+convention that `cn` is a name, which the form and the card know.
 
 ## Module map
 
-Imports point downwards; nothing imports upwards, and `components/` never
-imports `DirectoryConsole`.
+Imports point downwards: `components/` never imports `DirectoryConsole`, and
+the one cycle (`api/ConsoleApiClient.ts` and `importer.ts`) is type-only.
 
 ```
-src/index.ts                public exports: DirectoryConsole, the components,
+src/index.ts                public exports: DirectoryConsole, four components
+                            (EntityList, EntityDetail, EntityForm, OrganizationTree),
                             ConsoleApiClient, Translator, html/SafeHtml, types
 └── DirectoryConsole.ts     the controller: boot, routing, shell and sidebar,
     │                       every view (overview, lists, cards, organizations,
@@ -40,13 +45,14 @@ src/index.ts                public exports: DirectoryConsole, the components,
     │   ├── EntityList.ts       search, list, selection, CSV export
     │   ├── EntityDetail.ts     an entry's card, its relations and actions
     │   ├── EntityForm.ts       the create/edit form built from a schema
-    │   ├── EntityImport.ts     the CSV import (with importer.ts and csv.ts)
+        │   ├── EntityImport.ts     the CSV import
     │   ├── OrganizationTree.ts the tree, its search and lazy loading
     │   ├── AttachedTables.ts   the people and groups of an organization
     │   ├── GroupPicker.ts      "Add to a group…" and "Add members…"
     │   └── PasswordPolicies.ts the policies table and form
     ├── api/ConsoleApiClient.ts fetch, discovery, every endpoint, the error
     │                           model, compatibility with older ldap-rest answers
+        ├── importer.ts, csv.ts     reading a CSV file and resolving its values
     ├── format.ts               labels, values, sizes, dates, refusals in words
     ├── i18n.ts                 Translator and the en/fr/mn catalogues
     ├── session.ts              signing in again after a 401
@@ -81,8 +87,10 @@ page ([docs/usage.md](docs/usage.md)):
    (`features.console`, from `docker/consoleSettings.mjs`). A failure here
    is the end of it: the page says so.
 3. `api.scope()` reads `GET /v1/authz/scope`. A failure is **not** the end:
-   the console stays up read-only, says the scope is unavailable, and leaves
-   every write to the server to refuse.
+   the console stays up, says the scope is unavailable, and offers no write
+   (`canCreate`, `canWrite`, `canDelete` say no while `scopeError` is set).
+   A server without the plugin answers `404`: the scope is then `null`,
+   restricts nothing, and every action is offered and left to the server.
 4. Whether the password policies can be read, and who is signed in.
 5. The route is read from the hash; the listeners go up (`hashchange`,
    `keydown` for the panel, `beforeunload` for a dirty form,
@@ -107,7 +115,7 @@ the address without a render, for a node the tree already shows.
   `if (!this.current(generation)) return`. Reads with their own ordering
   (transit count) carry their own counter (`transitReads`).
 - **The panel belongs to the page it opened on.** `openPanel(title, build,
-modal)` fills one body for every form; `closePanel(force)` empties it (a
+modal, wide)` fills one body for every form; `closePanel(force)` empties it (a
   password must not linger in a hidden node). `panelGuard` lets a form
   refuse to close (the discard question, `guardDiscard`), `panelDirty`
   answers `beforeunload`, `afterPanel` queues what waits for the panel to
@@ -131,18 +139,18 @@ modal)` fills one body for every form; `closePanel(force)` empties it (a
 report)`; `DirectoryConsole.report` shows _Something went wrong: …_, logs
   to the browser console and calls `options.onError`. ESLint refuses a bare
   `void promise`.
-- **Markup is safe by construction.** Every piece of HTML is an `html`…``
+- **Markup is safe by construction.** Every piece of HTML is an ``html`…` ``
   template (`src/shared/html.ts`), which escapes every interpolation that is
   not already a `SafeHtml`; `render` and `append` are the only writes to the
   page, and ESLint refuses `innerHTML` elsewhere. The image serves the page
   with a strict `Content-Security-Policy` (`DM_STATIC_CSP` in the
   `Dockerfile`): no inline script or style, so nothing written into the
   directory can run ([ADR 0002](docs/adr/0002-vanilla-typescript-and-templates.md)).
-- **One error model at the API boundary.** `ConsoleApiClient.request` reads
-  the status before the body and throws an `Error` carrying `status` and,
+- **One error model at the API boundary.** `ConsoleApiClient.request`
+  throws, for any failed status, an `Error` carrying `status` and,
   when the server gave one, a structured `Refusal` (`code`, `attribute`,
-  `value`, `domains`). `readFailure` and `explainRefusal` turn it into words
-  for the reader; a `401` goes to `signInAgain`, guarded against a reload
+  `value`, `domains`); a body that is not JSON never hides the status.
+  `readFailure` and `explainRefusal` turn it into words for the reader; a `401` goes to `signInAgain`, guarded against a reload
   loop.
 - **Older ldap-rest answers are tolerated, up to a point.** Optional fields
   of `Scope` and fallbacks in the client exist for servers before 0.25.0;
@@ -157,15 +165,18 @@ shows) and renders into an element it is given; it keeps its own state
 (selection, open nodes, typed values) and reports through callbacks
 (`onOpen`, `onSubmit`, `onDelete`…). None reads the scope or the route: the
 console decides what to offer and passes it as booleans (`canWrite`,
-`canDelete`) or absent callbacks. All take an optional `report` for their
-background work.
+`canDelete`) or absent callbacks. All but `AttachedTables`, which starts no
+background work, take an optional `report` for theirs.
 
 ## Internationalisation
 
 `Translator` holds three catalogues (`en`, `fr`, `mn`) in `src/i18n.ts`,
-with placeholders `{name}` and plural forms `key.one`/`key.other` chosen by
-`Intl.PluralRules`; a test checks every catalogue has every key. Entity and
-attribute names are **not** translated here: they come from the schemas'
+with placeholders `{name}`. A sentence with a count is written in the forms
+its language tells apart, chosen by `Intl.PluralRules` (`key.one` and
+`key.other` where English or French need both, the plain key where a noun
+does not change after a number); `test/i18n.test.ts` checks that every
+catalogue holds every key, plural categories and a language's own
+refinements aside. Entity and attribute names are **not** translated here: they come from the schemas'
 `label`, per language, with English as the fallback.
 
 ## Build, tests, delivery
@@ -174,8 +185,10 @@ attribute names are **not** translated here: they come from the schemas'
   stylesheet minified by lightningcss, the page with content digests on the
   files it loads).
 - `npm test`: mocha over `test/`, with hand-made DOM stubs and `nock` for the
-  API; `npm run test:coverage` adds c8 with thresholds. Moving the suite
-  onto a DOM implementation is [#221](https://github.com/linagora/twake-directory-manager/issues/221).
+  API; the console's own tests are in `test/console.test.ts` (large, grouped
+  by `describe`), the components' with them, the importer's, the policies'
+  and the catalogues' in files of their own; `npm run test:coverage` adds c8
+  with thresholds. Moving the suite onto a DOM implementation is [#221](https://github.com/linagora/twake-directory-manager/issues/221).
 - `e2e/`: Playwright against the image built from the tree, behind OpenLDAP
   and Dex (`scripts/qa-environment/`); it gates pull requests and releases
   ([ADR 0005](docs/adr/0005-e2e-suite-as-release-gate.md)).

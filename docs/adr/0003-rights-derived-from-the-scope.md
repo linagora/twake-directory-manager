@@ -1,6 +1,6 @@
 # 0003 — Rights are derived from the scope, and the server decides
 
-**Status**: accepted · **Date**: 2026-10-26, recording a choice made with #167 (October 2026)
+**Status**: accepted · **Date**: 2026-10-26, recording the choice of the console's first commit (2026-09-02)
 
 ## Context
 
@@ -11,8 +11,9 @@ reference data. `GET /v1/authz/scope` describes that scope as branches with
 `read`/`write`/`delete`, entities with `create`, the transit branch and a few
 flags. It does not say, for a given entry, what the caller may do with it.
 
-Offering every action and letting the server refuse was tried and rejected
-(#167): a console full of buttons that answer "forbidden" is not usable.
+Offering every action and letting the server refuse was never the design: a
+console full of buttons that answer "forbidden" is not usable. #167
+(2026-10-24) is what a case the rules missed looks like.
 
 ## Decision
 

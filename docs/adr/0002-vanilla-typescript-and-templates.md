@@ -15,7 +15,7 @@ follow, and a rewrite of what exists.
 
 The console stays dependency-free at run time: TypeScript, the DOM, and
 markup written as template strings. Since 2026-10-26 those templates are
-`html`…`` tagged templates (`src/shared/html.ts`): every interpolation is
+``html`…` `` tagged templates (`src/shared/html.ts`): every interpolation is
 escaped unless it is a `SafeHtml` produced by another template or marked
 `trusted` as a constant of the console's own; `render` and `append` are the
 only writes to the page, and ESLint refuses `innerHTML` elsewhere. The image

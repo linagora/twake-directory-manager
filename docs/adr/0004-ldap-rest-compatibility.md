@@ -8,7 +8,7 @@ The console depends entirely on ldap-rest's API, which moves fast: within
 two months its answers gained the scope's `described` flag (0.9.0), the
 transit branch (0.11.1), a `422` for a search too broad (0.13.0), the
 `X-Result-Truncated` header, the password policies in the scope (0.25.0).
-The console added a fallback for each, and comments naming eight versions,
+The console added a fallback for each, and comments naming seven versions,
 but no file says which versions it supports. CI tests the one version the
 `Dockerfile` names (1.1.0 today).
 
