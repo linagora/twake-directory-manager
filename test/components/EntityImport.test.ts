@@ -48,6 +48,19 @@ describe('EntityImport', () => {
     expect(document.activeElement).to.equal(fresh);
   });
 
+  it('should give the focus to the file input when another file is asked for', async () => {
+    // The file step has no lead; the button pressed is gone with the step.
+    const { root, read } = drawn();
+    await read('Identifier,Name\nA1,Ann\n');
+    const restart = root.querySelector<HTMLElement>('[data-import-restart]');
+    if (!restart) throw new Error('no restart button');
+    restart.focus();
+    restart.click();
+    expect(document.activeElement).to.equal(
+      root.querySelector('[data-import-file]')
+    );
+  });
+
   it('should not take the focus from elsewhere on the page when a step completes', async () => {
     // A file read, or the last row written, while the reader is on the
     // language select: the step is drawn, the focus stays where it is.

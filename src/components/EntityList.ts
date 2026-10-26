@@ -607,10 +607,12 @@ export class EntityList {
           )
         );
       } catch (err) {
-        if (generation !== this.generation) return;
+        if (generation !== this.generation || this.root?.isConnected === false)
+          return;
         this.error = listFailure(err, this.options.translator);
         this.loading = false;
         this.draw();
+        this.announceLoaded();
         return;
       }
       if (generation !== this.generation) return;
@@ -628,6 +630,7 @@ export class EntityList {
     ]);
     this.loading = false;
     this.loaded = true;
+    if (this.root?.isConnected === false) return;
     this.draw();
     this.announceLoaded();
   }

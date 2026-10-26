@@ -183,7 +183,8 @@ export class EntityImport {
     this.painted = { step: this.step, error: this.error };
     const back = this.refocus && root.querySelector<HTMLElement>(this.refocus);
     this.refocus = null;
-    if (back) back.focus();
+    // A control drawn disabled (Stop, once pressed) cannot take it: the lead does.
+    if (back && !(back as HTMLButtonElement).disabled) back.focus();
     else if (
       this.focusIs(root) !== 'elsewhere' &&
       (changed || this.focusIs(root) === 'lost')
@@ -800,6 +801,9 @@ export class EntityImport {
         this.step = 'file';
         this.table = null;
         this.error = '';
+        // Back to choosing a file: the focus goes to the file input, as the
+        // step has no lead to say anything.
+        this.refocus = '[data-import-file]';
         this.paint();
       });
 
