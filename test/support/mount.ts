@@ -15,7 +15,7 @@ import nock from 'nock';
 
 import { ConsoleApiClient } from '../../src/api/ConsoleApiClient';
 import { DirectoryConsole } from '../../src/DirectoryConsole';
-import type { Entry, Scope } from '../../src/types';
+import type { Entry, PasswordPolicy, Scope } from '../../src/types';
 import { beforeReset } from './dom';
 
 const FIXTURES = join(__dirname, '..', 'fixtures');
@@ -37,8 +37,17 @@ export interface MountOptions {
   /** The address to open, as after `#/` */
   hash?: string;
   language?: string;
-  /** Whether the server serves the password policies to this account */
-  policies?: boolean;
+  /**
+   * Whether the server serves the password policies to this account, and
+   * which: `false` is a 403, `true` (the default) none, a body those it holds
+   */
+  policies?: boolean | { policies: PasswordPolicy[]; attributes?: string[] };
+  /**
+   * Answers of the server a test needs, set before the mount's own: `nock`
+   * answers with the first interceptor matching, and the mount answers every
+   * organization read with none
+   */
+  answers?(server: nock.Scope): void;
 }
 
 export interface Mounted {
@@ -134,6 +143,7 @@ export async function mountConsole(
   // would otherwise be this one's.
   const url = mountUrl(++mounts);
   const server = nock(url).persist();
+  options.answers?.(server);
   server.get('/api/v1/config').reply(200, read('config.json'));
   const granted: Scope | null =
     typeof scope === 'string' ? read<Scope>(`scopes/${scope}.json`) : scope;
@@ -141,7 +151,14 @@ export async function mountConsole(
   else server.get('/api/v1/authz/scope').reply(404, { error: 'not found' });
   server
     .get('/api/v1/password-policies')
-    .reply(options.policies === false ? 403 : 200, { policies: [] });
+    .reply(
+      options.policies === false ? 403 : 200,
+      typeof options.policies === 'object'
+        ? options.policies
+        : options.policies === false
+          ? { error: 'Forbidden' }
+          : { policies: [] }
+    );
   server
     .get(/\/api\/v1\/ldap\/users\/[^/?]+$/)
     .reply(options.account ? 200 : 404, options.account ?? { error: 'none' });

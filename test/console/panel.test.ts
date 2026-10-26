@@ -1,10 +1,144 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { expect } from 'chai';
+import type nock from 'nock';
 import { ToastController } from '../../src/DirectoryConsole';
 import { EntityForm } from '../../src/components/EntityForm';
 import { Translator } from '../../src/i18n';
-import type { EntityDescriptor } from '../../src/types';
+import type { EntityDescriptor, Entry } from '../../src/types';
 import { consoleIn, toastElement } from '../support/stubs';
 import { usersSchema, users } from '../fixtures/entities';
+import { mountConsole, settled, type Mounted } from '../support/mount';
+
+/** Alice's entry, as the ldap-rest tested answers it. */
+const alice = (
+  JSON.parse(
+    readFileSync(
+      join(__dirname, '..', 'fixtures', 'contract', 'users-alice.json'),
+      'utf8'
+    )
+  ) as { body: Entry }
+).body;
+
+/** The panel of a mounted console. */
+const parts = (root: HTMLElement) => {
+  const find = (selector: string): HTMLElement => {
+    const found = root.querySelector<HTMLElement>(selector);
+    if (!found) throw new Error(`no ${selector}`);
+    return found;
+  };
+  return {
+    panel: find('[data-panel]'),
+    title: find('[data-panel-title]'),
+    body: find('[data-panel-body]'),
+  };
+};
+
+/** Click what the selector finds, which must be there. */
+const click = (root: HTMLElement, selector: string): void => {
+  const found = root.querySelector<HTMLElement>(selector);
+  if (!found) throw new Error(`no ${selector}`);
+  found.click();
+};
+
+/** A key pressed wherever the focus is: the console listens on the document. */
+const press = (key: string, shiftKey = false): void => {
+  (document.activeElement ?? document.body).dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key,
+      shiftKey,
+      bubbles: true,
+      cancelable: true,
+    })
+  );
+};
+
+/** Wait for what the console does once the server answers. */
+const until = async (done: () => boolean): Promise<void> => {
+  for (let i = 0; i < 200; i++) {
+    if (done()) return;
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  throw new Error('waited a second in vain');
+};
+
+/** An answer of the server held back until the test lets it go. */
+const gate = () => {
+  let open = (): void => undefined;
+  const opened = new Promise<void>(resolve => (open = resolve));
+  return { opened, open: () => open() };
+};
+
+/** Type a value into a field, as the reader does. */
+const type = (field: HTMLInputElement | null, value: string): void => {
+  if (!field) throw new Error('no field');
+  field.focus();
+  field.value = value;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  field.dispatchEvent(new Event('change', { bubbles: true }));
+};
+
+const top = 'ou=organization,dc=example,dc=com';
+/** The organization tree the department picker searches, before the mount's empty one. */
+const tree = (server: nock.Scope): void => {
+  server
+    .get('/api/v1/ldap/organizations/top')
+    .reply(200, { dn: top, ou: 'organization' });
+  server
+    .get(/\/api\/v1\/ldap\/organizations\/[^/]+\/search\?q=/)
+    .reply(200, [
+      { dn: `ou=Sales,${top}`, ou: 'Sales', twakeDepartmentPath: 'Sales' },
+    ]);
+};
+
+/**
+ * Create Hélène from the list's New user, with no password: the server
+ * generates one, which the console shows before her card.
+ *
+ * @param mounted the console, on the list of users
+ * @param held what the creation's answer waits for, when it is held back
+ * @returns once the password is answered, which the page may not show yet
+ */
+const create = async (
+  { root, server }: Mounted,
+  held?: Promise<void>
+): Promise<{ answered: Promise<void> }> => {
+  let answer = (): void => undefined;
+  const answered = new Promise<void>(resolve => (answer = resolve));
+  server.post('/api/v1/ldap/users').reply(async () => {
+    await held;
+    return [200, { uid: 'helene' }];
+  });
+  server.post('/api/v1/ldap/users/helene/password').reply(() => {
+    answer();
+    return [200, { generated: true, password: 's3cret' }];
+  });
+  click(root, '[data-main] [data-new]');
+  await settled(root);
+  const { body } = parts(root);
+  const field = (name: string) =>
+    body.querySelector<HTMLInputElement>(`[name="${name}"]`);
+  type(field('employeeNumber'), 'E0099');
+  type(field('sn'), 'Lefèvre');
+  type(field('givenName'), 'Hélène');
+  type(field('displayName'), 'Hélène Lefèvre');
+  type(field('mail'), 'helene@example.com');
+  type(
+    body.querySelector<HTMLInputElement>('#dc-field-twakeDepartmentLink'),
+    'Sal'
+  );
+  await until(() => !!body.querySelector('[data-candidate="0"]'));
+  // The first match is the active one: Enter takes it, as the reader does.
+  press('Enter');
+  click(body, 'button[type="submit"]');
+  // Read by the console a few turns after nock answers it.
+  return {
+    answered: answered.then(
+      () => new Promise(resolve => setTimeout(resolve, 20))
+    ),
+  };
+};
 
 describe('Directory console: the side panel and the toast', () => {
   describe('the toast', () => {
@@ -294,20 +428,39 @@ describe('Directory console: the side panel and the toast', () => {
     it('should be sent once, and stay while the server answers', async () => {
       // Closed in the meantime, it had the password shown over whatever
       // opened next; sent twice, the one shown might not be the one kept.
-      let guard: (() => boolean) | null = null;
-      const { panel, body, calls } = await reset('', ({ app, els, panel }) => {
-        expect(els.send.disabled).to.be.true;
-        app.closePanel();
-        expect(panel.hidden).to.be.false;
-        els.form.fire('submit');
-        guard = app.panelGuard;
+      const { root, calls, server } = await mountConsole({
+        hash: 'users/alice',
+        account: alice,
       });
-      expect(calls()).to.equal(1);
+      const answer = gate();
+      server.post('/api/v1/ldap/users/alice/password').reply(async () => {
+        await answer.opened;
+        return [200, { generated: true, password: 's3cret' }];
+      });
+      click(root, '[data-main] [data-password]');
+      const { panel, body } = parts(root);
+      const send = body.querySelector<HTMLButtonElement>(
+        'button[type="submit"]'
+      );
+      send?.click();
+      expect(send?.disabled).to.be.true;
+      press('Escape');
       expect(panel.hidden).to.be.false;
-      expect(body.innerHTML).to.contain('id="dc-generated-password"');
-      // Given back by a confirmation answered after the server, the guard
-      // no longer holds the panel.
-      expect((guard as unknown as () => boolean)()).to.be.true;
+      send?.click();
+      answer.open();
+      await until(() => !!body.querySelector('#dc-generated-password'));
+      expect(
+        calls.filter(call => call.startsWith('resetPassword'))
+      ).to.deep.equal(['resetPassword(users, alice, true)']);
+      expect(panel.hidden).to.be.false;
+      // The guard of the request let go of the panel once answered: what
+      // holds it now is the password's own question, asked once.
+      press('Escape');
+      expect(panel.hidden).to.be.false;
+      expect(body.querySelector<HTMLElement>('[data-leave]')?.hidden).to.be
+        .false;
+      press('Escape');
+      expect(panel.hidden).to.be.true;
     });
 
     it('should close on Cancel even while the server answers', async () => {
@@ -419,24 +572,22 @@ describe('Directory console: the side panel and the toast', () => {
 
     it('should be generated and shown before the card opens', async () => {
       // An account created empty could not be signed in to (#164).
-      const { app, body, title, asked, give } = setup(async () => ({
-        generated: true,
-        password: 's3cret',
-      }));
-      let opened = 0;
-      const shown = await give({ cn: 'Hélène Lefèvre' }, () => opened++);
-      expect(shown).to.equal(true);
-      expect(asked).to.deep.equal([
-        [{ ...users, password: 'userPassword' }, 'helene', undefined, true],
-      ]);
-      expect(body.innerHTML).to.include('id="dc-generated-password"');
+      const mounted = await mountConsole({ hash: 'users', answers: tree });
+      const { root, calls } = mounted;
+      const { body, title, panel } = parts(root);
+      await create(mounted);
+      await until(() => !!body.querySelector('#dc-generated-password'));
+      expect(
+        calls.filter(call => call.startsWith('resetPassword'))
+      ).to.deep.equal(['resetPassword(users, helene, true)']);
       expect(title.textContent).to.match(/^New password — /);
+      expect(window.location.hash).to.equal('#/users');
       // The card opens once the password panel is closed.
-      const queued = (app as unknown as { afterPanel: (() => void)[] })
-        .afterPanel;
-      expect(queued).to.have.length(1);
-      queued[0]();
-      expect(opened).to.equal(1);
+      press('Escape');
+      press('Escape');
+      expect(panel.hidden).to.be.true;
+      await settled(root);
+      expect(window.location.hash).to.equal('#/users/helene');
     });
 
     it('should not be asked to change when the form said No', async () => {
@@ -472,64 +623,80 @@ describe('Directory console: the side panel and the toast', () => {
     });
 
     it('should wait behind the panel opened meanwhile, and open no card', async () => {
-      const { app, body, panel, give } = setup(async () => ({
-        generated: true,
-        password: 's3cret',
-      }));
-      panel.hidden = false;
-      let opened = 0;
-      expect(await give({}, () => opened++, false)).to.equal(true);
-      expect(body.innerHTML).to.not.include('dc-generated-password');
-      const queued = (app as unknown as { afterPanel: (() => void)[] })
-        .afterPanel;
-      expect(queued).to.have.length(1);
-      panel.hidden = true;
-      queued[0]();
-      expect(body.innerHTML).to.include('id="dc-generated-password"');
-      expect(opened).to.equal(0);
+      const mounted = await mountConsole({ hash: 'users', answers: tree });
+      const { root } = mounted;
+      const { body, title, panel } = parts(root);
+      const created = gate();
+      const { answered } = await create(mounted, created.opened);
+      // The form is left while the server answers, and another panel opens.
+      press('Escape');
+      click(root, '[data-panel-body] [data-discard-confirm]');
+      expect(panel.hidden).to.be.true;
+      click(root, '[data-main] [data-import]');
+      const other = title.textContent;
+      expect(panel.hidden).to.be.false;
+      created.open();
+      await answered;
+      expect(title.textContent).to.equal(other);
+      expect(body.querySelector('#dc-generated-password')).to.equal(null);
+      // Shown once that one is closed, and no card opened over the list.
+      press('Escape');
+      expect(panel.hidden).to.be.false;
+      expect(body.querySelector('#dc-generated-password')).to.not.equal(null);
+      press('Escape');
+      press('Escape');
+      expect(panel.hidden).to.be.true;
+      await settled(root);
+      expect(window.location.hash).to.equal('#/users');
     });
 
     it('should open the card only if the administrator stayed', async () => {
-      const global = globalThis as { window?: unknown };
-      const saved = global.window;
-      const location = { hash: '#users' };
-      global.window = { location };
-      try {
-        const { app, give } = setup(async () => ({
-          generated: true,
-          password: 's3cret',
-        }));
-        let opened = 0;
-        await give({}, () => opened++);
-        const queued = (app as unknown as { afterPanel: (() => void)[] })
-          .afterPanel;
-        location.hash = '#groups';
-        queued[0]();
-        expect(opened).to.equal(0);
-        await give({}, () => opened++);
-        location.hash = '#groups';
-        queued[1]();
-        expect(opened).to.equal(1);
-      } finally {
-        global.window = saved;
-      }
+      const mounted = await mountConsole({ hash: 'users', answers: tree });
+      const { root } = mounted;
+      const { body, panel } = parts(root);
+      await create(mounted);
+      await until(() => !!body.querySelector('#dc-generated-password'));
+      // Gone elsewhere: the password stays until it is closed on purpose,
+      // and its card does not open over the page gone to.
+      window.location.hash = '#/groups';
+      await settled(root);
+      expect(panel.hidden).to.be.false;
+      press('Escape');
+      expect(panel.hidden).to.be.true;
+      await settled(root);
+      expect(window.location.hash).to.equal('#/groups');
+      // Stayed: the card opens.
+      window.location.hash = '#/users';
+      await settled(root);
+      await create(mounted);
+      await until(() => !!body.querySelector('#dc-generated-password'));
+      press('Escape');
+      press('Escape');
+      await settled(root);
+      expect(window.location.hash).to.equal('#/users/helene');
     });
 
     it('should give the password a panel of its own when its form was closed meanwhile', async () => {
       // Written into the hidden panel, it was seen by nobody, and the card
       // it queued opened at some later close (#164).
-      const { app, body, panel, give } = setup(async () => ({
-        generated: true,
-        password: 's3cret',
-      }));
-      let opened = 0;
-      expect(await give({}, () => opened++, false)).to.equal(true);
-      expect(panel.hidden).to.be.false;
-      expect(body.innerHTML).to.include('id="dc-generated-password"');
-      expect(
-        (app as unknown as { afterPanel: unknown[] }).afterPanel
-      ).to.have.length(0);
-      expect(opened).to.equal(0);
+      const mounted = await mountConsole({ hash: 'users', answers: tree });
+      const { root } = mounted;
+      const { body, panel } = parts(root);
+      const created = gate();
+      await create(mounted, created.opened);
+      press('Escape');
+      click(root, '[data-panel-body] [data-discard-confirm]');
+      expect(panel.hidden).to.be.true;
+      created.open();
+      await until(() => !panel.hidden);
+      expect(body.querySelector('#dc-generated-password')).to.not.equal(null);
+      // Nothing waits behind it: closed, it opens no card.
+      press('Escape');
+      press('Escape');
+      expect(panel.hidden).to.be.true;
+      await settled(root);
+      expect(window.location.hash).to.equal('#/users');
+      expect(panel.hidden).to.be.true;
     });
 
     it('should say so when the server named no account to give one to', async () => {

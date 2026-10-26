@@ -84,9 +84,9 @@ import type {
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
 import type { ConsoleDeps } from './console/deps';
-import { confirmMarkup, markAlert } from './console/dialog';
+import { DialogService } from './console/dialog';
 import { POLICIES_KEY, type Route, routeOf } from './console/route';
-import { firstFocus, overlayMarkup, tabTarget } from './console/panel';
+import { PanelService, overlayMarkup } from './console/panel';
 import {
   highContrast,
   onContrastChange,
@@ -255,26 +255,17 @@ export class DirectoryConsole {
    */
   private readonly listViews = new Map<string, ListView>();
   /**
-   * What had the focus when the side panel opened, given it back on close:
-   * a keyboard user is otherwise left at the top of the page.
+   * The side panel every form opens in, and what the form open asks of the
+   * console: a guard on its close, a reload to warn of, what waits for it.
    */
-  private panelOpener: HTMLElement | null = null;
-  /**
-   * Asked before the side panel closes, when it holds what cannot be shown
-   * again: `false` keeps it open. Each panel opens without one.
-   */
-  private panelGuard: (() => boolean) | null = null;
-  /** Whether the form in the panel holds what closing it would lose */
-  private panelDirty: (() => boolean) | null = null;
-  /** The address changed: the page the panel belongs to is gone */
-  private navigating = false;
-  /** What waits for the panel to close before it opens: a late password */
-  private afterPanel: (() => void)[] = [];
-  /**
-   * Told when the panel open now closes, or another replaces it: an action
-   * that waits on its panel, as the list's bulk actions do
-   */
-  private panelClosed: (() => void) | null = null;
+  private readonly panel = new PanelService(
+    () => this.container,
+    key => this.translator.t(key)
+  );
+  /** The question asked before what cannot be taken back, in the panel. */
+  private readonly dialog = new DialogService(this.panel, key =>
+    this.translator.t(key)
+  );
 
   /**
    * @param options what the page gives the console
@@ -388,8 +379,7 @@ export class DirectoryConsole {
     // A reload or a closed tab loses a form as surely as Escape: the
     // browser's own question then.
     on('beforeunload', event => {
-      const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
-      if (!panel || panel.hidden || !this.panelDirty?.()) return;
+      if (!this.panel.isDirty()) return;
       event.preventDefault();
       event.returnValue = '';
     });
@@ -412,12 +402,7 @@ export class DirectoryConsole {
   private async followHash(): Promise<void> {
     // A changed form is not asked about here: kept over the new page, it
     // would save into an entry no longer on screen.
-    this.navigating = true;
-    try {
-      this.closePanel();
-    } finally {
-      this.navigating = false;
-    }
+    this.panel.closeOnNavigation();
     this.route = routeOf(window.location.hash);
     await this.renderMain();
   }
@@ -1623,10 +1608,7 @@ export class DirectoryConsole {
 
   /** Whether the side panel is open: one opened needs a page to be in. */
   private panelShown(): boolean {
-    return (
-      this.container?.querySelector<HTMLElement>('[data-panel]')?.hidden ===
-      false
-    );
+    return this.panel.isOpen();
   }
 
   /**
@@ -1647,26 +1629,26 @@ export class DirectoryConsole {
     let changed = false;
     let settle = (_changed: boolean): void => undefined;
     const settled = new Promise<boolean>(resolve => (settle = resolve));
-    this.panelClosed = (): void => {
+    this.panel.whenClosed((): void => {
       closed = true;
       if (!running) settle(changed);
-    };
+    });
     return {
       own: () => !closed,
       start: (): void => {
         running = true;
         // Escape and Cancel would leave the work going, unseen; a reload
         // would stop it halfway, and the browser asks first.
-        this.panelGuard = (): boolean => !running;
-        this.panelDirty = (): boolean => running;
+        this.panel.setGuard((): boolean => !running);
+        this.panel.setDirty((): boolean => running);
       },
       finish: (done: boolean): void => {
         running = false;
         changed ||= done;
         if (closed) settle(changed);
         else {
-          this.panelGuard = null;
-          this.panelDirty = null;
+          this.panel.setGuard(null);
+          this.panel.setDirty(null);
         }
       },
       settled,
@@ -2051,9 +2033,9 @@ export class DirectoryConsole {
         } else if (joined.length) {
           await this.renderMain();
           // The button the panel gives the focus back to was redrawn.
-          this.panelOpener =
-            this.main()?.querySelector<HTMLElement>('[data-add-groups]') ??
-            null;
+          this.panel.returnFocusTo(
+            this.main()?.querySelector<HTMLElement>('[data-add-groups]') ?? null
+          );
         }
         // Several refused: each said with the group it is about.
         const error =
@@ -2701,216 +2683,29 @@ export class DirectoryConsole {
 
   /* ------------------------------------------------------------ side panel */
 
-  /** Open the side panel with a title and a body builder. */
-  /**
-   * Show the overlay.
-   *
-   * A long form docks to the side, so its Save button stays put instead of
-   * scrolling off the bottom of a modal — that was the complaint the brief
-   * makes. A form of three fields does not need half the screen, and reads
-   * better centred, which is what `modal` asks for.
-   *
-   * @param title heading of the overlay
-   * @param build fills the body
-   * @param modal centre it rather than docking it to the side
-   */
+  /** Open the side panel with a title and a body builder (`PanelService.open`). */
   private openPanel(
     title: string,
     build: (body: HTMLElement) => void,
     modal = false,
     wide = false
   ): void {
-    const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
-    const heading =
-      this.container?.querySelector<HTMLElement>('[data-panel-title]');
-    const body =
-      this.container?.querySelector<HTMLElement>('[data-panel-body]');
-    const dialog = this.container?.querySelector<HTMLElement>(
-      '[data-panel-dialog]'
-    );
-    if (!panel || !heading || !body) return;
-    // A panel opened over another keeps the first one's opener: that is
-    // where the reader was before any panel.
-    if (panel.hidden && typeof document !== 'undefined')
-      this.panelOpener = document.activeElement as HTMLElement | null;
-    const replaced = this.panelClosed;
-    this.panelClosed = null;
-    replaced?.();
-    heading.textContent = title;
-    this.panelGuard = null;
-    this.panelDirty = null;
-    panel.classList.toggle('dc-panel-modal', modal);
-    panel.classList.toggle('dc-panel-wide', wide);
-    render(body, html``);
-    build(body);
-    panel.hidden = false;
-    // One body serves every form, and a hidden one keeps the offset the last
-    // form was left at: the next would open scrolled past its first fields.
-    // Reset once shown, since an element with no box ignores the write.
-    body.scrollTop = 0;
-    // Into the panel, on its first field: left on the button that opened
-    // it, the keyboard went on through the page behind it. A panel with no
-    // field holds the focus itself.
-    (firstFocus(body) ?? dialog)?.focus();
+    this.panel.open(title, build, modal, wide);
   }
 
-  /**
-   * Close the side panel, unless what it holds asks to stay.
-   *
-   * What it held goes with it: hidden, a password typed or generated in it
-   * stayed in the page, for any script or open developer tools to read, until
-   * the next panel replaced it.
-   *
-   * @param force close it whatever it holds
-   */
+  /** Close the side panel, unless what it holds asks to stay (`PanelService.close`). */
   private closePanel(force = false): void {
-    const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
-    if (!panel || panel.hidden) return;
-    if (!force && this.panelGuard && !this.panelGuard()) return;
-    this.panelGuard = null;
-    this.panelDirty = null;
-    panel.hidden = true;
-    const body =
-      this.container?.querySelector<HTMLElement>('[data-panel-body]');
-    if (body) render(body, html``);
-    const opener = this.panelOpener;
-    this.panelOpener = null;
-    if (opener?.isConnected) opener.focus();
-    const closed = this.panelClosed;
-    this.panelClosed = null;
-    closed?.();
-    this.afterPanel.shift()?.();
+    this.panel.close(force);
   }
 
-  /**
-   * Keep the keyboard in the side panel while it is open, and close it on
-   * Escape. Listened to on the document, so that Tab is caught even once
-   * the focus has strayed onto the backdrop.
-   *
-   * @param event the key pressed
-   */
+  /** The keyboard in the side panel: Tab kept in, Escape closes (`PanelService.key`). */
   private panelKey(event: KeyboardEvent): void {
-    const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
-    const dialog = this.container?.querySelector<HTMLElement>(
-      '[data-panel-dialog]'
-    );
-    if (!panel || panel.hidden || !dialog) return;
-    if (event.key === 'Escape') {
-      // A control that answers Escape itself, such as a picker closing its
-      // suggestions, prevents its default: that press is spent.
-      if (event.defaultPrevented) return;
-      event.preventDefault();
-      this.closePanel();
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const target = tabTarget(
-      dialog,
-      document.activeElement as HTMLElement | null,
-      event.shiftKey
-    );
-    if (!target) return;
-    event.preventDefault();
-    target.focus();
+    this.panel.key(event);
   }
 
-  /**
-   * Ask before an action that cannot be taken back, in the centred dialog
-   * Claim uses. The browser's own confirm() named an entry by its identifier
-   * alone, said nothing of what went with it, and spoke the browser's
-   * language with buttons in the browser's order.
-   *
-   * The focus starts on Cancel, so an Enter pressed out of habit deletes
-   * nothing, and Escape cancels. Asked over an open panel, a policy's form,
-   * the dialog gives that panel back as it was once answered.
-   *
-   * @param question what to ask
-   * @returns whether the action was confirmed
-   */
+  /** Ask before what cannot be taken back (`DialogService.confirm`). */
   private confirmAction(question: Confirmation): Promise<boolean> {
-    const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
-    const heading =
-      this.container?.querySelector<HTMLElement>('[data-panel-title]');
-    const body =
-      this.container?.querySelector<HTMLElement>('[data-panel-body]');
-    const dialog = this.container?.querySelector<HTMLElement>(
-      '[data-panel-dialog]'
-    );
-    if (!panel || !heading || !body || !dialog) return Promise.resolve(false);
-    const covered = panel.hidden
-      ? undefined
-      : {
-          title: heading.textContent ?? '',
-          nodes: Array.from(body.childNodes),
-          modal: panel.classList.contains('dc-panel-modal'),
-          wide: panel.classList.contains('dc-panel-wide'),
-          guard: this.panelGuard,
-          dirty: this.panelDirty,
-          closed: this.panelClosed,
-          focus: document.activeElement as HTMLElement | null,
-        };
-    // A question over a panel does not close it.
-    this.panelClosed = null;
-    return new Promise(resolve => {
-      let answered = false;
-      let boxes: HTMLInputElement[] = [];
-      const answer = (confirmed: boolean): void => {
-        if (answered) return;
-        answered = true;
-        // Read before the panel gives its body back or is emptied.
-        question.choices?.options.forEach((option, index) => {
-          if (boxes[index]) option.checked = boxes[index].checked;
-        });
-        this.panelGuard = null;
-        // An alert dialog only while it asks.
-        markAlert(dialog, false);
-        if (covered) {
-          heading.textContent = covered.title;
-          panel.classList.toggle('dc-panel-modal', covered.modal);
-          panel.classList.toggle('dc-panel-wide', covered.wide);
-          body.replaceChildren(...covered.nodes);
-          this.panelGuard = covered.guard;
-          this.panelDirty = covered.dirty;
-          this.panelClosed = covered.closed;
-          (covered.focus?.isConnected ? covered.focus : dialog).focus();
-        } else this.closePanel(true);
-        resolve(confirmed);
-      };
-      this.openPanel(
-        question.title,
-        inner => {
-          render(
-            inner,
-            confirmMarkup(question, this.translator.t('app.cancel'))
-          );
-          boxes = Array.from(
-            inner.querySelectorAll<HTMLInputElement>('[data-confirm-choice]')
-          );
-          inner
-            .querySelector('[data-cancel]')
-            ?.addEventListener('click', () => answer(false));
-          inner
-            .querySelector('[data-confirm]')
-            ?.addEventListener('click', () => answer(true));
-          inner
-            .querySelector('[data-confirm-alternative]')
-            ?.addEventListener('click', () => {
-              answer(false);
-              question.alternative?.run();
-            });
-        },
-        true
-      );
-      // The form it covers still holds what a reload would lose.
-      this.panelDirty = covered?.dirty ?? null;
-      markAlert(dialog, true);
-      // Escape, the close button and a page left all cancel.
-      this.panelGuard = (): boolean => {
-        answer(false);
-        return false;
-      };
-      body.querySelector<HTMLElement>('[data-cancel]')?.focus();
-    });
+    return this.dialog.confirm(question);
   }
 
   /**
@@ -3272,68 +3067,9 @@ export class DirectoryConsole {
     );
   }
 
-  /**
-   * Ask before a form loses what was typed in it: Escape, the panel's × and
-   * Cancel closed a long form at once, and the Escape that closes a list of
-   * suggestions is a press away from the one that closed the panel. The
-   * question takes the place of the form's actions, as the generated
-   * password's does; a second Escape, or Discard, closes.
-   *
-   * @param body the panel's body, holding the form
-   * @param dirty whether the form holds what closing it would lose
-   */
+  /** Ask before a form loses what was typed in it (`PanelService.guardDiscard`). */
   private guardDiscard(body: HTMLElement, dirty: () => boolean): void {
-    const t = (key: string): string => this.translator.t(key);
-    let asking: HTMLElement | null = null;
-    let before: HTMLElement | null = null;
-    const actions = (): HTMLElement | null =>
-      body.querySelector<HTMLElement>('.dc-form-actions');
-    const keep = (): void => {
-      asking?.remove();
-      asking = null;
-      const row = actions();
-      if (row) row.hidden = false;
-      (before?.isConnected
-        ? before
-        : row?.querySelector<HTMLElement>('button')
-      )?.focus();
-    };
-    this.panelDirty = dirty;
-    this.panelGuard = (): boolean => {
-      if (asking || this.navigating || !dirty()) return true;
-      const row = actions();
-      if (!row || typeof document === 'undefined') return true;
-      before = document.activeElement as HTMLElement | null;
-      row.hidden = true;
-      asking = document.createElement('div');
-      asking.className = 'dc-form-leave';
-      asking.setAttribute('data-discard', '');
-      // The question is read with the button it moves the focus to: "Keep
-      // editing" alone said nothing of why the form did not close (#217).
-      asking.setAttribute('role', 'group');
-      asking.setAttribute('aria-labelledby', 'dc-discard-question');
-      render(
-        asking,
-        html`
-        <p id="dc-discard-question">${t('form.discardQuestion')}</p>
-        <button type="button" class="dc-button" data-discard-keep
-          aria-describedby="dc-discard-question">${t(
-            'form.keepEditing'
-          )}</button>
-        <button type="button" class="dc-button dc-button-danger" data-discard-confirm>${t(
-          'form.discard'
-        )}</button>`
-      );
-      row.after(asking);
-      asking
-        .querySelector('[data-discard-keep]')
-        ?.addEventListener('click', keep);
-      asking
-        .querySelector('[data-discard-confirm]')
-        ?.addEventListener('click', () => this.closePanel(true));
-      asking.querySelector<HTMLElement>('[data-discard-keep]')?.focus();
-      return false;
-    };
+    this.panel.guardDiscard(body, dirty);
   }
 
   /**
@@ -3957,7 +3693,7 @@ export class DirectoryConsole {
         if (send) send.disabled = true;
         // Tied to the request, not set for good: a confirmation asked over
         // the panel meanwhile gives this guard back once it is answered.
-        this.panelGuard = (): boolean => !pending;
+        this.panel.setGuard((): boolean => !pending);
         const password =
           body.querySelector<HTMLInputElement>('#dc-new-password')?.value || '';
         const force =
@@ -3973,7 +3709,7 @@ export class DirectoryConsole {
                   ? result.password
                   : undefined;
                 if (own()) {
-                  this.panelGuard = null;
+                  this.panel.setGuard(null);
                   if (generated)
                     this.showGeneratedPassword(
                       body,
@@ -3995,21 +3731,16 @@ export class DirectoryConsole {
                   this.toast(t('password.set'));
                   return;
                 }
-                const show = (): void =>
+                this.panel.whenFree(() =>
                   this.openPanel(t('password.title'), inner =>
                     this.showGeneratedPassword(inner, id, generated, force)
-                  );
-                if (
-                  this.container?.querySelector<HTMLElement>('[data-panel]')
-                    ?.hidden === false
-                )
-                  this.afterPanel.push(show);
-                else show();
+                  )
+                );
               })
               .catch((err: Error) => {
                 pending = false;
                 if (send) send.disabled = false;
-                if (own()) this.panelGuard = null;
+                if (own()) this.panel.setGuard(null);
                 this.toast(err.message, true);
               }),
           'api.resetPassword',
@@ -4076,25 +3807,20 @@ export class DirectoryConsole {
     const body =
       this.container?.querySelector<HTMLElement>('[data-panel-body]');
     if (own() && body) {
-      this.panelDirty = null;
+      this.panel.setDirty(null);
       // Its card, unless the administrator has gone elsewhere since.
-      this.afterPanel.push(() => {
+      this.panel.afterClose(() => {
         if (typeof window === 'undefined' || window.location.hash === address)
           next();
       });
       this.showGeneratedPassword(body, name, password, mustChange);
       return true;
     }
-    const show = (): void =>
+    this.panel.whenFree(() =>
       this.openPanel(this.translator.t('password.title'), inner =>
         this.showGeneratedPassword(inner, name, password, mustChange)
-      );
-    if (
-      this.container?.querySelector<HTMLElement>('[data-panel]')?.hidden ===
-      false
-    )
-      this.afterPanel.push(show);
-    else show();
+      )
+    );
     return true;
   }
 
@@ -4169,12 +3895,12 @@ export class DirectoryConsole {
       if (leave) leave.hidden = !shown;
       if (done) done.hidden = shown;
     };
-    this.panelGuard = (): boolean => {
+    this.panel.setGuard((): boolean => {
       if (copied || (leave && !leave.hidden)) return true;
       ask(true);
       body.querySelector<HTMLElement>('[data-leave-close]')?.focus();
       return false;
-    };
+    });
 
     field?.addEventListener('focus', () => field.select());
     const copy = body.querySelector<HTMLElement>('[data-copy-password]');

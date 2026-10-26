@@ -63,8 +63,9 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── shared/dom.ts           escapeHtml and small DOM helpers
     ├── console/shell.ts        the sidebar's markup (the frame moves here, #220)
     ├── console/settings.ts     what the browser remembers: language, reference section, contrast
-    ├── console/panel.ts        the overlay (panel, toast region, announcer) and what Tab reaches in the panel
-    ├── console/dialog.ts       the confirm question's markup and its alert role
+    ├── console/panel.ts        the overlay (panel, toast region, announcer), what Tab reaches in the panel,
+    │                           PanelService: opening, closing, guards, what waits for the panel
+    ├── console/dialog.ts       DialogService: the confirm question, its markup and its alert role
     ├── console/route.ts        what the hash names: routeOf
     ├── console/deps.ts         ConsoleDeps: what a test gives the console in place of what it builds
     ├── ui/table.ts             dataTable: the one way to draw a table (#226)
@@ -127,15 +128,19 @@ the address without a render, for a node the tree already shows.
   ticket (`viewGeneration++`); every `await` in a view is followed by
   `if (!this.current(generation)) return`. Reads with their own ordering
   (transit count) carry their own counter (`transitReads`).
-- **The panel belongs to the page it opened on.** `openPanel(title, build,
-modal, wide)` fills one body for every form; `closePanel(force)` empties it (a
-  password must not linger in a hidden node). `panelGuard` lets a form
-  refuse to close (the discard question, `guardDiscard`), `panelDirty`
-  answers `beforeunload`, `afterPanel` queues what waits for the panel to
-  close (a generated password shown after a save), `panelClosed` tells an
-  action that owns the panel (bulk actions) that it was taken away. A
-  navigation closes the panel: a form left open over another page would save
-  into an entry no longer on screen.
+- **The panel belongs to the page it opened on.** `PanelService`
+  (`src/console/panel.ts`) holds it: `open(title, build, modal, wide)` fills
+  one body for every form; `close(force)` empties it (a password must not
+  linger in a hidden node). `setGuard` lets a form refuse to close (the
+  discard question, `guardDiscard`), `setDirty` answers `beforeunload`
+  (`isDirty`), `afterClose`/`whenFree` queue what waits for the panel to
+  close (a generated password shown after a save), `whenClosed` tells an
+  action that owns the panel (bulk actions) that it was taken away;
+  nothing else reads that state. `DialogService.confirm` asks its question
+  in the panel, taking an open form aside with `hold()` and giving it back
+  with `restore()`. A navigation closes the panel (`closeOnNavigation`): a
+  form left open over another page would save into an entry no longer on
+  screen.
 - **Nothing is offered that the server would refuse, and the server is the
   authority.** `src/rights.ts` is where the `Scope` is read:
   the pure helpers (`scopeRestricts`, `transitState`, `writesEntry`,
