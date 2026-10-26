@@ -3,12 +3,17 @@
  * it: the client, the words, the rights, the entities, the panel and the
  * dialog, the toast and the reporter, the ticket of the page drawn, the
  * address, the tree, an entry's relations, the transit count, the words of
- * a creation and the first password of an account created (#220).
+ * a creation and the first password of an account created, and what the
+ * organizations page asks of the pages and actions still in the console:
+ * the names of what entries point at, an organization's entries, Claim…,
+ * a list opened on a search, the forms and the deletion (#220).
  *
  * @module twake-directory-manager/console/context
  */
 
 import type { ConsoleApiClient } from '../api/ConsoleApiClient';
+import type { AttachedOptions } from '../components/AttachedTables';
+import type { ListView } from '../components/EntityList';
 import type { OrganizationTree } from '../components/OrganizationTree';
 import type { Translator } from '../i18n';
 import type { Rights } from '../rights';
@@ -44,8 +49,8 @@ export interface Relations {
  * keeps the context, not what it said.
  *
  * It holds what the views and actions moved out so far need (the password
- * policies; the password resets, the state changes, the transit, the
- * deletions and the forms), and grows with each view and action moved out of
+ * policies and the organizations; the password resets, the state changes,
+ * the transit, the deletions and the forms), and grows with each view and action moved out of
  * `DirectoryConsole` (#220): add a member when a moved method needs one, not
  * before.
  */
@@ -72,6 +77,12 @@ export interface ConsoleContext {
    * over a newer page
    */
   current(generation: number): boolean;
+  /**
+   * Take a new ticket, as drawing a page does: what a page shows of itself
+   * on a click, an organization picked in the tree, is navigation like any
+   * other, and an answer for what was asked before draws nothing over it
+   */
+  ticket(): number;
   /** Title the browser tab after the page, or with the bare title for none */
   titlePage(name?: string): void;
   /** Draw the page the address names again, after a change of what it shows */
@@ -120,6 +131,49 @@ export interface ConsoleContext {
   readTransit(): Promise<AttachedEntries | null>;
   /** The organization tree drawn last, when the organizations page drew one */
   tree(): OrganizationTree | null;
+  /** What to call a collection: the schema's label in the language now */
+  plural(entity: EntityDescriptor): string;
+  /**
+   * How a card or a list names the entries an entity's pointers land on:
+   * the names the schema gives, those of the branches it can list read
+   */
+  pointerNames(
+    entity: EntityDescriptor
+  ): Promise<(dn: string) => string | undefined>;
+  /** The names of what the accounts and the groups attached somewhere point at */
+  attachedNames(): Promise<(dn: string) => string | undefined>;
+  /** The accounts and the groups attached to an organization, each kind asked apart */
+  readMembers(dn: string): Promise<AttachedEntries>;
+  /** The address of a related entry's card, in whichever entity owns its DN */
+  relationHref(dn: string): string | undefined;
+  /** Claim…, at the end of each row listing what waits in transit */
+  claimAction(): NonNullable<AttachedOptions['rowAction']>;
+  /**
+   * Open an entity's list on a search of its own, kept as where the reader
+   * left that list: the list page is the console's until it moves
+   */
+  openList(entity: EntityDescriptor, view: ListView): void;
+  /**
+   * Create or edit an entry of a flat or group entity, `here` presetting
+   * where it goes and what follows its creation (see `FormActions.open`)
+   */
+  openForm(
+    entity: EntityDescriptor,
+    entry?: Entry,
+    here?: { preset: Entry; created(): void }
+  ): void;
+  /** Create or edit an organization, under a parent when named (see `FormActions`) */
+  openOrganizationForm(
+    entity: EntityDescriptor,
+    entry?: Entry,
+    parentDn?: string
+  ): void;
+  /** Delete an organization once asked (see `DeletionActions.organization`) */
+  deleteOrganization(
+    entity: EntityDescriptor,
+    entry: Entry,
+    dn: string
+  ): Promise<void>;
   /**
    * An entry's members or groups, as its card lists them. `strict` fails
    * a search of groups that cannot be made, rather than finding none.
