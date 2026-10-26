@@ -113,9 +113,6 @@ export function sidebarMarkup(options: SidebarOptions): SafeHtml {
     <div class="dc-sidebar-footer">
       <label class="dc-language">
         <span>${t('app.language')}</span>
-        <span id="dc-language-hint" class="dc-visually-hidden">${t(
-          'app.languageHint'
-        )}</span>
         <select class="dc-input" data-language
           aria-describedby="dc-language-hint">
           ${availableLanguages.map(
@@ -126,6 +123,9 @@ export function sidebarMarkup(options: SidebarOptions): SafeHtml {
           )}
         </select>
       </label>
+      <span id="dc-language-hint" class="dc-visually-hidden">${t(
+        'app.languageHint'
+      )}</span>
     </div>
   </aside>`;
 }

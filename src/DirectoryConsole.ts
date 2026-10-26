@@ -2363,15 +2363,16 @@ export class DirectoryConsole {
     main: HTMLElement,
     generation: number
   ): Promise<void> {
-    // Named after the page until a card names it after the organization.
-    this.titlePage(this.translator.t('tree.title'));
+    const entity = this.entities.find(item => item.kind === 'organization');
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      this.translator.t(key, values);
+    // Named after the page, as the sidebar names it, until a card names it
+    // after the organization.
+    this.titlePage(entity ? this.plural(entity) : t('tree.title'));
     if (this.rights.administersNothing()) {
       render(main, this.nothingMarkup());
       return;
     }
-    const entity = this.entities.find(item => item.kind === 'organization');
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
     render(
       main,
       html`
@@ -2516,8 +2517,8 @@ export class DirectoryConsole {
     // for last is the node whose card should end up on screen.
     const generation = ++this.viewGeneration;
     // Until its card is drawn, the tab no longer names the organization
-    // shown before: a card that fails to load leaves it named after none.
-    this.titlePage();
+    // shown before, but the page: a card that fails to load leaves it so.
+    this.titlePage(this.plural(entity));
 
     // The address names an organization by its DN, which the server checks
     // before looking for it: `#/organizations/zzz` read its refusal, in

@@ -623,6 +623,9 @@ test.describe('NAV layout, navigation and language', () => {
     // The first Tab reaches a link to the main area; Enter focuses it, the
     // address does not change, and the next Tab is the page's first control
     // (#215)
+    // A fresh document, with nothing focused: the toggle just clicked would
+    // otherwise hold the focus, and Tab would move on from it.
+    await app.reload();
     const skip = page.getByRole('link', { name: 'Skip to main content' });
     await expect(skip).not.toBeInViewport();
     await page.keyboard.press('Tab');

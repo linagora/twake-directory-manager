@@ -128,6 +128,11 @@
   display: flex;
 }
 
+/* The reference entries sit as close as they did. */
+.dc-nav-reference .dc-nav-list {
+  gap: 1px;
+}
+
 .dc-nav-item {
   display: flex;
   align-items: center;
