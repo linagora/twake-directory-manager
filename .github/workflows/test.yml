@@ -121,7 +121,7 @@ jobs:
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: '1'
-          trivyignores: ../.trivyignore
+          trivyignores: .trivyignore
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
