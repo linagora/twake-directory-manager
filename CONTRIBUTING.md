@@ -51,6 +51,9 @@ context, report)` (`src/shared/background.ts`), which reports a failure.
   the files over it today are listed in `eslint.config.mjs` with the size
   they had, which may only shrink. A new page or action goes in a file of
   its own. The catalogues of `src/i18n.ts` are data and exempt.
+- A view of `src/views/` imports no other view, and `src/components/`
+  imports neither `src/views/` nor `src/actions/` (`no-restricted-imports`):
+  what two views share goes to `src/console/`, `src/ui/` or a component.
 - Coverage thresholds (`.c8rc.json`) only go up; lower one in the PR that
   needs it and say why.
 - A colour is a token of `src/styles.css`, set once for the default theme and
@@ -61,11 +64,21 @@ context, report)` (`src/shared/background.ts`), which reports a failure.
 
 ## Adding things
 
-**A page.** Today a page is a `render…` method of `DirectoryConsole` and a
-case in `readRoute` and `renderMain`; it takes a generation ticket and checks
-`this.current(generation)` after each `await`. Once #220 lands, a page is a
-file in `src/views/`. Markup through `html`, writes through `render`, actions
-through `background`.
+**A page: how to add a view.** A page is a class of its own in
+`src/views/`, as `PoliciesView` (`src/views/policies.ts`) is: its constructor
+takes the `ConsoleContext` (`src/console/context.ts`), and
+`render(main, generation)` draws it into the main area, checking
+`ctx.current(generation)` after each `await` so that a late answer draws
+over no newer page. It reaches the console only through the context — the
+client (`ctx.api`), the words (`ctx.t`, `ctx.translator()`), the rights
+(`ctx.rights()`), `ctx.panel` and `ctx.dialog`, `ctx.toast`, `ctx.report`,
+`ctx.refresh()` to draw the page again after a write — and a member it lacks
+is added to the context, not read from the console. The route gets a case in
+`routeOf` (`src/console/route.ts`) and in `renderMain`, which makes the view;
+a view that holds nothing between drawings is made anew each time, one that
+keeps something (where a list was left) is kept by the console. Its tests
+mount the console on its address (`test/views/`). Markup through `html`,
+writes through `render`, actions through `background`.
 
 **A reusable widget.** A class in `src/components/` taking an options object
 (translator, callbacks, what it shows, an optional `report`) and rendering
@@ -104,8 +117,11 @@ the contract test holds the fixtures to `ldapRest.tested`.
 **A test of the console.** `mountConsole({ scope, hash, language })` from
 `test/support/mount.ts` mounts a console into the page over the recorded
 fixtures and waits for its first page; act through the DOM (`click()`, a
-`change` event, a hash written, `settled(root)` after) and read the DOM and
-`calls`, what the console asked of its API. A new test reaches no private
+`change` event, a hash written, `settled(root)` after; `test/support/act.ts`
+presses keys, types values and waits for a late answer) and read the DOM
+and `calls`, what the console asked of its API. A read the fixtures do not
+hold is answered through `answers`, before the mount's own; a write is
+answered on `server` once mounted. A new test reaches no private
 member through a cast: such a test fails when code moves, not when behaviour
 changes; the older ones that do are moved as the code they cast into moves
 (#221).

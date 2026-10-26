@@ -38,10 +38,11 @@ src/index.ts                public exports: DirectoryConsole, four components
                             ConsoleApiClient, Translator, Rights and the scope helpers,
                             html/SafeHtml, types
 └── DirectoryConsole.ts     the controller: boot, routing, shell and sidebar,
-    │                       every view (overview, lists, cards, organizations,
-    │                       password policies), the side panel and the dialog,
-    │                       the actions (forms, state changes, passwords, transit,
-    │                       deletion, bulk actions), the client-side rights
+    │                       the views not moved yet (overview, lists, cards,
+    │                       organizations), the actions (forms, state changes,
+    │                       passwords, transit, deletion, bulk actions)
+    ├── views/
+    │   └── policies.ts         the password policies page and its panel (#220's first view)
     ├── components/
     │   ├── EntityList.ts       search, list, selection, CSV export
     │   ├── EntityDetail.ts     an entry's card, its relations and actions
@@ -63,10 +64,12 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── shared/dom.ts           escapeHtml and small DOM helpers
     ├── console/shell.ts        the sidebar's markup (the frame moves here, #220)
     ├── console/settings.ts     what the browser remembers: language, reference section, contrast
-    ├── console/panel.ts        the overlay (panel, toast region, announcer) and what Tab reaches in the panel
-    ├── console/dialog.ts       the confirm question's markup and its alert role
+    ├── console/panel.ts        the overlay (panel, toast region, announcer), what Tab reaches in the panel,
+    │                           PanelService: opening, closing, guards, what waits for the panel
+    ├── console/dialog.ts       DialogService: the confirm question, its markup and its alert role
     ├── console/route.ts        what the hash names: routeOf
     ├── console/deps.ts         ConsoleDeps: what a test gives the console in place of what it builds
+    ├── console/context.ts      ConsoleContext: what a view or an action is given of the console
     ├── ui/table.ts             dataTable: the one way to draw a table (#226)
     ├── ui/search.ts            searchBox: a named search box, with the select of its scope
     ├── ui/announce.ts          the hidden live region: said to a screen reader, not shown
@@ -85,8 +88,17 @@ scripts/qa-environment/     OpenLDAP + Dex + the image, for e2e and by hand
 
 `DirectoryConsole.ts` is far too large (over 4,000 lines) and takes in every
 feature; splitting it into views and actions behind a small shell is
-[#220](https://github.com/linagora/twake-directory-manager/issues/220). Until
-then: a new page is a method there, a new reusable widget is a component.
+[#220](https://github.com/linagora/twake-directory-manager/issues/220), under
+way. A view is a class of `src/views/` given a `ConsoleContext`
+(`src/console/context.ts`) — the client, the words, the rights, the panel and
+the dialog services, the toast and the reporter, the page's ticket — built
+once in `init()`, whose changing parts (the translator, the rights) are
+functions asked each time, never copies. The password policies are the
+first (`PoliciesView`); the console keeps a one-line method for each view and
+for the panel and dialog services while the other callers move, deleted at
+the last step. ESLint keeps the direction: a view imports no other view, and
+`components/` imports neither `views/` nor `actions/`. Until a feature's
+turn comes, a new page is a view, a new reusable widget is a component.
 
 ## Boot
 
@@ -117,9 +129,9 @@ page ([docs/usage.md](docs/usage.md)):
 The address is a hash: `#/` (overview), `#/<entity>` (list),
 `#/<entity>/<id>` (card), `#/organizations/<dn>`, `#/password-policies`.
 `go(path)` writes the hash and lets `hashchange` drive the render
-(`followHash` → `readRoute` → `renderMain`); `record(path, replace)` writes
+(`followHash` → `routeOf` → `renderMain`); `record(path, replace)` writes
 the address without a render, for a node the tree already shows.
-`readRoute` decodes defensively: a hash is typed and mailed around.
+`routeOf` decodes defensively: a hash is typed and mailed around.
 
 ## Invariants and their mechanisms
 
@@ -127,15 +139,19 @@ the address without a render, for a node the tree already shows.
   ticket (`viewGeneration++`); every `await` in a view is followed by
   `if (!this.current(generation)) return`. Reads with their own ordering
   (transit count) carry their own counter (`transitReads`).
-- **The panel belongs to the page it opened on.** `openPanel(title, build,
-modal, wide)` fills one body for every form; `closePanel(force)` empties it (a
-  password must not linger in a hidden node). `panelGuard` lets a form
-  refuse to close (the discard question, `guardDiscard`), `panelDirty`
-  answers `beforeunload`, `afterPanel` queues what waits for the panel to
-  close (a generated password shown after a save), `panelClosed` tells an
-  action that owns the panel (bulk actions) that it was taken away. A
-  navigation closes the panel: a form left open over another page would save
-  into an entry no longer on screen.
+- **The panel belongs to the page it opened on.** `PanelService`
+  (`src/console/panel.ts`) holds it: `open(title, build, modal, wide)` fills
+  one body for every form; `close(force)` empties it (a password must not
+  linger in a hidden node). `setGuard` lets a form refuse to close (the
+  discard question, `guardDiscard`), `setDirty` answers `beforeunload`
+  (`isDirty`), `afterClose`/`whenFree` queue what waits for the panel to
+  close (a generated password shown after a save), `whenClosed` tells an
+  action that owns the panel (bulk actions) that it was taken away;
+  nothing else reads that state. `DialogService.confirm` asks its question
+  in the panel, taking an open form aside with `hold()` and giving it back
+  with `restore()`. A navigation closes the panel (`closeOnNavigation`): a
+  form left open over another page would save into an entry no longer on
+  screen.
 - **Nothing is offered that the server would refuse, and the server is the
   authority.** `src/rights.ts` is where the `Scope` is read:
   the pure helpers (`scopeRestricts`, `transitState`, `writesEntry`,
@@ -214,14 +230,16 @@ refinements aside. Entity and attribute names are **not** translated here: they 
 - `npm test`: mocha over `test/`, which mirrors `src/`: `test/api/`,
   `test/components/`, one file per module, and `test/console/` for the
   console's own behaviours (helpers, organizations, the panel and the toast,
-  the shell and the overview, entries and their groups). A DOM
+  the shell and the overview, entries and their groups), `test/views/` for
+  the views moved out of it. A DOM
   (happy-dom, `test/support/dom.ts`) is registered before any test, and
   nothing reaches the network: the API is `nock`, with no connection allowed
   otherwise. A console test mounts one into the page with `mountConsole`
   (`test/support/mount.ts`): the API answered from the fixtures recorded
   against the ldap-rest tested, the real client given to the console through
   its `deps` (`ConsoleDeps.api`), every call it receives recorded; the test
-  acts through the DOM and reads it, and `unmount()` takes the console off
+  acts through the DOM (`test/support/act.ts`: a click, a key, a value
+  typed) and reads it, and `unmount()` takes the console off
   the page after. The older tests still build hand-made stubs and reach
   private members, which keep working until each group moves
   ([#221](https://github.com/linagora/twake-directory-manager/issues/221));

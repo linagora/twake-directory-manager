@@ -37,8 +37,14 @@ export interface MountOptions {
   /** The address to open, as after `#/` */
   hash?: string;
   language?: string;
-  /** Whether the server serves the password policies to this account */
+  /** Whether the server serves the password policies to this account: `false` is a 403, `true` (the default) none; `answers` sets some */
   policies?: boolean;
+  /**
+   * Answers of the server a test needs, set before the mount's own: `nock`
+   * answers with the first interceptor matching, and the mount answers every
+   * organization read with none
+   */
+  answers?(server: nock.Scope): void;
 }
 
 export interface Mounted {
@@ -53,6 +59,13 @@ export interface Mounted {
   url: string;
   /** The signals of the listeners the console put on the window and the document */
   signals: AbortSignal[];
+  /**
+   * Resolves once every call the console made of its client has been
+   * answered and the console has had a turn to read the answers: what it does
+   * with one that shows nothing on the page, a password kept for later, is
+   * done by then
+   */
+  idle(): Promise<void>;
   /** Take the console off the page, its container with it: mount another rather than `init()` again */
   unmount(): void;
 }
@@ -134,6 +147,7 @@ export async function mountConsole(
   // would otherwise be this one's.
   const url = mountUrl(++mounts);
   const server = nock(url).persist();
+  options.answers?.(server);
   server.get('/api/v1/config').reply(200, read('config.json'));
   const granted: Scope | null =
     typeof scope === 'string' ? read<Scope>(`scopes/${scope}.json`) : scope;
@@ -141,7 +155,10 @@ export async function mountConsole(
   else server.get('/api/v1/authz/scope').reply(404, { error: 'not found' });
   server
     .get('/api/v1/password-policies')
-    .reply(options.policies === false ? 403 : 200, { policies: [] });
+    .reply(
+      options.policies === false ? 403 : 200,
+      options.policies === false ? { error: 'Forbidden' } : { policies: [] }
+    );
   server
     .get(/\/api\/v1\/ldap\/users\/[^/?]+$/)
     .reply(options.account ? 200 : 404, options.account ?? { error: 'none' });
@@ -149,6 +166,16 @@ export async function mountConsole(
   server.get(/\/api\/v1\/ldap\/organizations(\/.*)?$/).reply(200, []);
 
   const calls: string[] = [];
+  // The calls not answered yet, and who waits for them all to be.
+  let pending = 0;
+  let waiting: (() => void)[] = [];
+  const answered = (): void => {
+    pending -= 1;
+    if (pending > 0) return;
+    const woken = waiting;
+    waiting = [];
+    woken.forEach(wake => wake());
+  };
   const client = new ConsoleApiClient(url);
   const api = new Proxy(client, {
     get(target, property, receiver) {
@@ -159,10 +186,30 @@ export async function mountConsole(
         calls.push(
           `${property}(${args.map(shown).filter(Boolean).join(', ')})`
         );
-        return (value as (...a: unknown[]) => unknown).apply(target, args);
+        const result = (value as (...a: unknown[]) => unknown).apply(
+          target,
+          args
+        );
+        if (result instanceof Promise) {
+          pending += 1;
+          // Registered before the console awaits the same promise: told
+          // first, so that the console's turn comes before `idle` resolves.
+          result.then(answered, answered);
+        }
+        return result;
       };
     },
   });
+  const idle = async (): Promise<void> => {
+    for (let i = 0; i < 200; i++) {
+      if (pending > 0)
+        await new Promise<void>(resolve => waiting.push(resolve));
+      // A turn for the console to read the answers, and ask more.
+      await new Promise(resolve => setTimeout(resolve, 0));
+      if (pending === 0) return;
+    }
+    throw new Error('the console kept asking for a second');
+  };
 
   const root = document.createElement('div');
   root.id = `console-${mounted.length + 1}`;
@@ -182,6 +229,7 @@ export async function mountConsole(
     server,
     url,
     signals,
+    idle,
     unmount: (): void => {
       app.unmount();
       root.remove();

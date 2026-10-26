@@ -395,6 +395,41 @@ function schemaLabel(
 }
 
 /**
+ * What a failed read means for the reader.
+ *
+ * Only a `404` means what "no longer exists" says. A `401`, a `403` or a proxy
+ * error is a different thing entirely, and telling the operator the entry is
+ * gone sends them looking for the wrong problem — so every view that reads one
+ * entry reads its failures here.
+ *
+ * A `403` is said plainly too: the server words it for an API client
+ * ("Token does not have permission on this branch"), and a refusal is no
+ * failure of the console to report as one.
+ *
+ * @param err failure raised by the API client
+ * @param translator interface language
+ * @returns the message to show, whether the entry is simply gone, and
+ *   whether the reader was refused it
+ */
+export function readFailure(
+  err: unknown,
+  translator: Translator
+): { gone: boolean; refused: boolean; message: string } {
+  const status = (err as { status?: number }).status;
+  const gone = status === 404;
+  const refused = status === 403;
+  return {
+    gone,
+    refused,
+    message: gone
+      ? translator.t('detail.notFound')
+      : refused
+        ? translator.t('detail.refused')
+        : (err as Error).message,
+  };
+}
+
+/**
  * A server refusal in the interface's language, and the attribute at fault.
  *
  * ldap-rest describes its common refusals besides wording them (see
