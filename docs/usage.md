@@ -38,12 +38,32 @@ new DirectoryConsole({
   apiBaseUrl: 'https://directory.example.org', // defaults to the page's origin
   apiPrefix: '/ldap', // only if the server does not serve the API under `/api`
   language: 'fr', // defaults to the browser's, falling back to English
+  onError: (error, context) => collect(error, context), // see below
 });
 ```
 
 `apiPrefix` exists because everything else is asked at the prefix
 `GET {apiPrefix}/v1/config` advertises — and that one request has nothing to
 read it from. A server started without `--api-prefix` needs neither option.
+
+`onError` is told of a failure in work the console started without waiting
+for it — a view drawn again after a save, the transit count read for the
+banner, a bulk action — once the console has shown it to the administrator
+(_Something went wrong: …_) and written it to the browser's console. The
+console sends nothing anywhere itself: the page decides. `context` names what
+was started (`renderMain`, `readTransit`, `bulkChangeState`…).
+
+The context `unhandled` is an exception or a rejection nobody handled, caught
+by the console's own `error` and `unhandledrejection` listeners on the window.
+Those take only an error whose stack names the console's bundle
+(`twake-directory-manager.esm.js` and the others the build writes), so that
+the page's own errors are left to it: a page that bundles the console under
+another name, from the npm package, gets nothing under `unhandled`, and still
+gets everything else. The console marks such an error handled, which spares
+the browser's second log line; a global collector the page registered itself
+still sees it there too. The components exported on their own (`EntityForm`,
+`EntityList`…) take the same kind of reporter as `report` in their options,
+and log to the browser's console without one.
 
 An `apiBaseUrl` on another origin makes every call a cross-origin one, sent
 with credentials: that deployment has to allow the console's origin _and_

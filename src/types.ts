@@ -232,6 +232,14 @@ export interface ConsoleOptions {
   apiPrefix?: string;
   /** Interface language; defaults to the browser's, falling back to English */
   language?: string;
+  /**
+   * Told of a failure in work the console started without waiting for it
+   * (a view drawn again after a save, a count read for the banner…), after
+   * the console has shown it to the administrator and logged it. `context`
+   * names what was started. For the page to send where it collects its
+   * errors; the console reports nowhere itself.
+   */
+  onError?: (error: unknown, context: string) => void;
 }
 
 /** One organization of the tree. */
