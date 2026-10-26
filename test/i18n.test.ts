@@ -47,4 +47,37 @@ describe('the catalogues', () => {
       for (const key of Object.keys(catalogues[code]))
         expect(key, `${code}: ${key}`).to.not.equal('');
   });
+
+  /**
+   * The words of a text as axe compares a control's visible text with its
+   * name (WCAG 2.5.3, label in name): lower case, accents taken apart and
+   * dropped with every other sign, so that "Rattacher à…" is [rattacher, a].
+   */
+  const words = (text: string): string[] =>
+    text
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim()
+      .split(' ')
+      .filter(Boolean);
+  const within = (label: string[], name: string[]): boolean =>
+    name.some((_, i) => label.every((word, j) => name[i + j] === word));
+
+  it('should keep the visible text of a named action within its name', () => {
+    // A button showing one text and named another, for a screen reader, must
+    // keep the shown words in the name, in a row: "Rattacher à…" named
+    // "Rattacher Grace Kim" failed the e2e gate the first time an entry
+    // waited in transit while the overview was scanned.
+    const pairs: [string, string][] = [['transit.claim', 'transit.claimTitle']];
+    for (const code of availableLanguages)
+      for (const [label, name] of pairs) {
+        const shown = words(catalogues[code][label]);
+        const named = words(
+          catalogues[code][name].replace('{name}', 'Grace Kim')
+        );
+        expect(within(shown, named), `${code}: ${label} within ${name}`).to.be
+          .true;
+      }
+  });
 });
