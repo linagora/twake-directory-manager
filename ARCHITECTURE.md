@@ -101,7 +101,7 @@ e2e/                        the Playwright suite, a package of its own
 scripts/qa-environment/     OpenLDAP + Dex + the image, for e2e and by hand
 ```
 
-`DirectoryConsole.ts` is far too large (over 1,700 lines) and takes in every
+`DirectoryConsole.ts` is far too large (about 1,700 lines) and takes in every
 feature; splitting it into views and actions behind a small shell is
 [#220](https://github.com/linagora/twake-directory-manager/issues/220), under
 way. A view is a class of `src/views/` given a `ConsoleContext`
