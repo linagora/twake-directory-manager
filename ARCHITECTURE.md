@@ -200,11 +200,15 @@ refinements aside. Entity and attribute names are **not** translated here: they 
 - `npm run build`: Rollup writes `dist/` (ESM, UMD, minified UMD, the
   stylesheet minified by lightningcss, the page with content digests on the
   files it loads).
-- `npm test`: mocha over `test/`, with hand-made DOM stubs and `nock` for the
-  API; the console's own tests are in `test/console.test.ts` (large, grouped
-  by `describe`), the components' with them, the importer's, the policies'
-  and the catalogues' in files of their own; `npm run test:coverage` adds c8
-  with thresholds. Moving the suite onto a DOM implementation is [#221](https://github.com/linagora/twake-directory-manager/issues/221).
+- `npm test`: mocha over `test/`, which mirrors `src/`: `test/api/`,
+  `test/components/`, one file per module, and `test/console/` for the
+  console's own behaviours (helpers, organizations, the panel and the toast,
+  the shell and the overview, entries and their groups). A DOM
+  (happy-dom, `test/support/dom.ts`) is registered before any test, and
+  nothing reaches the network: the API is `nock`, with no connection allowed
+  otherwise. The older tests still build hand-made stubs, which keep working
+  until each group moves to the DOM ([#221](https://github.com/linagora/twake-directory-manager/issues/221));
+  `npm run test:coverage` adds c8 with thresholds.
 - `e2e/`: Playwright against the image built from the tree, behind OpenLDAP
   and Dex (`scripts/qa-environment/`); it gates pull requests and releases
   ([ADR 0005](docs/adr/0005-e2e-suite-as-release-gate.md)).
