@@ -1,0 +1,42 @@
+{
+  "status": 200,
+  "headers": {
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "dn": "uid=alice,ou=users,dc=example,dc=com",
+    "objectClass": [
+      "top",
+      "twakeAccount",
+      "twakeWhitePages"
+    ],
+    "uid": "alice",
+    "employeeNumber": "E0010",
+    "cn": "Alice Moreau",
+    "givenName": "Alice",
+    "sn": "Moreau",
+    "displayName": "Alice Moreau",
+    "mail": "alice@example.com",
+    "mailAlternateAddress": "alice.moreau@example.com",
+    "personalTitle": "cn=Mrs,ou=twakeTitle,ou=nomenclature,dc=example,dc=com",
+    "title": "cn=Sales Representative,ou=positions,dc=example,dc=com",
+    "mobile": "+33 6 12 34 56 78",
+    "l": "Lyon",
+    "mailQuotaSize": "1073741824",
+    "twakeDepartmentLink": "ou=France,ou=Sales,ou=organization,dc=example,dc=com",
+    "twakeDepartmentPath": "Sales / France",
+    "twakeAccountStatus": "cn=active,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com",
+    "twakeDeliveryMode": "cn=normal,ou=twakeDeliveryMode,ou=nomenclature,dc=example,dc=com",
+    "memberOf": [
+      "cn=all-staff,ou=groups,dc=example,dc=com",
+      "cn=sales-team,ou=groups,dc=example,dc=com"
+    ],
+    "description": [],
+    "twakeOtherMailbox": [],
+    "telephoneNumber": [],
+    "postalAddress": [],
+    "postalCode": [],
+    "twakeDeletionDate": [],
+    "twakeDelegatedUsers": []
+  }
+}

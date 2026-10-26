@@ -1,0 +1,12 @@
+{
+  "status": 409,
+  "headers": {
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "error": "user: \"alice@example.com\" is already used (mail must be unique)",
+    "code": "unique",
+    "attribute": "mail",
+    "value": "alice@example.com"
+  }
+}

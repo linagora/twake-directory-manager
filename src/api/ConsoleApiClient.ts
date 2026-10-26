@@ -741,11 +741,9 @@ export class ConsoleApiClient {
    * refuses one that matches more entries than its own size limit: ldap-rest
    * then answers `422` (an ldap-rest before 0.13.0 answered `500`, which the
    * console no longer reads as that refusal). With one, it answers the first
-   * `limit` entries and says in
-   * `X-Result-Truncated` that there were more. A server that predates `limit`
-   * ignores it and sends no such header, so its answer reads as complete,
-   * which it is whenever it is an answer at all. Across origins the browser
-   * hides the header unless the server's CORS policy exposes it.
+   * `limit` entries and says in `X-Result-Truncated` that there were more.
+   * Across origins the browser hides the header unless the server's CORS
+   * policy exposes it.
    *
    * A group list answers its name and members only, unless `attributes` asks
    * for more: the schema's attributes are asked for, or the table's email
@@ -1451,8 +1449,8 @@ export class ConsoleApiClient {
             options,
             // Across origins the header may not reach the page — ldap-rest
             // exposes none to CORS — so an answer exactly as long as asked
-            // is taken as cut too. Exactly: ldap-rest 0.12.0 ignores the
-            // bound, and an answer longer than it is a whole one.
+            // is taken as cut too. Exactly: a server that ignored the bound
+            // would answer more than it, which is a whole answer.
             truncated: truncated || found.length === POINTER_LOOKUP_LIMIT,
           };
         } catch (err) {
@@ -1531,21 +1529,18 @@ export class ConsoleApiClient {
     const display = roleAttribute(owner.schema, 'displayName');
     return async query => {
       // Asked for bounded, because a loose search can match more of the
-      // directory than it lets one search return; cut here as well, because
-      // ldap-rest 0.12.0 ignores the bound.
+      // directory than it lets one search return.
       const found = await this.list(owner, query, scope, POINTER_SEARCH_LIMIT);
-      return Object.entries(found)
-        .slice(0, POINTER_SEARCH_LIMIT)
-        .map(([id, entry]) => {
-          const shown = display ? entryValue(entry, display) : undefined;
-          const name = Array.isArray(shown) ? shown[0] : shown;
-          return {
-            dn: String(entry.dn || id),
-            label: name && name !== id ? `${name} (${id})` : id,
-            // Once chosen, named as the values the entry already holds.
-            token: rdnValue(String(entry.dn || id)),
-          };
-        });
+      return Object.entries(found).map(([id, entry]) => {
+        const shown = display ? entryValue(entry, display) : undefined;
+        const name = Array.isArray(shown) ? shown[0] : shown;
+        return {
+          dn: String(entry.dn || id),
+          label: name && name !== id ? `${name} (${id})` : id,
+          // Once chosen, named as the values the entry already holds.
+          token: rdnValue(String(entry.dn || id)),
+        };
+      });
     };
   }
 

@@ -1,8 +1,10 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { type APIResponse } from '@playwright/test';
+
 import { LoginPage } from '../pages';
-import { ADMIN, ALICE, ERIC, GRACE, SOPHIE } from '../support/accounts';
+import { ADMIN, ALICE, ERIC, GRACE, ORG, SOPHIE } from '../support/accounts';
 import { expect, test } from '../support/fixtures';
 
 /**
@@ -14,7 +16,8 @@ import { expect, test } from '../support/fixtures';
  * (`scripts/qa-environment/ldap/seed.ldif`) or the authorization settings of
  * the stack change.
  */
-const FIXTURES = join(__dirname, '..', '..', 'test', 'fixtures');
+const ROOT = join(__dirname, '..', '..');
+const FIXTURES = join(ROOT, 'test', 'fixtures');
 const PERSONAS = [ADMIN, SOPHIE, ERIC, ALICE, GRACE];
 
 function save(file: string, body: unknown): void {
@@ -23,8 +26,46 @@ function save(file: string, body: unknown): void {
   writeFileSync(path, `${JSON.stringify(body, null, 2)}\n`);
 }
 
+/** A response as the contract test replays it: status, the headers it reads, the body. */
+async function answer(response: APIResponse): Promise<unknown> {
+  const headers = response.headers();
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    body = await response.text();
+  }
+  return {
+    status: response.status(),
+    headers: Object.fromEntries(
+      Object.entries(headers).filter(([name]) =>
+        ['content-type', 'x-result-truncated'].includes(name)
+      )
+    ),
+    body,
+  };
+}
+
 test.describe('record the personas’ scopes', () => {
   test.skip(!process.env.RECORD_SCOPES, 'a recorder, run on demand');
+
+  test('record which version answered', () => {
+    // The ldap-rest the stack's image was built on: LDAP_REST_IMAGE when
+    // build.sh was given one, the Dockerfile's default otherwise. The contract
+    // test holds the fixtures to `ldapRest.tested`, so a recording made
+    // against another version says so rather than pass for it.
+    const image =
+      process.env.LDAP_REST_IMAGE ??
+      readFileSync(join(ROOT, 'Dockerfile'), 'utf8').match(
+        /^ARG LDAP_REST_IMAGE=(\S+)$/m
+      )?.[1];
+    expect(image, 'the image the stack was built on').toBeTruthy();
+    save('recorded.json', {
+      ldapRest: (image as string).split(':').pop(),
+      image,
+      date: new Date().toISOString().slice(0, 10),
+    });
+  });
 
   for (const account of PERSONAS) {
     test(`record ${account.uid}`, async ({ page }) => {
@@ -39,4 +80,91 @@ test.describe('record the personas’ scopes', () => {
       }
     });
   }
+
+  // What the API client reads besides the scope: a bounded list and the header
+  // saying it was cut, one entry, and the refusals the console explains.
+  test('record the contract answers', async ({ page }) => {
+    const app = await new LoginPage(page).loginAs(ADMIN);
+    await expect(app.navItem('Users')).toBeVisible();
+    save(
+      'contract/users-list-limited.json',
+      await answer(await page.request.get('/api/v1/ldap/users?limit=2'))
+    );
+    save(
+      'contract/users-alice.json',
+      await answer(await page.request.get('/api/v1/ldap/users/alice'))
+    );
+    // The identifier and the organization path are computed by the server:
+    // not sent.
+    const account = (
+      employeeNumber: string,
+      mail: string,
+      organization: string
+    ) => ({
+      employeeNumber,
+      cn: 'Contract Recorder',
+      sn: 'Recorder',
+      givenName: 'Contract',
+      displayName: 'Contract Recorder',
+      mail,
+      twakeDepartmentLink: organization,
+    });
+    const refused = async (file: string, body: Record<string, string>) => {
+      const response = await page.request.post('/api/v1/ldap/users', {
+        data: body,
+      });
+      save(file, await answer(response));
+      // Not refused after all: leave nothing behind, and say so.
+      if (response.ok()) {
+        const created = (await response.json()) as { uid?: string };
+        if (created.uid)
+          await page.request.delete(
+            `/api/v1/ldap/users/${encodeURIComponent(created.uid)}`
+          );
+      }
+      expect(response.ok(), `${file} records a refusal`).toBe(false);
+    };
+    // An address already taken (alice's).
+    await refused(
+      'contract/refusal-duplicate.json',
+      account(`C-${Date.now()}`, 'alice@example.com', ORG.sales)
+    );
+    // An address at a domain the directory does not manage.
+    await refused(
+      'contract/refusal-mailDomain.json',
+      account(
+        `C-${Date.now()}`,
+        'contract.recorder@unmanaged.invalid',
+        ORG.sales
+      )
+    );
+  });
+
+  test('record a refusal of a local administrator', async ({ page }) => {
+    // Sophie administers Sales: an account created in Engineering is refused.
+    await new LoginPage(page).loginAs(SOPHIE);
+    const response = await page.request.post('/api/v1/ldap/users', {
+      data: {
+        employeeNumber: `C-${Date.now()}`,
+        cn: 'Contract Recorder',
+        sn: 'Recorder',
+        givenName: 'Contract',
+        displayName: 'Contract Recorder',
+        mail: 'contract.recorder@example.com',
+        twakeDepartmentLink: ORG.engineering,
+      },
+    });
+    const recorded = (await answer(response)) as { body: { code?: string } };
+    save('contract/refusal-forbidden.json', recorded);
+    if (response.ok()) {
+      const created = (await response.json()) as { uid?: string };
+      if (created.uid)
+        await page.request.delete(
+          `/api/v1/ldap/users/${encodeURIComponent(created.uid)}`
+        );
+    }
+    // A refusal, and the one meant: an address left behind would give a 409.
+    expect(response.status()).toBe(403);
+    expect(recorded.body.code).toBe('forbidden');
+  });
 });

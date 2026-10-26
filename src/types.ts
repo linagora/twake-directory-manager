@@ -185,8 +185,7 @@ export interface Scope {
   /**
    * `false` when the plugins judging the caller gate routes or read a token,
    * and none can say what the caller may do: `branches` and `entities` are
-   * then empty for want of a model, not of rights. Absent before ldap-rest
-   * 0.9.0, which answered `unrestricted: true` there
+   * then empty for want of a model, not of rights. Absent is read as `true`
    */
   described?: boolean;
   branches: {
@@ -200,7 +199,7 @@ export interface Scope {
   entities: { name: string; base: string; create: boolean }[];
   /**
    * The organization entries are handed over through between administrators,
-   * `null` when there is none. Absent before ldap-rest 0.11.1
+   * `null` or absent when there is none
    */
   transit?: string | null;
   /**
@@ -212,8 +211,7 @@ export interface Scope {
   linksAnyDomain?: boolean;
   /**
    * Whether the caller may list the password policies. Absent when the
-   * server serves none, and before ldap-rest 0.25.0, whose console then asks
-   * for them to know
+   * server serves none; the console then asks for them to know
    */
   passwordPolicies?: boolean;
 }

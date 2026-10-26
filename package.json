@@ -28,7 +28,7 @@
     "clean": "rm -rf dist",
     "format:check": "prettier --check .",
     "format:fix": "prettier --write .",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-compat.mjs",
     "test": "mocha",
     "test:coverage": "c8 mocha",
     "version": "node scripts/sync-chart-version.mjs && git add package.json package-lock.json helm/twake-directory-manager/Chart.yaml",
@@ -70,5 +70,9 @@
     "edge >= 111",
     "firefox >= 113",
     "safari >= 16.2"
-  ]
+  ],
+  "ldapRest": {
+    "min": "1.1.0",
+    "tested": "1.1.0"
+  }
 }
