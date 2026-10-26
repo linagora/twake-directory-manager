@@ -20,8 +20,10 @@ and CI tests against (#225). The floor is 1.1.0, the first ldap-rest to
 serve the page's Content-Security-Policy (`--static-csp`), which the image
 relies on; it moves when the console comes to rely on a newer answer, in a
 minor release, said in the changelog. Every fallback for an older server is
-tagged `compat(ldap-rest<X.Y.Z)` where it stands and removed, by
-`scripts/check-compat.mjs` under `npm run lint`, once the floor passes it.
+tagged `compat(ldap-rest<X.Y.Z)` where it stands, and refused by
+`scripts/check-compat.mjs` under `npm run lint` once the floor passes it,
+until it is removed; this applies to fallbacks from now on, none being tagged
+at the time of writing.
 The answers of the tested server are recorded (`test/fixtures/`) and
 replayed by `test/api/contract.test.ts`; the e2e suite runs against both
 ends of the range, a release against the tested one.
@@ -34,5 +36,6 @@ versions on pull requests once the ends differ, the discipline of tagging
 each fallback, and recording the fixtures again when the tested version
 moves. What
 is already decided: 0.12.x's `500` for a search too broad is no longer read
-as such (#232); the image defaults to 1.1.0; servers before 0.25.0 lack part
-of the scope and offer less.
+as such (#232); the image defaults to 1.1.0; servers below the floor are
+neither tested nor supported (before 0.25.0 they lacked part
+of the scope and offered less).
