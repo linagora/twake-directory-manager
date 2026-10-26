@@ -14,7 +14,10 @@
   --dc-danger: #c4232f;
   --dc-danger-soft: rgb(196 35 47 / 9%);
   --dc-ink: #1d1d1f;
-  --dc-muted: #6e6e73;
+  /* Dark enough for 4.5:1 on the tinted grounds the text sits on too — a
+     hovered row, an accent chip, the import's drop zone — not only on white:
+     #6e6e73 read 4.4 there, which WCAG AA refuses. */
+  --dc-muted: #66666b;
   --dc-line: #e3e3e8;
   --dc-line-strong: #d2d2d7;
   --dc-surface: #ffffff;

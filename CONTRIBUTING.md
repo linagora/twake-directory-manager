@@ -69,6 +69,16 @@ is accepted (#225) the form is `compat(ldap-rest<X.Y.Z)`, checked by lint.
 **A decision.** When something in [docs/adr/](docs/adr/) changes, add a
 record that supersedes the old one; do not edit the old one.
 
+## Accessibility
+
+`e2e/tests/a11y.spec.ts` scans every main view and panel with axe-core
+against WCAG 2.2 AA, in both languages and for two personas, and fails on a
+violation. A new view or panel gets a scan there. A rule axe reports wrongly on
+a custom widget is excluded with a comment saying why, and reviewed. What axe
+cannot see — focus kept on a redraw, announcements, keyboard paths — is the
+subject of the open accessibility issues (#207 to #219) and of the shared
+primitives #226 asks for.
+
 ## Pull requests
 
 One concern per PR, with tests where behaviour changes, and a description
