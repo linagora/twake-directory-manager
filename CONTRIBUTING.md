@@ -83,6 +83,19 @@ the contract test holds the fixtures to `ldapRest.tested`.
 **A decision.** When something in [docs/adr/](docs/adr/) changes, add a
 record that supersedes the old one; do not edit the old one.
 
+## Accessibility
+
+`e2e/tests/a11y.spec.ts` scans the views and panels `e2e/e2e.md` lists with
+axe-core against WCAG 2.2 AA, in English and in French, as the global
+administrator and as a local one, and fails on a violation. A new view or
+panel gets a scan there. A rule axe reports wrongly on a custom widget is
+excluded with a comment saying why, and reviewed. What axe could not decide
+(a contrast over an overlap or a background image) is annotated on the test
+in the report, not failed. What axe cannot see — focus kept on a redraw,
+announcements, keyboard paths, the page's `lang` after a language change — is
+the subject of the open accessibility issues (#207 to #219) and of the shared
+primitives #226 asks for.
+
 ## Pull requests
 
 One concern per PR, with tests where behaviour changes, and a description

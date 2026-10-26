@@ -14,7 +14,10 @@
   --dc-danger: #c4232f;
   --dc-danger-soft: rgb(196 35 47 / 9%);
   --dc-ink: #1d1d1f;
-  --dc-muted: #6e6e73;
+  /* Dark enough for 4.5:1 on the tinted grounds the text sits on too — a
+     hovered row, an accent chip, the import's drop zone — not only on white:
+     #6e6e73 read 4.4 there, which WCAG AA refuses. */
+  --dc-muted: #66666b;
   --dc-line: #e3e3e8;
   --dc-line-strong: #d2d2d7;
   --dc-surface: #ffffff;
@@ -181,7 +184,7 @@
 }
 
 .dc-nav-item:nth-child(5n + 1) .dc-nav-icon {
-  --dc-tint: #6e6e73;
+  --dc-tint: #66666b;
 }
 
 .dc-nav-item:nth-child(5n + 2) .dc-nav-icon,
@@ -725,7 +728,7 @@
   width: auto;
   padding-left: 38px;
   border-radius: 999px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%236e6e73' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3.5 3.5'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2366666b' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3.5 3.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: 14px center;
 }
@@ -1700,7 +1703,7 @@
 select.dc-input {
   appearance: none;
   padding-right: 36px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%236e6e73' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2366666b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   cursor: pointer;

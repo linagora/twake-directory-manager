@@ -147,3 +147,17 @@ administrators do not.
 
 - [x] SEC-01 (P1) The page is served under a strict Content-Security-Policy, and every view keeps to it — `security.spec.ts`
 - [x] SEC-02 (P1) A directory value written as markup is shown as text, on the card, in the list and in the organization's table, and runs nowhere — `security.spec.ts`
+
+## Accessibility
+
+The views and panels below, scanned by axe-core against WCAG 2.2 AA (`support/a11y.ts`), as the global administrator and as a local one, in English and in French (Mongolian is not scanned; the catalogue changes no markup) — `a11y.spec.ts`. The scan waits for the page to settle (`aria-busy`), then judges what is there at that moment: a section filled late (the overview's transit count) or a hover tint under the mouse is covered only when the run meets it. The panels of an action (edit, reset a password, claim, change a state, hand over) are not scanned yet. A view with a defect on file is marked `knownIssue` until it is fixed; a new defect fails the run.
+
+- [x] A11Y-01 (P1) Overview
+- [x] A11Y-02 (P1) Users list
+- [x] A11Y-03 (P1) A user's card
+- [x] A11Y-04 (P1) The create-user panel
+- [x] A11Y-05 (P1) Groups list
+- [x] A11Y-06 (P1) A group's card
+- [x] A11Y-07 (P1) Organizations with a card open
+- [x] A11Y-08 (P1) The CSV import panel
+- [x] A11Y-09 (P1) Password policies with the form open (global administrator)
