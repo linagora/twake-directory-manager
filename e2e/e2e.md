@@ -141,3 +141,4 @@ administrators do not.
 
 - [x] MSG-01 (P2) Server refusal shown as a red toast with the reason — `messages.spec.ts`
 - [x] MSG-02 (P3) Session ended elsewhere — `messages.spec.ts`
+- [x] MSG-03 (P3) A failure the console did not wait for shows as a toast, the page stays usable — `messages.spec.ts`

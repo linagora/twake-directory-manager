@@ -13,9 +13,15 @@ import { escapeHtml } from '../shared/dom';
 import { comparableDn, withinDn } from '../format';
 import type { Translator } from '../i18n';
 import type { OrganizationNode } from '../types';
+import { background, type Reporter } from '../shared/background';
 
 export interface TreeOptions {
   translator: Translator;
+  /**
+   * Told of a failure in work the component starts without waiting for it
+   * (see `background`); the console's own reporter, or the log when absent
+   */
+  report?: Reporter;
   /** Root of the tree */
   root(): Promise<OrganizationNode | null>;
   /** Direct children of a node */
@@ -424,7 +430,7 @@ export class OrganizationTree {
         : null;
     }
     if (this.index === undefined) {
-      void this.loadIndex();
+      background(() => this.loadIndex(), 'loadIndex', this.options.report);
       return undefined;
     }
     if (this.index === null) return null;
@@ -465,7 +471,11 @@ export class OrganizationTree {
     const ticket = this.searchTicket;
     this.searchTimer = setTimeout(() => {
       this.searchTimer = undefined;
-      void this.runSearch(query, root, ticket);
+      background(
+        () => this.runSearch(query, root, ticket),
+        'runSearch',
+        this.options.report
+      );
     }, SEARCH_DELAY);
   }
 
@@ -628,7 +638,11 @@ export class OrganizationTree {
       container.querySelectorAll<HTMLElement>('[data-toggle]')
     )) {
       button.addEventListener('click', () => {
-        void this.toggle(button.dataset.toggle as string);
+        background(
+          () => this.toggle(button.dataset.toggle as string),
+          'toggle',
+          this.options.report
+        );
       });
     }
 
@@ -636,7 +650,11 @@ export class OrganizationTree {
       container.querySelectorAll<HTMLElement>('[data-select]')
     )) {
       button.addEventListener('click', () => {
-        void this.pick(button.dataset.select as string);
+        background(
+          () => this.pick(button.dataset.select as string),
+          'pick',
+          this.options.report
+        );
       });
     }
 
@@ -644,9 +662,14 @@ export class OrganizationTree {
       container.querySelectorAll<HTMLElement>('[data-found]')
     )) {
       button.addEventListener('click', () => {
-        void this.choose(
-          button.dataset.found as string,
-          button.textContent?.trim() || ''
+        background(
+          () =>
+            this.choose(
+              button.dataset.found as string,
+              button.textContent?.trim() || ''
+            ),
+          'choose',
+          this.options.report
         );
       });
     }
