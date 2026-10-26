@@ -57,6 +57,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── i18n.ts                 Translator and the en/fr/mn catalogues
     ├── session.ts              signing in again after a 401
     ├── shared/html.ts          html`…`, SafeHtml, render: the only way to the page
+        ├── rights.ts               Rights: what the scope lets the caller do, the one reader of Scope
     ├── shared/background.ts    background(): work nobody waits for, reported
     ├── shared/dom.ts           escapeHtml and small DOM helpers
     ├── assets.ts               inlined logos
@@ -124,15 +125,21 @@ modal, wide)` fills one body for every form; `closePanel(force)` empties it (a
   navigation closes the panel: a form left open over another page would save
   into an entry no longer on screen.
 - **Nothing is offered that the server would refuse, and the server is the
-  authority.** The console derives what to offer from `Scope`
-  (`scopeRestricts`, `transitState`, `writesEntry`, `claimRoots`,
-  `organizationParents` and the private predicates `canCreate`, `canWrite`,
-  `canDelete`, `organizationRights`…), mirroring ldap-rest's rules: an
-  organization is judged by its parent, an entry in transit by the transit
-  branch, reference data through the global branches. The server still
-  decides; a refusal is shown in its words (`refusal`, `explainRefusal`).
-  Gathering these rules into one tested module, and asking the server for
-  per-entry rights, is [#222](https://github.com/linagora/twake-directory-manager/issues/222)
+  authority.** `src/rights.ts` is the one module that reads the `Scope`:
+  the pure helpers (`scopeRestricts`, `transitState`, `writesEntry`,
+  `claimRoots`, `organizationParents`) and a `Rights` class the console
+  asks in domain terms (`canCreate(entity)`, `organizationRights(dn)`,
+  `transitOf(entity, entry)`, `summary` for the banner…), mirroring
+  ldap-rest's rules: an organization is judged by its parent, an entry in
+  transit by the transit branch, reference data through the global branches.
+  `DirectoryConsole` builds `Rights` from the scope it holds each time a view
+  asks (`this.rights`); ESLint refuses a reading of the scope anywhere else.
+  `test/rights.test.ts` pins the rules of each QA persona on the scopes the
+  real server described (`test/fixtures/scopes/`, recorded by
+  `e2e/tests/record-scopes.spec.ts`). The server still decides; a refusal is
+  shown in its words (`refusal`, `explainRefusal`). Asking the server for
+  per-entry rights is the next step of
+  [#222](https://github.com/linagora/twake-directory-manager/issues/222)
   ([ADR 0003](docs/adr/0003-rights-derived-from-the-scope.md)).
 - **No failure is silent.** Work nobody waits for (a redraw after a save,
   the transit count, a bulk loop) goes through `background(task, context,
@@ -152,11 +159,13 @@ report)`; `DirectoryConsole.report` shows _Something went wrong: …_, logs
   `value`, `domains`); a body that is not JSON never hides the status.
   `readFailure` and `explainRefusal` turn it into words for the reader; a `401` goes to `signInAgain`, guarded against a reload
   loop.
-- **Older ldap-rest answers are tolerated, up to a point.** Optional fields
-  of `Scope` and fallbacks in the client exist for servers before 0.25.0;
-  which versions are supported, and when a fallback goes, is
-  [#225](https://github.com/linagora/twake-directory-manager/issues/225)
-  ([ADR 0004](docs/adr/0004-ldap-rest-compatibility.md)).
+- **The supported ldap-rest range is declared.** `package.json` says it
+  (`ldapRest.min` to `ldapRest.tested`, both 1.1.0 today); `npm run lint`
+  runs `scripts/check-compat.mjs`, which holds the `Dockerfile` to the tested
+  version and removes a `compat(ldap-rest<X.Y.Z)` fallback once the floor
+  passes it; `test/api/contract.test.ts` replays the answers recorded from
+  the tested server (`test/fixtures/contract/`); the e2e suite runs against
+  both ends of the range ([ADR 0004](docs/adr/0004-ldap-rest-compatibility.md)).
 
 ## Components
 

@@ -1,6 +1,6 @@
-# 0004 — ldap-rest compatibility: tested against one version, tolerant of older ones
+# 0004 — ldap-rest compatibility: a declared range, tested at both ends
 
-**Status**: proposed · **Date**: 2026-10-26
+**Status**: accepted · **Date**: 2026-10-26
 
 ## Context
 
@@ -12,20 +12,27 @@ The console added a fallback for each, and comments naming seven versions,
 but no file says which versions it supports. CI tests the one version the
 `Dockerfile` names (1.1.0 today).
 
-## Decision (proposed, to be settled by #225)
+## Decision
 
-The console is tested against the ldap-rest version the `Dockerfile` names
-and declares a floor in `package.json` (`ldapRest.min`). It supports the
-current minor and the previous major's last minor for at least six months.
-Every compatibility branch is tagged `compat(ldap-rest<X.Y.Z)` and removed,
-by a lint script, when the floor passes it. Raising the floor happens in a
-minor release and is said in the changelog.
+`package.json` declares the range: `ldapRest.min`, the oldest server the
+console runs on, and `ldapRest.tested`, the one the `Dockerfile` builds on
+and CI tests against (#225). The floor is 1.1.0, the first ldap-rest to
+serve the page's Content-Security-Policy (`--static-csp`), which the image
+relies on; it moves when the console comes to rely on a newer answer, in a
+minor release, said in the changelog. Every fallback for an older server is
+tagged `compat(ldap-rest<X.Y.Z)` where it stands and removed, by
+`scripts/check-compat.mjs` under `npm run lint`, once the floor passes it.
+The answers of the tested server are recorded (`test/fixtures/`) and
+replayed by `test/api/contract.test.ts`; the e2e suite runs against both
+ends of the range, a release against the tested one.
 
 ## Consequences
 
 Compatibility becomes a stated promise rather than an accumulation of
 fallbacks, and dead branches cannot linger. The cost is an e2e matrix of two
-versions on pull requests, and the discipline of tagging each fallback. What
+versions on pull requests once the ends differ, the discipline of tagging
+each fallback, and recording the fixtures again when the tested version
+moves. What
 is already decided: 0.12.x's `500` for a search too broad is no longer read
 as such (#232); the image defaults to 1.1.0; servers before 0.25.0 lack part
 of the scope and offer less.
