@@ -1358,22 +1358,11 @@ const mn: Catalogue = {
   'policy.attr.pwdCheckModule': 'Шалгах модуль',
 };
 
-const catalogues: Record<string, Catalogue> = { en, fr, mn };
+// Exported for the test that keeps the catalogues complete.
+export const catalogues: Record<string, Catalogue> = { en, fr, mn };
 
 /** Languages the console ships with. */
 export const availableLanguages = Object.keys(catalogues);
-
-/**
- * The keys a catalogue holds, for the test that keeps the catalogues
- * complete: a key present in one and missing from another is the
- * mixed-language interface the catalogues replace.
- *
- * @param code language code
- * @returns its keys, in the catalogue's order
- */
-export function catalogueKeys(code: string): string[] {
-  return Object.keys(catalogues[code] ?? {});
-}
 
 /**
  * What a language is called in itself, the way a reader looks for theirs:

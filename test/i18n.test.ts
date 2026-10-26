@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 
-import { availableLanguages, catalogueKeys } from '../src/i18n';
+import { availableLanguages, catalogues } from '../src/i18n';
 
 /**
  * A sentence with a count is written in the forms its language tells apart
@@ -18,7 +18,7 @@ const PLURAL = /\.(zero|one|two|few|many|other)$/;
  * key as its fallback.
  */
 const bases = (code: string): Set<string> => {
-  const keys = new Set(catalogueKeys(code));
+  const keys = new Set(Object.keys(catalogues[code]));
   const refinement = (key: string): boolean =>
     keys.has(key.slice(0, key.lastIndexOf('.')));
   return new Set(
@@ -44,7 +44,7 @@ describe('the catalogues', () => {
 
   it('should hold no empty translation', () => {
     for (const code of availableLanguages)
-      for (const key of catalogueKeys(code))
+      for (const key of Object.keys(catalogues[code]))
         expect(key, `${code}: ${key}`).to.not.equal('');
   });
 });
