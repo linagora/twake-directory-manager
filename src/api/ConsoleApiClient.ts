@@ -364,18 +364,22 @@ function statusError(
 /**
  * Whether a failure is one a search too broad for the directory ends in.
  *
- * `422` is ldap-rest saying so; `500` is how ldap-rest 0.12.0 reports the
- * same refusal, and `502` or `504` a proxy giving up on the unbounded search
- * before the server did. The last three have other causes too, which is why
- * what is said about them stays hedged — but each is worth trying something
- * narrower after.
+ * `422` is ldap-rest saying so, and `502` or `504` a proxy giving up on the
+ * unbounded search before the server did. The last two have other causes
+ * too, which is why what is said about them stays hedged — but each is
+ * worth trying something narrower after.
+ *
+ * Not `500`. ldap-rest 0.12.0 reported the same refusal that way, and this
+ * read every `500` as too broad for it; on a current server a `500` is a
+ * failure of the server's own, and advising a narrower search hid it — a
+ * pointer search even passed it off as an answer cut short.
  *
  * @param err what a request threw
- * @returns true for those four statuses
+ * @returns true for those three statuses
  */
 export function tooBroad(err: unknown): boolean {
   const status = (err as { status?: number } | null)?.status;
-  return status === 422 || status === 500 || status === 502 || status === 504;
+  return status === 422 || status === 502 || status === 504;
 }
 
 export class ConsoleApiClient {
@@ -1451,8 +1455,8 @@ export class ConsoleApiClient {
             truncated: truncated || found.length === POINTER_LOOKUP_LIMIT,
           };
         } catch (err) {
-          // Refused as too broad — ldap-rest 0.12.0 honours no bound — says
-          // no more than an answer cut short: the name may be there.
+          // Refused as too broad says no more than an answer cut short: the
+          // name may be there.
           if (tooBroad(err)) return { options: [], truncated: true };
           throw err;
         }

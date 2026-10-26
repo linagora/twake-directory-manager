@@ -8153,16 +8153,16 @@ describe('Directory console', () => {
         'Too many entries to show them all: narrow the search.'
       );
 
+      // A failure of the server's own is no search too broad: its words
+      // stay, for the operator to act on.
       nock(baseUrl).get('/api/v1/ldap/users').query(true).reply(500, {
         error: 'Internal Server Error',
         message: 'An error occurred',
       });
-      expect(await failure()).to.equal(
-        'The list could not be loaded. If the directory holds many entries, narrow the search.'
-      );
+      expect(await failure()).to.equal('Internal Server Error');
     });
 
-    it('should hedge a failure a broad search may explain, keeping any cause', () => {
+    it('should hedge a failure a broad search may explain', () => {
       const translator = new Translator('en');
       const failed = (status: number, message: string): string =>
         listFailure(Object.assign(new Error(message), { status }), translator);
@@ -8170,12 +8170,12 @@ describe('Directory console', () => {
       // A proxy giving up on a slow unbounded search says nothing useful.
       expect(failed(502, '502 Bad Gateway')).to.equal(hedged);
       expect(failed(504, '504 Gateway Timeout')).to.equal(hedged);
-      expect(failed(500, '500 Internal Server Error')).to.equal(hedged);
-      expect(failed(500, '500 ')).to.equal(hedged);
-      // A 500 that names its cause keeps it, so it can still be diagnosed.
-      expect(failed(500, 'Invalid DN syntax')).to.equal(
-        `${hedged} (Invalid DN syntax)`
+      // A 500 is the server's own failure, not a search too broad: it keeps
+      // its words, however little they say, so that it stays diagnosable.
+      expect(failed(500, '500 Internal Server Error')).to.equal(
+        '500 Internal Server Error'
       );
+      expect(failed(500, 'Invalid DN syntax')).to.equal('Invalid DN syntax');
       // Any other failure keeps its own words; a refusal is said plainly.
       expect(failed(400, 'Unbalanced filter')).to.equal('Unbalanced filter');
       expect(
@@ -8981,16 +8981,16 @@ describe('Directory console', () => {
       );
       expect(refused).to.not.contain('Size limit exceeded');
 
-      // ldap-rest 0.12.0 ignores `limit` and reports it as any failure.
+      // A failure of the server's own is said in its words, not as a search
+      // too broad: ldap-rest 0.12.0 reported both as a 500, a current one
+      // does not, and advising a narrower search hid the failure.
       nock(baseUrl).get('/api/v1/ldap/users').query(true).reply(500, {
         error: 'Internal Server Error',
         message: 'An error occurred',
       });
       const failed = await drawnList('en');
-      expect(failed).to.contain(
-        'The list could not be loaded. If the directory holds many entries, narrow the search.'
-      );
-      expect(failed).to.not.contain('Internal Server Error');
+      expect(failed).to.contain('Internal Server Error');
+      expect(failed).to.not.contain('narrow the search');
 
       // A refusal is said plainly, not in the server's words for an API
       // client.
@@ -9319,7 +9319,7 @@ describe('Directory console', () => {
       expect(nock.isDone()).to.equal(true);
     });
 
-    for (const status of [500, 422]) {
+    for (const status of [422, 504]) {
       it(`should look each value up when the branch answers ${status}`, async () => {
         nock(baseUrl)
           .get('/api/v1/ldap/users')
@@ -9367,8 +9367,8 @@ describe('Directory console', () => {
             'X-Result-Truncated': 'true',
           }
         );
-        // Refused as too broad by ldap-rest 0.12.0: says as little.
-        search('x').reply(500, { error: 'Internal Server Error' });
+        // Refused as too broad: says as little as an answer cut short.
+        search('x').reply(422, { error: 'Size limit exceeded' });
         // Exactly as long as asked, and no header — which a cross-origin page
         // may not see: read as cut all the same.
         const many: Record<string, Entry> = {};
@@ -9410,7 +9410,7 @@ describe('Directory console', () => {
     it('should explain a branch it could neither list nor look up', async () => {
       nock(baseUrl)
         .get('/api/v1/ldap/users')
-        .reply(500, { error: 'Internal Server Error' });
+        .reply(422, { error: 'Size limit exceeded' });
       nock(baseUrl)
         .get('/api/v1/ldap/users/bob')
         .reply(502, '<html>Bad gateway</html>', {
@@ -9420,6 +9420,17 @@ describe('Directory console', () => {
       expect(error).to.equal(
         'The list could not be loaded. If the directory holds many entries, narrow the search.'
       );
+    });
+
+    it('should not look values up when the branch failed on its own', async () => {
+      // A 500 is no search too broad: looking each value up would hide the
+      // failure behind "not found" for every one of them.
+      nock(baseUrl)
+        .get('/api/v1/ldap/users')
+        .reply(500, { error: 'Internal Server Error' });
+      const { error } = await check([['new1', 'bob', '']]);
+      expect(error).to.equal('Internal Server Error');
+      expect(nock.isDone()).to.equal(true);
     });
 
     it('should not look values up when the branch was refused for another reason', async () => {
@@ -11187,7 +11198,7 @@ describe('Directory console', () => {
 
       it('should explain a branch too broad to list, and offer its search', () => {
         const failed = pointerFallback(
-          failure(500, 'Internal Server Error'),
+          failure(504, 'Gateway Timeout'),
           translator,
           () => search
         );
@@ -11195,6 +11206,19 @@ describe('Directory console', () => {
           'The list could not be loaded. If the directory holds many entries, narrow the search.'
         );
         expect(failed.search).to.equal(search);
+        // The server's own failure is said in its words, and a search is no
+        // answer to it.
+        let asked = false;
+        const broken = pointerFallback(
+          failure(500, 'Internal Server Error'),
+          translator,
+          () => {
+            asked = true;
+            return search;
+          }
+        );
+        expect(broken).to.deep.equal({ message: 'Internal Server Error' });
+        expect(asked).to.equal(false);
         const refused = pointerFallback(
           failure(422, 'Size limit exceeded'),
           translator,
@@ -11269,7 +11293,7 @@ describe('Directory console', () => {
         await renderWith(
           select,
           { uid: 'bob', twakeDepartmentLink: [held] },
-          () => Promise.reject(failure(500, 'Internal Server Error'))
+          () => Promise.reject(failure(504, 'Gateway Timeout'))
         );
         expect(select.disabled).to.equal(false);
         expect(select.innerHTML).to.include(`${held}" selected`);
@@ -11361,7 +11385,7 @@ describe('Directory console', () => {
           },
           entry: { uid: 'bob', twakeDelegatedUsers: [alice, bob] },
           translator,
-          pointerOptions: () => Promise.reject(failure(500, 'Internal')),
+          pointerOptions: () => Promise.reject(failure(504, 'Gateway Timeout')),
           pointerSearch: (_branch, failed) => (failed ? search : undefined),
           onSubmit: () => Promise.resolve(),
           onCancel: () => undefined,

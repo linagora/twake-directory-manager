@@ -10,7 +10,7 @@
  * pretending to load. The page size is remembered, because being handed ten
  * rows out of twelve thousand on every visit is not a default anyone chose.
  *
- * @module browser/directory-console/components/EntityList
+ * @module twake-directory-manager/components/EntityList
  */
 
 import { csvCell, writeCsv } from '../csv';
@@ -18,7 +18,6 @@ import { escapeHtml } from '../shared/dom';
 import type { Translator } from '../i18n';
 import { hasRole, tooBroad } from '../api/ConsoleApiClient';
 import {
-  GENERIC_FAILURE,
   accountState,
   attributeLabel,
   displayValue,
@@ -50,9 +49,7 @@ export const SEARCH_MINIMUM = 3;
  * Server Error" and nothing else. With a server that honours `limit`, asking
  * for fewer turns that into a thousand entries and a notice that there are
  * more — and a thousand rows is already more than anyone pages through rather
- * than searches. ldap-rest 0.12.0 ignores it and still fails past the
- * directory's limit; that failure is then explained (`listFailure`) rather
- * than shown as "Internal Server Error".
+ * than searches.
  */
 export const LIST_LIMIT = 1000;
 
@@ -64,12 +61,10 @@ export const LIST_LIMIT = 1000;
  * permission on this branch"): the reader is told plainly they may not see
  * these entries. Nor for the failures a search too broad for the directory
  * ends in (see `tooBroad`): `422` is ldap-rest saying so, with wording meant
- * for an API client; `500` is how ldap-rest 0.12.0 reports the same refusal — as
- * "Internal Server Error", which tells the operator nothing they can act on
- * — and `502` or `504` is a proxy giving up on the unbounded search before
- * the server did. Those can have other causes, hence the hedged wording; and
- * a `500` that does name its cause keeps it, after that wording, so a real
- * failure stays diagnosable.
+ * for an API client, and `502` or `504` is a proxy giving up on the unbounded
+ * search before the server did. Those two can have other causes, hence the
+ * hedged wording. A `500` is the server's own failure and keeps its words,
+ * so it stays diagnosable.
  *
  * @param err what the request threw
  * @param translator translator of the interface
@@ -81,11 +76,7 @@ export function listFailure(err: unknown, translator: Translator): string {
   if (status === 403) return translator.t('list.refused');
   if (!tooBroad(err)) return message;
   if (status === 422) return translator.t('list.tooMany');
-  const hedged = translator.t('list.failed');
-  const cause = message.trim();
-  return status === 500 && !GENERIC_FAILURE.test(cause)
-    ? `${hedged} (${cause})`
-    : hedged;
+  return translator.t('list.failed');
 }
 
 /**
