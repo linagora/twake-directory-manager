@@ -3,10 +3,11 @@
  * it: the client, the words, the rights, the entities, the panel and the
  * dialog, the toast and the reporter, the ticket of the page drawn, the
  * address, the tree, an entry's relations, the transit count, the words of
- * a creation and the first password of an account created, and what the
+ * a creation and the first password of an account created, what the
  * organizations page asks of the pages and actions still in the console:
  * the names of what entries point at, an organization's entries, Claim…,
- * a list opened on a search, the forms and the deletion (#220).
+ * a list opened on a search, the forms and the deletion, and the actions
+ * an entry's card starts (#220).
  *
  * @module twake-directory-manager/console/context
  */
@@ -49,10 +50,11 @@ export interface Relations {
  * keeps the context, not what it said.
  *
  * It holds what the views and actions moved out so far need (the password
- * policies and the organizations; the password resets, the state changes,
- * the transit, the deletions and the forms), and grows with each view and
- * action moved out of `DirectoryConsole` (#220): add a member when a moved
- * method needs one, not before.
+ * policies, the organizations and an entry's card; the password resets, the
+ * state changes, the transit, the deletions, the forms and the memberships
+ * of groups), and grows with each view and action moved out of
+ * `DirectoryConsole` (#220): add a member when a moved method needs one,
+ * not before.
  */
 export interface ConsoleContext {
   /** The client of ldap-rest */
@@ -87,6 +89,11 @@ export interface ConsoleContext {
   titlePage(name?: string): void;
   /** Draw the page the address names again, after a change of what it shows */
   refresh(): Promise<void>;
+  /**
+   * The main area the pages are drawn in, none once the console is off the
+   * page: where an action finds the control of a page drawn again
+   */
+  main(): HTMLElement | null;
   /** The entities the directory serves, as discovered: none before */
   entities(): EntityDescriptor[];
   /**
@@ -206,6 +213,53 @@ export interface ConsoleContext {
     id: string,
     entry: Entry,
     preselect?: string
+  ): Promise<void>;
+  /** Reset an account's password, from its card (see `PasswordActions`) */
+  resetPassword(entity: EntityDescriptor, id: string): void;
+  /**
+   * Claim an entry in transit into one of the caller's organizations, from
+   * its card (see `TransitActions.claim`)
+   */
+  claim(entity: EntityDescriptor, id: string, name?: string): Promise<void>;
+  /**
+   * Hand an entry over to the transit branch, once asked (see
+   * `TransitActions`)
+   */
+  handOver(entity: EntityDescriptor, id: string, entry: Entry): Promise<void>;
+  /**
+   * Delete an entry once asked, from its card, an account's change of
+   * state offered instead when `canChangeState` (see `DeletionActions.one`)
+   */
+  deleteEntry(
+    entity: EntityDescriptor,
+    id: string,
+    entry?: Entry,
+    canChangeState?: boolean
+  ): Promise<void>;
+  /**
+   * Add to a group…, on an account's card: `held` the DN of its groups,
+   * not offered (see `GroupActions.add`)
+   */
+  addToGroups(entry: Entry, name: string, held: string[]): void;
+  /** Take an account out of a group, from the × on it (see `GroupActions`) */
+  leaveGroup(entry: Entry, name: string, dn: string): Promise<void>;
+  /**
+   * Add members…, on a group's card: `held` the DN of its members, not
+   * offered (see `GroupActions.addMembers`)
+   */
+  addMembers(
+    entity: EntityDescriptor,
+    entry: Entry,
+    id: string,
+    name: string,
+    held: string[]
+  ): void;
+  /** Take a member out of a group, from the × on it (see `GroupActions`) */
+  removeMember(
+    entity: EntityDescriptor,
+    id: string,
+    name: string,
+    dn: string
   ): Promise<void>;
   /**
    * What the button and the panel creating an entry of an entity read, as

@@ -1,7 +1,8 @@
 /**
- * What the list's bulk actions share, Add to a group… in the console and
- * Change state… in `actions/state.ts`: the accounts of the selection the
- * caller writes, and the panel an action holds while its work runs (#220).
+ * What the list's bulk actions share, Add to a group… in
+ * `actions/groups.ts` and Change state… in `actions/state.ts`: the
+ * accounts of the selection the caller writes, and the panel an action
+ * holds while its work runs (#220).
  *
  * @module twake-directory-manager/console/bulk
  */

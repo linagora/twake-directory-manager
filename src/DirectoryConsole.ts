@@ -22,23 +22,16 @@ import {
   attachedClass,
   attachedEntity,
 } from './components/AttachedTables';
-import { EntityDetail } from './components/EntityDetail';
 import { EntityImport } from './components/EntityImport';
 import {
   EntityList,
   LIST_LIMIT,
   SEARCH_MINIMUM,
 } from './components/EntityList';
-import { GroupPicker, type GroupChoice } from './components/GroupPicker';
 import {
-  attributeLabel,
   comparableDn,
-  displayValue,
   entryValue,
-  explainRefusal,
   isDnShaped,
-  readFailure,
-  parentDn as parentOf,
   ownValueLabel,
   pointerLabel,
   rdnValue,
@@ -74,9 +67,10 @@ import type {
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
-import type { ConsoleContext, Relations } from './console/context';
+import type { ConsoleContext } from './console/context';
 import type { ConsoleDeps } from './console/deps';
 import { DialogService } from './console/dialog';
+import { groupEntity, readRelations, relationHref } from './console/relations';
 import { POLICIES_KEY, type Route, routeOf } from './console/route';
 import { PanelService, overlayMarkup } from './console/panel';
 import {
@@ -91,12 +85,13 @@ import {
 import { announcer } from './ui/announce';
 import { PoliciesView } from './views/policies';
 import { OrganizationsView } from './views/organizations';
+import { EntryView } from './views/entry';
 import { PasswordActions } from './actions/passwords';
 import { StateActions } from './actions/state';
 import { TransitActions } from './actions/transit';
 import { DeletionActions } from './actions/deletion';
 import { FormActions, createdEntryId } from './actions/forms';
-import { bulkPanel, bulkWritable } from './console/bulk';
+import { GroupActions } from './actions/groups';
 import { ToastController } from './ui/toast';
 
 // Kept importable from here, where they were first defined.
@@ -211,6 +206,8 @@ export class DirectoryConsole {
   private deletions!: DeletionActions;
   /** The create and edit forms, made by `init()` with the context: they hold nothing */
   private forms!: FormActions;
+  /** The memberships of groups, made by `init()` with the context: they hold nothing */
+  private groups!: GroupActions;
   /**
    * The organizations page, made by `init()` with the context and kept
    * between its drawings: it holds the tree, which the next drawing, the
@@ -267,6 +264,7 @@ export class DirectoryConsole {
     this.transits = new TransitActions(this.context);
     this.deletions = new DeletionActions(this.context);
     this.forms = new FormActions(this.context);
+    this.groups = new GroupActions(this.context);
     // A console mounted again keeps the tree it drew, as it did when the
     // tree was its own.
     this.organizationsView = new OrganizationsView(
@@ -373,6 +371,7 @@ export class DirectoryConsole {
       ticket: () => ++this.viewGeneration,
       titlePage: name => this.titlePage(name),
       refresh: () => this.renderMain(),
+      main: () => this.main(),
       entities: () => this.entities,
       personName: (entity, entry, id) => this.personName(entity, entry, id),
       submittedName: (entity, values, id) =>
@@ -385,10 +384,22 @@ export class DirectoryConsole {
       readTransit: () => this.readTransit(),
       tree: () => this.organizationsView?.tree() ?? null,
       relations: (entity, entry, strict) =>
-        this.relations(entity, entry, strict),
-      groupEntity: dn => this.groupEntity(dn),
+        readRelations(this.context, entity, entry, strict),
+      groupEntity: dn => groupEntity(this.entities, dn),
       changeState: (entity, id, entry, preselect) =>
         this.changeState(entity, id, entry, preselect),
+      resetPassword: (entity, id) => this.passwords.reset(entity, id),
+      claim: (entity, id, name) => this.claim(entity, id, name),
+      handOver: (entity, id, entry) =>
+        this.transits.handOver(entity, id, entry),
+      deleteEntry: (entity, id, entry, canChangeState) =>
+        this.deletions.one(entity, id, entry, canChangeState),
+      addToGroups: (entry, name, held) => this.groups.add(entry, name, held),
+      leaveGroup: (entry, name, dn) => this.groups.leave(entry, name, dn),
+      addMembers: (entity, entry, id, name, held) =>
+        this.groups.addMembers(entity, entry, id, name, held),
+      removeMember: (entity, id, name, dn) =>
+        this.groups.removeMember(entity, id, name, dn),
       createLabel: entity => this.createLabel(entity),
       givePassword: (entity, values, id, next, own) =>
         this.passwords.give(entity, values, id, next, own),
@@ -396,7 +407,7 @@ export class DirectoryConsole {
       pointerNames: entity => this.pointerNames(entity),
       attachedNames: () => this.attachedNames(),
       readMembers: dn => this.readMembers(dn),
-      relationHref: dn => this.relationHref(dn),
+      relationHref: dn => relationHref(this.entities, dn),
       claimAction: () => this.claimAction(),
       openList: (entity, view): void => {
         this.listViews.set(entity.key, view);
@@ -1213,165 +1224,18 @@ export class DirectoryConsole {
     await list.render(holder);
   }
 
-  /** One entry, read-only, with its actions and its relations. */
-  private async renderDetail(
+  /**
+   * Draw an entry's card (see `EntryView`): kept for `renderMain` and the
+   * routing tests that replace it until #220's last step. A view is made
+   * for each drawing, as the card holds nothing from one to the next.
+   */
+  private renderDetail(
     main: HTMLElement,
     entity: EntityDescriptor,
     id: string,
     generation: number
   ): Promise<void> {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    if (this.rights.administersNothing()) {
-      render(main, this.nothingMarkup());
-      return;
-    }
-    render(main, html`<p class="dc-empty">${t('app.loading')}</p>`);
-    const naming = this.pointerNames(entity);
-    let entry: Entry;
-    try {
-      entry = await this.api.get(entity, id);
-      if (!this.current(generation)) return;
-    } catch (err) {
-      if (!this.current(generation)) return;
-      const failure = readFailure(err, this.translator);
-      render(
-        main,
-        html`<p class="dc-empty${
-          failure.gone || failure.refused ? '' : ' dc-error-block'
-        }">${failure.message}</p>`
-      );
-      return;
-    }
-
-    render(
-      main,
-      html`
-      <section class="dc-view">
-        <header class="dc-view-header">
-          <button type="button" class="dc-button" data-back>${t('app.back')}</button>
-        </header>
-        <div data-detail></div>
-      </section>`
-    );
-    main
-      .querySelector('[data-back]')
-      ?.addEventListener('click', () => this.go(entity.key));
-
-    const [named, relations] = await Promise.all([
-      naming,
-      this.relations(entity, entry),
-    ]);
-    if (!this.current(generation)) return;
-    const transit = this.rights.transitOf(entity, entry);
-    const readOnly = this.rights.readsReferenceOnly(entity);
-    const canWrite =
-      !readOnly && (transit.rights?.write ?? this.rights.canWrite());
-    const groups = relations?.groups && entry.dn ? relations.items : undefined;
-    // A group's members, managed from its card as an account's groups are
-    // from the account's: the whole form was the only way to change one.
-    // Only a group has the routes that add and remove one member: a flat
-    // entity's members, a team mailbox's, are saved with the whole entry.
-    const members =
-      relations &&
-      !relations.groups &&
-      entity.kind === 'group' &&
-      this.rights.writes(entity, entry)
-        ? relations
-        : undefined;
-    if (members) for (const item of members.items) item.removable = true;
-    const joins =
-      !!groups &&
-      this.rights.writes(entity, entry) &&
-      !!this.api.groupSearch(this.entities);
-    const detail: EntityDetail = new EntityDetail({
-      report: this.report,
-      entity,
-      entry,
-      translator: this.translator,
-      canWrite,
-      canDelete:
-        !readOnly && (transit.rights?.delete ?? this.rights.canDelete()),
-      notice:
-        readOnly && this.isReference(entity)
-          ? this.translator.t('reference.readOnly')
-          : undefined,
-      inTransit: transit.inTransit,
-      onClaim: transit.claim
-        ? (): void =>
-            background(
-              () => this.claim(entity, id, this.personName(entity, entry, id)),
-              'claim',
-              this.report
-            )
-        : undefined,
-      onHandOver: transit.handOver
-        ? (): void =>
-            background(
-              () => this.handOver(entity, id, entry),
-              'handOver',
-              this.report
-            )
-        : undefined,
-      pointerLabel: named,
-      relations,
-      onEdit: (): void => {
-        background(() => this.openForm(entity, entry), 'openForm', this.report);
-      },
-      onDelete: (): void => {
-        background(
-          () => this.confirmDelete(entity, id, entry, canWrite),
-          'confirmDelete',
-          this.report
-        );
-      },
-      onStatus: (): void => {
-        background(
-          () => this.changeState(entity, id, entry),
-          'changeState',
-          this.report
-        );
-      },
-      onResetPassword: (): void => {
-        background(
-          () => this.resetPassword(entity, id),
-          'resetPassword',
-          this.report
-        );
-      },
-      relationHref: (dn: string): string | undefined => this.relationHref(dn),
-      onAddToGroups:
-        groups && joins
-          ? (): void =>
-              this.addToGroups(
-                entry,
-                detail.heading(),
-                groups.map(group => group.id)
-              )
-          : undefined,
-      onLeaveGroup: groups
-        ? (dn: string): Promise<void> =>
-            this.leaveGroup(entry, detail.heading(), dn)
-        : members
-          ? (dn: string): Promise<void> =>
-              this.removeMember(entity, id, detail.heading(), dn)
-          : undefined,
-      onAddMembers:
-        members && this.api.memberSearch('members', this.entities)
-          ? (): void =>
-              this.addMembers(
-                entity,
-                entry,
-                id,
-                detail.heading(),
-                members.items.map(item => item.id)
-              )
-          : undefined,
-    });
-    detail.render(
-      main.querySelector<HTMLElement>('[data-detail]') as HTMLElement
-    );
-    this.titlePage(detail.heading());
+    return new EntryView(this.context).render(main, entity, id, generation);
   }
 
   /**
@@ -1384,173 +1248,6 @@ export class DirectoryConsole {
   private titlePage(name?: string): void {
     if (typeof document === 'undefined' || !this.pageTitle) return;
     document.title = name ? `${name} — ${this.pageTitle}` : this.pageTitle;
-  }
-
-  /**
-   * Entries related to this one: the members of a group, the groups an account
-   * belongs to. Both are read from roles, so an entity that models them under
-   * other names still gets the section.
-   *
-   * An account's groups come from its `memberOf`, which only a directory
-   * running OpenLDAP's `memberof` overlay fills in. Without it they are
-   * searched among the groups; a search that fails leaves the section empty
-   * rather than the card unshown.
-   *
-   * @param strict whether a group entity that cannot be searched fails the
-   * search, which then says `unknown` rather than no group: what is to be
-   * done to every group, as a hand-over, cannot take one for the other
-   */
-  private async relations(
-    entity: EntityDescriptor,
-    entry: Entry,
-    strict = false
-  ): Promise<Relations | undefined> {
-    let unknown = false;
-    for (const role of ['members', 'groupMemberships']) {
-      for (const [name, attr] of Object.entries(entity.schema.attributes)) {
-        const roles = Array.isArray(attr.role) ? attr.role : [attr.role];
-        if (!roles.includes(role)) continue;
-        const raw = entryValue(entry, name);
-        let list = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
-        if (role === 'groupMemberships' && !list.length && entry.dn)
-          list = await this.api
-            .memberships(entry.dn, this.entities, strict)
-            .catch(() => {
-              unknown = strict;
-              return [];
-            });
-        // An empty value stands for no member in some directories: it is
-        // neither counted nor offered a ×, as the deletion's count skips it.
-        const items = list
-          .filter(dn => String(dn).trim())
-          .map(dn => ({
-            id: String(dn),
-            label: rdnValue(String(dn)),
-          }));
-        if (role === 'members')
-          return {
-            title: attributeLabel(name, attr, this.translator.language),
-            attribute: name,
-            items,
-          };
-        // Groups, whatever the schema calls them: a deployment's "Mailing
-        // lists" listed shared mailboxes and simple groups as well.
-        return {
-          title: this.translator.t('groups.section'),
-          attribute: name,
-          items: await this.groupItems(items),
-          groups: true,
-          ...(unknown ? { unknown } : {}),
-        };
-      }
-    }
-    return undefined;
-  }
-
-  /**
-   * An account's groups, each with its type and whether the caller may take
-   * the account out of it. Each group is read for that, all at once; one
-   * that cannot be read is named alone, and offers no ×.
-   *
-   * @param items the groups, by DN and name
-   * @returns the same groups, said in full
-   */
-  private async groupItems(
-    items: { id: string; label: string }[]
-  ): Promise<
-    { id: string; label: string; note?: string; removable?: boolean }[]
-  > {
-    return Promise.all(
-      items.map(async item => {
-        const owner = this.groupEntity(item.id);
-        if (!owner) return item;
-        let group: Entry;
-        try {
-          group = await this.api.get(owner, item.label);
-        } catch {
-          return item;
-        }
-        const note = this.groupType(owner, group);
-        return {
-          ...item,
-          ...(note ? { note } : {}),
-          removable: this.rights.writes(owner, group),
-        };
-      })
-    );
-  }
-
-  /** The group entity whose branch holds a DN. */
-  private groupEntity(dn: string): EntityDescriptor | undefined {
-    const parent = parentOf(dn);
-    return parent
-      ? this.entities.find(
-          entity =>
-            entity.kind === 'group' &&
-            entity.base &&
-            comparableDn(entity.base) === comparableDn(parent)
-        )
-      : undefined;
-  }
-
-  /**
-   * A group's type — _Mailing list_, _Shared mailbox_ — named as its card
-   * names it, from the nomenclature's own labels.
-   *
-   * @param entity the groups' entity
-   * @param group the group as read
-   * @returns its type, or nothing for a schema or a group with none
-   */
-  private groupType(entity: EntityDescriptor, group: Entry): string {
-    const type = roleAttribute(entity.schema, 'mailboxType');
-    const value = type ? [entryValue(group, type) ?? []].flat()[0] : undefined;
-    if (!type || !value) return '';
-    const { language } = this.translator;
-    return displayValue(
-      entity.schema.attributes[type],
-      String(value),
-      dn => pointerLabel(this.entities, dn, language),
-      language
-    );
-  }
-
-  /** The card of a related entry, in whichever entity owns its DN. */
-  private relationHref(dn: string): string | undefined {
-    const owner = this.entities.find(
-      entity =>
-        entity.base &&
-        dn.toLowerCase().endsWith(`,${entity.base.toLowerCase()}`)
-    );
-    if (!owner) return undefined;
-    // `rdnValue`, not a split on the first comma: `cn=Smith\, John,…` holds
-    // one, and the truncated id it produced answered "no longer exists".
-    const id = rdnValue(dn);
-    return `#/${owner.key}/${encodeURIComponent(id)}`;
-  }
-
-  /** A group found, as a group picker offers it. */
-  private groupChoice(found: {
-    dn: string;
-    entity: EntityDescriptor;
-    entry: Entry;
-  }): GroupChoice {
-    const group = rdnValue(found.dn);
-    const mail = roleAttribute(found.entity.schema, 'primaryEmail');
-    const address = mail
-      ? [entryValue(found.entry, mail) ?? []].flat()[0]
-      : undefined;
-    return {
-      dn: found.dn,
-      name: group,
-      // sales-team — Shared mailbox — sales@example.com
-      label: [
-        group,
-        this.groupType(found.entity, found.entry),
-        address ? String(address) : '',
-      ]
-        .filter(Boolean)
-        .join(' — '),
-    };
   }
 
   /**
@@ -1579,7 +1276,7 @@ export class DirectoryConsole {
     if (this.api.groupSearch(this.entities))
       actions.push({
         label: t('bulk.addToGroups'),
-        run: selected => this.bulkAddToGroups(entity, selected),
+        run: selected => this.groups.addMany(entity, selected),
       });
     const status = entity.accountStatus;
     if (status && entity.schema.attributes[status]?.states)
@@ -1590,424 +1287,12 @@ export class DirectoryConsole {
     return actions;
   }
 
-  /** Whether the side panel is open: one opened needs a page to be in. */
-  private panelShown(): boolean {
-    return this.panel.isOpen();
-  }
-
-  /**
-   * Add the accounts selected to groups chosen in a panel, one request a
-   * group. A group that refuses stays chosen in the panel, with why.
-   *
-   * @returns whether the accounts are in a group chosen, once the panel is
-   *   closed
-   */
-  private bulkAddToGroups(
-    entity: EntityDescriptor,
-    selected: [string, Entry][]
-  ): Promise<boolean> {
-    const { kept, leftOut } = bulkWritable(
-      this.rights,
-      this.translator,
-      entity,
-      selected
-    );
-    const members = kept.map(([, entry]) => String(entry.dn));
-    const search = this.api.groupSearch(this.entities, found =>
-      this.rights.writes(found.entity, found.entry)
-    );
-    if (!search) return Promise.resolve(false);
-    if (!members.length) {
-      if (leftOut) this.toast(leftOut, true);
-      return Promise.resolve(false);
-    }
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const owners = new Map<string, EntityDescriptor>();
-    // The members each group found holds already: one sent again fails the
-    // whole request, the others with it.
-    const holds = new Map<string, Set<string>>();
-    const picker = new GroupPicker({
-      report: this.report,
-      translator: this.translator,
-      search: async (query: string): Promise<GroupChoice[]> =>
-        (await search(query)).map(found => {
-          const key = comparableDn(found.dn);
-          owners.set(key, found.entity);
-          const role = roleAttribute(found.entity.schema, 'members');
-          holds.set(
-            key,
-            new Set(
-              (role ? [entryValue(found.entry, role) ?? []].flat() : []).map(
-                dn => comparableDn(String(dn))
-              )
-            )
-          );
-          return this.groupChoice(found);
-        }),
-      onAdd: async (
-        chosen: GroupChoice[]
-      ): Promise<{ left: GroupChoice[]; error?: string }> => {
-        const already: string[] = [];
-        const left: GroupChoice[] = [];
-        const refused: string[] = [];
-        // How many each group joined took: one already in it is not said
-        // to be added.
-        const added = new Map<number, string[]>();
-        let sent = false;
-        action.start();
-        try {
-          for (const group of chosen) {
-            const key = comparableDn(group.dn);
-            const owner = owners.get(key);
-            if (!owner) continue;
-            const held = holds.get(key) ?? new Set<string>();
-            const absent = members.filter(dn => !held.has(comparableDn(dn)));
-            if (!absent.length) {
-              already.push(group.name);
-              continue;
-            }
-            try {
-              await this.api.addMembers(owner, group.name, absent);
-              for (const dn of absent) held.add(comparableDn(dn));
-              sent = true;
-              added.set(absent.length, [
-                ...(added.get(absent.length) ?? []),
-                group.name,
-              ]);
-            } catch (err) {
-              left.push(group);
-              refused.push(this.refusal(err, owner, group.name).message);
-            }
-          }
-        } finally {
-          // Everyone in the groups chosen already is done as well: the
-          // selection goes.
-          action.finish(sent || already.length > 0);
-        }
-        const told = [
-          ...[...added].map(([count, groups]) =>
-            t('bulk.added', { count, groups: groups.join(', ') })
-          ),
-          ...(already.length
-            ? [
-                t('bulk.alreadyIn', {
-                  count: members.length,
-                  groups: already.join(', '),
-                }),
-              ]
-            : []),
-        ];
-        if (told.length) this.toast(told.join('. '));
-        if (left.length === 0 && action.own()) this.closePanel(true);
-        return {
-          left,
-          // Each refusal said with the group it is about.
-          error: refused.length
-            ? refused
-                .map((message, index) => `${left[index].name}: ${message}`)
-                .join(' ')
-            : undefined,
-        };
-      },
-      onCancel: (): void => this.closePanel(),
-    });
-    this.openPanel(t('bulk.addTitle', { count: members.length }), body => {
-      render(
-        body,
-        html`${
-          leftOut ? html`<p class="dc-hint">${leftOut}</p>` : ''
-        }<div data-bulk-picker></div>`
-      );
-      const holder = body.querySelector<HTMLElement>('[data-bulk-picker]');
-      if (holder) picker.render(holder);
-    });
-    if (!this.panelShown()) return Promise.resolve(false);
-    const action = bulkPanel(this.panel);
-    return action.settled;
-  }
-
   /** Change the state of the accounts selected (see `StateActions`). */
   private bulkChangeState(
     entity: EntityDescriptor,
     selected: [string, Entry][]
   ): Promise<boolean> {
     return this.states.changeMany(entity, selected);
-  }
-
-  /**
-   * Add an account to groups, chosen in the panel _Add to a group…_ opens.
-   * The groups offered are those the caller writes: any other would be
-   * refused. Each is joined on its own, so that one refused leaves the
-   * others joined, and stays chosen in the panel with why.
-   *
-   * @param entry the account
-   * @param name what its card is headed with
-   * @param held DN of the groups it is in already, not offered again
-   */
-  private addToGroups(entry: Entry, name: string, held: string[]): void {
-    const holds = new Set(held.map(dn => comparableDn(dn)));
-    const search = this.api.groupSearch(
-      this.entities,
-      found =>
-        !holds.has(comparableDn(found.dn)) &&
-        this.rights.writes(found.entity, found.entry)
-    );
-    if (!search || !entry.dn) return;
-    const member = String(entry.dn);
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const owners = new Map<string, EntityDescriptor>();
-    const picker = new GroupPicker({
-      report: this.report,
-      translator: this.translator,
-      search: async (query: string): Promise<GroupChoice[]> =>
-        (await search(query)).map(found => {
-          owners.set(comparableDn(found.dn), found.entity);
-          return this.groupChoice(found);
-        }),
-      onAdd: async (
-        chosen: GroupChoice[]
-      ): Promise<{ left: GroupChoice[]; error?: string }> => {
-        const joined: string[] = [];
-        const left: GroupChoice[] = [];
-        const refused: string[] = [];
-        for (const group of chosen) {
-          const owner = owners.get(comparableDn(group.dn));
-          if (!owner) continue;
-          try {
-            await this.api.addMembers(owner, group.name, [member]);
-            joined.push(group.name);
-            // Joined: no longer offered, as the server would refuse it twice.
-            holds.add(comparableDn(group.dn));
-          } catch (err) {
-            left.push(group);
-            refused.push(this.refusal(err, owner, group.name).message);
-          }
-        }
-        if (joined.length)
-          this.toast(t('groups.added', { name, groups: joined.join(', ') }));
-        if (left.length === 0) {
-          this.closePanel(true);
-          await this.refreshCard('[data-add-groups]');
-        } else if (joined.length) {
-          await this.renderMain();
-          // The button the panel gives the focus back to was redrawn.
-          this.panel.returnFocusTo(
-            this.main()?.querySelector<HTMLElement>('[data-add-groups]') ?? null
-          );
-        }
-        // Several refused: each said with the group it is about.
-        const error =
-          refused.length > 1
-            ? refused
-                .map((message, index) => `${left[index].name}: ${message}`)
-                .join(' ')
-            : refused[0];
-        return { left, error };
-      },
-      onCancel: (): void => this.closePanel(),
-    });
-    this.openPanel(t('groups.title', { name }), body => picker.render(body));
-  }
-
-  /**
-   * Add members to a group, chosen in a panel as an account's groups are:
-   * found by name, address or employee ID, added in one request.
-   *
-   * A team mailbox the server keeps to its domain is offered the accounts
-   * of that domain only, as in the form. A DN typed whole, or an outside
-   * address, is still the form's to add.
-   *
-   * @param entity the group's entity
-   * @param entry the group
-   * @param id the group
-   * @param name what its card is headed with
-   * @param held DN of its members, not offered again
-   */
-  private addMembers(
-    entity: EntityDescriptor,
-    entry: Entry,
-    id: string,
-    name: string,
-    held: string[]
-  ): void {
-    // Nor the group itself.
-    const holds = new Set(
-      [...held, String(entry.dn ?? '')].map(dn => comparableDn(dn))
-    );
-    const search = this.api.memberSearch(
-      'members',
-      this.entities,
-      dn => !holds.has(comparableDn(dn))
-    );
-    if (!search) return;
-    const domain = this.teamMailboxDomain(entity, entry);
-    let leftOut = false;
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const picker = new GroupPicker({
-      report: this.report,
-      translator: this.translator,
-      words: {
-        field: t('members.field'),
-        hint: t('form.searchMember', { count: SEARCH_MINIMUM }),
-      },
-      search: async (query: string): Promise<GroupChoice[]> => {
-        const found = (await search(query)).filter(
-          candidate => !holds.has(comparableDn(candidate.dn))
-        );
-        const kept = found.filter(
-          candidate =>
-            !domain ||
-            candidate.mail
-              ?.slice(candidate.mail.lastIndexOf('@') + 1)
-              .toLowerCase() === domain
-        );
-        leftOut = kept.length < found.length;
-        return kept.map(candidate => ({
-          dn: candidate.dn,
-          name: rdnValue(candidate.dn),
-          label: candidate.label,
-        }));
-      },
-      // An address typed at another domain is said to be refused as well,
-      // as the form says it: the search found no account of it to leave out.
-      emptyNote: (query: string): string | undefined => {
-        if (!domain) return undefined;
-        const at = query.lastIndexOf('@');
-        const typed =
-          at > 0
-            ? query
-                .slice(at + 1)
-                .trim()
-                .toLowerCase()
-            : undefined;
-        return leftOut || (typed && !domain.startsWith(typed))
-          ? t('form.otherDomain', { domain })
-          : undefined;
-      },
-      onAdd: async (
-        chosen: GroupChoice[]
-      ): Promise<{ left: GroupChoice[]; error?: string }> => {
-        try {
-          await this.api.addMembers(
-            entity,
-            id,
-            chosen.map(member => member.dn)
-          );
-        } catch (err) {
-          return {
-            left: chosen,
-            error: this.refusal(err, entity, name).message,
-          };
-        }
-        this.toast(
-          t('members.added', {
-            count: chosen.length,
-            names: chosen.map(member => member.name).join(', '),
-            group: name,
-          })
-        );
-        this.closePanel(true);
-        await this.refreshCard('[data-add-members]');
-        return { left: [] };
-      },
-      onCancel: (): void => this.closePanel(),
-    });
-    this.openPanel(t('members.title', { group: name }), body =>
-      picker.render(body)
-    );
-  }
-
-  /**
-   * The domain a group keeps its members to: a team mailbox's, when the
-   * server keeps them to theirs. What `EntityForm` reads from the form, read
-   * from the group as stored.
-   */
-  private teamMailboxDomain(
-    entity: EntityDescriptor,
-    entry: Entry
-  ): string | undefined {
-    if (!this.api.teamMailboxesKeepDomain) return undefined;
-    const type = roleAttribute(entity.schema, 'mailboxType');
-    const mail = roleAttribute(entity.schema, 'primaryEmail');
-    if (!type || !mail) return undefined;
-    const types = [entryValue(entry, type) ?? []].flat().map(String);
-    if (!types.some(dn => /^\s*cn=teamMailbox\s*,/i.test(dn))) return undefined;
-    const address = String([entryValue(entry, mail) ?? []].flat()[0] ?? '');
-    const at = address.lastIndexOf('@');
-    return at > 0
-      ? address
-          .slice(at + 1)
-          .trim()
-          .toLowerCase()
-      : undefined;
-  }
-
-  /**
-   * Take a member out of a group, from the × on the member: one click, as
-   * the × of a group on an account's card.
-   *
-   * @param entity the group's entity
-   * @param id the group
-   * @param name what its card is headed with
-   * @param dn DN of the member
-   */
-  private async removeMember(
-    entity: EntityDescriptor,
-    id: string,
-    name: string,
-    dn: string
-  ): Promise<void> {
-    const member = rdnValue(dn);
-    try {
-      await this.api.removeMember(entity, id, dn);
-    } catch (err) {
-      this.toast(this.refusal(err, entity, name).message, true);
-      return;
-    }
-    this.toast(
-      this.translator.t('groups.removed', { name: member, group: name })
-    );
-    await this.refreshCard('[data-add-members]');
-  }
-
-  /**
-   * Take an account out of one of its groups, from the × on the group: one
-   * click, as the × of a member in the group's form, and as easily undone.
-   *
-   * @param entry the account
-   * @param name what its card is headed with
-   * @param dn DN of the group
-   */
-  private async leaveGroup(
-    entry: Entry,
-    name: string,
-    dn: string
-  ): Promise<void> {
-    const owner = this.groupEntity(dn);
-    if (!owner || !entry.dn) return;
-    const group = rdnValue(dn);
-    try {
-      await this.api.removeMember(owner, group, String(entry.dn));
-    } catch (err) {
-      this.toast(this.refusal(err, owner, group).message, true);
-      return;
-    }
-    this.toast(this.translator.t('groups.removed', { name, group }));
-    await this.refreshCard('[data-add-groups]');
-  }
-
-  /**
-   * Draw the card on screen again, after a change made from it, and give
-   * the focus back to a control of it: the one it was on was redrawn.
-   *
-   * @param focus selector of the control to focus, when the card has it
-   */
-  private async refreshCard(focus: string): Promise<void> {
-    await this.renderMain();
-    this.main()?.querySelector<HTMLElement>(focus)?.focus();
   }
 
   /**
@@ -2254,25 +1539,6 @@ export class DirectoryConsole {
       names.get(comparableDn(dn)) ?? pointerLabel(this.entities, dn, language);
   }
 
-  /**
-   * A refusal in the interface's language, naming the fields the way the
-   * form does (see {@link explainRefusal}).
-   *
-   * @param err what the request threw
-   * @param entity the entity of the entry refused
-   * @param name what a refusal of rights is about: the entry, or the
-   *   organization it goes to
-   * @param field the attribute naming that organization
-   */
-  private refusal(
-    err: unknown,
-    entity: EntityDescriptor,
-    name?: string,
-    field?: string
-  ): { message: string; attribute?: string } {
-    return explainRefusal(err, entity.schema, this.translator, name, field);
-  }
-
   /* --------------------------------------------------------------- actions */
 
   /** Change an account's state from its card (see `StateActions`). */
@@ -2285,11 +1551,6 @@ export class DirectoryConsole {
     return this.states.change(entity, id, entry, preselect);
   }
 
-  /** Reset an account's password (see `PasswordActions`). */
-  private resetPassword(entity: EntityDescriptor, id: string): void {
-    this.passwords.reset(entity, id);
-  }
-
   /**
    * Claim an entry in transit into one of the caller's organizations (see
    * `TransitActions`).
@@ -2300,15 +1561,6 @@ export class DirectoryConsole {
     name = id
   ): Promise<void> {
     return this.transits.claim(entity, id, name);
-  }
-
-  /** Let an entry go into the transit branch, once asked (see `TransitActions`). */
-  private handOver(
-    entity: EntityDescriptor,
-    id: string,
-    entry: Entry
-  ): Promise<void> {
-    return this.transits.handOver(entity, id, entry);
   }
 
   /**
@@ -2384,21 +1636,6 @@ export class DirectoryConsole {
       ? [entryValue(entry, attribute) ?? []].flat()[0]
       : undefined;
     return value && String(value).trim() ? String(value).trim() : undefined;
-  }
-
-  /**
-   * Delete an entry once asked (see `DeletionActions`).
-   *
-   * @param entry the entry, when its card is open
-   * @param canChangeState offer an account's state change instead
-   */
-  private confirmDelete(
-    entity: EntityDescriptor,
-    id: string,
-    entry?: Entry,
-    canChangeState = false
-  ): Promise<void> {
-    return this.deletions.one(entity, id, entry, canChangeState);
   }
 
   /** Delete a selection once asked (see `DeletionActions`): whether any went. */
