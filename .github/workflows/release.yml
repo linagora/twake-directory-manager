@@ -46,8 +46,9 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           PACKAGE=$(node -p "require('./package.json').version")
-          CHART=$(sed -n 's/^version: *//p' helm/twake-directory-manager/Chart.yaml)
-          APP=$(sed -n 's/^appVersion: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' helm/twake-directory-manager/Chart.yaml)
+          # Quoted or not, with or without a comment after.
+          CHART=$(sed -n 's/^version: *"\{0,1\}\([^" #]*\)"\{0,1\}.*$/\1/p' helm/twake-directory-manager/Chart.yaml)
+          APP=$(sed -n 's/^appVersion: *"\{0,1\}\([^" #]*\)"\{0,1\}.*$/\1/p' helm/twake-directory-manager/Chart.yaml)
           failed=0
           if [ "$PACKAGE" != "$VERSION" ]; then
             echo "::error::package.json says $PACKAGE, the tag says $VERSION"; failed=1

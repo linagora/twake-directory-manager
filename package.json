@@ -31,7 +31,7 @@
     "lint": "eslint .",
     "test": "mocha",
     "test:coverage": "c8 mocha",
-    "version": "node scripts/sync-chart-version.mjs && git add helm/twake-directory-manager/Chart.yaml",
+    "version": "node scripts/sync-chart-version.mjs && git add package.json package-lock.json helm/twake-directory-manager/Chart.yaml",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
