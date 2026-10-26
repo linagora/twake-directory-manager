@@ -19,13 +19,8 @@ import {
   resolveText,
 } from '../../src/format';
 import { Translator } from '../../src/i18n';
-import type {
-  EntityDescriptor,
-  EntitySchema,
-  Entry,
-  Scope,
-} from '../../src/types';
-import { baseUrl, consoleIn } from '../support/stubs';
+import type { EntityDescriptor, EntitySchema, Entry } from '../../src/types';
+import { baseUrl } from '../support/stubs';
 import {
   usersSchema,
   users,
@@ -1885,150 +1880,8 @@ describe('server rules', () => {
       ).to.deep.equal({ message: 'The server refused: Bad' });
     });
 
-    it('should blame the organization a new or moved entry goes to, not the entry', () => {
-      const top = 'ou=organization,dc=example,dc=com';
-      const sales = `ou=Sales,${top}`;
-      const engineering = `ou=Engineering,${top}`;
-      const app = consoleIn({}) as unknown as {
-        scope: Scope | null;
-        toast(message: string, isError?: boolean): void;
-        organizationRefused(
-          entity: EntityDescriptor,
-          values: Record<string, string | string[]>,
-          entry?: Entry,
-          form?: { pointerName(dn: string): string | undefined }
-        ): { name: string; attribute: string } | undefined;
-        refuseSave(
-          err: unknown,
-          entity: EntityDescriptor,
-          form: { refuse(attribute: string, message: string): boolean },
-          name: string,
-          field?: string
-        ): void;
-      };
-      const form = {
-        pointerName: (dn: string) =>
-          dn === sales ? 'Acme / Sales' : undefined,
-      };
-      const link = 'twakeDepartmentLink';
-      // Created: the organization it is attached to, as the form named it.
-      expect(
-        app.organizationRefused(
-          users,
-          { cn: 'Va Val', [link]: sales },
-          undefined,
-          form
-        )
-      ).to.deep.equal({ name: 'Acme / Sales', attribute: link });
-      // Edited without a move: the entry itself.
-      const stored: Entry = {
-        dn: `uid=va,${users.base}`,
-        uid: 'va',
-        cn: 'Va Val',
-        [link]: engineering,
-        twakeDepartmentPath: 'Acme / Engineering',
-      };
-      expect(
-        app.organizationRefused(users, { cn: 'Va Vale' }, stored, form)
-      ).to.equal(undefined);
-      // Moved, the scope saying nothing: where it goes.
-      expect(
-        app.organizationRefused(users, { [link]: sales }, stored, form)
-      ).to.deep.equal({ name: 'Acme / Sales', attribute: link });
-      // Moved where the caller writes: where it was, by its path.
-      app.scope = {
-        branches: [{ dn: sales, write: true }],
-        entities: [],
-      } as unknown as Scope;
-      expect(
-        app.organizationRefused(users, { [link]: sales }, stored, form)
-      ).to.deep.equal({ name: 'Acme / Engineering', attribute: link });
-      // Moved where the caller does not write, unnamed by the form.
-      app.scope = {
-        branches: [{ dn: engineering, write: true }],
-        entities: [],
-      } as unknown as Scope;
-      expect(
-        app.organizationRefused(users, { [link]: sales }, stored)
-      ).to.deep.equal({ name: 'Sales', attribute: link });
-
-      // Said under the organization field.
-      const toasts: string[] = [];
-      app.toast = message => toasts.push(message);
-      const shown: [string, string][] = [];
-      app.refuseSave(
-        forbidden,
-        users,
-        {
-          refuse: (attribute, message) => {
-            shown.push([attribute, message]);
-            return true;
-          },
-        },
-        'Acme / Sales',
-        link
-      );
-      expect(shown).to.deep.equal([
-        [
-          link,
-          'You do not administer Acme / Sales: this change is not yours to make.',
-        ],
-      ]);
-      expect(toasts).to.deep.equal(['Not saved: see the highlighted field']);
-    });
-
-    it('should show a refusal under the field at fault, the toast pointing there', () => {
-      const app = consoleIn({}) as unknown as {
-        toast(message: string, isError?: boolean): void;
-        refuseSave(
-          err: unknown,
-          entity: EntityDescriptor,
-          form: { refuse(attribute: string, message: string): boolean },
-          name: string
-        ): void;
-      };
-      const toasts: [string, boolean | undefined][] = [];
-      app.toast = (message, isError) => toasts.push([message, isError]);
-      const shown: [string, string][] = [];
-      const form = {
-        refuse: (attribute: string, message: string) => {
-          shown.push([attribute, message]);
-          return attribute === 'mail';
-        },
-      };
-      app.refuseSave(taken, users, form, 'Alice');
-      expect(shown).to.deep.equal([
-        ['mail', 'Mail “alice@example.com” is already used by another entry.'],
-      ]);
-      expect(toasts).to.deep.equal([
-        ['Not saved: see the highlighted field', true],
-      ]);
-
-      // A field the form does not show: the toast says it all.
-      toasts.length = 0;
-      app.refuseSave(
-        refused(409, 'already used', {
-          code: 'unique',
-          attribute: 'employeeNumber',
-          value: 'E0010',
-        }),
-        users,
-        form,
-        'Alice'
-      );
-      expect(toasts).to.deep.equal([
-        ['Employee Number “E0010” is already used by another entry.', true],
-      ]);
-
-      toasts.length = 0;
-      app.refuseSave(forbidden, users, form, 'Transit');
-      expect(toasts).to.deep.equal([
-        [
-          'You do not administer Transit: this change is not yours to make.',
-          true,
-        ],
-      ]);
-    });
+    // The organization a refusal of rights is about, and a refusal said
+    // under the field at fault: in test/actions/forms.test.ts.
   });
 });
 

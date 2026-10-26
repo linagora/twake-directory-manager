@@ -324,32 +324,7 @@ describe('Translator', () => {
     ).to.equal('Importer des utilisateurs');
   });
 
-  it('should name what was created in its toast', () => {
-    // "Created" alone did not say what.
-    type Toasting = {
-      createdToast(
-        entity: EntityDescriptor,
-        values: Record<string, string | string[]>,
-        id: string
-      ): string;
-    };
-    const en = consoleIn({}) as unknown as Toasting;
-    const fr = consoleIn({}, 'fr') as unknown as Toasting;
-    // By its full name (the fixture's cn holds that role)
-    expect(en.createdToast(users, { cn: 'Ux Audit' }, 'ux-audit-1')).to.equal(
-      'Ux Audit created'
-    );
-    // Said without a gender in French, a group or an organization being
-    // named by the same sentence.
-    expect(fr.createdToast(users, { cn: 'Ux Audit' }, 'ux-audit-1')).to.equal(
-      'Ux Audit est maintenant dans l’annuaire'
-    );
-    // Else by its identifier
-    expect(en.createdToast(groups, {}, 'sales-team')).to.equal(
-      'sales-team created'
-    );
-    expect(en.createdToast(groups, {}, '')).to.equal('Created');
-  });
+  // What was created, named in its toast: in test/actions/forms.test.ts.
 
   it('should name the department in the import rules as its field does', () => {
     // The Twake schema labels the field "Organisation" / "Байгууллага",

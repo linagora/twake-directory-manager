@@ -26,22 +26,8 @@ describe('Directory console: the shell and the overview', () => {
       expect(en.t('state.toDelete')).to.equal('To delete');
     });
 
-    it('should name a nomenclature entry as its card does, to edit it', async () => {
-      // Its deletion is asked in test/actions/deletion.test.ts.
-      const app = consoleIn({}, 'fr') as unknown as {
-        openPanel(title: string): void;
-        openForm(entity: EntityDescriptor, entry?: Entry): void;
-      };
-      const titles: string[] = [];
-      app.openPanel = (title: string): void => {
-        titles.push(title);
-      };
-      await app.openForm(mailboxTypes, {
-        dn: 'cn=teamMailbox,ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com',
-        cn: 'teamMailbox',
-      });
-      expect(titles).to.deep.equal(['Modifier — Boîte partagée']);
-    });
+    // A nomenclature entry named as its card names it, to edit it and to
+    // delete it: in test/actions/forms.test.ts and deletion.test.ts.
 
     describe('what the browser remembers', () => {
       const original = Object.getOwnPropertyDescriptor(
