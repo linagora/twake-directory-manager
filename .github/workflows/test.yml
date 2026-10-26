@@ -110,7 +110,7 @@ jobs:
           node -e '
             const { ldapRest } = require("./package.json");
             const asked = (process.env.ASKED || "min,tested").split(",").map(end => end.trim());
-            const unknown = asked.filter(end => !(end in ldapRest));
+            const unknown = asked.filter(end => !Object.hasOwn(ldapRest, end));
             if (unknown.length) {
               console.error(`ldap-rest: ${unknown.join(", ")} is not an end of the range (min, tested)`);
               process.exit(1);

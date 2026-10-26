@@ -50,13 +50,19 @@ test.describe('record the personas’ scopes', () => {
   test.skip(!process.env.RECORD_SCOPES, 'a recorder, run on demand');
 
   test('record which version answered', () => {
-    // The stack runs the image built on `ldapRest.tested`: the fixtures are
-    // that version's answers, and the contract test holds them to it.
-    const { ldapRest } = JSON.parse(
-      readFileSync(join(ROOT, 'package.json'), 'utf8')
-    ) as { ldapRest: { tested: string } };
+    // The ldap-rest the stack's image was built on: LDAP_REST_IMAGE when
+    // build.sh was given one, the Dockerfile's default otherwise. The contract
+    // test holds the fixtures to `ldapRest.tested`, so a recording made
+    // against another version says so rather than pass for it.
+    const image =
+      process.env.LDAP_REST_IMAGE ??
+      readFileSync(join(ROOT, 'Dockerfile'), 'utf8').match(
+        /^ARG LDAP_REST_IMAGE=(\S+)$/m
+      )?.[1];
+    expect(image, 'the image the stack was built on').toBeTruthy();
     save('recorded.json', {
-      ldapRest: ldapRest.tested,
+      ldapRest: (image as string).split(':').pop(),
+      image,
       date: new Date().toISOString().slice(0, 10),
     });
   });
@@ -148,7 +154,8 @@ test.describe('record the personas’ scopes', () => {
         twakeDepartmentLink: ORG.engineering,
       },
     });
-    save('contract/refusal-forbidden.json', await answer(response));
+    const recorded = (await answer(response)) as { body: { code?: string } };
+    save('contract/refusal-forbidden.json', recorded);
     if (response.ok()) {
       const created = (await response.json()) as { uid?: string };
       if (created.uid)
@@ -156,6 +163,8 @@ test.describe('record the personas’ scopes', () => {
           `/api/v1/ldap/users/${encodeURIComponent(created.uid)}`
         );
     }
-    expect(response.ok()).toBe(false);
+    // A refusal, and the one meant: an address left behind would give a 409.
+    expect(response.status()).toBe(403);
+    expect(recorded.body.code).toBe('forbidden');
   });
 });

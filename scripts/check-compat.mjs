@@ -20,11 +20,14 @@ const { ldapRest } = JSON.parse(readFileSync('package.json', 'utf8'));
 const MENTION = /compat\(ldap-rest[^)\n]*\)?/g;
 const TAG = /^compat\(ldap-rest<(\d+\.\d+\.\d+)\)$/;
 
-// `1.2.0-rc.1` compares as 1.2.0: a prerelease of the floor is below it.
-const parse = version => version.split('-')[0].split('.').map(Number);
+// A prerelease comes before its release: `1.2.0-rc.1` is below `1.2.0`.
+const parse = version => {
+  const [release, pre] = version.split('-');
+  return [...release.split('.').map(Number), pre === undefined ? 1 : 0];
+};
 const atMost = (a, b) => {
   const [x, y] = [parse(a), parse(b)];
-  for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i];
+  for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return x[i] < y[i];
   return true;
 };
 
@@ -46,7 +49,7 @@ function* files(dir) {
     if (statSync(path).isDirectory()) yield* files(path);
     else if (
       path !== SELF &&
-      (/\.(ts|mjs|js|css|sh|yaml|yml|json)$/.test(name) ||
+      (/\.(ts|mjs|js|css|sh|yaml|yml|json|html)$/.test(name) ||
         name === 'Dockerfile')
     )
       yield path;
@@ -54,9 +57,15 @@ function* files(dir) {
 }
 
 const failures = [];
-const scanned = ['src', 'public', 'docker', 'scripts', 'helm', 'e2e'].flatMap(
-  dir => [...files(dir)]
-);
+const scanned = [
+  'src',
+  'test',
+  'public',
+  'docker',
+  'scripts',
+  'helm',
+  'e2e',
+].flatMap(dir => [...files(dir)]);
 for (const path of [...scanned, 'Dockerfile']) {
   const text = readFileSync(path, 'utf8');
   for (const mention of text.matchAll(MENTION)) {
