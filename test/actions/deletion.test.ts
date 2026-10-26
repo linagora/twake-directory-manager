@@ -569,9 +569,17 @@ describe('actions/deletion', () => {
       expect(callsOf(calls, 'organizationChildren').slice(listed)).to.include(
         `organizationChildren(${engineering})`
       );
-      expect(callsOf(calls, 'organization').slice(reads)).to.deep.equal([
-        `organization(${engineering})`,
-      ]);
+      // Only it is read. happy-dom tells a `replaceState` as a change of
+      // hash, which a browser does not: on its own timer, the page may be
+      // drawn, and its card read, once more.
+      expect(callsOf(calls, 'organization').slice(reads)).to.include(
+        `organization(${engineering})`
+      );
+      expect(
+        callsOf(calls, 'organization')
+          .slice(reads)
+          .filter(call => call !== `organization(${engineering})`)
+      ).to.deep.equal([]);
     });
 
     it('should explain a refused deletion of a non-empty organization', async () => {
