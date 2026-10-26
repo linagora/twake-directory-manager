@@ -16,6 +16,13 @@ const rules = {
   '@typescript-eslint/no-explicit-any': 'warn',
   'prefer-const': 'error',
   'no-var': 'error',
+  // A module that keeps growing is one nobody holds in their head: a new page
+  // or action goes in a file of its own. The files over the budget today are
+  // listed in `oversized` below; that list only shrinks.
+  'max-lines': [
+    'error',
+    { max: 1200, skipComments: true, skipBlankLines: true },
+  ],
   // A promise nobody waits for fails with nobody listening: it is started
   // through `background` (src/shared/background.ts), which reports it. This
   // refuses the `void` that marked such a start; a bare call statement it
@@ -32,6 +39,17 @@ const rules = {
   // TypeScript resolves names itself, DOM types included, which `no-undef`
   // knows nothing about.
   'no-undef': 'off',
+};
+
+// The files over the line budget when it was set, each held to its size then
+// (comments and blank lines aside): it may shrink, not grow. Lower a figure
+// when the file does; remove the file when it goes under the budget; never
+// add one.
+const oversized = {
+  'src/DirectoryConsole.ts': 4080,
+  'src/components/EntityForm.ts': 1411,
+  'src/i18n.ts': 1340,
+  'test/console.test.ts': 11447,
 };
 
 export default [
@@ -59,11 +77,21 @@ export default [
       '@typescript-eslint/explicit-function-return-type': 'off',
       // chai asserts with property reads: `expect(x).to.be.true`.
       '@typescript-eslint/no-unused-expressions': 'off',
+      'max-lines': [
+        'error',
+        { max: 2500, skipComments: true, skipBlankLines: true },
+      ],
       'no-restricted-syntax': 'off',
     },
   },
+  ...Object.entries(oversized).map(([file, max]) => ({
+    files: [file],
+    rules: {
+      'max-lines': ['error', { max, skipComments: true, skipBlankLines: true }],
+    },
+  })),
   {
-    files: ['*.mjs', 'docker/*.mjs'],
+    files: ['*.mjs', 'docker/*.mjs', 'scripts/*.mjs'],
     languageOptions: { globals: globals.node },
   },
   { ignores: ['dist/', 'node_modules/', 'coverage/'] },

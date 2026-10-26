@@ -1,10 +1,14 @@
 name: Test
 
+# Every gate of the project, in one place: run on pull requests and on main,
+# and called by release.yml, so that a release cannot skip a check a pull
+# request runs.
 on:
   push:
     branches:
       - main
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -12,6 +16,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     strategy:
       fail-fast: false
@@ -41,8 +46,23 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      # Coverage is measured once, with the thresholds of .c8rc.json: a
+      # suite that stops covering what it covered fails the build.
       - name: Test
+        if: matrix.node-version != '24.x'
         run: npm test
+
+      - name: Test with coverage
+        if: matrix.node-version == '24.x'
+        run: npm run test:coverage
+
+      # Kept when the thresholds fail too: that is when the report is read.
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() && matrix.node-version == '24.x' }}
+        with:
+          name: coverage
+          path: coverage/lcov.info
+          retention-days: 14
 
       - name: Build
         run: npm run build
@@ -100,6 +120,7 @@ jobs:
 
   helm:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 

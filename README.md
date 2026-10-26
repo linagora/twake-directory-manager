@@ -294,11 +294,19 @@ and [storage](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugi
 
 ```sh
 npm ci
-npm test           # unit tests, no server needed
-npm run build      # bundles and page in dist/
+npm test               # unit tests, no server needed
+npm run test:coverage  # the same, with coverage (thresholds in .c8rc.json)
+npm run build          # bundles and page in dist/
 npm run lint
 npm run format:check
 ```
+
+A release is a tag `vX.Y.Z` on `main`. The commit under it bumps
+`package.json` with `npm version X.Y.Z --no-git-tag-version`, which also
+writes the version into the Helm chart, and adds a `## vX.Y.Z (date)` section
+to `CHANGELOG.md`: the release workflow refuses a tag that disagrees with any
+of the three, and takes the release notes from that section. A prerelease
+(`vX.Y.Z-rc.1`) follows the same rule, under its own version.
 
 To try a change against a directory, serve `dist/` from a local ldap-rest:
 

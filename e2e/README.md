@@ -5,8 +5,8 @@ with the release `Dockerfile`) against a real OpenLDAP holding the Twake schemas
 data, behind a real OpenID Connect provider (Dex). No mock, no stub. TypeScript +
 [Playwright](https://playwright.dev/), in a standalone npm package: `e2e/` has its own
 `package.json` and lockfile, out of the console's npm build. CI runs it: the `e2e` job of
-`.github/workflows/test.yml` (every push to main and pull request) and of `release.yml` (a tag
-publishes nothing unless it passes) builds the image, starts the stack, runs the suite with 2
+`.github/workflows/test.yml` (every push to main and pull request, and every tag through
+`release.yml`, which publishes nothing unless it passes) builds the image, starts the stack, runs the suite with 2
 workers and keeps the HTML report, the traces and the stack's logs as the `e2e-report` artifact.
 
 The scenarios come from the QA test plan
