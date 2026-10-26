@@ -200,6 +200,6 @@ else starts, a flaky test fails the run (`failOnFlakyTests`), so that one passin
 does not go unseen.
 
 A toast stays five seconds, longer than the next action takes: `ConsolePage.expectToast` hides
-the toast once it has read it, so that a second "Saved" is waited for rather than seen in the
-first. A test that asserts on `app.toast` itself after an action must say what sets the new
+and empties the toast once it has read it, the red one too, so that a second "Saved" is waited
+for rather than seen in the first. A test that asserts on `app.toast` itself after an action must say what sets the new
 toast apart (its text), or go through `expectToast`.
