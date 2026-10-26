@@ -10,8 +10,6 @@ import { DirectoryConsole } from '../../src/DirectoryConsole';
 export const baseUrl = 'http://localhost:8099';
 
 /** Minimal stand-in for the element a component renders into. */
-
-/** Minimal stand-in for the element a component renders into. */
 export function stubContainer(): HTMLElement & { innerHTML: string } {
   return {
     innerHTML: '',
@@ -21,14 +19,6 @@ export function stubContainer(): HTMLElement & { innerHTML: string } {
     removeEventListener: () => undefined,
   } as unknown as HTMLElement & { innerHTML: string };
 }
-
-/**
- * A container that keeps what a component writes into it apart, the way a
- * browser does: writing its `innerHTML` replaces the whole subtree (a new
- * filter input, a new list), while writing the list's own replaces only the
- * list. `builds` counts how many times the shell was written, which is how
- * many times the filter input was replaced.
- */
 
 /**
  * A container that keeps what a component writes into it apart, the way a
@@ -94,11 +84,6 @@ export function treeContainer(): HTMLElement & TreeContainer {
  * A console drawn into a container that answers each selector with the
  * element given for it: enough for an action that writes into the shell.
  */
-
-/**
- * A console drawn into a container that answers each selector with the
- * element given for it: enough for an action that writes into the shell.
- */
 export function consoleIn(
   elements: Record<string, unknown>,
   language = 'en'
@@ -114,8 +99,6 @@ export function consoleIn(
   };
   return app;
 }
-
-/** A toast element, which records the last message it was given. */
 
 /** A toast element, which records the last message it was given. */
 export function toastElement(): { textContent: string } {

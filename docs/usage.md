@@ -384,7 +384,7 @@ not a failure.
 
 The console ships with English, French and Mongolian. A further one is a
 catalogue in `src/i18n.ts` — `availableLanguages` lists them all, and the
-catalogue test in `test/console.test.ts` walks that list — plus, on the
+catalogue test in `test/translator.test.ts` walks that list — plus, on the
 deployment side, the matching key in every schema `label`; a label without it
 falls back to English, so a half-translated screen stays readable.
 A sentence that holds a count has one key per plural form the language tells

@@ -13,6 +13,7 @@ describe('session', () => {
     beforeEach(() => {
       reloads = 0;
       sessionStorage.clear();
+      // An own property over the prototype's method, taken away after.
       window.location.reload = (): void => {
         reloads++;
       };
@@ -20,6 +21,7 @@ describe('session', () => {
 
     afterEach(() => {
       Object.defineProperty(globalThis, 'sessionStorage', original);
+      delete (window.location as { reload?: unknown }).reload;
     });
 
     it('should reload once a minute at most', () => {

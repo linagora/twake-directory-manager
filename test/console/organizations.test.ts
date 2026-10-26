@@ -462,6 +462,8 @@ describe('Directory console: organizations', () => {
         entities: [organizations],
         scope: granted,
         renderMain: async () => undefined,
+        // Counted again after a creation; the transit branch is not served.
+        readMembers: async () => null,
       });
       const created: (string | undefined)[] = [];
       Object.assign((app as unknown as { api: object }).api, {

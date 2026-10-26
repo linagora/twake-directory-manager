@@ -107,7 +107,7 @@ export default [
     languageOptions: {
       parser: tsparser,
       parserOptions: { ecmaVersion: 2020, sourceType: 'module' },
-      globals: { ...globals.node, ...globals.mocha },
+      globals: { ...globals.node, ...globals.mocha, ...globals.browser },
     },
     plugins: { '@typescript-eslint': tseslint, prettier },
     rules: {

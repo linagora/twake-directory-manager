@@ -93,8 +93,6 @@ export const groups: EntityDescriptor = {
 };
 
 /** Groups as the Twake schema has them: attached to the organization tree. */
-
-/** Groups as the Twake schema has them: attached to the organization tree. */
 export const twakeGroups: EntityDescriptor = {
   ...groups,
   schema: {
@@ -128,8 +126,6 @@ export const mailboxTypes: EntityDescriptor = {
   endpoint: '/api/v1/ldap/mailboxTypes',
   kind: 'flat',
 };
-
-/** A group as the directory holds it, before the form edits it. */
 
 /** A group as the directory holds it, before the form edits it. */
 export const staff: Entry = {

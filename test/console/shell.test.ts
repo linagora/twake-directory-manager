@@ -864,6 +864,46 @@ describe('Directory console: the shell and the overview', () => {
       );
     });
 
+    describe('what the browser remembers', () => {
+      const original = Object.getOwnPropertyDescriptor(
+        globalThis,
+        'localStorage'
+      ) as PropertyDescriptor;
+      afterEach(() => {
+        Object.defineProperty(globalThis, 'localStorage', original);
+      });
+      const fresh = () =>
+        new DirectoryConsole({
+          containerId: 'console',
+          apiBaseUrl: baseUrl,
+        }) as unknown as {
+          translator: Translator;
+          referenceOpen(): boolean;
+        };
+
+      it('should start in the language of the last visit, with the reference section as it was left', () => {
+        localStorage.setItem('ldap-rest.console.language', 'fr');
+        localStorage.setItem('ldap-rest.console.referenceOpen', '1');
+        const app = fresh();
+        expect(app.translator.language).to.equal('fr');
+        expect(app.referenceOpen()).to.equal(true);
+      });
+
+      it('should start in English with the section closed when storage is denied', () => {
+        // A browser that refuses storage (a private window with it blocked)
+        // throws on the property itself.
+        Object.defineProperty(globalThis, 'localStorage', {
+          configurable: true,
+          get: () => {
+            throw new Error('denied');
+          },
+        });
+        const app = fresh();
+        expect(app.translator.language).to.equal('en');
+        expect(app.referenceOpen()).to.equal(false);
+      });
+    });
+
     it('should keep an open panel, and what was typed, across a change of language', () => {
       const typed = { hidden: false, value: 'E9901' };
       let drawn = false;
