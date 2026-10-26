@@ -33,6 +33,7 @@ import type {
   SchemaAttribute,
 } from '../types';
 import { background, type Reporter } from '../shared/background';
+import { rememberPageSize, storedPageSize } from '../console/settings';
 import { html, render, type SafeHtml } from '../shared/html';
 import type { Announce } from '../ui/announce';
 import { dataTable } from '../ui/table';
@@ -116,7 +117,6 @@ function asEntryList(answer: Record<string, Entry> | EntryList): EntryList {
 export const SEARCH_ANYWHERE = '*';
 
 const PAGE_SIZES = [25, 50, 100, 200];
-const PAGE_SIZE_KEY = 'ldap-rest.console.pageSize';
 
 /**
  * The entries an import has just created, shown in the list in place of a
@@ -227,16 +227,6 @@ function text(value: unknown): string {
   return Array.isArray(value) ? value.join(', ') : String(value);
 }
 
-/** Remembered page size, or the first sensible default. */
-function storedPageSize(): number {
-  try {
-    const stored = Number(localStorage.getItem(PAGE_SIZE_KEY));
-    if (PAGE_SIZES.includes(stored)) return stored;
-    // eslint-disable-next-line no-empty
-  } catch {}
-  return PAGE_SIZES[0];
-}
-
 export class EntityList {
   private readonly options: ListOptions;
   private readonly columns: string[];
@@ -248,7 +238,7 @@ export class EntityList {
   private search = '';
   private searchAttribute: string;
   private page = 0;
-  private pageSize = storedPageSize();
+  private pageSize = storedPageSize(PAGE_SIZES) ?? PAGE_SIZES[0];
   private loading = false;
   private loaded = false;
   private error: string | null = null;
@@ -1052,10 +1042,7 @@ export class EntityList {
       ?.addEventListener('change', event => {
         this.pageSize = Number((event.target as HTMLSelectElement).value);
         this.page = 0;
-        try {
-          localStorage.setItem(PAGE_SIZE_KEY, String(this.pageSize));
-          // eslint-disable-next-line no-empty
-        } catch {}
+        rememberPageSize(this.pageSize);
         this.turnPage();
       });
 

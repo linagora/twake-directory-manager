@@ -12,6 +12,7 @@ const LANGUAGE_KEY = 'ldap-rest.console.language';
 const REFERENCE_OPEN_KEY = 'ldap-rest.console.referenceOpen';
 /** The reader's choice of contrast: `high`, `standard`, or none (the system's). */
 const CONTRAST_KEY = 'ldap-rest.console.contrast';
+const PAGE_SIZE_KEY = 'ldap-rest.console.pageSize';
 /** The system's wish for more contrast, followed until the reader chooses. */
 const MORE_CONTRAST = '(prefers-contrast: more)';
 
@@ -64,9 +65,20 @@ export function rememberContrast(on: boolean): void {
   write(CONTRAST_KEY, on ? 'high' : 'standard');
 }
 
+/** The rows a page of a list shows, as last chosen, if among `offered`. */
+export function storedPageSize(offered: readonly number[]): number | undefined {
+  const stored = Number(read(PAGE_SIZE_KEY));
+  return offered.includes(stored) ? stored : undefined;
+}
+
+export function rememberPageSize(size: number): void {
+  write(PAGE_SIZE_KEY, String(size));
+}
+
 /**
  * Tell when the system's wish for contrast changes; the reader's own choice,
- * once made, is read by `highContrast` over it.
+ * once made, is read by `highContrast` over it. A browser without
+ * `addEventListener` on a media query (Safari before 14) is not told.
  *
  * @param listener what to run then
  */

@@ -337,6 +337,11 @@
   padding-bottom: 4px;
 }
 
+/* The contrast box, a line under the language. */
+.dc-contrast {
+  margin-top: 8px;
+}
+
 /* ------------------------------------------------------------------ header */
 
 .dc-content {
@@ -2573,8 +2578,6 @@ textarea.dc-policy-text {
   }
 }
 
-/* Forced colours draw no shadow, and every ring above is one: an outline
-   there instead, in the system's own colour. */
 /* ------------------------------------------------------------ high contrast */
 
 /* Switched on from the sidebar, or by the system (`prefers-contrast: more`)
@@ -2629,8 +2632,44 @@ textarea.dc-policy-text {
 }
 
 .dc-app.dc-contrast-high .dc-nav-icon,
-.dc-app.dc-contrast-high .dc-entity-icon {
+.dc-app.dc-contrast-high .dc-nav-list > li .dc-nav-icon,
+.dc-app.dc-contrast-high .dc-entity-icon,
+.dc-app.dc-contrast-high .dc-cards .dc-card .dc-entity-icon {
   --dc-tint: #000000;
+}
+
+/* What the dark theme sets by colour rather than by token, told again here
+   (a dark system asking for more contrast meets both). */
+.dc-app.dc-contrast-high .dc-button-primary,
+.dc-app.dc-contrast-high .dc-button-destructive,
+.dc-app.dc-contrast-high .dc-nav-item.dc-active .dc-nav-icon {
+  color: #fff;
+}
+
+.dc-app.dc-contrast-high .dc-header > .dc-scope-empty::before {
+  background: #000;
+}
+
+.dc-app.dc-contrast-high .dc-import-stat-ok strong {
+  color: #000;
+}
+
+.dc-app.dc-contrast-high select.dc-input {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23000000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 4.5 3 3 3-3'/%3E%3C/svg%3E");
+}
+
+.dc-app.dc-contrast-high .dc-search input[type='search'] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23000000' stroke-width='1.8' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3.5 3.5'/%3E%3C/svg%3E");
+}
+
+/* The bar and its track, told apart without colour. */
+.dc-app.dc-contrast-high .dc-progress {
+  background: #fff;
+  border: 1px solid #000;
+}
+
+.dc-app.dc-contrast-high .dc-progress-bar {
+  background: #000;
 }
 
 .dc-app.dc-contrast-high .dc-input::placeholder {
@@ -2640,6 +2679,7 @@ textarea.dc-policy-text {
 .dc-app.dc-contrast-high .dc-button[disabled] {
   opacity: 1;
   color: #595959;
+  background: #fff;
   border-color: #595959;
 }
 
@@ -2653,12 +2693,25 @@ textarea.dc-policy-text {
   box-shadow: inset 4px 0 0 #000000;
 }
 
-.dc-app.dc-contrast-high a,
+/* The bar and the focus ring, both drawn as shadows: together when focused. */
+.dc-app.dc-contrast-high .dc-nav-item[aria-current='page']:focus-visible,
+.dc-app.dc-contrast-high
+  .dc-tree-node.dc-selected
+  > .dc-tree-row
+  .dc-tree-label:focus-visible {
+  box-shadow:
+    inset 4px 0 0 #000000,
+    var(--dc-focus);
+}
+
+.dc-app.dc-contrast-high a:not(.dc-button),
 .dc-app.dc-contrast-high .dc-link,
 .dc-app.dc-contrast-high .dc-path-link {
   text-decoration: underline;
 }
 
+/* Forced colours draw no shadow, and every ring above is one: an outline
+   there instead, in the system's own colour. */
 @media (forced-colors: active) {
   .dc-app :focus-visible {
     outline: 2px solid CanvasText !important;

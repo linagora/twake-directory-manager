@@ -1,11 +1,14 @@
 import { expect } from 'chai';
 import {
   highContrast,
+  onContrastChange,
   referenceOpen,
   rememberContrast,
   rememberLanguage,
+  rememberPageSize,
   rememberReference,
   storedLanguage,
+  storedPageSize,
 } from '../../src/console/settings';
 
 describe('the settings the browser remembers', () => {
@@ -35,6 +38,30 @@ describe('the settings the browser remembers', () => {
     rememberContrast(true);
     systemWants(false);
     expect(highContrast()).to.equal(true);
+  });
+
+  it('should tell when the system changes its wish, and read the choice over it', () => {
+    let fire: (() => void) | undefined;
+    (globalThis as { matchMedia?: unknown }).matchMedia = () => ({
+      matches: true,
+      addEventListener: (_type: string, listener: () => void) => {
+        fire = listener;
+      },
+    });
+    let told = 0;
+    onContrastChange(() => told++);
+    fire?.();
+    expect(told).to.equal(1);
+    rememberContrast(false);
+    expect(highContrast()).to.equal(false);
+  });
+
+  it('should remember a page size among those offered', () => {
+    expect(storedPageSize([25, 50])).to.equal(undefined);
+    rememberPageSize(50);
+    expect(storedPageSize([25, 50])).to.equal(50);
+    rememberPageSize(7);
+    expect(storedPageSize([25, 50])).to.equal(undefined);
   });
 
   it('should go by its defaults when storage is denied', () => {
