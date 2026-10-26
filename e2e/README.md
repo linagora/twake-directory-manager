@@ -159,6 +159,20 @@ name: 'France' })` gives `France <unique>`. Nothing is created in Sales nor Engi
 | `tenant`                            | `{ org, admin }`: an organization of its own under the root and its local administrator (password `secret`)                                                                                                                                                                                        |
 | `loginInNewContext(account, hash?)` | Signs another account in, in a browser context of its own; returns its `ConsolePage`                                                                                                                                                                                                               |
 
+### Recording the personas' scopes
+
+`test/rights.test.ts`, in the console's unit suite, reads the rights of each persona from the
+scope the real server describes rather than from one written by hand: `test/fixtures/scopes/*.json`
+and `test/fixtures/config.json`. `tests/record-scopes.spec.ts` writes them, against the running
+stack, and is skipped otherwise:
+
+```sh
+RECORD_SCOPES=1 npx playwright test record-scopes
+```
+
+Run it again, and commit what changed, whenever `scripts/qa-environment/ldap/seed.ldif` or the
+authorization settings of `scripts/qa-environment/docker-compose.yaml` change.
+
 ### Flakiness
 
 On a Docker host, Chromium aborts the requests in flight with `net::ERR_NETWORK_CHANGED` whenever

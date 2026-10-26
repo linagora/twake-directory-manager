@@ -1,0 +1,60 @@
+{
+  "user": "uid=grace,ou=users,dc=example,dc=com",
+  "unrestricted": false,
+  "described": true,
+  "source": "authzLinid1",
+  "sources": [
+    "authzLinid1"
+  ],
+  "branches": [],
+  "transit": "ou=Transit,ou=organization,dc=example,dc=com",
+  "linksAnyDomain": false,
+  "passwordPolicies": false,
+  "entities": [
+    {
+      "name": "users",
+      "base": "ou=users,dc=example,dc=com",
+      "create": false
+    },
+    {
+      "name": "positions",
+      "base": "ou=positions,dc=example,dc=com",
+      "create": false
+    },
+    {
+      "name": "titles",
+      "base": "ou=twakeTitle,ou=nomenclature,dc=example,dc=com",
+      "create": false
+    },
+    {
+      "name": "accountStatuses",
+      "base": "ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com",
+      "create": false
+    },
+    {
+      "name": "listTypes",
+      "base": "ou=twakeListType,ou=nomenclature,dc=example,dc=com",
+      "create": false
+    },
+    {
+      "name": "mailboxTypes",
+      "base": "ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com",
+      "create": false
+    },
+    {
+      "name": "domains",
+      "base": "ou=domains,ou=nomenclature,dc=example,dc=com",
+      "create": false
+    },
+    {
+      "name": "groups",
+      "base": "ou=groups,dc=example,dc=com",
+      "create": false
+    },
+    {
+      "name": "organizations",
+      "base": "ou=organization,dc=example,dc=com",
+      "create": false
+    }
+  ]
+}

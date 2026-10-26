@@ -2487,7 +2487,9 @@ describe('Directory console', () => {
         scope: Scope | null;
         readTransit(): Promise<unknown>;
         showTransitWaiting(main: unknown, generation: number): Promise<void>;
-        organizationRights(dn: string): { write: boolean; delete: boolean };
+        rights: {
+          organizationRights(dn: string): { write: boolean; delete: boolean };
+        };
         claim(entity: EntityDescriptor, id: string): Promise<void>;
       };
       /** A console of this scope, the transit branch holding these entries */
@@ -2586,19 +2588,21 @@ describe('Directory console', () => {
         // Every administrator writes the transit branch to hand entries
         // over: Edit was offered on it, and Save refused at the end.
         const local = setup(eric(), []).app;
-        expect(local.organizationRights(transit)).to.deep.equal({
+        expect(local.rights.organizationRights(transit)).to.deep.equal({
           write: false,
           delete: false,
         });
         // An organization is judged by its parent: Engineering is changed
         // from above it, what it holds by its administrator (#167).
-        expect(local.organizationRights(`ou=Engineering,${top}`)).to.deep.equal(
-          { write: false, delete: false }
-        );
         expect(
-          local.organizationRights(`ou=Backend,ou=Engineering,${top}`)
+          local.rights.organizationRights(`ou=Engineering,${top}`)
+        ).to.deep.equal({ write: false, delete: false });
+        expect(
+          local.rights.organizationRights(`ou=Backend,ou=Engineering,${top}`)
         ).to.deep.equal({ write: true, delete: true });
-        expect(local.organizationRights(`ou=Sales,${top}`)).to.deep.equal({
+        expect(
+          local.rights.organizationRights(`ou=Sales,${top}`)
+        ).to.deep.equal({
           write: false,
           delete: false,
         });
@@ -2609,7 +2613,7 @@ describe('Directory console', () => {
           },
           []
         ).app;
-        expect(admin.organizationRights(transit)).to.deep.equal({
+        expect(admin.rights.organizationRights(transit)).to.deep.equal({
           write: true,
           delete: true,
         });
@@ -2630,12 +2634,12 @@ describe('Directory console', () => {
           []
         ).app;
         expect(
-          narrowed.organizationRights(`ou=Engineering,${top}`)
+          narrowed.rights.organizationRights(`ou=Engineering,${top}`)
         ).to.deep.equal({ write: true, delete: false });
         // The most specific branch holding the parent judges, as the
         // server's does; and Delete needs every branch below as well.
         const backend = `ou=Backend,ou=Engineering,${top}`;
-        expect(narrowed.organizationRights(backend)).to.deep.equal({
+        expect(narrowed.rights.organizationRights(backend)).to.deep.equal({
           write: true,
           delete: false,
         });
@@ -2649,9 +2653,9 @@ describe('Directory console', () => {
           },
           []
         ).app;
-        expect(below.organizationRights(`ou=Engineering,${top}`)).to.deep.equal(
-          { write: true, delete: false }
-        );
+        expect(
+          below.rights.organizationRights(`ou=Engineering,${top}`)
+        ).to.deep.equal({ write: true, delete: false });
       });
     });
   });
@@ -6699,9 +6703,9 @@ describe('Directory console', () => {
       Object.assign(app as unknown as object, { scope });
       return (
         app as unknown as {
-          inheritsDomains(entity: EntityDescriptor): boolean;
+          rights: { inheritsDomains(entity: EntityDescriptor): boolean };
         }
-      ).inheritsDomains(organizations);
+      ).rights.inheritsDomains(organizations);
     };
 
     it('should be those linked above, unless the caller writes the top', () => {
