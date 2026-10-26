@@ -19,6 +19,6 @@ fi
 docker build "${build_args[@]}" -t twake-directory-manager-qa -f "$REPO_DIR/Dockerfile" "$REPO_DIR"
 
 # Pinned tags: a local copy is as good when the registry does not answer
-for image in osixia/openldap:1.5.0 ghcr.io/dexidp/dex:v2.41.1; do
+for image in "${QA_LDAP_IMAGE:-osixia/openldap:1.5.0}" ghcr.io/dexidp/dex:v2.41.1; do
   docker pull -q "$image" || docker image inspect "$image" >/dev/null
 done

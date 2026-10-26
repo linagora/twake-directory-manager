@@ -7,7 +7,10 @@
 # host needs `127.0.0.1 sso` in /etc/hosts.
 services:
   ldap:
-    image: osixia/openldap:1.5.0
+    # OpenLDAP 2.4, the image start.sh knows how to fill (its variables, its ldapi socket, its
+    # cn=config). QA_LDAP_IMAGE tries another; a 2.6 image (bitnamilegacy/openldap:2.6.10) needs
+    # its own variables and bootstrap in start.sh first (#230).
+    image: ${QA_LDAP_IMAGE:-osixia/openldap:1.5.0}
     environment:
       - LDAP_ORGANISATION=Example Corp
       - LDAP_DOMAIN=example.com

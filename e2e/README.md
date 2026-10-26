@@ -31,6 +31,12 @@ npx playwright test                    # whole suite, ~1 min with 4 workers
 ./scripts/stop.sh                      # removes containers, network and volumes
 ```
 
+The stack runs OpenLDAP 2.4 (`osixia/openldap:1.5.0`, which `start.sh` knows how to fill:
+its variables, its `ldapi` socket, its `cn=config`). `QA_LDAP_IMAGE=<image>` tries another, for
+`build.sh` and `start.sh` alike; a maintained 2.6 image (`bitnamilegacy/openldap:2.6.10`) has
+other variables, listens on 1389 and loads schemas its own way, so `start.sh` needs a second
+bootstrap before the suite runs on it (#230).
+
 Run a subset:
 
 ```bash
