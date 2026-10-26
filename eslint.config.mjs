@@ -97,7 +97,7 @@ const rules = {
 // add one.
 const oversized = {
   'src/DirectoryConsole.ts': 3827,
-  'src/components/EntityForm.ts': 1408,
+  'src/components/EntityForm.ts': 1406,
 };
 
 // What the types tell on top: a promise nobody waits for or handles, a

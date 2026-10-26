@@ -29,7 +29,7 @@ Conventions).
 - [x] NAV-05 (P3) Narrow screen and dark mode — `navigation.spec.ts` (dark mode: background and contrast of the headings; focus visibility not judged)
 - [x] NAV-06 (P3) Mongolian interface — `navigation.spec.ts`
 - [x] NAV-07 (P3) The bare host opens the console — `navigation.spec.ts`
-- [x] NAV-08 (P2) Side panel is a modal dialog: focus, Tab, Escape — `navigation.spec.ts`
+- [x] NAV-08 (P2) Side panel is a modal dialog: focus, Tab, Escape — `navigation.spec.ts` (a field's help is a button the keyboard reaches, hidden by Escape without closing the form, #216)
 - [x] NAV-09 (P3) Side panel opens at its top and closes when the page changes — `navigation.spec.ts`
 - [x] NAV-10 (P3) An unknown address says there is no page there, with a link to the Overview — `navigation.spec.ts` (`#/passwordPolicies`, `#/accountStates`; `#/` and the bare console still open the Overview)
 - [x] NAV-11 (P2) The frame for keyboard and screen-reader users: a title per page (#214), a skip link to the main area (#215), the sidebar as lists (#219), the page's `lang` and the focus kept on the Language select (#209) — `navigation.spec.ts`
@@ -61,6 +61,7 @@ Conventions).
 - [x] LIST-13 (P3) The LINAGORA badge covers no row — `list.spec.ts`
 - [x] LIST-14 (P2) The selection joins a group, and changes state, in one action — `list.spec.ts` (#170)
 - [x] LIST-15 (P2) The search ("Search Users"), its scope ("Search in"), the table and each row's box ("Select alice") are named for a screen reader, in French too — `list.spec.ts` (#211; what a load brings and each change of selection are said to a screen reader through the frame's hidden live region, #212)
+- [x] LIST-16 (P2) The keyboard keeps its place when the list is redrawn: List without searching focuses the first row's name, a ticked box and the header's box keep the focus, Per page keeps it, Next keeps it or hands it to Previous at the last page — `list.spec.ts` (#208)
 
 ## User accounts
 
@@ -95,7 +96,7 @@ Conventions).
 
 ## Organizations
 
-- [x] ORG-01 (P1) Browse the tree and open a card — `organizations.spec.ts` (the Sales card lists People (1) and Groups (1) in tables, with name, email, position or group type, and status, #128)
+- [x] ORG-01 (P1) Browse the tree and open a card — `organizations.spec.ts` (the Sales card lists People (1) and Groups (1) in tables, with name, email, position or group type, and status, #128; opened from the keyboard, an arrow keeps the focus and says its new state, #208)
 - [x] ORG-02 (P1) Tree filter types forwards — `organizations.spec.ts` (from two letters the filter lists paths from the whole tree, #132; the filter is named "Filter organizations", #211)
 - [x] ORG-03 (P2) Create a sub-organization — `organizations.spec.ts`
 - [x] ORG-04 (P2) Edit an organization: managers, local administrators, mail domains — `organizations.spec.ts` (Mail domains is a typed search since v0.8.0, no longer a select; the new administrator's banner is checked at once, without the 5 min cache wait)

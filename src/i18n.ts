@@ -324,6 +324,7 @@ const en: Catalogue = {
   'form.discardQuestion': 'Discard what you typed?',
   'form.keepEditing': 'Keep editing',
   'form.discard': 'Discard',
+  'form.helpOn': 'Help on {label}',
   'password.set': 'Password changed',
   'password.confirmButton': 'Reset password',
 
@@ -810,6 +811,7 @@ const fr: Catalogue = {
   'form.discardQuestion': 'Abandonner votre saisie ?',
   'form.keepEditing': 'Continuer la saisie',
   'form.discard': 'Abandonner',
+  'form.helpOn': 'Aide sur {label}',
   'password.set': 'Mot de passe modifié',
   'password.confirmButton': 'Réinitialiser',
 
@@ -1254,6 +1256,7 @@ const mn: Catalogue = {
   'form.discardQuestion': 'Оруулсан мэдээллээ хаях уу?',
   'form.keepEditing': 'Үргэлжлүүлэх',
   'form.discard': 'Хаях',
+  'form.helpOn': '{label} тусламж',
   'password.set': 'Нууц үг солигдлоо',
   'password.confirmButton': 'Дахин тохируулах',
 

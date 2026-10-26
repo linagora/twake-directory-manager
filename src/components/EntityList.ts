@@ -33,6 +33,7 @@ import type {
   SchemaAttribute,
 } from '../types';
 import { background, type Reporter } from '../shared/background';
+import { selectorValue } from '../shared/dom';
 import { html, render, type SafeHtml } from '../shared/html';
 import type { Announce } from '../ui/announce';
 import { dataTable } from '../ui/table';
@@ -213,7 +214,23 @@ export interface ListOptions {
 const READ_CONCURRENCY = 4;
 
 /** Controls a repaint must not steal the caret from. */
-const FOCUSABLE = ['[data-search]', '[data-search-attribute]'];
+/**
+ * The controls a repaint replaces, told apart by what survives it: the
+ * focus, and the caret of a text field, are put back on the new one. A row's
+ * box and a bulk action are named by their data (see `selectorOf`).
+ */
+const KEPT_FOCUS = [
+  '[data-search]',
+  '[data-search-attribute]',
+  '[data-select-all]',
+  '[data-page-size]',
+  '[data-page="1"]',
+  '[data-page="-1"]',
+  '[data-export]',
+  '[data-delete-selected]',
+  '[data-list-all]',
+  '.dc-empty',
+];
 
 interface FocusState {
   selector: string;
@@ -793,15 +810,26 @@ export class EntityList {
     if (!root || typeof document === 'undefined') return null;
     const active = document.activeElement as HTMLInputElement | null;
     if (!active) return null;
-    for (const selector of FOCUSABLE) {
-      const candidate = root.querySelector(selector);
-      if (candidate && candidate === active)
-        return {
-          selector,
-          start: active.selectionStart ?? null,
-          end: active.selectionEnd ?? null,
-        };
-    }
+    const selector = this.selectorOf(root, active);
+    if (!selector) return null;
+    return {
+      selector,
+      start: active.selectionStart ?? null,
+      end: active.selectionEnd ?? null,
+    };
+  }
+
+  /** What names the focused control once it is drawn anew, if anything. */
+  private selectorOf(root: HTMLElement, active: HTMLElement): string | null {
+    for (const selector of KEPT_FOCUS)
+      if (root.querySelector(selector) === active) return selector;
+    const { select, bulkAction } = (active.dataset ?? {}) as {
+      select?: string;
+      bulkAction?: string;
+    };
+    if (select !== undefined) return `[data-select="${selectorValue(select)}"]`;
+    if (bulkAction !== undefined)
+      return `[data-bulk-action="${selectorValue(bulkAction)}"]`;
     return null;
   }
 
@@ -813,7 +841,11 @@ export class EntityList {
   private restoreFocus(state: FocusState | null): void {
     const root = this.root;
     if (!root || !state) return;
-    const target = root.querySelector<HTMLInputElement>(state.selector);
+    const drawn = root.querySelector<HTMLInputElement>(state.selector);
+    const target =
+      drawn && !(drawn as HTMLElement & { disabled?: boolean }).disabled
+        ? drawn
+        : this.focusInstead(root, state.selector);
     if (!target) return;
     target.focus();
     if (state.start !== null && typeof target.setSelectionRange === 'function')
@@ -824,25 +856,54 @@ export class EntityList {
       }
   }
 
+  /**
+   * Where the focus goes when the control it was on is gone or disabled:
+   * from a pager button at its end to the other one, else to the count;
+   * from a bulk action, gone with the selection, to the header's box; from
+   * List without searching, or a message, to the first row's name, else to
+   * the message shown.
+   */
+  private focusInstead(
+    root: HTMLElement,
+    selector: string
+  ): HTMLInputElement | null {
+    const find = (query: string): HTMLInputElement | null =>
+      root.querySelector<HTMLInputElement>(query);
+    if (selector.startsWith('[data-page=')) {
+      const other = find(
+        selector === '[data-page="1"]' ? '[data-page="-1"]' : '[data-page="1"]'
+      );
+      return other && !other.disabled ? other : find('.dc-count');
+    }
+    if (/^\[data-(export|bulk-action|delete-selected)/.test(selector))
+      return find('[data-select-all]');
+    if (selector === '[data-list-all]' || selector === '.dc-empty')
+      return find('.dc-row-link') ?? find('.dc-empty');
+    return null;
+  }
+
   private bodyMarkup(slice: [string, Entry][]): SafeHtml {
     const { translator } = this.options;
     if (this.loading)
-      return html`<p class="dc-empty">${translator.t('app.loading')}</p>`;
+      return html`<p class="dc-empty" tabindex="-1">${translator.t('app.loading')}</p>`;
     if (this.error)
-      return html`<p class="dc-empty dc-error-block">${this.error}</p>`;
+      return html`<p class="dc-empty dc-error-block" tabindex="-1">${this.error}</p>`;
     if (
       !this.imported &&
       !this.listable() &&
       this.under === undefined &&
       this.query.length < SEARCH_MINIMUM
     )
-      return html`<p class="dc-empty">${translator.t('list.searchGuard', {
-        count: SEARCH_MINIMUM,
-      })}<br /><button type="button" class="dc-button" data-list-all>${translator.t(
+      return html`<p class="dc-empty" tabindex="-1">${translator.t(
+        'list.searchGuard',
+        {
+          count: SEARCH_MINIMUM,
+        }
+      )}<br /><button type="button" class="dc-button" data-list-all>${translator.t(
         'list.listEverything'
       )}</button></p>`;
     if (this.entries.length === 0)
-      return html`<p class="dc-empty">${
+      return html`<p class="dc-empty" tabindex="-1">${
         // Nobody of the department in what the server kept is no proof
         // that nobody is in it.
         this.under !== undefined && this.truncated
@@ -1005,7 +1066,7 @@ export class EntityList {
             )}
           </select>
         </label>
-        <span class="dc-count">${translator.t('list.count', {
+        <span class="dc-count" tabindex="-1">${translator.t('list.count', {
           from: from + 1,
           to: from + shown,
           total,

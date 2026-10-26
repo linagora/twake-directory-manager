@@ -1656,13 +1656,21 @@
   place-items: center;
   width: 16px;
   height: 16px;
+  padding: 0;
   border-radius: 50%;
   border: 1px solid var(--dc-line-strong);
+  background: none;
+  font: inherit;
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
   color: var(--dc-muted);
   cursor: help;
+}
+
+.dc-help:focus-visible {
+  outline: none;
+  box-shadow: var(--dc-focus);
 }
 
 .dc-help:hover {
@@ -1686,12 +1694,21 @@
   visibility: hidden;
   opacity: 0;
   transition: opacity 0.12s;
-  pointer-events: none;
 }
 
-.dc-help:hover + .dc-tooltip {
+/* Shown under the pointer, under the keyboard's focus, once pressed, and
+   while the pointer reads it; Escape dismisses it until the help is left. */
+.dc-help:hover + .dc-tooltip,
+.dc-help:focus-visible + .dc-tooltip,
+.dc-help[aria-expanded='true'] + .dc-tooltip,
+.dc-tooltip:hover {
   visibility: visible;
   opacity: 1;
+}
+
+.dc-tooltip.dc-dismissed {
+  visibility: hidden !important;
+  opacity: 0 !important;
 }
 
 .dc-required {
@@ -2294,9 +2311,12 @@ select.dc-input {
   outline: none;
 }
 
-/* The lead of an import step takes the focus for the screen reader; it is
-   no control, and shows no ring. */
-[data-step-lead]:focus {
+/* The lead of an import step, a list's message and its count take the focus
+   for the screen reader when the control it was on is gone; none is a
+   control, and none shows a ring. */
+[data-step-lead]:focus,
+.dc-empty:focus,
+.dc-count:focus {
   outline: none;
 }
 

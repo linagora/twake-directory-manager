@@ -28,6 +28,60 @@ describe('EntityForm', () => {
       onCancel: () => undefined,
     });
 
+  it('should show a field’s help to the keyboard, and hide it on Escape without closing the form', async () => {
+    // The "?" was a span shown on hover only: a keyboard user never saw the
+    // help, and Escape closed the whole form (#216).
+    const container = document.createElement('div');
+    document.body.append(container);
+    const helped: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          uid: { type: 'string', role: 'identifier', required: true },
+          employeeNumber: {
+            type: 'string',
+            label: { en: 'Employee ID' },
+            help: { en: 'The number HR knows the person by' },
+          },
+        },
+      },
+    };
+    await new EntityForm({
+      entity: helped,
+      translator: new Translator('en'),
+      pointerOptions: () => Promise.resolve([]),
+      onSubmit: () => Promise.resolve(),
+      onCancel: () => undefined,
+    }).render(container);
+    const help = container.querySelector<HTMLElement>('button.dc-help');
+    const tip = container.querySelector<HTMLElement>('#dc-help-employeeNumber');
+    if (!help || !tip) throw new Error('no help');
+    expect(help.getAttribute('aria-label')).to.equal('Help on Employee ID');
+    expect(help.getAttribute('aria-describedby')).to.equal(
+      'dc-help-employeeNumber'
+    );
+    expect(
+      container
+        .querySelector('#dc-field-employeeNumber')
+        ?.getAttribute('aria-describedby')
+    ).to.equal('dc-help-employeeNumber');
+    help.focus();
+    help.click();
+    expect(help.getAttribute('aria-expanded')).to.equal('true');
+    help.click();
+    expect(help.getAttribute('aria-expanded')).to.equal('false');
+    const escape = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      cancelable: true,
+      bubbles: true,
+    });
+    help.dispatchEvent(escape);
+    expect(escape.defaultPrevented).to.equal(true);
+    expect(tip.classList.contains('dc-dismissed')).to.equal(true);
+    help.dispatchEvent(new Event('blur'));
+    expect(tip.classList.contains('dc-dismissed')).to.equal(false);
+  });
+
   it('should group named fields in a fieldset, and the rest in a plain block', async () => {
     // A fieldset with no legend was announced as a group with no name (#211).
     const grouped: EntityDescriptor = {
@@ -400,9 +454,10 @@ describe('EntityForm', () => {
     it('should explain a field on demand', async () => {
       const container = stubContainer();
       await form().render(container);
-      // Not focusable: a panel focuses its first field, and opened on it.
-      expect(container.innerHTML).to.include(
-        '<span class="dc-help" aria-hidden="true">?</span>'
+      // A button the keyboard reaches, named after the field (#216); the
+      // panel's first focus skips it.
+      expect(container.innerHTML).to.match(
+        /<button type="button" class="dc-help" aria-label="Help on Employee Number"\s+aria-describedby="dc-help-employeeNumber" aria-expanded="false">\?<\/button>/
       );
       expect(container.innerHTML).to.match(
         /<span class="dc-tooltip" role="tooltip" id="dc-help-employeeNumber">The number HR knows the person by<\/span>/

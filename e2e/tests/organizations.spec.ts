@@ -31,6 +31,25 @@ test.describe('ORG organizations', () => {
     await expect(organizations.label('France')).toBeHidden();
     await organizations.toggle('Sales').click();
 
+    // Opened from the keyboard, the arrow keeps the focus and says its new
+    // state (#208)
+    await organizations.toggle('Engineering').focus();
+    await page.keyboard.press('Enter');
+    await expect(organizations.toggle('Engineering')).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
+    await expect(organizations.toggle('Engineering')).toBeFocused();
+    await expect(organizations.toggle('Engineering')).toHaveAccessibleName(
+      'Collapse Engineering'
+    );
+    await page.keyboard.press('Enter');
+    await expect(organizations.toggle('Engineering')).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+    await expect(organizations.toggle('Engineering')).toBeFocused();
+
     await expect(organizations.label('Sales')).toHaveAttribute(
       'title',
       'Sales'

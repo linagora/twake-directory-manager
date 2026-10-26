@@ -28,6 +28,17 @@ export function focusables(root: HTMLElement): HTMLElement[] {
 }
 
 /**
+ * Where a panel's focus starts: its first control, but not a field's help
+ * button, which stands before the field and is not where a form starts.
+ *
+ * @param body the panel's body
+ * @returns the control, or null for a panel with none
+ */
+export function firstFocus(body: HTMLElement): HTMLElement | null {
+  return focusables(body).find(item => !item.matches?.('.dc-help')) ?? null;
+}
+
+/**
  * Where a Tab pressed in an open panel takes the focus, or null to leave it
  * to the browser. The focus stays in the dialog: past its last control it
  * comes back to the first, and the other way with Shift. From a place the

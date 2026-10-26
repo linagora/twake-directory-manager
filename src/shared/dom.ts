@@ -28,3 +28,14 @@ export function toTitleCase(text: string): string {
   const label = text.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ');
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
+
+/**
+ * A value written into an attribute selector, `[data-id="…"]`: its quotes
+ * and backslashes escaped.
+ *
+ * @param value the value
+ * @returns what goes between the quotes
+ */
+export function selectorValue(value: string): string {
+  return value.replace(/["\\]/g, '\\$&');
+}

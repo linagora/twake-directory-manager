@@ -731,4 +731,40 @@ test.describe('LIST lists, search and bulk actions', () => {
       'Select sales-team'
     );
   });
+
+  test('LIST-16 the keyboard keeps its place when the list is redrawn', async ({
+    page,
+  }) => {
+    // Ticking a row, listing everything or turning a page dropped the focus
+    // on the page, and the next Tab started again at the search box (#208).
+    const app = await new LoginPage(page).loginAs(ADMIN, 'users');
+    const list = app.list();
+    await list.listEverythingButton.focus();
+    await page.keyboard.press('Enter');
+    await expect(list.rows.first()).toBeVisible();
+    await expect(list.rows.first().getByRole('link')).toBeFocused();
+
+    const bob = list.rowCheckbox('bob');
+    await bob.focus();
+    await page.keyboard.press('Space');
+    await expect(bob).toBeChecked();
+    await expect(bob).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(list.row('bob').getByRole('link')).toBeFocused();
+
+    await list.selectAll.focus();
+    await page.keyboard.press('Space');
+    await expect(list.selectAll).toBeFocused();
+    await expect(list.selectAll).toBeChecked();
+    await page.keyboard.press('Space');
+    await expect(list.selectAll).toBeFocused();
+
+    await list.perPage.selectOption('25');
+    await expect(list.perPage).toBeFocused();
+    if (await list.nextButton.isEnabled()) {
+      await list.nextButton.focus();
+      await page.keyboard.press('Enter');
+      await expect(list.nextButton.or(list.previousButton)).toBeFocused();
+    }
+  });
 });

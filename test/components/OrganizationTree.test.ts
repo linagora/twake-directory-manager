@@ -456,6 +456,46 @@ describe('OrganizationTree', () => {
     });
   });
 
+  describe('OrganizationTree, the focus across a redraw', () => {
+    const top = 'ou=organization,dc=example,dc=com';
+    const sales = `ou=Sales,${top}`;
+    const tick = (): Promise<void> =>
+      new Promise(resolve => setTimeout(resolve, 0));
+
+    it('should keep the focus on the arrow pressed, which then says the other state', async () => {
+      // The arrow was drawn anew with the list, and the focus fell to the
+      // page (#208).
+      const container = document.createElement('div');
+      document.body.append(container);
+      await new OrganizationTree({
+        translator: new Translator('en'),
+        root: async () => ({ dn: top, name: 'organization' }),
+        children: async dn =>
+          dn === top
+            ? [{ dn: sales, name: 'Sales' }]
+            : [{ dn: `ou=France,${sales}`, name: 'France' }],
+        onSelect: () => undefined,
+      }).render(container);
+      const toggle = (): HTMLElement | null =>
+        container.querySelector<HTMLElement>(`[data-toggle="${sales}"]`);
+      const arrow = toggle();
+      if (!arrow) throw new Error('no arrow');
+      expect(arrow.getAttribute('aria-label')).to.equal('Expand Sales');
+      arrow.focus();
+      arrow.click();
+      await tick();
+      await tick();
+      expect(toggle()).to.not.equal(arrow);
+      expect(document.activeElement).to.equal(toggle());
+      expect(toggle()?.getAttribute('aria-label')).to.equal('Collapse Sales');
+      // Pressed again, closed, the focus stays
+      toggle()?.click();
+      await tick();
+      expect(document.activeElement).to.equal(toggle());
+      expect(toggle()?.getAttribute('aria-label')).to.equal('Expand Sales');
+    });
+  });
+
   describe('OrganizationTree, revealing a node', () => {
     const top = 'ou=organization,dc=example,dc=com';
     const engineering = `ou=Engineering,${top}`;

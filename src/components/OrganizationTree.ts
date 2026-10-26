@@ -750,9 +750,24 @@ export class OrganizationTree {
   private async toggle(dn: string): Promise<void> {
     const node = this.find(dn);
     if (!node) return;
+    // The arrow pressed is drawn anew with the list, and the focus went
+    // with it to the page: it comes back to the arrow, whose name now says
+    // the other state (#208). Left alone when the focus was elsewhere.
+    const pressed =
+      typeof document !== 'undefined' &&
+      (document.activeElement as HTMLElement | null)?.dataset?.toggle === dn;
+    const refocus = (): void => {
+      if (pressed)
+        this.container
+          ?.querySelector<HTMLElement>(
+            `[data-toggle="${dn.replace(/["\\]/g, '\\$&')}"]`
+          )
+          ?.focus();
+    };
     if (this.expanded.has(dn)) {
       this.expanded.delete(dn);
       this.draw();
+      refocus();
       return;
     }
     this.expanded.add(dn);
@@ -767,6 +782,7 @@ export class OrganizationTree {
       }
     }
     this.draw();
+    refocus();
   }
 
   /** Find a node by DN, in any spelling of it, in the loaded tree. */

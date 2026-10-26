@@ -37,7 +37,9 @@ import type {
   SchemaAttribute,
 } from '../types';
 import { background, type Reporter } from '../shared/background';
+import { selectorValue } from '../shared/dom';
 import { append, html, render, type SafeHtml } from '../shared/html';
+import { bindHelp, helpMarkup } from '../ui/field';
 
 /** An entry a pointer field may land on. */
 interface PointerCandidate {
@@ -186,21 +188,6 @@ const SHOWN_ROLES = [
   'password',
   'passwordReset',
 ];
-
-/**
- * Quote an attribute name for use inside an attribute selector.
- *
- * `CSS.escape` would do, but it does not exist outside a browser, and a
- * component that cannot be rendered in a test is a component nobody tests.
- * LDAP attribute names are letters, digits and hyphens, so quoting the two
- * characters that could close the selector early is enough.
- *
- * @param name attribute name
- * @returns the name, safe to embed between double quotes
- */
-function selectorValue(name: string): string {
-  return name.replace(/["\\]/g, '\\$&');
-}
 
 /** Read an entry value as a list of strings. */
 function toList(value: unknown): string[] {
@@ -668,18 +655,15 @@ export class EntityForm {
             : this.inputMarkup(name, attr);
 
     const pointer = attr.type === 'pointer' || attr.items?.type === 'pointer';
-    const label = html`<label for="${id}">${this.label(name, attr)}${required}</label>`;
-    const help = resolveText(attr.help, this.options.translator.language);
-    // Outside the label, which would hand a click on it to the control, and
-    // shown on hover only: focusable, it took the focus a panel gives its
-    // first field and opened with the form. The control is described by it
-    // instead (see bind), which is how a screen reader hears it.
+    const text = this.label(name, attr);
+    const label = html`<label for="${id}">${text}${required}</label>`;
+    const help = resolveText(attr.help, translator.language);
+    // Outside the label, which would hand a click on it to the control; a
+    // button the keyboard reaches (ui/field), which the panel's first focus
+    // skips. The control is described by the text too (see bind).
+    const helpName = translator.t('form.helpOn', { label: text });
     const heading = help
-      ? html`<div class="dc-label">
-          ${label}
-          <span class="dc-help" aria-hidden="true">?</span>
-          <span class="dc-tooltip" role="tooltip" id="dc-help-${name}">${help}</span>
-        </div>`
+      ? html`<div class="dc-label">${label} ${helpMarkup(`dc-help-${name}`, helpName, help)}</div>`
       : label;
     return html`
         ${heading}
@@ -894,10 +878,12 @@ export class EntityForm {
         `[data-field="${selectorValue(name)}"]`
       );
       if (!wrapper) continue;
-      if (attr.help)
+      if (attr.help) {
         wrapper
           .querySelector(`[id="dc-field-${selectorValue(name)}"]`)
           ?.setAttribute('aria-describedby', `dc-help-${name}`);
+        bindHelp(wrapper);
+      }
 
       if (this.searches.has(name)) {
         this.bindPicker(name, wrapper);

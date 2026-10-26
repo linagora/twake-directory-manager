@@ -82,7 +82,7 @@ import type {
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
-import { focusables, tabTarget } from './console/panel';
+import { firstFocus, tabTarget } from './console/panel';
 import { announcer, announcerMarkup } from './ui/announce';
 import { ToastController } from './ui/toast';
 
@@ -2796,7 +2796,7 @@ export class DirectoryConsole {
     // Into the panel, on its first field: left on the button that opened
     // it, the keyboard went on through the page behind it. A panel with no
     // field holds the focus itself.
-    (focusables(body)[0] ?? dialog)?.focus();
+    (firstFocus(body) ?? dialog)?.focus();
   }
 
   /**

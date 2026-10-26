@@ -461,6 +461,22 @@ test.describe('NAV layout, navigation and language', () => {
     ).toHaveAttribute('aria-modal', 'true');
     await expect(await form.field('Employee ID')).toBeFocused();
 
+    // The field's help is a button the keyboard reaches; Escape hides it
+    // and leaves the form open, the focus on the button (#216)
+    const help = form.dialog.getByRole('button', {
+      name: 'Help on Employee ID',
+    });
+    const tooltip = form.dialog.locator('#dc-help-employeeNumber');
+    await expect(tooltip).toBeHidden();
+    await help.focus();
+    await expect(tooltip).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(tooltip).toBeHidden();
+    await expect(form.dialog).toBeVisible();
+    await expect(help).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(tooltip).toBeVisible();
+
     const insidePanel = (): Promise<boolean> =>
       page.evaluate(() =>
         Boolean(document.activeElement?.closest('[role=dialog]'))

@@ -212,6 +212,91 @@ describe('EntityList', () => {
     expect(announced).to.deep.equal(['Aucune entrée ne correspond']);
   });
 
+  describe('the focus across a redraw', () => {
+    // Ticking a row, turning a page or listing everything redrew the list
+    // and dropped the focus on the page (#208).
+    const tick = (): Promise<void> =>
+      new Promise(resolve => setTimeout(resolve, 0));
+    const mounted = async (
+      count: number,
+      listable = true
+    ): Promise<HTMLElement> => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const entries: Record<string, { uid: string }> = {};
+      for (let i = 0; i < count; i++) {
+        const uid = `u${String(i).padStart(3, '0')}`;
+        entries[uid] = { uid };
+      }
+      await new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () => Promise.resolve(entries),
+        listable,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(false),
+        canDelete: false,
+      }).render(container);
+      return container;
+    };
+    const change = (element: HTMLInputElement, checked: boolean): void => {
+      element.focus();
+      element.checked = checked;
+      element.dispatchEvent(new Event('change'));
+    };
+
+    it('should keep the focus on the box ticked, and on the header’s box', async () => {
+      const root = await mounted(3);
+      const box = root.querySelector<HTMLInputElement>('[data-select="u001"]');
+      if (!box) throw new Error('no box');
+      change(box, true);
+      const fresh = root.querySelector('[data-select="u001"]');
+      expect(fresh).to.not.equal(box);
+      expect(document.activeElement).to.equal(fresh);
+      const all = root.querySelector<HTMLInputElement>('[data-select-all]');
+      if (!all) throw new Error('no header box');
+      change(all, true);
+      expect(document.activeElement).to.equal(
+        root.querySelector('[data-select-all]')
+      );
+    });
+
+    it('should keep the focus on Next, and move it to Previous at the last page', async () => {
+      const root = await mounted(60);
+      const next = root.querySelector<HTMLElement>('[data-page="1"]');
+      if (!next) throw new Error('no Next');
+      next.focus();
+      next.click();
+      expect(root.querySelector('.dc-count')?.textContent).to.equal(
+        '26–50 of 60'
+      );
+      expect(document.activeElement).to.equal(
+        root.querySelector('[data-page="1"]')
+      );
+      root.querySelector<HTMLElement>('[data-page="1"]')?.click();
+      expect(root.querySelector('.dc-count')?.textContent).to.equal(
+        '51–60 of 60'
+      );
+      // Next is disabled on the last page: Previous takes the focus
+      expect(document.activeElement).to.equal(
+        root.querySelector('[data-page="-1"]')
+      );
+    });
+
+    it('should move the focus to the first row’s name after List without searching', async () => {
+      const root = await mounted(3, false);
+      const button = root.querySelector<HTMLElement>('[data-list-all]');
+      if (!button) throw new Error('no List without searching');
+      button.focus();
+      button.click();
+      await tick();
+      await tick();
+      expect(document.activeElement).to.equal(
+        root.querySelector('.dc-row-link')
+      );
+    });
+  });
+
   it('should cut a department’s list to it and what lies under it', async () => {
     // A search of the path matches a substring: "Sales" found Presales.
     const container = stubContainer();
