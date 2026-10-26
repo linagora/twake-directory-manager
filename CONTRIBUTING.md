@@ -78,9 +78,8 @@ client (`ctx.api`), the words (`ctx.t`, `ctx.translator()`), the rights
 is added to the context, not read from the console. The route gets a case in
 `routeOf` (`src/console/route.ts`) and in `renderMain`, which makes the view;
 a view that holds nothing between drawings is made anew each time, one that
-keeps something (the tree of `OrganizationsView`) is made once by `init()`
-and kept by the console, as the console keeps where each list was left
-until the list page moves. Its tests
+keeps something (the tree of `OrganizationsView`, where `ListsView` left each
+list) is made once by `init()` and kept by the console. Its tests
 mount the console on its address (`test/views/`). Markup through `html`,
 writes through `render`, actions through `background`.
 
