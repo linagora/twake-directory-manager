@@ -11519,7 +11519,11 @@ describe('Directory console', () => {
     it('should mark required fields and say what the mark means', async () => {
       const container = stubContainer();
       await build().render(container);
-      expect(container.innerHTML).to.include('dc-required');
+      // The mark is markup, not the text of its tag.
+      expect(container.innerHTML).to.include(
+        '<span class="dc-required">*</span>'
+      );
+      expect(container.innerHTML).to.not.include('&lt;span');
       expect(container.innerHTML).to.include(
         'Fields marked with * are required'
       );

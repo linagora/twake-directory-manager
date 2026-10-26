@@ -49,6 +49,11 @@ const rules = {
       message:
         'Add markup with append(element, html`…`) from shared/html, which escapes what it interpolates.',
     },
+    {
+      selector: "NewExpression[callee.name='SafeHtml']",
+      message:
+        'Markup is made by html`…`, or by trusted() for a constant of the console’s own; nothing else builds a SafeHtml.',
+    },
   ],
   // TypeScript resolves names itself, DOM types included, which `no-undef`
   // knows nothing about.
@@ -63,7 +68,7 @@ const oversized = {
   'src/DirectoryConsole.ts': 4113,
   'src/components/EntityForm.ts': 1411,
   'src/i18n.ts': 1340,
-  'test/console.test.ts': 11452,
+  'test/console.test.ts': 11455,
 };
 
 // What the types tell on top: a promise nobody waits for or handles, a

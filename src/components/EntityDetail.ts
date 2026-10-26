@@ -212,9 +212,9 @@ export class EntityDetail {
             }</h2>
             ${
               subtitle.length
-                ? html`<p class="dc-detail-subtitle" data-subtitle>${subtitle
-                    .map(part => part)
-                    .join(' · ')}</p>`
+                ? html`<p class="dc-detail-subtitle" data-subtitle>${subtitle.join(
+                    ' · '
+                  )}</p>`
                 : ''
             }
           </div>

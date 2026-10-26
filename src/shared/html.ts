@@ -82,6 +82,7 @@ export function html(
   let markup = strings[0];
   for (let i = 0; i < values.length; i++)
     markup += rendered(values[i]) + strings[i + 1];
+  // eslint-disable-next-line no-restricted-syntax -- where SafeHtml is made
   return new SafeHtml(markup);
 }
 
@@ -94,6 +95,7 @@ export function html(
  * @returns the same markup, as `SafeHtml`
  */
 export function trusted(markup: string): SafeHtml {
+  // eslint-disable-next-line no-restricted-syntax -- where SafeHtml is made
   return new SafeHtml(markup);
 }
 
@@ -102,6 +104,7 @@ export function trusted(markup: string): SafeHtml {
  * separator is text, escaped.
  */
 export function join(pieces: readonly SafeHtml[], separator: string): SafeHtml {
+  // eslint-disable-next-line no-restricted-syntax -- where SafeHtml is made
   return new SafeHtml(
     pieces.map(piece => piece.markup).join(escapeHtml(separator))
   );
