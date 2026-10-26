@@ -193,6 +193,8 @@ export class TransitActions {
     // included, and once handed over the caller no longer reached the
     // account's card to take them out: those the caller writes are offered,
     // checked; the others are named.
+    // relations() answers its own failures as `unknown` groups; the catch
+    // stands for a failure it would not, which no test reaches from the page.
     let failed = false;
     const relations = await ctx.relations(entity, entry, true).catch(() => {
       failed = true;

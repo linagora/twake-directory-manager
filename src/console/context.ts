@@ -2,7 +2,7 @@
  * What a view or an action is given of the console, instead of reaching into
  * it: the client, the words, the rights, the entities, the panel and the
  * dialog, the toast and the reporter, the ticket of the page drawn, the
- * address (#220).
+ * address, the tree, an entry's relations, the transit count (#220).
  *
  * @module twake-directory-manager/console/context
  */

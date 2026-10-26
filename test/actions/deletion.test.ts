@@ -552,6 +552,7 @@ describe('actions/deletion', () => {
         )
         .reply(200, {});
       const reads = callsOf(calls, 'organization').length;
+      const listed = callsOf(calls, 'organizationChildren').length;
       click(panelOf(root).body, '[data-confirm]');
       await until(() => toast(root) === 'Deleted');
       await until(() => selected(root) === engineering);
@@ -563,8 +564,11 @@ describe('actions/deletion', () => {
         `#/organizations/${encodeURIComponent(engineering)}`
       );
       expect(window.history.length).to.equal(steps);
-      // Its parent read again, for the organization gone from it, and shown.
-      expect(calls).to.include(`organizationChildren(${engineering})`);
+      // Its parent read again, for the organization gone from it, and shown:
+      // counted from the deletion, the tree having read it once already.
+      expect(callsOf(calls, 'organizationChildren').slice(listed)).to.include(
+        `organizationChildren(${engineering})`
+      );
       expect(callsOf(calls, 'organization').slice(reads)).to.deep.equal([
         `organization(${engineering})`,
       ]);
