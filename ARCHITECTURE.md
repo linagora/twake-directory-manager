@@ -65,6 +65,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── console/settings.ts     what the browser remembers: language, reference section, contrast
     ├── console/panel.ts        the overlay (panel, toast region, announcer) and what Tab reaches in the panel
     ├── console/dialog.ts       the confirm question's markup and its alert role
+    ├── console/route.ts        what the hash names: routeOf
     ├── ui/table.ts             dataTable: the one way to draw a table (#226)
     ├── ui/search.ts            searchBox: a named search box, with the select of its scope
     ├── ui/announce.ts          the hidden live region: said to a screen reader, not shown
@@ -215,8 +216,14 @@ refinements aside. Entity and attribute names are **not** translated here: they 
   the shell and the overview, entries and their groups). A DOM
   (happy-dom, `test/support/dom.ts`) is registered before any test, and
   nothing reaches the network: the API is `nock`, with no connection allowed
-  otherwise. The older tests still build hand-made stubs, which keep working
-  until each group moves to the DOM ([#221](https://github.com/linagora/twake-directory-manager/issues/221));
+  otherwise. A console test mounts one into the page with `mountConsole`
+  (`test/support/mount.ts`): the API answered from the fixtures recorded
+  against the ldap-rest tested, the real client given to the console through
+  its `deps` (`ConsoleDeps.api`), every call it receives recorded; the test
+  acts through the DOM and reads it, and `unmount()` takes the console off
+  the page after. The older tests still build hand-made stubs and reach
+  private members, which keep working until each group moves
+  ([#221](https://github.com/linagora/twake-directory-manager/issues/221));
   `npm run test:coverage` adds c8 with thresholds.
 - `e2e/`: Playwright against the image built from the tree, behind OpenLDAP
   and Dex (`scripts/qa-environment/`); it gates pull requests and releases

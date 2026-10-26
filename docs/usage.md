@@ -53,6 +53,13 @@ banner, a bulk action — once the console has shown it to the administrator
 console sends nothing anywhere itself: the page decides. `context` names what
 was started (`renderMain`, `readTransit`, `bulkChangeState`…).
 
+`init()` draws the console and starts listening to the page (the hash, the
+keyboard, errors); `unmount()` stops it and empties the container, for a host
+that mounts the console more than once on one page. The constructor's second
+argument gives the console what it would build itself — `{ api }`, an
+`ConsoleApiClient` — which a test uses to answer from fixtures; a page needs
+none of it.
+
 The context `unhandled` is an exception or a rejection nobody handled, caught
 by the console's own `error` and `unhandledrejection` listeners on the window.
 Those take only an error whose stack names the console's bundle

@@ -82,7 +82,10 @@ export function rememberPageSize(size: number): void {
  *
  * @param listener what to run then
  */
-export function onContrastChange(listener: () => void): void {
+export function onContrastChange(
+  listener: () => void,
+  signal?: AbortSignal
+): void {
   if (typeof matchMedia !== 'function') return;
-  matchMedia(MORE_CONTRAST).addEventListener?.('change', listener);
+  matchMedia(MORE_CONTRAST).addEventListener?.('change', listener, { signal });
 }

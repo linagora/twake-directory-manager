@@ -71,6 +71,7 @@ export {
 } from './rights';
 import type {
   Confirmation,
+  ConsoleDeps,
   AttachedEntries,
   AttachedEntry,
   ConsoleOptions,
@@ -84,6 +85,7 @@ import type {
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
 import { confirmMarkup, markAlert } from './console/dialog';
+import { POLICIES_KEY, type Route, routeOf } from './console/route';
 import { firstFocus, overlayMarkup, tabTarget } from './console/panel';
 import {
   highContrast,
@@ -106,15 +108,6 @@ interface SignedIn {
   name: string;
   email?: string;
 }
-
-/** Where the console currently is. */
-interface Route {
-  view: 'dashboard' | 'entity' | 'organizations' | 'policies';
-  entity?: string;
-  id?: string;
-}
-
-const POLICIES_KEY = 'password-policies';
 
 /**
  * What a failed read means for the reader.
@@ -244,6 +237,8 @@ export class DirectoryConsole {
   private viewGeneration = 0;
   /** The page's own title, which a card puts the entry's name before */
   private pageTitle = '';
+  /** Taken away with the console: what it listens to on the window and the document. */
+  private mounted = new AbortController();
   /** Says a text to a screen reader, and nothing to the eye (#212). */
   private readonly announce = announcer(() =>
     this.container?.querySelector<HTMLElement>('[data-announce]')
@@ -281,13 +276,30 @@ export class DirectoryConsole {
    */
   private panelClosed: (() => void) | null = null;
 
-  constructor(options: ConsoleOptions) {
+  /**
+   * @param options what the page gives the console
+   * @param deps what the console would otherwise build itself: the API
+   *   client, which a test replaces with one that answers from fixtures
+   */
+  constructor(options: ConsoleOptions, deps: ConsoleDeps = {}) {
     this.options = options;
-    this.api = new ConsoleApiClient(options.apiBaseUrl, options.apiPrefix);
+    this.api =
+      deps.api ?? new ConsoleApiClient(options.apiBaseUrl, options.apiPrefix);
     this.api.onSessionEnded = (): void => {
       signInAgain();
     };
     this.translator = new Translator(options.language || storedLanguage());
+  }
+
+  /**
+   * Take the console off the page: its listeners on the window and the
+   * document go, and its container is emptied. A page that mounts a console
+   * more than once (a test, a single-page host) calls it before the next.
+   */
+  unmount(): void {
+    this.mounted.abort();
+    this.container?.replaceChildren();
+    this.container = null;
   }
 
   /**
@@ -332,7 +344,14 @@ export class DirectoryConsole {
     ]);
 
     this.readRoute();
-    window.addEventListener('hashchange', () =>
+    // Every listener below goes with `unmount`.
+    if (this.mounted.signal.aborted) this.mounted = new AbortController();
+    const { signal } = this.mounted;
+    const on = <K extends keyof WindowEventMap>(
+      type: K,
+      listener: (event: WindowEventMap[K]) => void
+    ): void => window.addEventListener(type, listener, { signal });
+    on('hashchange', () =>
       background(() => this.followHash(), 'followHash', this.report)
     );
     // What slips past `background` — a listener that throws, a promise
@@ -340,23 +359,28 @@ export class DirectoryConsole {
     // page embedding the console has errors of its own, left to it. An error
     // taken is marked handled, so that the browser does not log it a second
     // time next to the report; the page's own listeners still see it.
-    window.addEventListener('unhandledrejection', event => {
+    on('unhandledrejection', event => {
       if (!fromConsole(event.reason)) return;
       event.preventDefault();
       this.report(event.reason, 'unhandled');
     });
-    window.addEventListener('error', event => {
+    on('error', event => {
       if (!fromConsole(event.error)) return;
       event.preventDefault();
       this.report(event.error, 'unhandled');
     });
-    document.addEventListener('keydown', event => this.panelKey(event));
+    document.addEventListener('keydown', event => this.panelKey(event), {
+      signal,
+    });
     // The system's wish for contrast, followed as it changes, until the
     // reader chooses.
-    onContrastChange(() => applyContrast(this.container, highContrast()));
+    onContrastChange(
+      () => applyContrast(this.container, highContrast()),
+      signal
+    );
     // A reload or a closed tab loses a form as surely as Escape: the
     // browser's own question then.
-    window.addEventListener('beforeunload', event => {
+    on('beforeunload', event => {
       const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
       if (!panel || panel.hidden || !this.panelDirty?.()) return;
       event.preventDefault();
@@ -375,31 +399,7 @@ export class DirectoryConsole {
 
   /** Read `#/entity/id` into the current route. */
   private readRoute(): void {
-    const hash = window.location.hash.replace(/^#\/?/, '');
-    // A hash is typed, pasted and mailed around, so it is not always the one
-    // `go()` wrote: `#/users/50%` throws out of `decodeURIComponent`, and an
-    // exception here leaves the console on "Loading…" for good. A segment
-    // that does not decode is taken as it stands.
-    const [first, second] = hash.split('/').map(segment => {
-      try {
-        return decodeURIComponent(segment);
-      } catch {
-        return segment;
-      }
-    });
-    if (!first) {
-      this.route = { view: 'dashboard' };
-      return;
-    }
-    if (first === 'organizations') {
-      this.route = { view: 'organizations', id: second };
-      return;
-    }
-    if (first === POLICIES_KEY) {
-      this.route = { view: 'policies' };
-      return;
-    }
-    this.route = { view: 'entity', entity: first, id: second };
+    this.route = routeOf(window.location.hash);
   }
 
   /**

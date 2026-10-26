@@ -5,8 +5,8 @@ import {
   type Confirmation,
 } from '../../src/DirectoryConsole';
 import { Translator, availableLanguages, languageName } from '../../src/i18n';
-import { splitEntities } from '../../src/rights';
 import { referenceOpen } from '../../src/console/settings';
+import { mountConsole, settled } from '../support/mount';
 import type { SafeHtml } from '../../src/shared/html';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
 import {
@@ -907,113 +907,104 @@ describe('Directory console: the shell and the overview', () => {
     });
 
     describe('the frame, drawn into the document', () => {
-      /** A console whose container is an element of the page, its shell drawn. */
-      const drawn = (language = 'en') => {
-        const container = document.createElement('div');
-        document.body.append(container);
-        const app = consoleIn({}, language) as unknown as {
-          container: HTMLElement;
-          entities: EntityDescriptor[];
-          pageTitle: string;
-          drawShell(): void;
-          changeLanguage(code: string): void;
-          renderMain(): Promise<void>;
-          renderDashboard(main: HTMLElement): void;
-          renderNotFound(main: HTMLElement): void;
-        };
-        app.container = container;
-        app.entities = [users, groups, mailboxTypes];
-        app.renderMain = () => Promise.resolve();
-        app.drawShell();
-        return { app, container };
-      };
+      /** A console mounted into the page, as the browser would have it. */
+      const drawn = (language = 'en') => mountConsole({ language });
       const labels = (list: Element): (string | null | undefined)[] =>
         Array.from(list.querySelectorAll('li > button[data-nav]')).map(
           button => button.querySelector('.dc-nav-label')?.textContent
         );
+      /** Choose a language in the sidebar, as the reader does. */
+      const choose = (root: HTMLElement, code: string): void => {
+        const select = root.querySelector<HTMLSelectElement>(
+          'select[data-language]'
+        );
+        if (!select) throw new Error('no language select');
+        select.value = code;
+        select.dispatchEvent(new Event('change'));
+      };
+      /** Go to an address, as a link or a typed hash does, and wait for the page. */
+      const go = async (root: HTMLElement, hash: string): Promise<void> => {
+        window.location.hash = `#/${hash}`;
+        window.dispatchEvent(new Event('hashchange'));
+        await settled(root);
+      };
 
-      it('should offer the entries as a list, the reference data as one of its own', () => {
-        // Announced "navigation, list, 3 items", and the reference data as a
+      it('should offer the entries as a list, the reference data as one of its own', async () => {
+        // Announced "navigation, list, 4 items", and the reference data as a
         // list of its own once opened (#219).
-        const { container } = drawn();
-        const { primary, reference } = splitEntities([
-          users,
-          groups,
-          mailboxTypes,
-        ]);
-        const lists = container.querySelectorAll('.dc-nav ul.dc-nav-list');
+        const { root } = await drawn();
+        const lists = root.querySelectorAll('.dc-nav ul.dc-nav-list');
         expect(lists).to.have.length(2);
+        // What the recorded configuration offers the global administrator
         expect(labels(lists[0])).to.deep.equal([
           'Overview',
-          ...primary.map(entity => entity.pluralName),
+          'Users',
+          'Groups',
+          'Organizations',
         ]);
         expect(lists[1].closest('#dc-nav-reference')).to.not.equal(null);
-        expect(labels(lists[1])).to.deep.equal(
-          reference.map(entity => entity.pluralName)
-        );
+        expect(labels(lists[1])).to.include.members([
+          'Positions',
+          'Password policies',
+        ]);
       });
 
-      it('should let the keyboard skip to the main area without changing the address', () => {
+      it('should let the keyboard skip to the main area without changing the address', async () => {
         // The first thing Tab reaches; Enter focuses the main area, and the
         // hash, which the console routes on, is left alone (#215).
-        const { container } = drawn();
-        const link = container.querySelector<HTMLElement>(
+        const { root } = await drawn();
+        const link = root.querySelector<HTMLElement>(
           'a.dc-skip-link[data-skip]'
         );
-        const main = container.querySelector<HTMLElement>(
+        const main = root.querySelector<HTMLElement>(
           'main#dc-main[tabindex="-1"]'
         );
         expect(link?.textContent).to.equal('Skip to main content');
-        expect(container.firstElementChild?.firstElementChild).to.equal(link);
+        expect(root.firstElementChild?.firstElementChild).to.equal(link);
         expect(main).to.not.equal(null);
         link?.click();
         expect(document.activeElement).to.equal(main);
         expect(window.location.hash).to.equal('');
       });
 
-      it('should declare the language of the page, and keep the focus on the selector that changed it', () => {
+      it('should declare the language of the page, and keep the focus on the selector that changed it', async () => {
         // A screen reader reads French with a French voice only when the
         // document says so; chosen by arrow keys, the select keeps the focus
         // and says what it does (#209).
-        const { app, container } = drawn();
+        const { root } = await drawn();
         expect(document.documentElement.lang).to.equal('en');
-        const select = container.querySelector<HTMLSelectElement>(
+        const select = root.querySelector<HTMLSelectElement>(
           'select[data-language]'
         );
         expect(select?.getAttribute('aria-describedby')).to.equal(
           'dc-language-hint'
         );
         expect(
-          container.querySelector('#dc-language-hint.dc-visually-hidden')
+          root.querySelector('#dc-language-hint.dc-visually-hidden')
             ?.textContent
         ).to.equal('The interface changes language as soon as one is chosen.');
-        app.changeLanguage('fr');
+        choose(root, 'fr');
         expect(document.documentElement.lang).to.equal('fr');
-        const fresh = container.querySelector<HTMLSelectElement>(
+        const fresh = root.querySelector<HTMLSelectElement>(
           'select[data-language]'
         );
         expect(fresh).to.not.equal(select);
         expect(document.activeElement).to.equal(fresh);
-        expect(
-          container.querySelector('#dc-language-hint')?.textContent
-        ).to.equal(
+        expect(root.querySelector('#dc-language-hint')?.textContent).to.equal(
           'L’interface change de langue dès qu’une langue est choisie.'
         );
       });
 
-      it('should close the reference section in one click after a reference page opened it', () => {
+      it('should close the reference section in one click after a reference page opened it', async () => {
         // The toggle read what the browser remembered (closed) and stored
         // "open" first; the section, opened by the page shown, stayed open.
-        const { app, container } = drawn();
-        const toggle =
-          container.querySelector<HTMLElement>('[data-nav-toggle]');
-        const section =
-          container.querySelector<HTMLElement>('#dc-nav-reference');
+        const { root } = await drawn();
+        const toggle = root.querySelector<HTMLElement>('[data-nav-toggle]');
+        const section = root.querySelector<HTMLElement>('#dc-nav-reference');
         if (!toggle || !section) throw new Error('no reference section');
         expect(section.hidden).to.equal(true);
-        (
-          app as unknown as { showReference(open: boolean): void }
-        ).showReference(true);
+        // A reference page shown opens its section
+        await go(root, 'password-policies');
         expect(toggle.getAttribute('aria-expanded')).to.equal('true');
         toggle.click();
         expect(section.hidden).to.equal(true);
@@ -1027,12 +1018,12 @@ describe('Directory console: the shell and the overview', () => {
         ).to.equal('1');
       });
 
-      it('should take Tab on from the lead of a panel step, not back to the panel’s first control', () => {
+      it('should take Tab on from the lead of a panel step, not back to the panel’s first control', async () => {
         // A lead focused for the screen reader is no control: Tab went to
         // the header's × from it, wherever it stood.
-        const { app, container } = drawn();
-        const panel = container.querySelector<HTMLElement>('[data-panel]');
-        const body = container.querySelector<HTMLElement>('[data-panel-body]');
+        const { root } = await drawn();
+        const panel = root.querySelector<HTMLElement>('[data-panel]');
+        const body = root.querySelector<HTMLElement>('[data-panel-body]');
         if (!panel || !body) throw new Error('no panel');
         panel.hidden = false;
         body.innerHTML =
@@ -1041,15 +1032,15 @@ describe('Directory console: the shell and the overview', () => {
           '<button type="button" id="two">two</button>';
         const lead = body.querySelector<HTMLElement>('#lead');
         lead?.focus();
+        // The console listens on the document, as the browser delivers it
         const press = (shiftKey: boolean): boolean => {
           const event = new KeyboardEvent('keydown', {
             key: 'Tab',
             shiftKey,
             cancelable: true,
+            bubbles: true,
           });
-          (app as unknown as { panelKey(event: KeyboardEvent): void }).panelKey(
-            event
-          );
+          document.dispatchEvent(event);
           return event.defaultPrevented;
         };
         expect(press(false)).to.equal(true);
@@ -1066,12 +1057,12 @@ describe('Directory console: the shell and the overview', () => {
         ).to.equal('');
       });
 
-      it('should offer high contrast under the language, remembered and applied at once', () => {
+      it('should offer high contrast under the language, remembered and applied at once', async () => {
         // Fields outlined at 1.5:1 and a current place shown by a tint only
         // left low-vision readers to guess (#210).
-        const { container } = drawn();
-        const app = container.querySelector('.dc-app');
-        const box = container.querySelector<HTMLInputElement>(
+        const { root } = await drawn();
+        const app = root.querySelector('.dc-app');
+        const box = root.querySelector<HTMLInputElement>(
           '.dc-sidebar-footer label.dc-contrast input[type="checkbox"][data-contrast]'
         );
         if (!app || !box) throw new Error('no contrast box');
@@ -1086,53 +1077,47 @@ describe('Directory console: the shell and the overview', () => {
         expect(localStorage.getItem('ldap-rest.console.contrast')).to.equal(
           'high'
         );
-        // Drawn anew (a change of language), the choice holds
-        const again = drawn('fr');
+        // Drawn anew, in another language, the choice holds
+        const again = await drawn('fr');
         expect(
-          again.container
+          again.root
             .querySelector('.dc-app')
             ?.classList.contains('dc-contrast-high')
         ).to.equal(true);
         expect(
-          again.container.querySelector<HTMLInputElement>('[data-contrast]')
-            ?.checked
+          again.root.querySelector<HTMLInputElement>('[data-contrast]')?.checked
         ).to.equal(true);
         expect(
-          again.container.querySelector('.dc-contrast span')?.textContent
+          again.root.querySelector('.dc-contrast span')?.textContent
         ).to.equal('Contraste élevé');
-        box.checked = false;
-        box.dispatchEvent(new Event('change'));
+        const fresh =
+          again.root.querySelector<HTMLInputElement>('[data-contrast]');
+        if (!fresh) throw new Error('no contrast box');
+        fresh.checked = false;
+        fresh.dispatchEvent(new Event('change'));
         expect(localStorage.getItem('ldap-rest.console.contrast')).to.equal(
           'standard'
         );
       });
 
-      it('should lay the panel, the toast region and the hidden region over the page', () => {
-        const { container } = drawn();
-        const dialog = container.querySelector(
-          '[data-panel] [data-panel-dialog]'
-        );
+      it('should lay the panel, the toast region and the hidden region over the page', async () => {
+        const { root } = await drawn();
+        const dialog = root.querySelector('[data-panel] [data-panel-dialog]');
         expect(dialog?.getAttribute('role')).to.equal('dialog');
         expect(dialog?.getAttribute('aria-modal')).to.equal('true');
         expect(dialog?.getAttribute('aria-labelledby')).to.equal(
           'dc-panel-title'
         );
         expect(
-          container
-            .querySelector('[data-panel-close]')
-            ?.getAttribute('aria-label')
+          root.querySelector('[data-panel-close]')?.getAttribute('aria-label')
         ).to.equal('Close');
-        const toast = container.querySelector('[data-toast-region]');
+        const toast = root.querySelector('[data-toast-region]');
         expect(toast?.getAttribute('role')).to.equal('status');
         expect(toast?.getAttribute('aria-live')).to.equal('polite');
         expect(
-          container.querySelector('[data-toast-region] [data-toast]')
+          root.querySelector('[data-toast-region] [data-toast]')
         ).to.not.equal(null);
-      });
-
-      it('should hold a hidden region that says to a screen reader what the eye reads at once', () => {
-        const { container } = drawn();
-        const region = container.querySelector(
+        const region = root.querySelector(
           '.dc-app > [data-announce].dc-visually-hidden'
         );
         expect(region?.getAttribute('role')).to.equal('status');
@@ -1140,25 +1125,37 @@ describe('Directory console: the shell and the overview', () => {
         expect(region?.getAttribute('aria-atomic')).to.equal('true');
       });
 
-      it('should title the tab after the page shown', () => {
+      it('should title the tab after the page shown', async () => {
         // Every page, not only a card, so that tabs and history tell them
         // apart (#214).
-        const { app, container } = drawn();
-        app.pageTitle = 'Twake Directory Manager';
-        Object.assign(app, { readMembers: async () => null });
-        const main = container.querySelector<HTMLElement>('[data-main]');
-        if (!main) throw new Error('no main area');
-        app.renderDashboard(main);
+        document.title = 'Twake Directory Manager';
+        const { root } = await drawn();
         expect(document.title).to.equal('Overview — Twake Directory Manager');
-        app.renderNotFound(main);
+        await go(root, 'nowhere');
         expect(document.title).to.equal(
           'No such page — Twake Directory Manager'
         );
-        app.changeLanguage('fr');
-        app.renderNotFound(main);
+        await go(root, 'users');
+        expect(document.title).to.equal('Users — Twake Directory Manager');
+        choose(root, 'fr');
+        await settled(root);
         expect(document.title).to.equal(
-          'Page introuvable — Twake Directory Manager'
+          'Utilisateurs — Twake Directory Manager'
         );
+      });
+
+      it('should leave the page alone once unmounted', async () => {
+        // A console taken off the page listens to nothing any more: a hash
+        // changed after it would otherwise draw into a detached container.
+        const first = await drawn();
+        expect(first.calls[0]).to.equal('discover()');
+        first.unmount();
+        expect(document.body.contains(first.root)).to.equal(false);
+        const before = first.calls.length;
+        await go(document.body, 'users');
+        expect(first.calls.length).to.equal(before);
+        const second = await drawn();
+        expect(second.root.querySelector('.dc-nav')).to.not.equal(null);
       });
     });
 
