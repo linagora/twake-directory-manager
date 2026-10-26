@@ -314,6 +314,9 @@ export class DirectoryConsole {
     this.pageTitle = document.title || '';
     // Every listener below goes with `unmount`, which may come while the
     // directory is still being read: nothing is drawn or listened to after.
+    // An `init()` on a console still mounted takes the first one's listeners
+    // away too, and stops it where it waits.
+    this.mounted.abort();
     this.mounted = new AbortController();
     const { signal } = this.mounted;
 
@@ -350,7 +353,7 @@ export class DirectoryConsole {
     ]);
     if (signal.aborted) return;
 
-    this.readRoute();
+    this.route = routeOf(window.location.hash);
     const on = <K extends keyof WindowEventMap>(
       type: K,
       listener: (event: WindowEventMap[K]) => void
@@ -401,11 +404,6 @@ export class DirectoryConsole {
 
   /* ---------------------------------------------------------------- routing */
 
-  /** Read `#/entity/id` into the current route. */
-  private readRoute(): void {
-    this.route = routeOf(window.location.hash);
-  }
-
   /**
    * Draw the page a new hash names. A side panel belongs to the page it was
    * opened on: left over a page reached with Back or a typed address, it
@@ -420,7 +418,7 @@ export class DirectoryConsole {
     } finally {
       this.navigating = false;
     }
-    this.readRoute();
+    this.route = routeOf(window.location.hash);
     await this.renderMain();
   }
 
@@ -448,7 +446,7 @@ export class DirectoryConsole {
       if (replace) window.history.replaceState(null, '', hash);
       else window.history.pushState(null, '', hash);
     }
-    this.readRoute();
+    this.route = routeOf(window.location.hash);
   }
 
   /* ------------------------------------------------------------------ shell */

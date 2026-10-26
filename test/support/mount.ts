@@ -66,8 +66,13 @@ let mounts = 0;
  * them, then nothing left to answer a late request.
  */
 export function unmountAll(): void {
-  while (mounted.length) mounted.pop()?.unmount();
-  nock.cleanAll();
+  while (mounted.length) {
+    const one = mounted.pop();
+    one?.unmount();
+    // Its answers only: a suite's own interceptors, set in a `before`, stay
+    one?.server.persist(false);
+    if (one) nock.removeInterceptor({ hostname: new URL(one.url).hostname });
+  }
 }
 // Before the harness resets the page, which would wake a console still there.
 beforeReset.push(unmountAll);
