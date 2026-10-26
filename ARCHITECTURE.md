@@ -61,6 +61,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── shared/html.ts          html`…`, SafeHtml, render: the only way to the page
     ├── shared/background.ts    background(): work nobody waits for, reported
     ├── shared/dom.ts           escapeHtml and small DOM helpers
+    ├── console/shell.ts        the sidebar's markup (the frame moves here, #220)
     ├── assets.ts               inlined logos
     └── types.ts                wire types (ConfigResponse, Scope…) and domain types
 src/styles.css              one stylesheet, `dc-` prefix, no framework

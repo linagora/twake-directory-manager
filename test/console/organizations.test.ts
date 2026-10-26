@@ -688,7 +688,7 @@ describe('Directory console: organizations', () => {
       expect(html).to.include(`title="${sales}">sales<`);
     });
 
-    it('should not leave the tab named after the organization shown before one that fails to load', async () => {
+    it('should name the tab after the page, not the organization shown before, when a card fails to load', async () => {
       const original = (globalThis as Record<string, unknown>).document;
       const page = { title: 'Sales — Twake Directory Manager' };
       (globalThis as Record<string, unknown>).document = page;
@@ -706,7 +706,7 @@ describe('Directory console: organizations', () => {
             showOrganization(node: { dn: string; name: string }): Promise<void>;
           }
         ).showOrganization({ dn: acme, name: 'Acme' });
-        expect(page.title).to.equal('Twake Directory Manager');
+        expect(page.title).to.equal('Organizations — Twake Directory Manager');
       } finally {
         (globalThis as Record<string, unknown>).document = original;
       }

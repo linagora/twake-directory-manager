@@ -29,6 +29,10 @@ const en: Catalogue = {
   'language.name': 'English',
   'app.logout': 'Sign out',
   'app.notFound': 'There is no page at this address.',
+  'app.notFoundTitle': 'No such page',
+  'app.skipToContent': 'Skip to main content',
+  'app.languageHint':
+    'The interface changes language as soon as one is chosen.',
   'app.toOverview': 'Go to the Overview',
 
   'nav.dashboard': 'Overview',
@@ -475,6 +479,10 @@ const fr: Catalogue = {
   'language.name': 'Français',
   'app.logout': 'Se déconnecter',
   'app.notFound': 'Il n’y a pas de page à cette adresse.',
+  'app.notFoundTitle': 'Page introuvable',
+  'app.skipToContent': 'Aller au contenu principal',
+  'app.languageHint':
+    'L’interface change de langue dès qu’une langue est choisie.',
   'app.toOverview': 'Aller à l’accueil',
 
   'nav.dashboard': 'Vue d’ensemble',
@@ -952,6 +960,9 @@ const mn: Catalogue = {
   'language.name': 'Монгол',
   'app.logout': 'Гарах',
   'app.notFound': 'Энэ хаягт хуудас алга.',
+  'app.notFoundTitle': 'Хуудас олдсонгүй',
+  'app.skipToContent': 'Үндсэн агуулга руу шилжих',
+  'app.languageHint': 'Хэл сонгомогц интерфэйс тэр даруй солигдоно.',
   'app.toOverview': 'Нүүр хуудас руу очих',
 
   'nav.dashboard': 'Тойм',

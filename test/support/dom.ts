@@ -64,6 +64,7 @@ export const mochaHooks = {
     document.body.replaceChildren();
     document.head.replaceChildren();
     document.title = '';
+    document.documentElement.lang = '';
     window.location.hash = '';
   },
 };
