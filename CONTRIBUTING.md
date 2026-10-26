@@ -51,11 +51,11 @@ context, report)` (`src/shared/background.ts`), which reports a failure.
   the files over it today are listed in `eslint.config.mjs` with the size
   they had, which may only shrink. A new page or action goes in a file of
   its own. The catalogues of `src/i18n.ts` are data and exempt.
-- A view of `src/views/` imports no other view, an action of `src/actions/`
-  imports no view and no other action, and `src/components/` imports
-  neither `src/views/` nor `src/actions/` (`no-restricted-imports`): what two
-  of them share goes to `src/console/`, `src/ui/`, `src/format.ts` or a
-  component.
+- A view of `src/views/` imports no other view and no action (it starts
+  one through the context), an action of `src/actions/` imports no view and
+  no other action, and `src/components/` imports neither `src/views/` nor
+  `src/actions/` (`no-restricted-imports`): what two of them share goes to
+  `src/console/`, `src/ui/`, `src/format.ts` or a component.
 - Coverage thresholds (`.c8rc.json`) only go up; lower one in the PR that
   needs it and say why.
 - A colour is a token of `src/styles.css`, set once for the default theme and
@@ -78,7 +78,9 @@ client (`ctx.api`), the words (`ctx.t`, `ctx.translator()`), the rights
 is added to the context, not read from the console. The route gets a case in
 `routeOf` (`src/console/route.ts`) and in `renderMain`, which makes the view;
 a view that holds nothing between drawings is made anew each time, one that
-keeps something (where a list was left) is kept by the console. Its tests
+keeps something (the tree of `OrganizationsView`) is made once by `init()`
+and kept by the console, as the console keeps where each list was left
+until the list page moves. Its tests
 mount the console on its address (`test/views/`). Markup through `html`,
 writes through `render`, actions through `background`.
 

@@ -21,7 +21,6 @@ import {
   AttachedTables,
   attachedClass,
   attachedEntity,
-  type AttachedKind,
 } from './components/AttachedTables';
 import { EntityDetail } from './components/EntityDetail';
 import { EntityImport } from './components/EntityImport';
@@ -31,7 +30,6 @@ import {
   SEARCH_MINIMUM,
 } from './components/EntityList';
 import { GroupPicker, type GroupChoice } from './components/GroupPicker';
-import { OrganizationTree } from './components/OrganizationTree';
 import {
   attributeLabel,
   comparableDn,
@@ -51,10 +49,6 @@ import { Translator } from './i18n';
 import { Rights, splitEntities } from './rights';
 import { signInAgain } from './session';
 import type { ListView } from './components/EntityList';
-import type {
-  OrganizationIndex,
-  OrganizationMatches,
-} from './components/OrganizationTree';
 import type { PointerLookup } from './importer';
 // Kept where embedders and the tests found them.
 export { readFailure } from './format';
@@ -76,7 +70,6 @@ import type {
   EntityDescriptor,
   Entry,
   EntryList,
-  OrganizationNode,
   Scope,
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
@@ -97,6 +90,7 @@ import {
 } from './console/settings';
 import { announcer } from './ui/announce';
 import { PoliciesView } from './views/policies';
+import { OrganizationsView } from './views/organizations';
 import { PasswordActions } from './actions/passwords';
 import { StateActions } from './actions/state';
 import { TransitActions } from './actions/transit';
@@ -187,7 +181,6 @@ export class DirectoryConsole {
   private readonly toasts = new ToastController(() =>
     this.container?.querySelector<HTMLElement>('[data-toast]')
   );
-  private tree: OrganizationTree | null = null;
   /**
    * Where the reader left the list of each entity, by key. A list is drawn
    * anew each time its page is shown, and without this Back from a card
@@ -218,6 +211,12 @@ export class DirectoryConsole {
   private deletions!: DeletionActions;
   /** The create and edit forms, made by `init()` with the context: they hold nothing */
   private forms!: FormActions;
+  /**
+   * The organizations page, made by `init()` with the context and kept
+   * between its drawings: it holds the tree, which the next drawing, the
+   * forms and the deletion find as it was left
+   */
+  private organizationsView!: OrganizationsView;
 
   /**
    * @param options what the page gives the console
@@ -268,6 +267,12 @@ export class DirectoryConsole {
     this.transits = new TransitActions(this.context);
     this.deletions = new DeletionActions(this.context);
     this.forms = new FormActions(this.context);
+    // A console mounted again keeps the tree it drew, as it did when the
+    // tree was its own.
+    this.organizationsView = new OrganizationsView(
+      this.context,
+      this.organizationsView?.tree()
+    );
 
     render(
       this.container,
@@ -365,6 +370,7 @@ export class DirectoryConsole {
       panel: this.panel,
       dialog: this.dialog,
       current: generation => this.current(generation),
+      ticket: () => ++this.viewGeneration,
       titlePage: name => this.titlePage(name),
       refresh: () => this.renderMain(),
       entities: () => this.entities,
@@ -377,7 +383,7 @@ export class DirectoryConsole {
       record: (path, replace) => this.record(path, replace),
       route: () => this.route,
       readTransit: () => this.readTransit(),
-      tree: () => this.tree,
+      tree: () => this.organizationsView?.tree() ?? null,
       relations: (entity, entry, strict) =>
         this.relations(entity, entry, strict),
       groupEntity: dn => this.groupEntity(dn),
@@ -386,6 +392,21 @@ export class DirectoryConsole {
       createLabel: entity => this.createLabel(entity),
       givePassword: (entity, values, id, next, own) =>
         this.passwords.give(entity, values, id, next, own),
+      plural: entity => this.plural(entity),
+      pointerNames: entity => this.pointerNames(entity),
+      attachedNames: () => this.attachedNames(),
+      readMembers: dn => this.readMembers(dn),
+      relationHref: dn => this.relationHref(dn),
+      claimAction: () => this.claimAction(),
+      openList: (entity, view): void => {
+        this.listViews.set(entity.key, view);
+        this.go(entity.key);
+      },
+      openForm: (entity, entry, here) => this.openForm(entity, entry, here),
+      openOrganizationForm: (entity, entry, parentDn) =>
+        this.forms.openOrganization(entity, entry, parentDn),
+      deleteOrganization: (entity, entry, dn) =>
+        this.deletions.organization(entity, entry, dn),
     };
   }
 
@@ -1990,298 +2011,15 @@ export class DirectoryConsole {
   }
 
   /**
-   * The organization tree, with the selected node's card beside it.
-   *
-   * The tree is drawn in place of the one shown last, so the branches the
-   * reader opened stay open; the node the address names is revealed in it.
+   * Draw the organizations page (see `OrganizationsView`): kept for
+   * `renderMain` and the routing tests that replace it until #220's last
+   * step.
    */
-  private async renderOrganizations(
+  private renderOrganizations(
     main: HTMLElement,
     generation: number
   ): Promise<void> {
-    const entity = this.entities.find(item => item.kind === 'organization');
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    // Named after the page, as the sidebar names it, until a card names it
-    // after the organization.
-    this.titlePage(entity ? this.plural(entity) : t('tree.title'));
-    if (this.rights.administersNothing()) {
-      render(main, this.nothingMarkup());
-      return;
-    }
-    render(
-      main,
-      html`
-      <section class="dc-split">
-        <div class="dc-split-aside" data-tree></div>
-        <div class="dc-split-main" data-org-detail>
-          <p class="dc-empty">${t('tree.empty')}</p>
-        </div>
-      </section>`
-    );
-
-    this.tree = new OrganizationTree(
-      {
-        translator: this.translator,
-        report: this.report,
-        root: (): Promise<OrganizationNode | null> =>
-          this.api.organizationTop(),
-        children: (dn: string): Promise<OrganizationNode[]> =>
-          this.api.organizationChildren(dn),
-        transit: this.rights.transit,
-        onSelect: (node: OrganizationNode): void => {
-          this.record(`organizations/${encodeURIComponent(node.dn)}`);
-          background(
-            () => this.showOrganization(node),
-            'showOrganization',
-            this.report
-          );
-        },
-        // A "+" on a node asks a different question from the card on the
-        // overview: the card creates where the scope's `organizations.create`
-        // or the caller's written branches allow, while the "+" creates under
-        // the node it sits on. The server judges that on the node, so the "+"
-        // shows only where the caller writes: a tree drawn from the root
-        // offered it on the root to an administrator of a branch below it,
-        // and creating there was refused.
-        onCreateChild:
-          entity && this.rights.canWrite()
-            ? (node: OrganizationNode): void => {
-                background(
-                  () => this.openOrganizationForm(entity, undefined, node.dn),
-                  'openOrganizationForm',
-                  this.report
-                );
-              }
-            : undefined,
-        canCreateChild: (node: OrganizationNode): boolean =>
-          this.rights.createsUnder(node.dn),
-        // Walked, or searched, from the root the tree is drawn from: the
-        // server roots a local administrator's tree at their branch, and the
-        // filter finds what the tree can open down to, no more. A server
-        // that searches the tree is asked once per filter rather than walked
-        // an organization at a time, up to a bound a wide tree goes past;
-        // it keeps the first matches of a broad text, and says so.
-        everywhere: (): Promise<OrganizationIndex> =>
-          this.api.organizationWalk(),
-        search: this.api.searchesOrganizations
-          ? (query: string, root: string): Promise<OrganizationMatches> =>
-              this.api.organizationSearchRead(query, root, Infinity)
-          : undefined,
-      },
-      this.tree
-    );
-    await this.tree.render(
-      main.querySelector<HTMLElement>('[data-tree]') as HTMLElement
-    );
-
-    if (!this.current(generation)) return;
-    if (this.route.id) {
-      const node = { dn: this.route.id, name: this.route.id };
-      await this.tree.reveal(this.route.id);
-      if (this.current(generation)) await this.showOrganization(node);
-      return;
-    }
-    // Opened on "Select an organization" beside a tree of one root, the page
-    // was always left by a click on that root: it is shown at once, the
-    // address naming it in place of the bare one, so that Back leaves the
-    // page rather than coming back to the empty box.
-    const top = this.tree.top();
-    if (!top) return;
-    this.record(`organizations/${encodeURIComponent(top.dn)}`, true);
-    this.tree.select(top.dn);
-    await this.showOrganization(top);
-  }
-
-  /**
-   * Whether an organization holds others, read from the tree when it has
-   * read it: its People table lists only those attached to it directly.
-   */
-  private async holdsOthers(dn: string): Promise<boolean> {
-    const known = this.tree?.hasChildren(dn);
-    if (known !== undefined) return known;
-    try {
-      return (await this.api.organizationChildren(dn)).length > 0;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * The Users list cut to an organization and what lies under it: who is in
-   * Sales was a question only reading the whole directory answered. It is
-   * searched by department path, and cut to the path itself and those under
-   * it, which a search by substring is not.
-   *
-   * @returns what the People table's button does, or nothing when no
-   *   entity lists the people with a path
-   */
-  private listEveryone(
-    entity: EntityDescriptor,
-    entry: Entry,
-    dn: string
-  ): (() => void) | undefined {
-    // The top of the tree is in no path: its children's start with their
-    // own name. Listed by its path, it gave the people attached to it alone.
-    if (comparableDn(dn) === comparableDn(entity.base)) return undefined;
-    const people = attachedEntity(this.entities, 'people');
-    const field = people?.organizationPath;
-    const stored = entity.organizationPath
-      ? entryValue(entry, entity.organizationPath)
-      : undefined;
-    const path =
-      String((Array.isArray(stored) ? stored[0] : stored) ?? '') ||
-      this.tree?.nameOf(dn);
-    if (!people || !field || !path) return undefined;
-    return (): void => {
-      this.listViews.set(people.key, {
-        search: path,
-        searchAttribute: field,
-        under: path,
-      });
-      this.go(people.key);
-    };
-  }
-
-  /** Show one organization in the right-hand pane, tree still visible. */
-  private async showOrganization(node: OrganizationNode): Promise<void> {
-    const entity = this.entities.find(item => item.kind === 'organization');
-    const holder =
-      this.container?.querySelector<HTMLElement>('[data-org-detail]');
-    if (!holder || !entity) return;
-    // Clicking through a tree is navigation like any other: the node asked
-    // for last is the node whose card should end up on screen.
-    const generation = ++this.viewGeneration;
-    // Until its card is drawn, the tab no longer names the organization
-    // shown before, but the page: a card that fails to load leaves it so.
-    this.titlePage(this.plural(entity));
-
-    // The address names an organization by its DN, which the server checks
-    // before looking for it: `#/organizations/zzz` read its refusal, in
-    // English and red, where it names an entry that is simply not there.
-    if (!isDnShaped(node.dn)) {
-      render(
-        holder,
-        html`<p class="dc-empty">${this.translator.t('detail.notFound')}</p>`
-      );
-      return;
-    }
-    let entry: Entry;
-    try {
-      entry = await this.api.organization(node.dn);
-      if (!this.current(generation)) return;
-    } catch (err) {
-      if (!this.current(generation)) return;
-      const failure = readFailure(err, this.translator);
-      render(
-        holder,
-        html`<p class="dc-empty${
-          failure.gone || failure.refused ? '' : ' dc-error-block'
-        }">${failure.message}</p>`
-      );
-      return;
-    }
-
-    // "Who is in this department?" is the question an organization card is
-    // opened to answer, and the tree deliberately does not show accounts.
-    let failure: string | undefined;
-    const listEveryone = this.listEveryone(entity, entry, node.dn);
-    const [members, named, attachedNames, holdsOthers] = await Promise.all([
-      // A failure is said where the entries would be: an empty table read
-      // as an empty department.
-      this.readMembers(node.dn).catch((err: unknown) => {
-        failure = readFailure(err, this.translator).message;
-        return { entries: [], truncated: false };
-      }),
-      this.pointerNames(entity),
-      this.attachedNames(),
-      listEveryone ? this.holdsOthers(node.dn) : false,
-    ]);
-    if (!this.current(generation)) return;
-
-    const organization = this.rights.organizationRights(node.dn);
-    const transit = this.rights.transit;
-    const name =
-      [entryValue(entry, entity.mainAttribute) ?? []].flat()[0] ||
-      rdnValue(node.dn);
-    // Said where Edit would be, on the organization the caller administers:
-    // the banner names it as theirs, and Save was refused at the end. Not
-    // on the top of the tree, which nobody above changes from the console,
-    // nor on the transit branch, which every administrator writes.
-    const above = parentOf(node.dn);
-    const changedAbove =
-      !organization.write &&
-      !!above &&
-      withinDn(above, entity.base) &&
-      !(transit && withinDn(node.dn, transit)) &&
-      this.rights.administersExactly(node.dn);
-    const card = new EntityDetail({
-      report: this.report,
-      entity,
-      entry,
-      translator: this.translator,
-      canWrite: organization.write,
-      canDelete: organization.delete,
-      notice: changedAbove
-        ? this.translator.t('org.changedAbove', { name })
-        : undefined,
-      pointerLabel: named,
-      attached: new AttachedTables({
-        entities: this.entities,
-        members,
-        translator: this.translator,
-        name,
-        pointerLabel: attachedNames,
-        onCreate: this.createsHere(entity, entry, node),
-        onListEveryone:
-          holdsOthers ||
-          (('cut' in members ? members.cut?.people?.truncated : undefined) ??
-            members.truncated)
-            ? listEveryone
-            : undefined,
-        // The transit branch's card is where its link leads: what waits
-        // there is claimed from it as from the Overview.
-        rowAction:
-          transit && comparableDn(transit) === comparableDn(node.dn)
-            ? this.claimAction()
-            : undefined,
-        partial: !this.rights.readsWhole(node.dn),
-        failure,
-        onOpen: (href: string): void => {
-          window.location.hash = href;
-        },
-      }),
-      relationHref: (dn: string): string | undefined => this.relationHref(dn),
-      onEdit: (): void => {
-        background(
-          () => this.openOrganizationForm(entity, entry),
-          'openOrganizationForm',
-          this.report
-        );
-      },
-      onDelete: (): void => {
-        background(
-          () => this.confirmDeleteOrganization(entity, entry, node.dn),
-          'confirmDeleteOrganization',
-          this.report
-        );
-      },
-      // What the tree's "+" does, said in words where the reader is looking:
-      // the "+" shows on a row only once it is pointed at or selected.
-      onCreateChild: this.rights.createsUnder(node.dn)
-        ? (): void => {
-            background(
-              () => this.openOrganizationForm(entity, undefined, node.dn),
-              'openOrganizationForm',
-              this.report
-            );
-          }
-        : undefined,
-      onStatus: (): void => undefined,
-      onResetPassword: (): void => undefined,
-    });
-    card.render(holder);
-    this.titlePage(card.heading());
+    return this.organizationsView.render(main, generation);
   }
 
   /**
@@ -2306,75 +2044,6 @@ export class DirectoryConsole {
     );
     return (dn: string): string | undefined =>
       named.map(name => name(dn)).find(Boolean);
-  }
-
-  /**
-   * New user here and New group here, on an organization's card: the New
-   * user form with the department already set to it, as the Overview's card
-   * opens it, and the entry, once created, listed on the card.
-   *
-   * Offered where the Overview offers the creation, and only on an
-   * organization the caller writes: the server judges a new account on the
-   * department it is attached to. Not in the transit branch, which is no
-   * organization of anyone's to grow.
-   *
-   * @param organizations the organizations' entity
-   * @param entry the organization, as read
-   * @param node the organization, as the tree has it
-   * @returns the creations offered, by table
-   */
-  private createsHere(
-    organizations: EntityDescriptor,
-    entry: Entry,
-    node: OrganizationNode
-  ): Partial<Record<AttachedKind, () => void>> {
-    const offered: Partial<Record<AttachedKind, () => void>> = {};
-    // The global administrator writes above the transit branch, and may
-    // grow it, but an account is handed over into it, not created there.
-    const transit = this.rights.transit;
-    if (
-      !this.rights.createsUnder(node.dn) ||
-      (transit && withinDn(node.dn, transit))
-    )
-      return offered;
-    // The path names the department in the form's picker, as it does on an
-    // entry being edited: the DN alone would show its last name only.
-    const path = organizations.organizationPath
-      ? [entryValue(entry, organizations.organizationPath) ?? []].flat()[0]
-      : undefined;
-    for (const kind of ['people', 'groups'] as const) {
-      const target = attachedEntity(this.entities, kind);
-      const link = target?.organizationLink;
-      if (!target || !link || !this.rights.canCreate(target)) continue;
-      const preset: Entry = { [link]: node.dn };
-      if (target.organizationPath && path)
-        preset[target.organizationPath] = path;
-      offered[kind] = (): void =>
-        background(
-          () =>
-            this.openForm(target, undefined, {
-              preset,
-              // The card is drawn anew, button included: the focus goes back to
-              // the new one, for the next creation, rather than to the page.
-              created: (): void =>
-                background(
-                  () =>
-                    this.showOrganization(node).then(() =>
-                      this.container
-                        ?.querySelector<HTMLElement>(
-                          `[data-create-attached="${kind}"]`
-                        )
-                        ?.focus()
-                    ),
-                  'showOrganization',
-                  this.report
-                ),
-            }),
-          'openForm',
-          this.report
-        );
-    }
-    return offered;
   }
 
   /**
@@ -2528,15 +2197,6 @@ export class DirectoryConsole {
     here?: { preset: Entry; created(): void }
   ): void {
     this.forms.open(entity, entry, here);
-  }
-
-  /** Create or edit an organization, through its own endpoints (see `FormActions`). */
-  private openOrganizationForm(
-    entity: EntityDescriptor,
-    entry?: Entry,
-    parentDn?: string
-  ): void {
-    this.forms.openOrganization(entity, entry, parentDn);
   }
 
   /**
@@ -2739,15 +2399,6 @@ export class DirectoryConsole {
     canChangeState = false
   ): Promise<void> {
     return this.deletions.one(entity, id, entry, canChangeState);
-  }
-
-  /** Delete an organization once asked (see `DeletionActions`). */
-  private confirmDeleteOrganization(
-    entity: EntityDescriptor,
-    entry: Entry,
-    dn: string
-  ): Promise<void> {
-    return this.deletions.organization(entity, entry, dn);
   }
 
   /** Delete a selection once asked (see `DeletionActions`): whether any went. */
