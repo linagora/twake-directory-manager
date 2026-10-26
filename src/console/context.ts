@@ -1,13 +1,13 @@
 /**
  * What a view or an action is given of the console, instead of reaching into
  * it: the client, the words, the rights, the entities, the panel and the
- * dialog, the toast and the reporter, the ticket of the page drawn, the
- * address, the tree, an entry's relations, the transit count, the words of
- * a creation and the first password of an account created, what the
- * organizations page asks of the pages and actions still in the console:
- * the names of what entries point at, an organization's entries, Claim…,
- * a list opened on a search, the forms and the deletion, and the actions
- * an entry's card starts (#220).
+ * dialog, the toast, the announcer and the reporter, the ticket of the page
+ * drawn, the address, the tree, an entry's relations, the transit count, the
+ * words of a creation and the first password of an account created, what
+ * the organizations page asks of the console, the other pages and the
+ * actions: the names of what entries point at, an organization's entries,
+ * Claim…, a list opened on a search, the forms and the deletion; the actions
+ * an entry's card starts and those a list starts on its selection (#220).
  *
  * @module twake-directory-manager/console/context
  */
@@ -20,6 +20,7 @@ import type { Translator } from '../i18n';
 import type { Rights } from '../rights';
 import type { Reporter } from '../shared/background';
 import type { AttachedEntries, EntityDescriptor, Entry } from '../types';
+import type { Announce } from '../ui/announce';
 import type { DialogService } from './dialog';
 import type { PanelService } from './panel';
 import type { Route } from './route';
@@ -50,9 +51,9 @@ export interface Relations {
  * keeps the context, not what it said.
  *
  * It holds what the views and actions moved out so far need (the password
- * policies, the organizations and an entry's card; the password resets, the
- * state changes, the transit, the deletions, the forms and the memberships
- * of groups), and grows with each view and action moved out of
+ * policies, the organizations, an entry's card and the lists; the password
+ * resets, the state changes, the transit, the deletions, the forms and the
+ * memberships of groups), and grows with each view and action moved out of
  * `DirectoryConsole` (#220): add a member when a moved method needs one,
  * not before.
  */
@@ -67,6 +68,8 @@ export interface ConsoleContext {
   rights(): Rights;
   /** Show a short message; a refusal interrupts the screen reader */
   toast(message: string, isError?: boolean): void;
+  /** Say a text to a screen reader, and nothing to the eye (#212) */
+  readonly announce: Announce;
   /** Where work nobody waits for ends when it fails (see `background`) */
   readonly report: Reporter;
   /** The side panel every form opens in */
@@ -166,7 +169,7 @@ export interface ConsoleContext {
   claimAction(): NonNullable<AttachedOptions['rowAction']>;
   /**
    * Open an entity's list on a search of its own, kept as where the reader
-   * left that list: the list page is the console's until it moves
+   * left that list (see `ListsView.open`)
    */
   openList(entity: EntityDescriptor, view: ListView): void;
   /**
@@ -261,6 +264,33 @@ export interface ConsoleContext {
     name: string,
     dn: string
   ): Promise<void>;
+  /**
+   * Delete a list's selection once asked (see `DeletionActions.many`)
+   *
+   * @returns whether any entry went
+   */
+  deleteSelection(entity: EntityDescriptor, ids: string[]): Promise<boolean>;
+  /**
+   * Change the state of the accounts a list's selection holds (see
+   * `StateActions.changeMany`)
+   *
+   * @returns whether any changed, once its panel is closed
+   */
+  changeSelectionState(
+    entity: EntityDescriptor,
+    selected: [string, Entry][]
+  ): Promise<boolean>;
+  /**
+   * Add to a group…, on a list's selection of accounts (see
+   * `GroupActions.addMany`)
+   *
+   * @returns whether the accounts are in a group chosen, once its panel is
+   *   closed
+   */
+  addSelectionToGroups(
+    entity: EntityDescriptor,
+    selected: [string, Entry][]
+  ): Promise<boolean>;
   /**
    * What the button and the panel creating an entry of an entity read, as
    * the Overview and the list name them
