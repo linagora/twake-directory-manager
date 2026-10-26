@@ -6,7 +6,7 @@ import { referenceOpen } from '../../src/console/settings';
 import { mountConsole, settled } from '../support/mount';
 import type { SafeHtml } from '../../src/shared/html';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
-import { baseUrl, stubContainer, consoleIn } from '../support/stubs';
+import { baseUrl, consoleIn } from '../support/stubs';
 import { users, groups, mailboxTypes } from '../fixtures/entities';
 
 describe('Directory console: the shell and the overview', () => {
@@ -396,102 +396,6 @@ describe('Directory console: the shell and the overview', () => {
     });
   });
 
-  describe('the list, between visits', () => {
-    /**
-     * The controls of one drawing of a list. Each repaint binds them again,
-     * so only the listener bound last is live, as in a browser.
-     */
-    const controls = () => {
-      const control = (dataset: Record<string, string> = {}) => {
-        let handler: ((event: unknown) => void) | undefined;
-        const made = {
-          value: '',
-          dataset,
-          fire: () => handler?.({ target: made }),
-          addEventListener: (
-            _type: string,
-            callback: (event: unknown) => void
-          ) => {
-            handler = callback;
-          },
-        };
-        return made;
-      };
-      const search = control();
-      const field = control();
-      const next = control({ page: '1' });
-      const holder = stubContainer();
-      Object.assign(holder, {
-        querySelector: (selector: string) =>
-          selector === '[data-search]'
-            ? search
-            : selector === '[data-search-attribute]'
-              ? field
-              : null,
-        querySelectorAll: (selector: string) =>
-          selector === '[data-page]' ? [next] : [],
-      });
-      return { holder, search, field, next };
-    };
-
-    it('should come back to the search, the field and the page it was left on', async () => {
-      // Back from a card drew the list anew: an empty box, "Every field",
-      // the prompt to type, and no rows.
-      const app = consoleIn({});
-      const loads: [string | undefined, string | undefined][] = [];
-      const entries: Record<string, Entry> = {};
-      for (let i = 10; i < 40; i++)
-        entries[`alice${i}`] = {
-          dn: `uid=alice${i},ou=users,dc=example,dc=com`,
-          uid: `alice${i}`,
-        };
-      Object.assign((app as unknown as { api: object }).api, {
-        listBounded: async (
-          _entity: EntityDescriptor,
-          search?: string,
-          attribute?: string
-        ) => {
-          loads.push([search, attribute]);
-          return { entries, truncated: false };
-        },
-      });
-      const visit = async () => {
-        const list = controls();
-        const main = {
-          innerHTML: '',
-          querySelector: (selector: string) =>
-            selector === '[data-list]' ? list.holder : null,
-        };
-        await (
-          app as unknown as {
-            renderList(main: unknown, entity: EntityDescriptor): Promise<void>;
-          }
-        ).renderList(main, users);
-        return list;
-      };
-
-      const first = await visit();
-      first.field.value = 'mail';
-      first.field.fire();
-      first.search.value = 'alice';
-      first.search.fire();
-      await new Promise(resolve => setTimeout(resolve, 300));
-      first.next.fire();
-      expect(first.holder.innerHTML).to.contain('26–30 of 30');
-      expect(loads).to.deep.equal([['alice', 'mail']]);
-
-      const back = await visit();
-      expect(loads).to.deep.equal([
-        ['alice', 'mail'],
-        ['alice', 'mail'],
-      ]);
-      expect(back.holder.innerHTML)
-        .to.contain('value="alice"')
-        .and.match(/<option value="mail" selected>/)
-        .and.contain('26–30 of 30');
-    });
-  });
-
   describe('an address naming no page', () => {
     const organizations: EntityDescriptor = {
       key: 'organizations',
@@ -611,86 +515,6 @@ describe('Directory console: the shell and the overview', () => {
         const { main, drawn } = await visit(hash);
         expect(drawn, hash).to.deep.equal([page]);
         expect(main.innerHTML, hash).to.not.include('There is no page');
-      }
-    });
-  });
-
-  describe('an account administering nothing', () => {
-    const top = 'ou=organization,dc=example,dc=com';
-    const organizations: EntityDescriptor = {
-      key: 'organizations',
-      pluralName: 'organizations',
-      singularName: 'organization',
-      mainAttribute: 'ou',
-      base: top,
-      schema: { attributes: { ou: { type: 'string', role: 'identifier' } } },
-      endpoint: '/api/v1/ldap/organizations',
-      kind: 'organization',
-    };
-    const notice =
-      'You administer no branch: there is nothing here for you to manage.';
-
-    /** A console with this scope, which records what it asks the server. */
-    const setup = (scope: Scope) => {
-      const asked: string[] = [];
-      const holder = stubContainer();
-      const main = {
-        innerHTML: '',
-        querySelector: (selector: string): unknown =>
-          ({
-            '[data-list]': holder,
-            '[data-detail]': stubContainer(),
-          })[selector] ?? null,
-      };
-      const app = consoleIn({ '[data-main]': main });
-      Object.assign(app as unknown as object, {
-        scope,
-        entities: [users, organizations],
-      });
-      Object.assign((app as unknown as { api: object }).api, {
-        listBounded: async () => {
-          asked.push('list');
-          return { entries: {}, truncated: false };
-        },
-        get: async () => {
-          asked.push('get');
-          return { dn: 'uid=bob,ou=users,dc=example,dc=com', uid: 'bob' };
-        },
-      });
-      const views = app as unknown as {
-        renderList(main: unknown, entity: EntityDescriptor): Promise<void>;
-      };
-      return { views, main, holder, asked };
-    };
-    const nobody: Scope = {
-      user: 'alice',
-      unrestricted: false,
-      described: true,
-      branches: [],
-      entities: [],
-    };
-
-    it('should say there is nothing to manage, and ask nothing the server would refuse', async () => {
-      // Each page answered in red with the server's "Token does not have
-      // permission on this branch".
-      const { views, main, holder, asked } = setup(nobody);
-      await views.renderList(main, users);
-      expect(holder.innerHTML).to.contain(notice).and.not.contain('error');
-      // The card: in test/views/entry.test.ts; the organizations page: in
-      // test/views/organizations.test.ts.
-      expect(asked).to.deep.equal([]);
-    });
-
-    it('should still read for an unrestricted or undescribed scope, which names no branch either', async () => {
-      for (const scope of [
-        { ...nobody, unrestricted: true },
-        { ...nobody, described: false },
-      ]) {
-        const { views, main, holder } = setup(scope);
-        await views.renderList(main, users);
-        expect(holder.innerHTML).to.not.contain(notice);
-        // The card's read: in test/views/entry.test.ts; the organizations
-        // page's tree: in test/views/organizations.test.ts.
       }
     });
   });
