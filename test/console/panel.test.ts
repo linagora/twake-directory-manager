@@ -756,7 +756,10 @@ describe('Directory console: the side panel and the toast', () => {
       const g = globalThis as Record<string, unknown>;
       let original: unknown;
       /** Which element has the focus, as `document.activeElement` says. */
-      const page = { activeElement: null as unknown };
+      const page = {
+        activeElement: null as unknown,
+        documentElement: { lang: '' },
+      };
       beforeEach(() => {
         original = g.document;
         page.activeElement = null;

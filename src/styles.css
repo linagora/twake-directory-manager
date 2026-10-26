@@ -113,6 +113,21 @@
   overflow-y: auto;
 }
 
+/* The entries are a list, announced with its count; it lays them out as the
+   navigation did, so nothing moves. */
+.dc-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-nav-list > li {
+  display: flex;
+}
+
 .dc-nav-item {
   display: flex;
   align-items: center;
@@ -180,26 +195,26 @@
   height: 14px;
 }
 
-.dc-nav-item:nth-child(5n + 1) .dc-nav-icon {
+.dc-nav-list > li:nth-child(5n + 1) .dc-nav-icon {
   --dc-tint: #6e6e73;
 }
 
-.dc-nav-item:nth-child(5n + 2) .dc-nav-icon,
+.dc-nav-list > li:nth-child(5n + 2) .dc-nav-icon,
 .dc-cards .dc-card:nth-child(5n + 1) .dc-entity-icon {
   --dc-tint: #0b63d6;
 }
 
-.dc-nav-item:nth-child(5n + 3) .dc-nav-icon,
+.dc-nav-list > li:nth-child(5n + 3) .dc-nav-icon,
 .dc-cards .dc-card:nth-child(5n + 2) .dc-entity-icon {
   --dc-tint: #7b3fe4;
 }
 
-.dc-nav-item:nth-child(5n + 4) .dc-nav-icon,
+.dc-nav-list > li:nth-child(5n + 4) .dc-nav-icon,
 .dc-cards .dc-card:nth-child(5n + 3) .dc-entity-icon {
   --dc-tint: #1d8540;
 }
 
-.dc-nav-item:nth-child(5n + 5) .dc-nav-icon,
+.dc-nav-list > li:nth-child(5n + 5) .dc-nav-icon,
 .dc-cards .dc-card:nth-child(5n + 4) .dc-entity-icon {
   --dc-tint: #c2410c;
 }
@@ -2239,6 +2254,26 @@ select.dc-input {
   height: auto;
 }
 
+/* The first thing the keyboard reaches: a link to the main area, shown only
+   while it has the focus, so that a page change does not cost the sidebar's
+   every entry again. */
+.dc-skip-link {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 30;
+  transform: translateY(-200%);
+}
+
+.dc-skip-link:focus {
+  transform: none;
+}
+
+/* Focused by the skip link, not by a reader's click: no ring on the area. */
+.dc-main:focus {
+  outline: none;
+}
+
 .dc-visually-hidden {
   position: absolute;
   width: 1px;
@@ -2331,6 +2366,18 @@ textarea.dc-policy-text {
   .dc-nav-item {
     width: auto;
     flex: none;
+  }
+
+  .dc-nav-list {
+    flex-direction: row;
+  }
+
+  .dc-nav-list > li {
+    flex: none;
+  }
+
+  .dc-nav-reference .dc-nav-list {
+    gap: 4px;
   }
 
   .dc-nav-section,
@@ -2442,26 +2489,26 @@ textarea.dc-policy-text {
     --dc-state-ink: #ffa39e;
   }
 
-  .dc-nav-item:nth-child(5n + 1) .dc-nav-icon {
+  .dc-nav-list > li:nth-child(5n + 1) .dc-nav-icon {
     --dc-tint: #a1a1a6;
   }
 
-  .dc-nav-item:nth-child(5n + 2) .dc-nav-icon,
+  .dc-nav-list > li:nth-child(5n + 2) .dc-nav-icon,
   .dc-cards .dc-card:nth-child(5n + 1) .dc-entity-icon {
     --dc-tint: #4b9dff;
   }
 
-  .dc-nav-item:nth-child(5n + 3) .dc-nav-icon,
+  .dc-nav-list > li:nth-child(5n + 3) .dc-nav-icon,
   .dc-cards .dc-card:nth-child(5n + 2) .dc-entity-icon {
     --dc-tint: #b48cff;
   }
 
-  .dc-nav-item:nth-child(5n + 4) .dc-nav-icon,
+  .dc-nav-list > li:nth-child(5n + 4) .dc-nav-icon,
   .dc-cards .dc-card:nth-child(5n + 3) .dc-entity-icon {
     --dc-tint: #4cd07d;
   }
 
-  .dc-nav-item:nth-child(5n + 5) .dc-nav-icon,
+  .dc-nav-list > li:nth-child(5n + 5) .dc-nav-icon,
   .dc-cards .dc-card:nth-child(5n + 4) .dc-entity-icon {
     --dc-tint: #ff9f5a;
   }

@@ -5,6 +5,7 @@ import {
   type Confirmation,
 } from '../../src/DirectoryConsole';
 import { Translator, availableLanguages, languageName } from '../../src/i18n';
+import { splitEntities } from '../../src/rights';
 import type { SafeHtml } from '../../src/shared/html';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
 import {
@@ -901,6 +902,123 @@ describe('Directory console: the shell and the overview', () => {
         const app = fresh();
         expect(app.translator.language).to.equal('en');
         expect(app.referenceOpen()).to.equal(false);
+      });
+    });
+
+    describe('the frame, drawn into the document', () => {
+      /** A console whose container is an element of the page, its shell drawn. */
+      const drawn = (language = 'en') => {
+        const container = document.createElement('div');
+        document.body.append(container);
+        const app = consoleIn({}, language) as unknown as {
+          container: HTMLElement;
+          entities: EntityDescriptor[];
+          pageTitle: string;
+          drawShell(): void;
+          changeLanguage(code: string): void;
+          renderMain(): Promise<void>;
+          renderDashboard(main: HTMLElement): void;
+          renderNotFound(main: HTMLElement): void;
+        };
+        app.container = container;
+        app.entities = [users, groups, mailboxTypes];
+        app.renderMain = () => Promise.resolve();
+        app.drawShell();
+        return { app, container };
+      };
+      const labels = (list: Element): (string | null | undefined)[] =>
+        Array.from(list.querySelectorAll('li > button[data-nav]')).map(
+          button => button.querySelector('.dc-nav-label')?.textContent
+        );
+
+      it('should offer the entries as a list, the reference data as one of its own', () => {
+        // Announced "navigation, list, 3 items", and the reference data as a
+        // list of its own once opened (#219).
+        const { container } = drawn();
+        const { primary, reference } = splitEntities([
+          users,
+          groups,
+          mailboxTypes,
+        ]);
+        const lists = container.querySelectorAll('.dc-nav ul.dc-nav-list');
+        expect(lists).to.have.length(2);
+        expect(labels(lists[0])).to.deep.equal([
+          'Overview',
+          ...primary.map(entity => entity.pluralName),
+        ]);
+        expect(lists[1].closest('#dc-nav-reference')).to.not.equal(null);
+        expect(labels(lists[1])).to.deep.equal(
+          reference.map(entity => entity.pluralName)
+        );
+      });
+
+      it('should let the keyboard skip to the main area without changing the address', () => {
+        // The first thing Tab reaches; Enter focuses the main area, and the
+        // hash, which the console routes on, is left alone (#215).
+        const { container } = drawn();
+        const link = container.querySelector<HTMLElement>(
+          'a.dc-skip-link[data-skip]'
+        );
+        const main = container.querySelector<HTMLElement>(
+          'main#dc-main[tabindex="-1"]'
+        );
+        expect(link?.textContent).to.equal('Skip to main content');
+        expect(container.firstElementChild?.firstElementChild).to.equal(link);
+        expect(main).to.not.equal(null);
+        link?.click();
+        expect(document.activeElement).to.equal(main);
+        expect(window.location.hash).to.equal('');
+      });
+
+      it('should declare the language of the page, and keep the focus on the selector that changed it', () => {
+        // A screen reader reads French with a French voice only when the
+        // document says so; chosen by arrow keys, the select keeps the focus
+        // and says what it does (#209).
+        const { app, container } = drawn();
+        expect(document.documentElement.lang).to.equal('en');
+        const select = container.querySelector<HTMLSelectElement>(
+          'select[data-language]'
+        );
+        expect(select?.getAttribute('aria-describedby')).to.equal(
+          'dc-language-hint'
+        );
+        expect(
+          container.querySelector('#dc-language-hint.dc-visually-hidden')
+            ?.textContent
+        ).to.equal('The interface changes language as soon as one is chosen.');
+        app.changeLanguage('fr');
+        expect(document.documentElement.lang).to.equal('fr');
+        const fresh = container.querySelector<HTMLSelectElement>(
+          'select[data-language]'
+        );
+        expect(fresh).to.not.equal(select);
+        expect(document.activeElement).to.equal(fresh);
+        expect(
+          container.querySelector('#dc-language-hint')?.textContent
+        ).to.equal(
+          'L’interface change de langue dès qu’une langue est choisie.'
+        );
+      });
+
+      it('should title the tab after the page shown', () => {
+        // Every page, not only a card, so that tabs and history tell them
+        // apart (#214).
+        const { app, container } = drawn();
+        app.pageTitle = 'Twake Directory Manager';
+        Object.assign(app, { readMembers: async () => null });
+        const main = container.querySelector<HTMLElement>('[data-main]');
+        if (!main) throw new Error('no main area');
+        app.renderDashboard(main);
+        expect(document.title).to.equal('Overview — Twake Directory Manager');
+        app.renderNotFound(main);
+        expect(document.title).to.equal(
+          'No such page — Twake Directory Manager'
+        );
+        app.changeLanguage('fr');
+        app.renderNotFound(main);
+        expect(document.title).to.equal(
+          'Page introuvable — Twake Directory Manager'
+        );
       });
     });
 

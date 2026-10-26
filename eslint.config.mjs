@@ -68,9 +68,8 @@ const rules = {
 // when the file does; remove the file when it goes under the budget; never
 // add one.
 const oversized = {
-  'src/DirectoryConsole.ts': 3911,
-  'src/components/EntityForm.ts': 1411,
-  'src/i18n.ts': 1340,
+  'src/DirectoryConsole.ts': 3859,
+  'src/components/EntityForm.ts': 1408,
 };
 
 // What the types tell on top: a promise nobody waits for or handles, a
@@ -128,6 +127,10 @@ export default [
       'max-lines': ['error', { max, skipComments: true, skipBlankLines: true }],
     },
   })),
+  // The catalogues are data, one line per sentence in each language: the
+  // file grows with every sentence the console says, and that is as it
+  // should be (#220).
+  { files: ['src/i18n.ts'], rules: { 'max-lines': 'off' } },
   {
     files: ['*.mjs', 'docker/*.mjs', 'scripts/*.mjs'],
     languageOptions: { globals: globals.node },

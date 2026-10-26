@@ -34,7 +34,7 @@ context, report)` (`src/shared/background.ts`), which reports a failure.
 - A module stays under 1,200 lines (2,500 for a test file), comments aside;
   the files over it today are listed in `eslint.config.mjs` with the size
   they had, which may only shrink. A new page or action goes in a file of
-  its own.
+  its own. The catalogues of `src/i18n.ts` are data and exempt.
 - Coverage thresholds (`.c8rc.json`) only go up; lower one in the PR that
   needs it and say why.
 

@@ -16,7 +16,8 @@ import {
   isLarge,
   roleAttribute,
 } from './api/ConsoleApiClient';
-import { CONSOLE_LOGO, LINAGORA_LOGO } from './assets';
+import { LINAGORA_LOGO } from './assets';
+import { initial, sidebarMarkup } from './console/shell';
 import {
   AttachedTables,
   attachedClass,
@@ -48,7 +49,7 @@ import {
   resolveText,
   withinDn,
 } from './format';
-import { availableLanguages, languageName, Translator } from './i18n';
+import { Translator } from './i18n';
 import { Rights, splitEntities } from './rights';
 import { signInAgain } from './session';
 import type { ListView } from './components/EntityList';
@@ -80,7 +81,7 @@ import type {
   Scope,
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
-import { html, render, trusted, type SafeHtml } from './shared/html';
+import { html, render, type SafeHtml } from './shared/html';
 
 /** The signed-in account, as the overview names it. */
 interface SignedIn {
@@ -122,31 +123,6 @@ export interface Confirmation {
 const LANGUAGE_KEY = 'ldap-rest.console.language';
 const POLICIES_KEY = 'password-policies';
 const REFERENCE_OPEN_KEY = 'ldap-rest.console.referenceOpen';
-
-/**
- * The letter standing for a collection in the navigation and on its card.
- * Collections are named by the deployment, so a drawn icon could only guess
- * what one holds; its own initial never does.
- */
-function initial(label: string): string {
-  return (Array.from(label.trim())[0] || '').toLocaleUpperCase();
-}
-
-/** A chevron, turned by CSS when its section is open. */
-const CHEVRON_ICON = trusted(
-  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" ' +
-    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-    '<path d="m6 4 4 4-4 4"/></svg>'
-);
-
-/** Four squares: the overview, which is every collection at once. */
-const OVERVIEW_ICON = trusted(
-  '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">' +
-    '<rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.6"/>' +
-    '<rect x="9" y="1.5" width="5.5" height="5.5" rx="1.6"/>' +
-    '<rect x="1.5" y="9" width="5.5" height="5.5" rx="1.6"/>' +
-    '<rect x="9" y="9" width="5.5" height="5.5" rx="1.6"/></svg>'
-);
 
 /** What Tab can reach in the side panel. */
 const FOCUSABLE = [
@@ -558,6 +534,11 @@ export class DirectoryConsole {
       this.container
         ?.querySelector<HTMLElement>('[data-panel]')
         ?.replaceWith(kept);
+    // Chosen with the keyboard, the language changes on each arrow: the
+    // focus stays on the select, drawn anew, rather than falling to the page.
+    this.container
+      ?.querySelector<HTMLSelectElement>('[data-language]')
+      ?.focus();
     background(() => this.renderMain(), 'renderMain', this.report);
   }
 
@@ -565,6 +546,10 @@ export class DirectoryConsole {
   private drawShell(): void {
     const container = this.container;
     if (!container) return;
+    // The page speaks the interface's language: a screen reader reads a
+    // French label with a French voice only when the document says so.
+    if (typeof document !== 'undefined')
+      document.documentElement.lang = this.translator.language;
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     // An account administering nothing finds only "nothing to manage" behind
@@ -578,66 +563,20 @@ export class DirectoryConsole {
       container,
       html`
       <div class="dc-app">
-        <aside class="dc-sidebar">
-          <div class="dc-brand">
-            <span class="dc-brand-logo" aria-hidden="true">${CONSOLE_LOGO}</span>
-            <span class="dc-brand-name">${t('app.title')}</span>
-          </div>
-          <nav class="dc-nav">
-            <button type="button" class="dc-nav-item" data-nav="">
-              <span class="dc-nav-icon">${OVERVIEW_ICON}</span>
-              <span class="dc-nav-label">${t('nav.dashboard')}</span>
-            </button>
-            ${primary.map(
-              entity =>
-                html`<button type="button" class="dc-nav-item" data-nav="${
-                  entity.key
-                }">
-                    <span class="dc-nav-icon" aria-hidden="true">${initial(
-                      this.plural(entity)
-                    )}</span>
-                    <span class="dc-nav-label">${this.plural(entity)}</span>
-                  </button>`
-            )}
-            ${
-              settings.length
-                ? html`<div class="dc-nav-section">
-                    <button type="button" class="dc-nav-toggle" data-nav-toggle
-                      aria-expanded="false" aria-controls="dc-nav-reference">
-                      <span>${t('nav.reference')}</span>
-                      <span class="dc-nav-chevron">${CHEVRON_ICON}</span>
-                    </button>
-                    <div class="dc-nav-reference" id="dc-nav-reference" hidden>
-                      ${settings.map(
-                        ({ key, label }) =>
-                          html`<button type="button" class="dc-nav-item dc-nav-item-reference" data-nav="${
-                            key
-                          }"><span class="dc-nav-label">${
-                            label
-                          }</span></button>`
-                      )}
-                    </div>
-                  </div>`
-                : ''
-            }
-          </nav>
-          <div class="dc-sidebar-footer">
-            <label class="dc-language">
-              <span>${t('app.language')}</span>
-              <select class="dc-input" data-language>
-                ${availableLanguages.map(
-                  code =>
-                    html`<option value="${code}" lang="${code}"${
-                      code === this.translator.language ? ' selected' : ''
-                    }>${languageName(code)}</option>`
-                )}
-              </select>
-            </label>
-          </div>
-        </aside>
+        <a class="dc-skip-link dc-button dc-button-primary" href="#dc-main"
+          data-skip>${t('app.skipToContent')}</a>
+        ${sidebarMarkup({
+          t,
+          primary: primary.map(entity => ({
+            key: entity.key,
+            label: this.plural(entity),
+          })),
+          reference: settings,
+          language: this.translator.language,
+        })}
         <div class="dc-content">
           <header class="dc-header">${this.scopeMarkup()}${this.logoutMarkup()}</header>
-          <main class="dc-main" data-main></main>
+          <main class="dc-main" id="dc-main" data-main tabindex="-1"></main>
           <a class="dc-powered" href="https://linagora.com" target="_blank"
             rel="noopener noreferrer">
             <img src="${LINAGORA_LOGO}" alt="LINAGORA" width="100" height="21" />
@@ -665,6 +604,15 @@ export class DirectoryConsole {
     )) {
       button.addEventListener('click', () => this.go(button.dataset.nav || ''));
     }
+
+    // The console routes on the hash, and "#dc-main" would be read as a page
+    // of that name: the link moves the focus itself and leaves the address.
+    container
+      .querySelector<HTMLElement>('[data-skip]')
+      ?.addEventListener('click', event => {
+        event.preventDefault();
+        this.main()?.focus();
+      });
 
     container
       .querySelector<HTMLElement>('[data-nav-toggle]')
@@ -1065,6 +1013,7 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     const generation = this.viewGeneration;
+    this.titlePage(t('nav.dashboard'));
     // What waits in transit goes first, once read: it is what may need
     // doing today.
     const sections = this.rights.administersNothing()
@@ -1249,6 +1198,7 @@ export class DirectoryConsole {
    */
   private renderNotFound(main: HTMLElement): void {
     const t = (key: string): string => this.translator.t(key);
+    this.titlePage(t('app.notFoundTitle'));
     render(
       main,
       html`
@@ -1269,6 +1219,7 @@ export class DirectoryConsole {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
     const readOnly = this.rights.readsReferenceOnly(entity);
+    this.titlePage(this.plural(entity));
     render(
       main,
       html`
@@ -1506,11 +1457,11 @@ export class DirectoryConsole {
   }
 
   /**
-   * Title the browser tab after the card on screen — "Alice Moreau — Twake
-   * Directory Manager" — so that the tabs of several open accounts, and the
-   * history, say whose they are.
+   * Title the browser tab after the page on screen — "Users — Twake Directory
+   * Manager", "Alice Moreau — Twake Directory Manager" — so that the tabs of
+   * several open pages, the history and a screen reader say which is which.
    *
-   * @param name the entry's name, or none for a page that is no card
+   * @param name the page's or the entry's name, or none for the bare title
    */
   private titlePage(name?: string): void {
     if (typeof document === 'undefined' || !this.pageTitle) return;
@@ -2412,6 +2363,8 @@ export class DirectoryConsole {
     main: HTMLElement,
     generation: number
   ): Promise<void> {
+    // Named after the page until a card names it after the organization.
+    this.titlePage(this.translator.t('tree.title'));
     if (this.rights.administersNothing()) {
       render(main, this.nothingMarkup());
       return;
@@ -3169,6 +3122,7 @@ export class DirectoryConsole {
   ): Promise<void> {
     const t = (key: string, values?: Record<string, string | number>): string =>
       this.translator.t(key, values);
+    this.titlePage(t('nav.policies'));
     render(
       main,
       html`

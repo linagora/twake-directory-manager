@@ -586,4 +586,72 @@ test.describe('NAV layout, navigation and language', () => {
     await app.expectLoaded();
     await expect(app.mainHeading).toHaveText('Twake Directory Manager');
   });
+
+  test('NAV-11 the frame for keyboard and screen-reader users: titles, skip link, lists, language', async ({
+    page,
+  }) => {
+    const app = await new LoginPage(page).loginAs(ADMIN);
+
+    // One title per page, the cards keeping their names (#214)
+    for (const [hash, name] of [
+      ['', 'Overview'],
+      ['users', 'Users'],
+      ['groups', 'Groups'],
+      ['positions', 'Positions'],
+      ['password-policies', 'Password policies'],
+      ['nowhere', 'No such page'],
+      ['users/alice', 'Alice Moreau'],
+    ]) {
+      await app.open(hash);
+      await expect(page).toHaveTitle(`${name} — Twake Directory Manager`);
+    }
+
+    // The sidebar is a list, the reference data another once opened (#219)
+    await app.open('users');
+    await expect(app.nav.getByRole('list')).toHaveCount(1);
+    await expect(app.nav.getByRole('list').getByRole('listitem')).toHaveCount(
+      4
+    );
+    await app.referenceToggle().click();
+    await expect(app.nav.getByRole('list')).toHaveCount(2);
+    await expect(
+      app.nav.getByRole('list').nth(1).getByRole('listitem')
+    ).toHaveCount(REFERENCE_LISTS.length);
+    await expect(app.navItem('Users')).toHaveAttribute('aria-current', 'page');
+    await app.referenceToggle().click();
+
+    // The first Tab reaches a link to the main area; Enter focuses it, the
+    // address does not change, and the next Tab is the page's first control
+    // (#215)
+    const skip = page.getByRole('link', { name: 'Skip to main content' });
+    await expect(skip).not.toBeInViewport();
+    await page.keyboard.press('Tab');
+    await expect(skip).toBeFocused();
+    await expect(skip).toBeInViewport();
+    await page.keyboard.press('Enter');
+    await expect(app.main).toBeFocused();
+    await expect(page).toHaveURL(/#\/users$/);
+    await page.keyboard.press('Tab');
+    await expect(app.list().importButton).toBeFocused();
+    await expect(skip).not.toBeInViewport();
+
+    // The page speaks the interface's language, and the select that changed
+    // it keeps the focus and says what it does (#209)
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(app.languageSelect).toHaveAccessibleDescription(
+      'The interface changes language as soon as one is chosen.'
+    );
+    await app.languageSelect.focus();
+    await app.languageSelect.selectOption('fr');
+    await expect(app.languageSelect).toHaveValue('fr');
+    await expect(app.languageSelect).toBeFocused();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+    await expect(page).toHaveTitle('Utilisateurs — Twake Directory Manager');
+    await app.reload();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+    await app.setLanguage('mn');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'mn');
+    await app.setLanguage('en');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  });
 });
