@@ -58,6 +58,7 @@ Conventions).
 - [x] LIST-12 (P2) A keyboard user opens an entry from a list: Tab reaches a link in each row, Enter opens the card — `list.spec.ts` (#135; not in the plan)
 - [x] LIST-13 (P3) The LINAGORA badge covers no row — `list.spec.ts`
 - [x] LIST-14 (P2) The selection joins a group, and changes state, in one action — `list.spec.ts` (#170)
+- [x] LIST-15 (P2) The search ("Search Users"), its scope ("Search in"), the table and each row's box ("Select alice") are named for a screen reader, in French too — `list.spec.ts` (#211)
 
 ## User accounts
 
@@ -93,7 +94,7 @@ Conventions).
 ## Organizations
 
 - [x] ORG-01 (P1) Browse the tree and open a card — `organizations.spec.ts` (the Sales card lists People (1) and Groups (1) in tables, with name, email, position or group type, and status, #128)
-- [x] ORG-02 (P1) Tree filter types forwards — `organizations.spec.ts` (from two letters the filter lists paths from the whole tree, #132)
+- [x] ORG-02 (P1) Tree filter types forwards — `organizations.spec.ts` (from two letters the filter lists paths from the whole tree, #132; the filter is named "Filter organizations", #211)
 - [x] ORG-03 (P2) Create a sub-organization — `organizations.spec.ts`
 - [x] ORG-04 (P2) Edit an organization: managers, local administrators, mail domains — `organizations.spec.ts` (Mail domains is a typed search since v0.8.0, no longer a select; the new administrator's banner is checked at once, without the 5 min cache wait)
 - [x] ORG-05 (P2) Delete an organization — `organizations.spec.ts` (confirmed in the console's dialog, in French too, #131)
@@ -103,7 +104,7 @@ Conventions).
 - [x] ORG-09 (P3) Organization card counts the attached entries it does not list — `organizations.spec.ts` (accounts written to the directory rather than imported; the singular with 51; the notice under the People table, headed People (50+), #128)
 - [x] ORG-10 (P1) Filter finds an organization under a closed branch, selecting a row opens it, its "+" stays shown, and the card's New organization here creates under it — `organizations.spec.ts` (#132)
 - [x] ORG-11 (P2) A local administrator's filter finds only their branch's organizations — `organizations.spec.ts` (#132)
-- [x] ORG-12 (P1) The card's People and Groups rows open the entry's card (click, Enter, Back returns), New user here shows where the caller creates (sophie.martin on Sales / France, not alice), and creates with the department set, the new account joining the table without a reload — `organizations.spec.ts` (#128)
+- [x] ORG-12 (P1) The card's People and Groups rows open the entry's card (click, Enter, Back returns), New user here shows where the caller creates (sophie.martin on Sales / France, not alice), and creates with the department set, the new account joining the table without a reload — `organizations.spec.ts` (#128; the tables are named by their headings, count included, #218)
 
 ## Transit: hand over and claim
 
@@ -134,6 +135,8 @@ administrators do not.
 - [x] POLICY-01 (P2) Only the global administrators see the password policies; the default one cannot be deleted — `policies.spec.ts` (the policies API answers 403 to a local administrator, whose page load no longer asks for them: the scope says it, #138)
 - [x] POLICY-02 (P1) Create, edit and delete a policy: durations sent in seconds, an emptied field removes its attribute, and only the settings the directory defines are offered (no Maximum length on OpenLDAP 2.4, #118); Cancel on the deletion's confirmation gives the form back — `policies.spec.ts`
 - [x] POLICY-03 (P2) A policy accounts use is not deleted — `policies.spec.ts` (that it holds their passwords cannot be checked: ldap-rest binds as the rootdn, which ppolicy exempts)
+- [x] POLICY-04 (P2) A name already taken is said under Name, not in a toast — `policies.spec.ts` (#176)
+- [x] POLICY-05 (P1) A keyboard user opens a policy: its name is a button, Enter and Space open the panel, which stays open, Escape and Cancel give the focus back to it; the mouse opens from anywhere on the row — `policies.spec.ts` (#207)
 - [x] DOMAIN-01 (P2) A global administrator adds a mail domain, offered after "@" at once, and deletes it — `domains.spec.ts` (named `*.test`, which LIST-08 and USER-15 ignore)
 - [x] DOMAIN-02 (P2) A local administrator reads the mail domains and changes none — `domains.spec.ts`
 

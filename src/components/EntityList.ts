@@ -34,6 +34,7 @@ import type {
 } from '../types';
 import { background, type Reporter } from '../shared/background';
 import { html, render, type SafeHtml } from '../shared/html';
+import { dataTable } from '../ui/table';
 
 // Kept importable from here, where it was first defined.
 export { csvCell };
@@ -152,6 +153,8 @@ export interface ListView {
 export interface ListOptions {
   entity: EntityDescriptor;
   translator: Translator;
+  /** The list's title in the interface's language ("Users"), which names the search and the table; the entity's plural name when absent */
+  title?: string;
   /**
    * Told of a failure in work the component starts without waiting for it
    * (see `background`); the console's own reporter, or the log when absent
@@ -673,14 +676,20 @@ export class EntityList {
   /** The search box and the field it searches in. */
   private searchMarkup(): SafeHtml {
     const { translator } = this.options;
+    // A placeholder goes as soon as one types: the name stays.
+    const searchLabel = translator.t('list.searchLabel', {
+      entity: this.title,
+    });
     return html`
       <div class="dc-search">
         <input type="search" class="dc-input" data-search
           value="${this.search}"
-          placeholder="${translator.t('list.search')}" />
+          placeholder="${translator.t('list.search')}"
+          aria-label="${searchLabel}" title="${searchLabel}" />
         <label class="dc-search-scope">
           <span>${translator.t('list.searchIn')}</span>
-          <select class="dc-input" data-search-attribute>
+          <select class="dc-input" data-search-attribute
+            aria-label="${translator.t('list.searchInLabel')}">
             <option value="${SEARCH_ANYWHERE}"${
               this.searchAttribute === SEARCH_ANYWHERE ? ' selected' : ''
             }>${translator.t('list.searchAnywhere')}</option>
@@ -800,39 +809,46 @@ export class EntityList {
             }</p>`
           : ''
       }
-      <div class="dc-table-scroll">
-        <table class="dc-table">
-          <thead>
-            <tr>
-              <th class="dc-checkbox-cell">
-                <input type="checkbox" data-select-all ${whole ? 'checked' : ''}
-                  aria-label="${translator.t('list.selectAll')}" />
-              </th>
-              ${this.columns.map(
-                name =>
-                  html`<th>${attributeLabel(
-                    name,
-                    attributes[name],
-                    translator.language
-                  )}</th>`
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            ${slice.map(([id, entry]) => this.rowMarkup(id, entry))}
-          </tbody>
-        </table>
-      </div>`;
+      ${dataTable({
+        name: this.title,
+        columns: [
+          {
+            className: 'dc-checkbox-cell',
+            heading: html`<input type="checkbox" data-select-all ${
+              whole ? 'checked' : ''
+            }
+                  aria-label="${translator.t('list.selectAll')}" />`,
+          },
+          ...this.columns.map(name => ({
+            heading: attributeLabel(
+              name,
+              attributes[name],
+              translator.language
+            ),
+          })),
+        ],
+        rows: slice.map(([id, entry]) => this.rowMarkup(id, entry)),
+      })}`;
+  }
+
+  /** What the list is called, for the reader: its title, else the entity's plural name. */
+  private get title(): string {
+    return this.options.title || this.options.entity.pluralName;
   }
 
   private rowMarkup(id: string, entry: Entry): SafeHtml {
     const { translator, entity } = this.options;
+    // The box is named after the row, as its first column shows it: ten
+    // boxes all called "Select this row" told nobody which account they
+    // ticked.
+    const first = this.columns[0];
+    const name = (first && text(entryValue(entry, first))) || id;
     return html`
       <tr data-id="${id}">
         <td class="dc-checkbox-cell">
           <input type="checkbox" data-select="${id}"
             ${this.selected.has(id) ? 'checked' : ''}
-            aria-label="${translator.t('list.selectRow')}" />
+            aria-label="${translator.t('list.selectNamed', { name })}" />
         </td>
         ${this.columns.map((name, index) => {
           const attr = entity.schema.attributes[name];

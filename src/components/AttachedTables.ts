@@ -31,6 +31,7 @@ import type {
   EntityDescriptor,
 } from '../types';
 import { html, type SafeHtml } from '../shared/html';
+import { dataTable } from '../ui/table';
 
 /** The two tables: accounts, and groups. */
 export type AttachedKind = 'people' | 'groups';
@@ -161,10 +162,16 @@ export function attachedClass(
   return own.find(value => !other.includes(value.toLowerCase()));
 }
 
+/** How many blocks were made: their headings' ids tell them apart on a page. */
+let instances = 0;
+
 export class AttachedTables {
+  /** Tells this block's headings from another's on the same page */
+  private readonly instance: number;
   private readonly options: AttachedOptions;
 
   constructor(options: AttachedOptions) {
+    this.instance = ++instances;
     this.options = options;
   }
 
@@ -272,12 +279,16 @@ export class AttachedTables {
     // Fifty listed of more is not fifty.
     const count = truncated ? `${rows.length}+` : rows.length;
     const create = onCreate?.[kind];
+    // The heading names the table (#218): a reader moving by table hears
+    // "People (1)", "Groups (1)", not "table" twice.
+    const heading = `dc-attached-${kind}-${this.instance}`;
     return html`
       <section class="dc-card dc-attached" data-attached="${kind}">
         <header class="dc-attached-header">
-          <h3>${translator.t(kind === 'people' ? 'org.people' : 'org.groups', {
-            count,
-          })}</h3>
+          <h3 id="${heading}">${translator.t(
+            kind === 'people' ? 'org.people' : 'org.groups',
+            { count }
+          )}</h3>
           ${
             kind === 'people' && this.options.onListEveryone
               ? html`<button type="button" class="dc-button" data-list-everyone>${translator.t(
@@ -302,24 +313,22 @@ export class AttachedTables {
                   name,
                 }
               )}</p>`
-            : html`<div class="dc-table-scroll">
-                <table class="dc-table dc-attached-table">
-                  <thead>
-                    <tr>${roles.map(
-                      role => html`<th>${this.heading(lead, role)}</th>`
-                    )}${
-                      this.options.rowAction
-                        ? html`<th><span class="dc-visually-hidden">${translator.t(
-                            'detail.actions'
-                          )}</span></th>`
-                        : ''
-                    }</tr>
-                  </thead>
-                  <tbody>${rows.map(entry =>
-                    this.rowMarkup(entry, roles)
-                  )}</tbody>
-                </table>
-              </div>`
+            : dataTable({
+                className: 'dc-attached-table',
+                name: { labelledBy: heading },
+                columns: [
+                  ...roles.map(role => ({ heading: this.heading(lead, role) })),
+                  ...(this.options.rowAction
+                    ? [
+                        {
+                          heading: translator.t('detail.actions'),
+                          hidden: true,
+                        },
+                      ]
+                    : []),
+                ],
+                rows: rows.map(entry => this.rowMarkup(entry, roles)),
+              })
         }
         ${truncated ? this.moreMarkup(cut.more) : ''}
       </section>`;

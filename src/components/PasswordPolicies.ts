@@ -12,6 +12,7 @@ import type { Translator } from '../i18n';
 import type { PasswordPolicy } from '../types';
 import { background, type Reporter } from '../shared/background';
 import { html, render, type SafeHtml } from '../shared/html';
+import { dataTable } from '../ui/table';
 
 type FieldKind = 'duration' | 'integer' | 'quality' | 'boolean' | 'text';
 
@@ -185,27 +186,31 @@ export function policyTableMarkup(
     translator.t(key, values);
   if (policies.length === 0)
     return html`<p class="dc-empty">${t('policy.empty')}</p>`;
-  return html`
-    <div class="dc-table-scroll">
-      <table class="dc-table dc-policy-table">
-        <thead>
-          <tr>
-            <th>${t('policy.name')}</th>
-            <th>${t('policy.column.maxAge')}</th>
-            <th>${t('policy.column.minLength')}</th>
-            <th>${t('policy.column.lockout')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${policies.map(policy => {
-            const maxAge =
-              typeof policy.pwdMaxAge === 'number' ? policy.pwdMaxAge : 0;
-            return html`<tr data-policy="${policy.cn}" tabindex="0">
-                <td>${policy.cn}${
-                  policy.isDefault
-                    ? html` <span class="dc-tag">${t('policy.default')}</span>`
-                    : ''
-                }</td>
+  return dataTable({
+    className: 'dc-policy-table',
+    name: t('nav.policies'),
+    columns: [
+      { heading: t('policy.name') },
+      { heading: t('policy.column.maxAge') },
+      { heading: t('policy.column.minLength') },
+      { heading: t('policy.column.lockout') },
+    ],
+    rows: policies.map(policy => {
+      const maxAge =
+        typeof policy.pwdMaxAge === 'number' ? policy.pwdMaxAge : 0;
+      // The name is a button: Tab reaches it, Enter and Space open the
+      // policy, and the focus comes back to it when the panel closes (#207).
+      // The rest of the row stands in for it, for the mouse.
+      return html`<tr data-policy="${policy.cn}">
+                <td><button type="button" class="dc-row-link dc-row-button"
+                    data-policy-open="${policy.cn}"
+                    aria-label="${t('policy.open', { name: policy.cn })}">${
+                      policy.cn
+                    }</button>${
+                      policy.isDefault
+                        ? html` <span class="dc-tag">${t('policy.default')}</span>`
+                        : ''
+                    }</td>
                 <td>${
                   maxAge ? durationText(translator, maxAge) : t('policy.never')
                 }</td>
@@ -216,10 +221,8 @@ export function policyTableMarkup(
                 }</td>
                 <td>${lockoutText(translator, policy)}</td>
               </tr>`;
-          })}
-        </tbody>
-      </table>
-    </div>`;
+    }),
+  });
 }
 
 export interface PolicyFormOptions {

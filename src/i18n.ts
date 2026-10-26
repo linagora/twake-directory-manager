@@ -62,6 +62,8 @@ const en: Catalogue = {
   'list.backToSearch': 'Back to search',
   'list.search': 'Search',
   'list.searchIn': 'in',
+  'list.searchLabel': 'Search {entity}',
+  'list.searchInLabel': 'Search in',
   'list.searchAnywhere': 'Every field',
   'list.searchGuard.one': 'Type at least {count} character to search',
   'list.searchGuard.other': 'Type at least {count} characters to search',
@@ -87,6 +89,7 @@ const en: Catalogue = {
   'list.deleteSelected': 'Delete selection',
   'list.selectAll': 'Select all rows on this page',
   'list.selectRow': 'Select this row',
+  'list.selectNamed': 'Select {name}',
 
   'detail.attributes': 'Details',
   'detail.relations': 'Related entries',
@@ -241,6 +244,9 @@ const en: Catalogue = {
   'import.notSent': 'not sent, the import was stopped',
   'import.downloadRefused': 'Download the refused rows',
   'import.createdName': 'Name',
+  'import.table.mapping': 'Columns of the file and the attribute each fills',
+  'import.table.problems': 'Rows with errors',
+  'import.table.created': 'Entries created',
   'import.moreCreated':
     'And {count} more: close this panel to see them all in the list.',
   'import.ambiguous': '{field}: “{value}” matches several entries',
@@ -257,6 +263,7 @@ const en: Catalogue = {
 
   'tree.title': 'Organizations',
   'tree.filter': 'Filter',
+  'tree.filterLabel': 'Filter organizations',
   'tree.empty': 'Select an organization',
   'tree.addChild': 'New organization here',
   'org.people': 'People ({count})',
@@ -381,6 +388,7 @@ const en: Catalogue = {
   'policy.new': 'New policy',
   'policy.name': 'Name',
   'policy.default': 'Default',
+  'policy.open': 'Open the policy {name}',
   'policy.empty': 'No password policy',
   'policy.column.maxAge': 'Expires after',
   'policy.column.minLength': 'Minimum length',
@@ -517,6 +525,8 @@ const fr: Catalogue = {
   'list.backToSearch': 'Revenir à la recherche',
   'list.search': 'Rechercher',
   'list.searchIn': 'dans',
+  'list.searchLabel': 'Rechercher dans {entity}',
+  'list.searchInLabel': 'Rechercher dans',
   'list.searchAnywhere': 'Tous les champs',
   'list.searchGuard.one':
     'Saisissez au moins {count} caractère pour rechercher',
@@ -546,6 +556,7 @@ const fr: Catalogue = {
   'list.deleteSelected': 'Supprimer la sélection',
   'list.selectAll': 'Sélectionner toutes les lignes de la page',
   'list.selectRow': 'Sélectionner cette ligne',
+  'list.selectNamed': 'Sélectionner {name}',
 
   'detail.attributes': 'Fiche',
   'detail.relations': 'Entrées liées',
@@ -711,6 +722,9 @@ const fr: Catalogue = {
   'import.notSent.other': 'non envoyées, l’import a été arrêté',
   'import.downloadRefused': 'Télécharger les lignes refusées',
   'import.createdName': 'Nom',
+  'import.table.mapping': 'Colonnes du fichier et attribut que chacune remplit',
+  'import.table.problems': 'Lignes en erreur',
+  'import.table.created': 'Entrées créées',
   'import.moreCreated':
     'Et {count} de plus : fermez ce panneau pour retrouver l’ensemble dans la liste.',
   'import.ambiguous': '{field} : « {value} » correspond à plusieurs entrées',
@@ -728,6 +742,7 @@ const fr: Catalogue = {
 
   'tree.title': 'Organisations',
   'tree.filter': 'Filtrer',
+  'tree.filterLabel': 'Filtrer les organisations',
   'tree.empty': 'Sélectionnez une organisation',
   'tree.addChild': 'Nouvelle organisation ici',
   'org.people': 'Personnes ({count})',
@@ -856,6 +871,7 @@ const fr: Catalogue = {
   'policy.new': 'Nouvelle politique',
   'policy.name': 'Nom',
   'policy.default': 'Par défaut',
+  'policy.open': 'Ouvrir la politique {name}',
   'policy.empty': 'Aucune politique de mot de passe',
   'policy.column.maxAge': 'Expire après',
   'policy.column.minLength': 'Longueur minimale',
@@ -984,6 +1000,8 @@ const mn: Catalogue = {
   'list.backToSearch': 'Хайлт руу буцах',
   'list.search': 'Хайх',
   'list.searchIn': 'Хайх талбар:',
+  'list.searchLabel': '{entity} хайх',
+  'list.searchInLabel': 'Хайх талбар',
   'list.searchAnywhere': 'Бүх талбар',
   'list.searchGuard': 'Хайхын тулд дор хаяж {count} тэмдэгт оруулна уу',
   'list.empty': 'Харуулах зүйл алга',
@@ -1007,6 +1025,7 @@ const mn: Catalogue = {
   'list.deleteSelected': 'Сонгосныг устгах',
   'list.selectAll': 'Энэ хуудасны бүх мөрийг сонгох',
   'list.selectRow': 'Энэ мөрийг сонгох',
+  'list.selectNamed': '{name}-г сонгох',
 
   'detail.attributes': 'Дэлгэрэнгүй',
   'detail.relations': 'Холбоотой бичлэгүүд',
@@ -1144,6 +1163,9 @@ const mn: Catalogue = {
   'import.notSent': 'илгээгээгүй, импортыг зогсоосон',
   'import.downloadRefused': 'Татгалзсан мөрүүдийг татах',
   'import.createdName': 'Нэр',
+  'import.table.mapping': 'Файлын баганууд ба тус бүрийн бөглөх атрибут',
+  'import.table.problems': 'Алдаатай мөрүүд',
+  'import.table.created': 'Үүсгэсэн бичилтүүд',
   'import.moreCreated':
     'Өөр {count} байна: бүгдийг жагсаалтаас харахын тулд энэ самбарыг хаана уу.',
   'import.ambiguous': '{field}: «{value}» хэд хэдэн бичлэгт тохирч байна',
@@ -1160,6 +1182,7 @@ const mn: Catalogue = {
 
   'tree.title': 'Байгууллагууд',
   'tree.filter': 'Шүүх',
+  'tree.filterLabel': 'Байгууллага шүүх',
   'tree.empty': 'Байгууллага сонгоно уу',
   'tree.addChild': 'Энд шинэ байгууллага',
   'org.people': 'Хүмүүс ({count})',
@@ -1284,6 +1307,7 @@ const mn: Catalogue = {
   'policy.new': 'Шинэ бодлого',
   'policy.name': 'Нэр',
   'policy.default': 'Үндсэн',
+  'policy.open': '{name} бодлогыг нээх',
   'policy.empty': 'Нууц үгийн бодлого алга',
   'policy.column.maxAge': 'Хүчинтэй хугацаа',
   'policy.column.minLength': 'Хамгийн бага урт',

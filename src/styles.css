@@ -843,6 +843,17 @@
   border-radius: 4px;
 }
 
+/* A name that opens its row from the keyboard, looking like the text it was. */
+.dc-row-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: start;
+}
+
 .dc-path {
   color: var(--dc-muted);
 }
@@ -1495,17 +1506,18 @@
   margin: 0 0 20px;
 }
 
+/* A fieldset for a named group, a plain block for the fields of none: the
+   rule between groups does not depend on which. */
 .dc-form-group {
   border: 0;
-  border-top: 1px solid var(--dc-line);
   margin: 0 0 8px;
-  padding: 20px 0 0;
+  padding: 0;
   min-width: 0;
 }
 
-.dc-form-group:first-of-type {
-  border-top: 0;
-  padding-top: 0;
+.dc-form-group + .dc-form-group {
+  border-top: 1px solid var(--dc-line);
+  padding-top: 20px;
 }
 
 .dc-form-group legend {
@@ -2256,11 +2268,6 @@ select.dc-input {
 
 .dc-policy-table td:first-child {
   font-weight: 550;
-}
-
-.dc-policy-table tbody tr:focus-visible {
-  outline: none;
-  box-shadow: var(--dc-focus-inset);
 }
 
 .dc-policy-attribute {

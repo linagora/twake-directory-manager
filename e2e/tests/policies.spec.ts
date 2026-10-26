@@ -1,4 +1,4 @@
-import { ConfirmDialog, LoginPage } from '../pages';
+import { ConfirmDialog, LoginPage, PolicyPanel } from '../pages';
 import { ADMIN, SOPHIE } from '../support/accounts';
 import { callApi } from '../support/api';
 import { DEFAULT_POLICY, POLICIES, uniquePart } from '../support/directory';
@@ -182,5 +182,42 @@ test.describe('POLICY password policies', () => {
     await expect(panel.nameInput).toBeFocused();
     await expect(panel.dialog).toBeVisible();
     await expect(page.locator('[data-toast]')).toBeHidden();
+  });
+
+  test('POLICY-05 a keyboard user opens a policy', async ({ page }) => {
+    // Enter on the focused row opened the panel, and the same Enter reached
+    // the panel's form and submitted it: the panel was hidden again 5ms
+    // later, and Space did nothing (#207). The name is a button now.
+    const app = await new LoginPage(page).loginAs(ADMIN, 'password-policies');
+    const policies = app.policies();
+    const row = policies.row('default');
+    await expect(row).toBeVisible();
+    await expect(row).not.toHaveAttribute('tabindex');
+    const button = row.getByRole('button', { name: 'Open the policy default' });
+    await expect(button).toHaveText('default');
+    await expect(policies.cells('default').first()).toHaveText(
+      'default Default'
+    );
+
+    await button.focus();
+    await page.keyboard.press('Enter');
+    const panel = new PolicyPanel(page);
+    await panel.expectOpen('Password policy default');
+    await expect(panel.dialog.locator(':focus')).toHaveCount(1);
+    await page.waitForTimeout(300);
+    await expect(panel.dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(panel.dialog).toBeHidden();
+    await expect(button).toBeFocused();
+
+    await page.keyboard.press('Space');
+    await panel.expectOpen('Password policy default');
+    await panel.cancelButton.click();
+    await expect(panel.dialog).toBeHidden();
+    await expect(button).toBeFocused();
+
+    // the mouse opens it from anywhere on the row, as before
+    await policies.cells('default').nth(2).click();
+    await panel.expectOpen('Password policy default');
   });
 });

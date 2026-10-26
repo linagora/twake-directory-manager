@@ -1369,7 +1369,7 @@ describe('Directory console: organizations', () => {
         expect(holder.innerHTML).to.include('aria-label="Claim Bob Schneider"');
         expect(holder.innerHTML).to.include('aria-label="Claim Grace Kim"');
         expect(holder.innerHTML).to.include(
-          '<th><span class="dc-visually-hidden">Actions</span></th>'
+          '<th scope="col"><span class="dc-visually-hidden">Actions</span></th>'
         );
         // No group waits: no Groups table saying so.
         expect(holder.innerHTML).to.not.include('data-attached="groups"');

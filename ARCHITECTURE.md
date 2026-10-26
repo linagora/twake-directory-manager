@@ -59,6 +59,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── shared/html.ts          html`…`, SafeHtml, render: the only way to the page
     ├── shared/background.ts    background(): work nobody waits for, reported
     ├── shared/dom.ts           escapeHtml and small DOM helpers
+    ├── ui/table.ts             dataTable: the one way to draw a table (#226)
     ├── assets.ts               inlined logos
     └── types.ts                wire types (ConfigResponse, Scope…) and domain types
 src/styles.css              one stylesheet, `dc-` prefix, no framework

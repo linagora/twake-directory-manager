@@ -679,4 +679,39 @@ test.describe('LIST lists, search and bulk actions', () => {
     for (const user of users)
       await expect(list.cells(user.uid).nth(5)).toHaveText('Disabled');
   });
+
+  test('LIST-15 the search, its scope, the table and each row’s box are named', async ({
+    page,
+  }) => {
+    // A placeholder goes as one types, and ten boxes all read "Select this
+    // row": a screen reader could not tell which account it ticked (#211).
+    const app = await new LoginPage(page).loginAs(ADMIN, 'users');
+    const list = app.list();
+    await expect(list.searchBox).toHaveAccessibleName('Search Users');
+    await expect(list.searchIn).toHaveAccessibleName('Search in');
+    await list.listEverything();
+    await expect(list.table).toHaveAccessibleName('Users');
+    await expect(list.columnHeaders.first()).toHaveAttribute('scope', 'col');
+    await expect(list.selectAll).toHaveAccessibleName(
+      'Select all rows on this page'
+    );
+    await expect(list.rowCheckbox('alice')).toHaveAccessibleName(
+      'Select alice'
+    );
+    await expect(list.rowCheckbox('bob')).toHaveAccessibleName('Select bob');
+
+    await app.setLanguage('fr');
+    await expect(list.searchBox).toHaveAccessibleName(
+      'Rechercher dans Utilisateurs'
+    );
+    await expect(list.searchIn).toHaveAccessibleName('Rechercher dans');
+    await app.setLanguage('en');
+
+    await app.open('groups');
+    await expect(list.searchBox).toHaveAccessibleName('Search Groups');
+    await list.listEverything();
+    await expect(list.rowCheckbox('sales-team')).toHaveAccessibleName(
+      'Select sales-team'
+    );
+  });
 });

@@ -31,6 +31,34 @@ const restrictedSyntax = [
   },
 ];
 
+// A table is drawn by dataTable() (src/ui/table.ts), which heads its columns
+// and names it (#226); the one `<table` written by hand is in that file.
+const tableSyntax = {
+  selector: 'TemplateElement[value.raw=/<table/]',
+  message:
+    'Draw a table with dataTable() from ui/table, which heads its columns and names it.',
+};
+
+// What the caller may do is read from the scope in one module, src/rights.ts
+// (#222): one file to review when the authorization model changes, and one
+// table of tests to pin it. The client that fetches the scope may read it;
+// nothing else does. A member read through `this.scope` or any `x.scope`;
+// a local of type Scope is not caught, so none is passed around.
+const scopeSyntax = [
+  {
+    selector:
+      "MemberExpression[object.type='MemberExpression'][object.property.name='scope']",
+    message:
+      'What the scope allows is asked of Rights (src/rights.ts), not read from the scope.',
+  },
+  {
+    selector:
+      "MemberExpression[object.type='TSNonNullExpression'][object.expression.property.name='scope']",
+    message:
+      'What the scope allows is asked of Rights (src/rights.ts), not read from the scope.',
+  },
+];
+
 // The rules ldap-rest applies to its browser libraries, which is where this
 // code comes from.
 const rules = {
@@ -57,7 +85,7 @@ const rules = {
   // Markup reaches the page through `html` and `render` (src/shared/html.ts),
   // which escape every interpolation: a bare `innerHTML` is one escaping
   // forgotten away from a stored XSS in an administrator's session.
-  'no-restricted-syntax': ['error', ...restrictedSyntax],
+  'no-restricted-syntax': ['error', ...restrictedSyntax, tableSyntax],
   // TypeScript resolves names itself, DOM types included, which `no-undef`
   // knows nothing about.
   'no-undef': 'off',
@@ -70,7 +98,6 @@ const rules = {
 const oversized = {
   'src/DirectoryConsole.ts': 3911,
   'src/components/EntityForm.ts': 1411,
-  'src/i18n.ts': 1340,
 };
 
 // What the types tell on top: a promise nobody waits for or handles, a
@@ -128,15 +155,14 @@ export default [
       'max-lines': ['error', { max, skipComments: true, skipBlankLines: true }],
     },
   })),
+  // The catalogues are data, one line per sentence in each language: the
+  // file grows with every sentence the console says, and that is as it
+  // should be (#220).
+  { files: ['src/i18n.ts'], rules: { 'max-lines': 'off' } },
   {
     files: ['*.mjs', 'docker/*.mjs', 'scripts/*.mjs'],
     languageOptions: { globals: globals.node },
   },
-  // What the caller may do is read from the scope in one module, src/rights.ts
-  // (#222): one file to review when the authorization model changes, and one
-  // table of tests to pin it. The client that fetches the scope may read it;
-  // nothing else does. A member read through `this.scope` or any `x.scope`;
-  // a local of type Scope is not caught, so none is passed around.
   {
     files: ['src/**/*.ts'],
     ignores: ['src/rights.ts', 'src/api/**'],
@@ -144,19 +170,15 @@ export default [
       'no-restricted-syntax': [
         'error',
         ...restrictedSyntax,
-        {
-          selector:
-            "MemberExpression[object.type='MemberExpression'][object.property.name='scope']",
-          message:
-            'What the scope allows is asked of Rights (src/rights.ts), not read from the scope.',
-        },
-        {
-          selector:
-            "MemberExpression[object.type='TSNonNullExpression'][object.expression.property.name='scope']",
-          message:
-            'What the scope allows is asked of Rights (src/rights.ts), not read from the scope.',
-        },
+        tableSyntax,
+        ...scopeSyntax,
       ],
+    },
+  },
+  {
+    files: ['src/ui/table.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', ...restrictedSyntax, ...scopeSyntax],
     },
   },
   // The page's own script, a module run by the browser.

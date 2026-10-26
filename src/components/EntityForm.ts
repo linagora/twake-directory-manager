@@ -612,17 +612,20 @@ export class EntityForm {
     return groups;
   }
 
-  /** Markup of groups of fields, one fieldset each. */
+  /**
+   * Markup of groups of fields: a fieldset with its legend for a named one,
+   * a plain block for the fields of no group, which a fieldset would have
+   * announced as a group with no name.
+   */
   private groupsMarkup(
     groups: Map<string, [string, SchemaAttribute][]>
   ): SafeHtml {
-    return html`${[...groups.entries()].map(
-      ([group, fields]) => html`
-          <fieldset class="dc-form-group">
-            ${group ? html`<legend>${group}</legend>` : ''}
-            ${fields.map(([name, attr]) => this.fieldMarkup(name, attr))}
-          </fieldset>`
-    )}`;
+    return html`${[...groups.entries()].map(([group, fields]) => {
+      const items = fields.map(([name, attr]) => this.fieldMarkup(name, attr));
+      return group
+        ? html`<fieldset class="dc-form-group"><legend>${group}</legend>${items}</fieldset>`
+        : html`<div class="dc-form-group">${items}</div>`;
+    })}`;
   }
 
   /** Markup of one field, chosen from its schema type. */

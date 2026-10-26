@@ -75,6 +75,9 @@ test.describe('ORG organizations', () => {
     await organizations.expand('Sales');
     await organizations.expand('Engineering');
 
+    await expect(organizations.filter).toHaveAccessibleName(
+      'Filter organizations'
+    );
     await organizations.filter.click();
     await organizations.filter.pressSequentially('Back', { delay: 120 });
     await expect(organizations.filter).toHaveValue('Back');
@@ -537,6 +540,14 @@ test.describe('ORG organizations', () => {
         name: 'sophie.martin',
       })
     ).toHaveAttribute('href', '#/users/sophie.martin');
+
+    // the tables are named by their headings, count included (#218)
+    await expect(
+      card.attached('People').getByRole('table')
+    ).toHaveAccessibleName(/^People \(\d+\)$/);
+    await expect(
+      card.attached('Groups').getByRole('table')
+    ).toHaveAccessibleName(/^Groups \(\d+\)$/);
 
     // a row opens the card, and Back returns to the organization
     await card
