@@ -900,6 +900,7 @@ describe('Directory console: the shell and the overview', () => {
           },
         });
         const app = fresh();
+        // The browser's language then, which happy-dom fixes at en-US.
         expect(app.translator.language).to.equal('en');
         expect(app.referenceOpen()).to.equal(false);
       });

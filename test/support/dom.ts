@@ -18,6 +18,10 @@ import nock from 'nock';
 // would pass; Node's rethrow, and mocha fails the test. happy-dom's `fetch`
 // sends a CORS preflight through its own HTTP client, which `nock` does not
 // answer; Node's is what `nock` mocks, as it did before the DOM came.
+// `FormData`, `Blob` and `File` stay happy-dom's (`new FormData(form)` needs
+// them), and Node's fetch does not read them: a body made of one is sent as
+// "[object FormData]". The console sends JSON only; a test that posts a form
+// through fetch will need a guard here first.
 const node = {
   setTimeout,
   clearTimeout,
@@ -46,14 +50,20 @@ nock.disableNetConnect();
 
 /**
  * Root hooks, which mocha reads from a required file: a test leaves the DOM
- * as it found it. The storages, the body and the hash are shared by the whole
- * run, and a test that mounts the console must not meet what another left.
+ * as it found it. The storages, the document and the hash are shared by the
+ * whole run, and a test that mounts the console must not meet what another
+ * left. What a mounted console adds to `window` (its `hashchange`, `keydown`
+ * and error listeners) is not taken away here: resetting the hash would wake
+ * every console mounted before, so the builder that mounts one (#221, step 5)
+ * must also unmount it, before the first test uses it.
  */
 export const mochaHooks = {
   afterEach(): void {
     localStorage.clear();
     sessionStorage.clear();
     document.body.replaceChildren();
+    document.head.replaceChildren();
+    document.title = '';
     window.location.hash = '';
   },
 };
