@@ -66,9 +66,10 @@ const rules = {
 // The files over the line budget when it was set, each held to its size then
 // (comments and blank lines aside): it may shrink, not grow. Lower a figure
 // when the file does; remove the file when it goes under the budget; never
-// add one.
+// add one. The exception is test/console.test.ts, which grows with the tests
+// it holds until #221 splits it: its figure follows, the others do not.
 const oversized = {
-  'src/DirectoryConsole.ts': 4113,
+  'src/DirectoryConsole.ts': 3911,
   'src/components/EntityForm.ts': 1411,
   'src/i18n.ts': 1340,
   'test/console.test.ts': 11459,
@@ -132,6 +133,33 @@ export default [
   {
     files: ['*.mjs', 'docker/*.mjs', 'scripts/*.mjs'],
     languageOptions: { globals: globals.node },
+  },
+  // What the caller may do is read from the scope in one module, src/rights.ts
+  // (#222): one file to review when the authorization model changes, and one
+  // table of tests to pin it. The client that fetches the scope may read it;
+  // nothing else does. A member read through `this.scope` or any `x.scope`;
+  // a local of type Scope is not caught, so none is passed around.
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/rights.ts', 'src/api/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...restrictedSyntax,
+        {
+          selector:
+            "MemberExpression[object.type='MemberExpression'][object.property.name='scope']",
+          message:
+            'What the scope allows is asked of Rights (src/rights.ts), not read from the scope.',
+        },
+        {
+          selector:
+            "MemberExpression[object.type='TSNonNullExpression'][object.expression.property.name='scope']",
+          message:
+            'What the scope allows is asked of Rights (src/rights.ts), not read from the scope.',
+        },
+      ],
+    },
   },
   {
     ignores: [

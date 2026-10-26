@@ -151,6 +151,7 @@ export function transitState(
       rights: { write: grants('write'), delete: grants('delete') },
     };
   }
+
   return {
     inTransit: false,
     claim: false,
@@ -254,13 +255,11 @@ export class Rights {
   /**
    * @param scope what `GET /v1/authz/scope` answered, or null without one
    * @param scopeError why it could not be read, when it could not
-   * @param entities every collection the server serves
    * @param policiesReadable whether the password policies can be read
    */
   constructor(
     readonly scope: Scope | null,
     readonly scopeError: string | null,
-    readonly entities: EntityDescriptor[],
     readonly policiesReadable: boolean
   ) {}
 
@@ -304,8 +303,9 @@ export class Rights {
   }
 
   /**
-   * The scope as the banner shows it: why nothing is restricted, or the
-   * branches administered and the transit branch.
+   * The scope as the banner shows it: the failure that withholds every
+   * write, why nothing is restricted, or the branches administered and the
+   * transit branch.
    */
   get summary():
     | { kind: 'error'; error: string }
@@ -332,6 +332,7 @@ export class Rights {
    */
   readsWhole(dn: string): boolean {
     const scope = this.scope;
+    if (this.scopeError) return false;
     if (!scopeRestricts(scope)) return true;
     if (scope.transit && withinDn(dn, scope.transit)) return true;
     return scope.branches.some(branch => withinDn(dn, branch.dn));
@@ -344,6 +345,7 @@ export class Rights {
    * @param dn an entry or a branch
    */
   writesWithin(dn: string): boolean {
+    if (this.scopeError) return false;
     if (!scopeRestricts(this.scope)) return true;
     return this.scope.branches.some(
       branch => branch.write && withinDn(dn, branch.dn)
@@ -374,20 +376,27 @@ export class Rights {
   administersNothing(): boolean {
     return scopeRestricts(this.scope) && this.scope.branches.length === 0;
   }
+
   /** Whether the caller may write anywhere at all. */
   canWrite(): boolean {
     if (this.scopeError) return false;
     if (!scopeRestricts(this.scope)) return true;
     return this.scope.branches.some(branch => branch.write);
   }
+  /** Whether the caller may delete anywhere at all. */
   canDelete(): boolean {
     if (this.scopeError) return false;
     if (!scopeRestricts(this.scope)) return true;
     return this.scope.branches.some(branch => branch.delete);
   }
+  /**
+   * Whether the caller manages the password policies: what the scope said
+   * (`policiesTold`), or what asking for them answered.
+   */
   managesPolicies(): boolean {
     return this.policiesReadable;
   }
+
   /** Whether the caller may create an entry of this entity. */
   canCreate(entity: EntityDescriptor): boolean {
     if (this.scopeError) return false;
@@ -401,6 +410,7 @@ export class Rights {
     if (!declared) return false;
     return declared.create || this.creationParents(entity).length > 0;
   }
+
   /**
    * Where a new organization goes when the caller may not create one at the
    * root of the tree.
@@ -429,6 +439,7 @@ export class Rights {
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }
+
   /**
    * Whether the caller links an organization only to the mail domains one
    * above it links already. ldap-rest's authorization holds every caller to
@@ -454,6 +465,7 @@ export class Rights {
       branch => branch.write && withinDn(top, branch.dn)
     );
   }
+
   /**
    * Whether the caller may create an organization under this one.
    *
@@ -475,6 +487,7 @@ export class Rights {
         withinDn(dn, branch.dn)
     );
   }
+
   /**
    * Whether the caller may change an entry, judged on the entry itself
    * rather than on the scope as a whole (see {@link writesEntry}).
@@ -482,6 +495,7 @@ export class Rights {
   writes(entity: EntityDescriptor, entry: Entry): boolean {
     return this.canWrite() && writesEntry(this.scope, entity, entry);
   }
+
   /**
    * What the caller may do to an organization itself, judged as the server
    * judges it: by its parent, on the most specific branch holding it, a
@@ -537,6 +551,7 @@ export class Rights {
       );
     return { write: judged('write'), delete: judged('delete') };
   }
+
   /**
    * Whether the caller only reads the entries of a reference entity:
    * positions, states, mail domains. They lie outside every department, and
@@ -550,6 +565,7 @@ export class Rights {
     if (this.scopeError) return false;
     return !isPrimaryEntity(entity) && !this.changesReference(entity);
   }
+
   /**
    * Whether the scope lets the caller write a reference entity. It says
    * so in `create`, the right to write its branch; it names no right to
@@ -561,12 +577,13 @@ export class Rights {
     return !!this.scope.entities.find(item => item.name === entity.pluralName)
       ?.create;
   }
+
   /**
    * Whether the caller may claim an entry listed in transit: as its card
    * would say, from the entity holding it, attached to the transit branch.
    */
   claimable(entry: AttachedEntry, entity: EntityDescriptor): boolean {
-    const transit = this.scope?.transit;
+    const transit = this.transit;
     if (!transit || !entity.organizationLink) return false;
     return transitState(this.scope, entity, {
       dn: entry.dn,

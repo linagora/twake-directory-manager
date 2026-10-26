@@ -2609,7 +2609,7 @@ export class DirectoryConsole {
     ]);
     if (!this.current(generation)) return;
 
-    const rights = this.rights.organizationRights(node.dn);
+    const organization = this.rights.organizationRights(node.dn);
     const transit = this.rights.transit;
     const name =
       [entryValue(entry, entity.mainAttribute) ?? []].flat()[0] ||
@@ -2620,7 +2620,7 @@ export class DirectoryConsole {
     // nor on the transit branch, which every administrator writes.
     const above = parentOf(node.dn);
     const changedAbove =
-      !rights.write &&
+      !organization.write &&
       !!above &&
       withinDn(above, entity.base) &&
       !(transit && withinDn(node.dn, transit)) &&
@@ -2630,8 +2630,8 @@ export class DirectoryConsole {
       entity,
       entry,
       translator: this.translator,
-      canWrite: rights.write,
-      canDelete: rights.delete,
+      canWrite: organization.write,
+      canDelete: organization.delete,
       notice: changedAbove
         ? this.translator.t('org.changedAbove', { name })
         : undefined,
@@ -2655,7 +2655,7 @@ export class DirectoryConsole {
           transit && comparableDn(transit) === comparableDn(node.dn)
             ? this.claimAction()
             : undefined,
-        partial: !this.readsWhole(node.dn),
+        partial: !this.rights.readsWhole(node.dn),
         failure,
         onOpen: (href: string): void => {
           window.location.hash = href;
@@ -2828,19 +2828,6 @@ export class DirectoryConsole {
         ])
       ),
     };
-  }
-
-  /**
-   * Whether the server lists the caller everything attached to an
-   * organization. It lists only the entries of the branches they
-   * administer, so on another administrator's organization an empty table
-   * says only that none of theirs is there. The transit branch is every
-   * administrator's to read.
-   *
-   * @param dn the organization
-   */
-  private readsWhole(dn: string): boolean {
-    return this.rights.readsWhole(dn);
   }
 
   /* ------------------------------------------------------------ side panel */
@@ -5058,12 +5045,7 @@ export class DirectoryConsole {
    * scope after construction, and a view asks at the moment it draws.
    */
   private get rights(): Rights {
-    return new Rights(
-      this.scope,
-      this.scopeError,
-      this.entities,
-      this.policiesReadable
-    );
+    return new Rights(this.scope, this.scopeError, this.policiesReadable);
   }
 
   /**

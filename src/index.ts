@@ -28,6 +28,8 @@ export type { Reporter } from './shared/background';
 export {
   Rights,
   claimRoots,
+  isPrimaryEntity,
+  splitEntities,
   organizationParents,
   scopeRestricts,
   transitState,

@@ -52,11 +52,9 @@ describe('Rights, from the scopes the QA server describes', () => {
   });
   after(() => nock.cleanAll());
 
-  /** The persona's rights, with the policies as the scope tells them. */
-  const of = (uid: string): Rights => {
-    const scope = read<Scope>(`scopes/${uid}.json`);
-    return new Rights(scope, null, entities, scope.passwordPolicies === true);
-  };
+  /** The persona's rights; the policies as asking for them would answer. */
+  const of = (uid: string, policiesReadable = false): Rights =>
+    new Rights(read<Scope>(`scopes/${uid}.json`), null, policiesReadable);
   /** An account attached to an organization. */
   const person = (uid: string, organization: string): Entry => ({
     dn: `uid=${uid},ou=users,dc=example,dc=com`,
@@ -64,7 +62,7 @@ describe('Rights, from the scopes the QA server describes', () => {
   });
 
   it('should give the global administrator the whole tree, the transit branch included', () => {
-    const admin = of('admin');
+    const admin = of('admin', true);
     expect(admin.restricted).to.equal(true);
     expect(admin.administersNothing()).to.equal(false);
     expect(admin.canWrite()).to.equal(true);
@@ -117,7 +115,6 @@ describe('Rights, from the scopes the QA server describes', () => {
     expect(admin.changesReference(positions)).to.equal(false);
     expect(admin.readsReferenceOnly(positions)).to.equal(true);
     expect(admin.policiesTold).to.equal(true);
-    expect(admin.managesPolicies()).to.equal(true);
     expect(admin.readsWhole(BACKEND)).to.equal(true);
     expect(admin.administersExactly(ROOT)).to.equal(true);
     expect(admin.administersExactly(SALES)).to.equal(false);
@@ -185,7 +182,6 @@ describe('Rights, from the scopes the QA server describes', () => {
       expect(local.changesReference(domains)).to.equal(false);
       expect(local.readsReferenceOnly(domains)).to.equal(true);
       expect(local.policiesTold).to.equal(false);
-      expect(local.managesPolicies()).to.equal(false);
       expect(local.readsWhole(child)).to.equal(true);
       expect(local.readsWhole(TRANSIT)).to.equal(true);
       expect(local.readsWhole(other)).to.equal(false);
@@ -212,8 +208,37 @@ describe('Rights, from the scopes the QA server describes', () => {
     });
   }
 
+  it('should offer a claim on what waits in transit to whoever writes a branch', () => {
+    const waiting = { dn: 'uid=x,ou=users,dc=example,dc=com', label: 'x' };
+    expect(of('sophie.martin').claimable(waiting, users)).to.equal(true);
+    expect(of('admin').claimable(waiting, users)).to.equal(true);
+    expect(of('alice').claimable(waiting, users)).to.equal(false);
+    // Only for an entity attached to the tree.
+    expect(of('sophie.martin').claimable(waiting, positions)).to.equal(false);
+  });
+
+  it('should restrict nothing when the server describes no scope, or cannot describe it', () => {
+    const base = read<Scope>('scopes/alice.json');
+    const unrestricted = new Rights(
+      { ...base, unrestricted: true },
+      null,
+      true
+    );
+    expect(unrestricted.restricted).to.equal(false);
+    expect(unrestricted.canWrite()).to.equal(true);
+    expect(unrestricted.administersNothing()).to.equal(false);
+    expect(unrestricted.summary.kind).to.equal('unrestricted');
+    // Named by a server that restricts nothing, the transit branch is none.
+    expect(unrestricted.transit).to.equal(undefined);
+    const undescribed = new Rights({ ...base, described: false }, null, false);
+    expect(undescribed.restricted).to.equal(false);
+    expect(undescribed.canCreate(users)).to.equal(true);
+    expect(undescribed.policiesTold).to.equal(undefined);
+    expect(undescribed.summary.kind).to.equal('undescribed');
+  });
+
   it('should restrict nothing without a scope, and withhold every write when it could not be read', () => {
-    const unrestricted = new Rights(null, null, entities, true);
+    const unrestricted = new Rights(null, null, true);
     expect(unrestricted.restricted).to.equal(false);
     expect(unrestricted.canWrite()).to.equal(true);
     expect(unrestricted.canCreate(users)).to.equal(true);
@@ -225,11 +250,13 @@ describe('Rights, from the scopes the QA server describes', () => {
     expect(unrestricted.readsWhole(SALES)).to.equal(true);
     expect(unrestricted.summary.kind).to.equal('unrestricted');
 
-    const failed = new Rights(null, 'Gateway Timeout', entities, false);
+    const failed = new Rights(null, 'Gateway Timeout', false);
     expect(failed.canWrite()).to.equal(false);
     expect(failed.canCreate(users)).to.equal(false);
     expect(failed.canDelete()).to.equal(false);
     expect(failed.readsReferenceOnly(domains)).to.equal(false);
+    expect(failed.writesWithin(SALES)).to.equal(false);
+    expect(failed.readsWhole(SALES)).to.equal(false);
     expect(failed.summary).to.deep.equal({
       kind: 'error',
       error: 'Gateway Timeout',
