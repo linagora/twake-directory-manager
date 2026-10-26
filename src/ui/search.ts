@@ -15,10 +15,13 @@ export interface SearchScopeOption {
   selected?: boolean;
 }
 
+/** The data attributes the callers find their boxes by: constants, written into the markup as attribute names. */
+export type SearchData = 'search' | 'filter';
+
 /** What the box shows. */
 export interface SearchBoxOptions {
-  /** The data attribute the caller finds the input by (`search`, `filter`) */
-  data: string;
+  /** The data attribute the caller finds the input by */
+  data: SearchData;
   /** What the box is called: "Search Users", "Filter organizations" */
   name: string;
   /** Shown while the box is empty */
@@ -28,7 +31,7 @@ export interface SearchBoxOptions {
   /** Where to search, when the search has a scope */
   scope?: {
     /** The data attribute of the select */
-    data: string;
+    data: 'search-attribute';
     /** What stands before the select: "in" */
     text: string;
     /** What the select is called: "Search in" */

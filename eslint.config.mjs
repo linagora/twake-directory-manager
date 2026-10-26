@@ -40,13 +40,16 @@ const tableSyntax = {
 };
 
 // A dialog and a live region are drawn once, by the frame (src/console) and
-// the primitives (src/ui), with their focus and announcement handled there.
-// A search box is `searchBox` (src/ui/search.ts); the typing box of a picker,
-// a combobox over a listbox, is its own thing and stays with the pickers.
+// the announcer (src/ui/announce.ts), with their focus and announcement
+// handled there. A guard rail, not a boundary: it reads templates, whatever
+// the quotes, and not a `setAttribute` (the toast's own). A search box is
+// `searchBox` (src/ui/search.ts); the typing box of a picker, a combobox over
+// a listbox, is its own thing and stays with the pickers.
 const dialogSyntax = {
-  selector: 'TemplateElement[value.raw=/role="(alert)?dialog"|aria-live=/]',
+  selector:
+    'TemplateElement[value.raw=/role\\s*=\\s*["\']?(alert)?dialog|aria-live\\s*=/]',
   message:
-    'A dialog and a live region are drawn by src/console and src/ui (overlayMarkup, confirmMarkup, announcerMarkup), not by a view.',
+    'A dialog and a live region are drawn by the frame (src/console: overlayMarkup, confirmMarkup) and the announcer (src/ui/announce.ts), not by a view.',
 };
 
 // What the caller may do is read from the scope in one module, src/rights.ts
@@ -203,7 +206,7 @@ export default [
     },
   },
   {
-    files: ['src/ui/search.ts', 'src/ui/announce.ts', 'src/console/*.ts'],
+    files: ['src/ui/announce.ts', 'src/console/*.ts'],
     rules: {
       'no-restricted-syntax': [
         'error',

@@ -37,7 +37,7 @@ describe('ui/search', () => {
     }).markup;
     expect(markup)
       .to.include('<div class="dc-search">')
-      .and.include('data-search\n')
+      .and.match(/data-search\s/)
       .and.include('<span>in</span>')
       .and.include('data-search-attribute aria-label="Search in"')
       .and.include('<option value="*">Every field</option>')

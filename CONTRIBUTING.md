@@ -34,7 +34,8 @@ context, report)` (`src/shared/background.ts`), which reports a failure.
 - No `<table` written by hand: a table is `dataTable({ name, columns, rows })`
   from `src/ui/table.ts`, which heads every column and names the table (a
   hidden caption, or the heading above it). A search box is `searchBox` from
-  `src/ui/search.ts`; a dialog and a live region are drawn by the frame
+  `src/ui/search.ts` (the typing box of a picker, a combobox over a listbox,
+  is its own thing); a dialog and a live region are drawn by the frame
   (`src/console/panel.ts`, `src/console/dialog.ts`) and the announcer, never
   by a view (ESLint refuses `role="dialog"` and `aria-live` elsewhere). The
   shared primitives of #226 live in `src/ui/`.
