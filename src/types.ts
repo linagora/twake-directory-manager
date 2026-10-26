@@ -9,8 +9,6 @@
  * @module twake-directory-manager/types
  */
 
-import type { ConsoleApiClient } from './api/ConsoleApiClient';
-
 /** Semantic role of an attribute, as declared by the server-side schema. */
 export type SchemaRole = string;
 
@@ -316,12 +314,4 @@ export interface Confirmation {
    * `checked` is set to the box's state once the question is answered.
    */
   choices?: { title: string; options: { label: string; checked: boolean }[] };
-}
-
-/**
- * What the console would build itself, given instead: the API client, which
- * a test replaces with one answering from fixtures (#221).
- */
-export interface ConsoleDeps {
-  api?: ConsoleApiClient;
 }

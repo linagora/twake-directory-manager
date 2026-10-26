@@ -16,13 +16,14 @@ import nock from 'nock';
 import { ConsoleApiClient } from '../../src/api/ConsoleApiClient';
 import { DirectoryConsole } from '../../src/DirectoryConsole';
 import type { Entry, Scope } from '../../src/types';
+import { beforeReset } from './dom';
 
 const FIXTURES = join(__dirname, '..', 'fixtures');
 const read = <T>(file: string): T =>
   JSON.parse(readFileSync(join(FIXTURES, file), 'utf8')) as T;
 
-/** The address every mounted console talks to; `nock` answers it. */
-export const MOUNT_URL = 'http://mounted.test';
+/** The address a mounted console talks to, one per mount; `nock` answers it. */
+const mountUrl = (n: number): string => `http://mounted-${n}.test`;
 
 /** The scopes recorded from the QA stack, by the account's name. */
 export type RecordedScope =
@@ -48,24 +49,70 @@ export interface Mounted {
   calls: string[];
   /** The `nock` scope of the server, for a test to add answers to */
   server: nock.Scope;
-  /** Take the console off the page */
+  /** The address the console talks to */
+  url: string;
+  /** The signals of the listeners the console put on the window and the document */
+  signals: AbortSignal[];
+  /** Take the console off the page, its container with it: mount another rather than `init()` again */
   unmount(): void;
 }
 
 const mounted: Mounted[] = [];
+let mounts = 0;
 
-/** Every console left mounted by a test goes after it. */
-afterEach(() => {
+/**
+ * Take every console a test left mounted off the page, and the answers its
+ * server held: a console's listeners first, before the page is reset under
+ * them, then nothing left to answer a late request.
+ */
+export function unmountAll(): void {
   while (mounted.length) mounted.pop()?.unmount();
-});
+  nock.cleanAll();
+}
+// Before the harness resets the page, which would wake a console still there.
+beforeReset.push(unmountAll);
 
 /** An argument, for `calls`: identifiers and keys, not whole objects. */
 function shown(value: unknown): string {
   if (value === undefined) return '';
   if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return `[${value.map(shown).join(', ')}]`;
   if (value && typeof value === 'object' && 'key' in value)
     return String((value as { key: unknown }).key);
   return JSON.stringify(value);
+}
+
+/**
+ * The signals a console's listeners are put under, caught as `init()` adds
+ * them to the window and the document: a test checks that `unmount()` aborts
+ * them, which nothing in the page shows.
+ */
+async function catching<T>(
+  signals: AbortSignal[],
+  run: () => Promise<T>
+): Promise<T> {
+  const targets: EventTarget[] = [window, document];
+  const originals = targets.map(target => target.addEventListener);
+  for (const target of targets) {
+    const original = target.addEventListener;
+    target.addEventListener = function (
+      this: EventTarget,
+      type: string,
+      listener: EventListenerOrEventListenerObject | null,
+      options?: boolean | AddEventListenerOptions
+    ): void {
+      if (typeof options === 'object' && options.signal)
+        signals.push(options.signal);
+      original.call(this, type, listener, options);
+    } as typeof target.addEventListener;
+  }
+  try {
+    return await run();
+  } finally {
+    targets.forEach((target, i) => {
+      target.addEventListener = originals[i];
+    });
+  }
 }
 
 /**
@@ -78,7 +125,10 @@ export async function mountConsole(
   options: MountOptions = {}
 ): Promise<Mounted> {
   const { scope = 'admin', hash = '', language = 'en' } = options;
-  const server = nock(MOUNT_URL).persist();
+  // An address of its own: the answers of an earlier mount in the same test
+  // would otherwise be this one's.
+  const url = mountUrl(++mounts);
+  const server = nock(url).persist();
   server.get('/api/v1/config').reply(200, read('config.json'));
   const granted: Scope | null =
     typeof scope === 'string' ? read<Scope>(`scopes/${scope}.json`) : scope;
@@ -94,7 +144,7 @@ export async function mountConsole(
   server.get(/\/api\/v1\/ldap\/organizations(\/.*)?$/).reply(200, []);
 
   const calls: string[] = [];
-  const client = new ConsoleApiClient(MOUNT_URL);
+  const client = new ConsoleApiClient(url);
   const api = new Proxy(client, {
     get(target, property, receiver) {
       const value = Reflect.get(target, property, receiver) as unknown;
@@ -114,21 +164,26 @@ export async function mountConsole(
   document.body.append(root);
   window.location.hash = hash ? `#/${hash}` : '';
   const app = new DirectoryConsole(
-    { containerId: root.id, apiBaseUrl: MOUNT_URL, language },
+    { containerId: root.id, apiBaseUrl: url, language },
     { api }
   );
+  // A 401 in a test is a test's business, not a reload of the page.
+  client.onSessionEnded = (): void => undefined;
+  const signals: AbortSignal[] = [];
   const result: Mounted = {
     root,
     app,
     calls,
     server,
+    url,
+    signals,
     unmount: (): void => {
       app.unmount();
       root.remove();
     },
   };
   mounted.push(result);
-  await app.init();
+  await catching(signals, () => app.init());
   await settled(root);
   return result;
 }
@@ -140,7 +195,10 @@ export async function mountConsole(
  * @param root the console's container
  */
 export async function settled(root: HTMLElement): Promise<void> {
-  for (let i = 0; i < 100; i++) {
+  // A tick first: a hash just written reaches the console on happy-dom's
+  // own timer.
+  await new Promise(resolve => setTimeout(resolve, 0));
+  for (let i = 0; i < 200; i++) {
     const busy =
       root.querySelector('[aria-busy="true"]') ||
       Array.from(root.querySelectorAll('.dc-empty')).some(p =>
@@ -149,4 +207,5 @@ export async function settled(root: HTMLElement): Promise<void> {
     if (!busy) return;
     await new Promise(resolve => setTimeout(resolve, 5));
   }
+  throw new Error('the console did not settle within a second');
 }

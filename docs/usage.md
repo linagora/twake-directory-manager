@@ -56,7 +56,7 @@ was started (`renderMain`, `readTransit`, `bulkChangeState`…).
 `init()` draws the console and starts listening to the page (the hash, the
 keyboard, errors); `unmount()` stops it and empties the container, for a host
 that mounts the console more than once on one page. The constructor's second
-argument gives the console what it would build itself — `{ api }`, an
+argument gives the console what it would build itself — `{ api }`, a
 `ConsoleApiClient` — which a test uses to answer from fixtures; a page needs
 none of it.
 

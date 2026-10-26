@@ -38,7 +38,6 @@ export {
 } from './rights';
 export { SafeHtml, append, html, join, render, trusted } from './shared/html';
 export type {
-  ConsoleDeps,
   ConsoleOptions,
   EntityDescriptor,
   EntitySchema,
@@ -48,3 +47,4 @@ export type {
   Scope,
   SchemaAttribute,
 } from './types';
+export type { ConsoleDeps } from './console/deps';

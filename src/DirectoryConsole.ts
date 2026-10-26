@@ -71,7 +71,6 @@ export {
 } from './rights';
 import type {
   Confirmation,
-  ConsoleDeps,
   AttachedEntries,
   AttachedEntry,
   ConsoleOptions,
@@ -84,6 +83,7 @@ import type {
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
+import type { ConsoleDeps } from './console/deps';
 import { confirmMarkup, markAlert } from './console/dialog';
 import { POLICIES_KEY, type Route, routeOf } from './console/route';
 import { firstFocus, overlayMarkup, tabTarget } from './console/panel';
@@ -312,6 +312,10 @@ export class DirectoryConsole {
     if (!this.container)
       throw new Error(`Container #${this.options.containerId} not found`);
     this.pageTitle = document.title || '';
+    // Every listener below goes with `unmount`, which may come while the
+    // directory is still being read: nothing is drawn or listened to after.
+    this.mounted = new AbortController();
+    const { signal } = this.mounted;
 
     render(
       this.container,
@@ -321,12 +325,14 @@ export class DirectoryConsole {
     try {
       this.entities = await this.api.discover();
     } catch (err) {
-      render(
-        this.container,
-        html`<p class="dc-empty dc-error-block">${(err as Error).message}</p>`
-      );
+      if (this.container)
+        render(
+          this.container,
+          html`<p class="dc-empty dc-error-block">${(err as Error).message}</p>`
+        );
       return;
     }
+    if (signal.aborted) return;
 
     // The scope is not worth a dead page: a console that lists and reads is
     // still a console. But it stops offering to write, since what came back
@@ -342,11 +348,9 @@ export class DirectoryConsole {
       this.readsPolicies(),
       this.readAccount(),
     ]);
+    if (signal.aborted) return;
 
     this.readRoute();
-    // Every listener below goes with `unmount`.
-    if (this.mounted.signal.aborted) this.mounted = new AbortController();
-    const { signal } = this.mounted;
     const on = <K extends keyof WindowEventMap>(
       type: K,
       listener: (event: WindowEventMap[K]) => void
@@ -837,23 +841,16 @@ export class DirectoryConsole {
    * Whether the caller manages the password policies. Who holds them is the
    * server's rule (`--authz-global-branches`), outside the tree the scope's
    * branches name, so the scope says it in `passwordPolicies`. Only a server
-   * that predates it is asked for the policies themselves: every page load
-   * of a local administrator then logged a refusal. An undescribed scope
-   * answers `false` for want of a model, and the console asks there too, as
-   * it leaves the server to answer whatever else such a scope cannot say. A
-   * refusal hides the page; any other failure shows it, with the failure on
-   * it.
+   * that predates it is asked for the policies themselves (see the client):
+   * every page load of a local administrator then logged a refusal. An
+   * undescribed scope answers `false` for want of a model, and the console
+   * asks there too, as it leaves the server to answer whatever else such a
+   * scope cannot say.
    */
   private async readsPolicies(): Promise<boolean> {
     if (!this.api.servesPasswordPolicies) return false;
     const told = this.rights.policiesTold;
-    if (told !== undefined) return told;
-    try {
-      await this.api.passwordPolicies();
-      return true;
-    } catch (err) {
-      return (err as { status?: number }).status !== 403;
-    }
+    return told ?? this.api.readsPasswordPolicies();
   }
 
   /**

@@ -77,10 +77,10 @@ export function rememberPageSize(size: number): void {
 
 /**
  * Tell when the system's wish for contrast changes; the reader's own choice,
- * once made, is read by `highContrast` over it. A browser without
- * `addEventListener` on a media query (Safari before 14) is not told.
+ * once made, is read by `highContrast` over it.
  *
  * @param listener what to run then
+ * @param signal takes the listener away when aborted (`unmount`)
  */
 export function onContrastChange(
   listener: () => void,

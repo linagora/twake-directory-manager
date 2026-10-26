@@ -49,16 +49,21 @@ Object.assign(globalThis, node);
 nock.disableNetConnect();
 
 /**
+ * What a test mounted and must go before the page is reset: the builder of
+ * a mounted console (test/support/mount.ts) registers its unmounting here, so
+ * that the hash reset below wakes no console still listening.
+ */
+export const beforeReset: (() => void)[] = [];
+
+/**
  * Root hooks, which mocha reads from a required file: a test leaves the DOM
  * as it found it. The storages, the document and the hash are shared by the
  * whole run, and a test that mounts the console must not meet what another
- * left. What a mounted console adds to `window` (its `hashchange`, `keydown`
- * and error listeners) is not taken away here: resetting the hash would wake
- * every console mounted before, so the builder that mounts one (#221, step 5)
- * must also unmount it, before the first test uses it.
+ * left.
  */
 export const mochaHooks = {
   afterEach(): void {
+    for (const cleanup of beforeReset) cleanup();
     localStorage.clear();
     sessionStorage.clear();
     document.body.replaceChildren();

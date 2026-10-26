@@ -104,10 +104,11 @@ the contract test holds the fixtures to `ldapRest.tested`.
 **A test of the console.** `mountConsole({ scope, hash, language })` from
 `test/support/mount.ts` mounts a console into the page over the recorded
 fixtures and waits for its first page; act through the DOM (`click()`, a
-`change` event, a `hashchange`, `settled(root)` after) and read the DOM and
-`calls`, what the console asked of its API. Do not reach a private member
-through a cast: a test that does fails when code moves, not when behaviour
-changes.
+`change` event, a hash written, `settled(root)` after) and read the DOM and
+`calls`, what the console asked of its API. A new test reaches no private
+member through a cast: such a test fails when code moves, not when behaviour
+changes; the older ones that do are moved as the code they cast into moves
+(#221).
 
 **A decision.** When something in [docs/adr/](docs/adr/) changes, add a
 record that supersedes the old one; do not edit the old one.

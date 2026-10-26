@@ -66,6 +66,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── console/panel.ts        the overlay (panel, toast region, announcer) and what Tab reaches in the panel
     ├── console/dialog.ts       the confirm question's markup and its alert role
     ├── console/route.ts        what the hash names: routeOf
+    ├── console/deps.ts         ConsoleDeps: what a test gives the console in place of what it builds
     ├── ui/table.ts             dataTable: the one way to draw a table (#226)
     ├── ui/search.ts            searchBox: a named search box, with the select of its scope
     ├── ui/announce.ts          the hidden live region: said to a screen reader, not shown

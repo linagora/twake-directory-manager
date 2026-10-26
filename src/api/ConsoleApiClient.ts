@@ -1023,6 +1023,22 @@ export class ConsoleApiClient {
     });
   }
 
+  /**
+   * Whether the caller may read the password policies, asked of the server
+   * itself: a refusal says no; any other failure says yes, so that the page
+   * shows it rather than hiding behind it.
+   *
+   * @returns false on a 403, true otherwise
+   */
+  async readsPasswordPolicies(): Promise<boolean> {
+    try {
+      await this.passwordPolicies();
+      return true;
+    } catch (err) {
+      return (err as { status?: number }).status !== 403;
+    }
+  }
+
   /** The password policies, sorted by name, and the attributes they take. */
   async passwordPolicies(): Promise<PasswordPolicies> {
     const { policies, attributes } = await this.call<PasswordPolicies>(

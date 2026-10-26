@@ -924,8 +924,8 @@ describe('Directory console: the shell and the overview', () => {
       };
       /** Go to an address, as a link or a typed hash does, and wait for the page. */
       const go = async (root: HTMLElement, hash: string): Promise<void> => {
+        // The browser sends `hashchange` itself, a moment later
         window.location.hash = `#/${hash}`;
-        window.dispatchEvent(new Event('hashchange'));
         await settled(root);
       };
 
@@ -1149,13 +1149,19 @@ describe('Directory console: the shell and the overview', () => {
         // changed after it would otherwise draw into a detached container.
         const first = await drawn();
         expect(first.calls[0]).to.equal('discover()');
+        // Its listeners on the window and the document, all under signals
+        expect(first.signals.length).to.be.greaterThan(4);
+        expect(first.signals.every(signal => !signal.aborted)).to.equal(true);
         first.unmount();
+        expect(first.signals.every(signal => signal.aborted)).to.equal(true);
         expect(document.body.contains(first.root)).to.equal(false);
         const before = first.calls.length;
         await go(document.body, 'users');
         expect(first.calls.length).to.equal(before);
+        // The next console mounts and answers for itself
         const second = await drawn();
         expect(second.root.querySelector('.dc-nav')).to.not.equal(null);
+        expect(second.url).to.not.equal(first.url);
       });
     });
 
