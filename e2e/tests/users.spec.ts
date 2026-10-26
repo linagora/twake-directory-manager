@@ -441,9 +441,6 @@ test.describe('USER user accounts', () => {
       );
       await expect(form.control('Email')).toBeFocused();
       await expect(form.dialog).toBeVisible();
-      await app.errorToast.evaluate(
-        toast => ((toast as HTMLElement).hidden = true)
-      );
     }
     expect(await directory.usersStartingWith(`x.${unique}`)).toEqual([]);
     expect(await directory.values(ALICE.dn, 'employeeNumber')).toEqual([
@@ -571,9 +568,6 @@ test.describe('USER user accounts', () => {
         'true'
       );
       await expect(form.dialog).toBeVisible();
-      await app.errorToast.evaluate(
-        toast => ((toast as HTMLElement).hidden = true)
-      );
     }
     expect(await directory.values(user.dn, 'mail')).toEqual([user.mail]);
 

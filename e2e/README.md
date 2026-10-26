@@ -198,3 +198,8 @@ default (`E2E_RETRIES`). Playwright lists a test that passed on its retry as fla
 trace before blaming the console. In CI, where the stack is up before the first test and nothing
 else starts, a flaky test fails the run (`failOnFlakyTests`), so that one passing only on retry
 does not go unseen.
+
+A toast stays five seconds, longer than the next action takes: `ConsolePage.expectToast` hides
+and empties the toast once it has read it, the red one too, so that a second "Saved" is waited
+for rather than seen in the first. A test that asserts on `app.toast` itself after an action must say what sets the new
+toast apart (its text), or go through `expectToast`.

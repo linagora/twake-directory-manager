@@ -231,10 +231,22 @@ export class ConsolePage {
     return organizations;
   }
 
-  /** Waits for a confirmation toast (or a red one with `error`) */
+  /**
+   * Waits for a confirmation toast (or a red one with `error`), and takes it
+   * as read: the toast is hidden and emptied once seen, as its own timer
+   * hides it five seconds after it shows. Left shown, a toast outlives the
+   * next action: a second "Saved" within those seconds was found at once,
+   * before the second save had been answered, and the directory was read
+   * too early (ORG-04). A toast shown again sets the element visible anew,
+   * with its text, which is what the next expectation waits for.
+   */
   async expectToast(text: string | RegExp, error = false): Promise<void> {
     const toast = error ? this.errorToast : this.toast;
     await expect(toast).toBeVisible();
     await expect(toast).toHaveText(text);
+    await toast.evaluate(element => {
+      (element as HTMLElement).hidden = true;
+      element.textContent = '';
+    });
   }
 }
