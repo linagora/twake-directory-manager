@@ -371,6 +371,11 @@ describe('views/list', () => {
         );
         expect(callsOf(calls, 'listBounded'), hash).to.deep.equal([]);
         expect(callsOf(calls, 'pointerOptions'), hash).to.deep.equal([]);
+        // Said once: not that reference data is kept outside the console.
+        expect(
+          root.querySelector('[data-main] [data-read-only]'),
+          hash
+        ).to.equal(null);
         unmount();
       }
     });
@@ -459,6 +464,37 @@ describe('views/list', () => {
         },
       });
       expect(offered(flat.root)).to.deep.equal(['Change state…']);
+      flat.unmount();
+      // Accounts whose schema names no states: Add to a group… alone.
+      const stateless = config();
+      const user = stateless.features.ldapFlatGeneric.flatResources.find(
+        resource => resource.name === 'twakeUser'
+      );
+      delete user?.schema.attributes.twakeAccountStatus.states;
+      const plain = await selected(two, {
+        answers: server => {
+          server.get('/api/v1/config').reply(200, stateless);
+        },
+      });
+      expect(offered(plain.root)).to.deep.equal(['Add to a group…']);
+    });
+
+    it('should offer no Delete selection on reference data the caller only reads, deleting elsewhere', async () => {
+      // Sophie Martin deletes in Sales, and creates no position.
+      const { root } = await mountConsole({
+        hash: 'positions',
+        scope: 'sophie.martin',
+        answers: server => {
+          server
+            .get(/\/api\/v1\/ldap\/positions(\?.*)?$/)
+            .reply(200, { Clerk: position('Clerk') });
+        },
+      });
+      click(root, '[data-select="Clerk"]');
+      expect(selecting(root)).to.equal(true);
+      expect(root.querySelector('[data-main] [data-delete-selected]')).to.equal(
+        null
+      );
     });
 
     it('should change the state of the accounts, list the refused, and read the list again once closed', async () => {
