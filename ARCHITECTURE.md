@@ -1,0 +1,187 @@
+# Architecture
+
+How the console is put together, for whoever changes it. The user-facing
+documentation is [docs/usage.md](docs/usage.md) and the
+[admin guide](docs/admin-guide/); how to contribute is in
+[CONTRIBUTING.md](CONTRIBUTING.md); the decisions behind what follows are in
+[docs/adr/](docs/adr/).
+
+## What it is
+
+A browser application, written in TypeScript with no runtime dependency,
+bundled by Rollup into one ESM file (plus UMD builds for the npm package) and
+one stylesheet, and served by [ldap-rest](https://github.com/linagora/ldap-rest)
+next to the API it reads. It holds no state of its own: everything on screen
+comes from ldap-rest at run time, and every change goes back through its REST
+API to the directory. Authentication is ldap-rest's (OpenID Connect in the
+image); the console only follows the redirects and signs in again on a `401`.
+
+The one design choice everything else follows from: **the console ships no
+entity name, attribute name or label.** `GET /v1/config` describes the
+entities, their schemas and their endpoints; `GET /v1/authz/scope` says what
+the signed-in administrator may do; the console builds its lists, cards and
+forms from that. A deployment with other schemas gets its own interface
+without a change here ([ADR 0001](docs/adr/0001-built-from-the-server.md)).
+
+## Module map
+
+Imports point downwards; nothing imports upwards, and `components/` never
+imports `DirectoryConsole`.
+
+```
+src/index.ts                public exports: DirectoryConsole, the components,
+                            ConsoleApiClient, Translator, html/SafeHtml, types
+└── DirectoryConsole.ts     the controller: boot, routing, shell and sidebar,
+    │                       every view (overview, lists, cards, organizations,
+    │                       password policies), the side panel and the dialog,
+    │                       the actions (forms, state changes, passwords, transit,
+    │                       deletion, bulk actions), the client-side rights
+    ├── components/
+    │   ├── EntityList.ts       search, list, selection, CSV export
+    │   ├── EntityDetail.ts     an entry's card, its relations and actions
+    │   ├── EntityForm.ts       the create/edit form built from a schema
+    │   ├── EntityImport.ts     the CSV import (with importer.ts and csv.ts)
+    │   ├── OrganizationTree.ts the tree, its search and lazy loading
+    │   ├── AttachedTables.ts   the people and groups of an organization
+    │   ├── GroupPicker.ts      "Add to a group…" and "Add members…"
+    │   └── PasswordPolicies.ts the policies table and form
+    ├── api/ConsoleApiClient.ts fetch, discovery, every endpoint, the error
+    │                           model, compatibility with older ldap-rest answers
+    ├── format.ts               labels, values, sizes, dates, refusals in words
+    ├── i18n.ts                 Translator and the en/fr/mn catalogues
+    ├── session.ts              signing in again after a 401
+    ├── shared/html.ts          html`…`, SafeHtml, render: the only way to the page
+    ├── shared/background.ts    background(): work nobody waits for, reported
+    ├── shared/dom.ts           escapeHtml and small DOM helpers
+    ├── assets.ts               inlined logos
+    └── types.ts                wire types (ConfigResponse, Scope…) and domain types
+src/styles.css              one stylesheet, `dc-` prefix, no framework
+public/                     index.html, boot.js, page.css, logo.svg
+docker/                     entrypoint.sh and two ldap-rest plugins (root redirect,
+                            console settings passed through the config API)
+helm/                       the chart
+e2e/                        the Playwright suite, a package of its own
+scripts/qa-environment/     OpenLDAP + Dex + the image, for e2e and by hand
+```
+
+`DirectoryConsole.ts` is far too large (over 4,000 lines) and takes in every
+feature; splitting it into views and actions behind a small shell is
+[#220](https://github.com/linagora/twake-directory-manager/issues/220). Until
+then: a new page is a method there, a new reusable widget is a component.
+
+## Boot
+
+`new DirectoryConsole(options).init()`, from `public/boot.js` or an embedding
+page ([docs/usage.md](docs/usage.md)):
+
+1. The container (`options.containerId`) shows _Loading…_.
+2. `api.discover()` reads `GET {apiPrefix}/v1/config`: the entities
+   (`EntityDescriptor`: key, names, main attribute, base, schema, endpoint,
+   kind), the features ldap-rest advertises, the console's own settings
+   (`features.console`, from `docker/consoleSettings.mjs`). A failure here
+   is the end of it: the page says so.
+3. `api.scope()` reads `GET /v1/authz/scope`. A failure is **not** the end:
+   the console stays up read-only, says the scope is unavailable, and leaves
+   every write to the server to refuse.
+4. Whether the password policies can be read, and who is signed in.
+5. The route is read from the hash; the listeners go up (`hashchange`,
+   `keydown` for the panel, `beforeunload` for a dirty form,
+   `unhandledrejection` and `error` for the error boundary).
+6. The shell is drawn (sidebar, scope banner, main area, panel, toast
+   region), what waits in transit is counted, and `renderMain()` draws the
+   page the route asks for.
+
+## Routing
+
+The address is a hash: `#/` (overview), `#/<entity>` (list),
+`#/<entity>/<id>` (card), `#/organizations/<dn>`, `#/password-policies`.
+`go(path)` writes the hash and lets `hashchange` drive the render
+(`followHash` → `readRoute` → `renderMain`); `record(path, replace)` writes
+the address without a render, for a node the tree already shows.
+`readRoute` decodes defensively: a hash is typed and mailed around.
+
+## Invariants and their mechanisms
+
+- **A late answer never draws over a newer page.** `renderMain()` takes a
+  ticket (`viewGeneration++`); every `await` in a view is followed by
+  `if (!this.current(generation)) return`. Reads with their own ordering
+  (transit count) carry their own counter (`transitReads`).
+- **The panel belongs to the page it opened on.** `openPanel(title, build,
+modal)` fills one body for every form; `closePanel(force)` empties it (a
+  password must not linger in a hidden node). `panelGuard` lets a form
+  refuse to close (the discard question, `guardDiscard`), `panelDirty`
+  answers `beforeunload`, `afterPanel` queues what waits for the panel to
+  close (a generated password shown after a save), `panelClosed` tells an
+  action that owns the panel (bulk actions) that it was taken away. A
+  navigation closes the panel: a form left open over another page would save
+  into an entry no longer on screen.
+- **Nothing is offered that the server would refuse, and the server is the
+  authority.** The console derives what to offer from `Scope`
+  (`scopeRestricts`, `transitState`, `writesEntry`, `claimRoots`,
+  `organizationParents` and the private predicates `canCreate`, `canWrite`,
+  `canDelete`, `organizationRights`…), mirroring ldap-rest's rules: an
+  organization is judged by its parent, an entry in transit by the transit
+  branch, reference data through the global branches. The server still
+  decides; a refusal is shown in its words (`refusal`, `explainRefusal`).
+  Gathering these rules into one tested module, and asking the server for
+  per-entry rights, is [#222](https://github.com/linagora/twake-directory-manager/issues/222)
+  ([ADR 0003](docs/adr/0003-rights-derived-from-the-scope.md)).
+- **No failure is silent.** Work nobody waits for (a redraw after a save,
+  the transit count, a bulk loop) goes through `background(task, context,
+report)`; `DirectoryConsole.report` shows _Something went wrong: …_, logs
+  to the browser console and calls `options.onError`. ESLint refuses a bare
+  `void promise`.
+- **Markup is safe by construction.** Every piece of HTML is an `html`…``
+  template (`src/shared/html.ts`), which escapes every interpolation that is
+  not already a `SafeHtml`; `render` and `append` are the only writes to the
+  page, and ESLint refuses `innerHTML` elsewhere. The image serves the page
+  with a strict `Content-Security-Policy` (`DM_STATIC_CSP` in the
+  `Dockerfile`): no inline script or style, so nothing written into the
+  directory can run ([ADR 0002](docs/adr/0002-vanilla-typescript-and-templates.md)).
+- **One error model at the API boundary.** `ConsoleApiClient.request` reads
+  the status before the body and throws an `Error` carrying `status` and,
+  when the server gave one, a structured `Refusal` (`code`, `attribute`,
+  `value`, `domains`). `readFailure` and `explainRefusal` turn it into words
+  for the reader; a `401` goes to `signInAgain`, guarded against a reload
+  loop.
+- **Older ldap-rest answers are tolerated, up to a point.** Optional fields
+  of `Scope` and fallbacks in the client exist for servers before 0.25.0;
+  which versions are supported, and when a fallback goes, is
+  [#225](https://github.com/linagora/twake-directory-manager/issues/225)
+  ([ADR 0004](docs/adr/0004-ldap-rest-compatibility.md)).
+
+## Components
+
+Each component takes an options object (translator, callbacks, what it
+shows) and renders into an element it is given; it keeps its own state
+(selection, open nodes, typed values) and reports through callbacks
+(`onOpen`, `onSubmit`, `onDelete`…). None reads the scope or the route: the
+console decides what to offer and passes it as booleans (`canWrite`,
+`canDelete`) or absent callbacks. All take an optional `report` for their
+background work.
+
+## Internationalisation
+
+`Translator` holds three catalogues (`en`, `fr`, `mn`) in `src/i18n.ts`,
+with placeholders `{name}` and plural forms `key.one`/`key.other` chosen by
+`Intl.PluralRules`; a test checks every catalogue has every key. Entity and
+attribute names are **not** translated here: they come from the schemas'
+`label`, per language, with English as the fallback.
+
+## Build, tests, delivery
+
+- `npm run build`: Rollup writes `dist/` (ESM, UMD, minified UMD, the
+  stylesheet minified by lightningcss, the page with content digests on the
+  files it loads).
+- `npm test`: mocha over `test/`, with hand-made DOM stubs and `nock` for the
+  API; `npm run test:coverage` adds c8 with thresholds. Moving the suite
+  onto a DOM implementation is [#221](https://github.com/linagora/twake-directory-manager/issues/221).
+- `e2e/`: Playwright against the image built from the tree, behind OpenLDAP
+  and Dex (`scripts/qa-environment/`); it gates pull requests and releases
+  ([ADR 0005](docs/adr/0005-e2e-suite-as-release-gate.md)).
+- `.github/workflows/test.yml` is every gate (lint, format, typecheck, unit
+  tests on three Node versions, build, audit, e2e with an image scan,
+  Helm); `release.yml` calls it, checks that the tag, `package.json`,
+  `Chart.yaml` and `CHANGELOG.md` agree, then publishes the images, the
+  chart and the GitHub release. The release flow is in
+  [CONTRIBUTING.md](CONTRIBUTING.md).

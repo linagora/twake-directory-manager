@@ -319,6 +319,10 @@ npx ldap-rest --plugin core/static --static-path ./dist --static-name console \
 End to end tests (Playwright, against the stack of `scripts/qa-environment/`):
 [`e2e/README.md`](e2e/README.md).
 
+How the code is put together: [ARCHITECTURE.md](ARCHITECTURE.md); how to
+change it, and how a release is cut: [CONTRIBUTING.md](CONTRIBUTING.md); the
+decisions behind it: [docs/adr/](docs/adr/).
+
 ## License
 
 [AGPL-3.0](LICENSE) — © LINAGORA
