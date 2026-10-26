@@ -50,9 +50,9 @@ export interface Relations {
  *
  * It holds what the views and actions moved out so far need (the password
  * policies and the organizations; the password resets, the state changes,
- * the transit, the deletions and the forms), and grows with each view and action moved out of
- * `DirectoryConsole` (#220): add a member when a moved method needs one, not
- * before.
+ * the transit, the deletions and the forms), and grows with each view and
+ * action moved out of `DirectoryConsole` (#220): add a member when a moved
+ * method needs one, not before.
  */
 export interface ConsoleContext {
   /** The client of ldap-rest */
@@ -109,7 +109,10 @@ export interface ConsoleContext {
    * the label its schema gives it, else by its identifier.
    */
   entryName(entity: EntityDescriptor, id: string): string;
-  /** The first value of the attribute playing a role, trimmed; none when empty */
+  /**
+   * The first value of the attribute playing a role, trimmed; none when
+   * empty
+   */
   roleValue(
     entity: EntityDescriptor,
     entry: Entry,
@@ -140,9 +143,15 @@ export interface ConsoleContext {
   pointerNames(
     entity: EntityDescriptor
   ): Promise<(dn: string) => string | undefined>;
-  /** The names of what the accounts and the groups attached somewhere point at */
+  /**
+   * The names of what the accounts and the groups attached somewhere point
+   * at
+   */
   attachedNames(): Promise<(dn: string) => string | undefined>;
-  /** The accounts and the groups attached to an organization, each kind asked apart */
+  /**
+   * The accounts and the groups attached to an organization, each kind
+   * asked apart
+   */
   readMembers(dn: string): Promise<AttachedEntries>;
   /** The address of a related entry's card, in whichever entity owns its DN */
   relationHref(dn: string): string | undefined;
@@ -162,7 +171,10 @@ export interface ConsoleContext {
     entry?: Entry,
     here?: { preset: Entry; created(): void }
   ): void;
-  /** Create or edit an organization, under a parent when named (see `FormActions`) */
+  /**
+   * Create or edit an organization, under a parent when named (see
+   * `FormActions`)
+   */
   openOrganizationForm(
     entity: EntityDescriptor,
     entry?: Entry,

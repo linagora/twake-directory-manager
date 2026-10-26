@@ -492,7 +492,26 @@ describe('views/organizations', () => {
         );
         unmount();
       }
-      const { root, calls } = await page(of(sales), { entries });
+      // A search of the path matches a substring: Salesforce is found with
+      // Sales, and the list cut to Sales and below leaves it out.
+      const account = (uid: string, path: string): Entry => ({
+        dn: `uid=${uid},${users}`,
+        objectClass: ['top', 'twakeAccount', 'twakeWhitePages'],
+        uid,
+        displayName: uid,
+        twakeDepartmentPath: path,
+      });
+      const { root, calls } = await page(of(sales), {
+        entries,
+        answers: server => {
+          server
+            .get(uri => uri.startsWith('/api/v1/ldap/users?'))
+            .reply(200, {
+              claire: account('claire', 'Sales / France'),
+              marc: account('marc', 'Salesforce'),
+            });
+        },
+      });
       await shown(root, 'Sales');
       await until(() => !!root.querySelector('[data-list-everyone]'));
       // It opens the accounts searched by path, cut to Sales and below.
@@ -507,6 +526,12 @@ describe('views/organizations', () => {
         root.querySelector<HTMLInputElement>('[data-main] input[type="search"]')
           ?.value
       ).to.equal('Sales');
+      await until(() => !!root.querySelector('[data-main] tr[data-id]'));
+      expect(
+        Array.from(
+          root.querySelectorAll<HTMLElement>('[data-main] tr[data-id]')
+        ).map(row => row.dataset.id)
+      ).to.deep.equal(['claire']);
     });
 
     /** The card of an organization drawn for a caller of this scope. */
@@ -680,21 +705,32 @@ describe('views/organizations', () => {
       });
       await shown(root, 'Sales');
       holding = true;
+      /** Sales' accounts asked for, as a card past its organization's read asks. */
+      const accounts = (): number =>
+        callsOf(calls, 'organizationMembers').filter(
+          call =>
+            call.startsWith(`organizationMembers(${sales},`) &&
+            call.endsWith('twakeAccount)')
+        ).length;
+      const asked = accounts();
       speak(root, 'fr');
       speak(root, 'en');
+      // The English page is past Sales' read, its accounts held: the answer
+      // that comes after the second organization's exists.
+      await until(() => accounts() > asked);
       const reads = callsOf(calls, 'organization').length;
       window.location.hash = `#/${of(engineering)}`;
-      await until(() =>
-        callsOf(calls, 'organization')
-          .slice(reads)
-          .includes(`organization(${engineering})`)
-      );
       await shown(root, 'Engineering');
       held.open();
       await idle();
       await settled(root);
       expect(heading(root)).to.equal('Engineering');
       expect(selected(root)).to.equal(engineering);
+      // A change of hash, which happy-dom tells once as a browser does:
+      // Engineering read once, by one rendering, and nothing else read.
+      expect(callsOf(calls, 'organization').slice(reads)).to.deep.equal([
+        `organization(${engineering})`,
+      ]);
     });
 
     it('should draw it when the language is switched while its card is read', async () => {

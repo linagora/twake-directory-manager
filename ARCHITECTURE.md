@@ -125,11 +125,12 @@ then asks the view (the tree is `OrganizationsView`'s); what it needs of
 another action (a change of state from a deletion, the first password of an
 account just created) it asks of the context too, and so does a view of an
 action it starts (the organization's form and its deletion), or of a page
-still in the console (the list of users opened on a department's path). The console keeps a one-line method for each view, each
-action and the panel and dialog services while the other callers move,
-deleted at the last step, or as soon as no caller is left. ESLint keeps the direction: a view imports no
-other view and no action, an action neither a view nor another action, and
-`components/` imports neither `views/` nor `actions/`.
+still in the console (the list of users opened on a department's path).
+The console keeps a one-line method for each view, each action and the
+panel and dialog services while the other callers move, deleted at the last
+step, or as soon as no caller is left. ESLint keeps the direction: a view
+imports no other view and no action, an action neither a view nor another
+action, and `components/` imports neither `views/` nor `actions/`.
 Until a feature's turn comes, a new page is a view, a new action an action, a
 new reusable widget a component.
 
