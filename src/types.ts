@@ -6,7 +6,7 @@
  * name, attribute name or label is written here: an entity the deployment
  * adds appears in the interface without a line of code.
  *
- * @module browser/directory-console/types
+ * @module twake-directory-manager/types
  */
 
 /** Semantic role of an attribute, as declared by the server-side schema. */
