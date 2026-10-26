@@ -10,8 +10,12 @@ import { browserslistToTargets, transform } from 'lightningcss';
 
 const NAME = 'twake-directory-manager';
 
-/** Files the page loads, named the same from one release to the next. */
-const PAGE_ASSETS = [`${NAME}.esm.js`, `${NAME}.css`];
+/**
+ * Files the page loads, named the same from one release to the next. The
+ * bundle first: boot.js imports it, and is rewritten to the digested name
+ * before its own digest is taken.
+ */
+const PAGE_ASSETS = [`${NAME}.esm.js`, `${NAME}.css`, 'page.css', 'boot.js'];
 
 /**
  * The stylesheet, minified, next to the bundles. One plain CSS file needs no
@@ -26,7 +30,9 @@ const stylesheet = () => ({
   writeBundle() {
     const file = `${NAME}.css`;
     const { code, map } = transform({
-      // Named from where the map will sit, so devtools find the source.
+      // Named from where the map will sit, so devtools find the source. The
+      // same name resolves a relative `url()` or `@import`, of which the
+      // stylesheet has none (its images are `data:` URLs).
       filename: '../src/styles.css',
       code: readFileSync('src/styles.css'),
       minify: true,
@@ -61,10 +67,23 @@ const copyPublic = () => ({
         .update(readFileSync(`dist/${asset}`))
         .digest('hex')
         .slice(0, 12);
-      page = page.replaceAll(`./${asset}'`, `./${asset}?v=${digest}'`);
-      page = page.replaceAll(`"${asset}"`, `"${asset}?v=${digest}"`);
+      // The page names the file; so does boot.js for the bundle it imports,
+      // which must follow the same digest or the browser keeps the old one.
+      for (const file of ['dist/index.html', 'dist/boot.js']) {
+        const text =
+          file === 'dist/index.html' ? page : readFileSync(file, 'utf8');
+        const named = text
+          .replaceAll(`./${asset}'`, `./${asset}?v=${digest}'`)
+          .replaceAll(`"${asset}"`, `"${asset}?v=${digest}"`);
+        if (file === 'dist/index.html') page = named;
+        else if (named !== text) writeFileSync(file, named);
+      }
     }
     writeFileSync('dist/index.html', page);
+    // A rewrite that missed (another quoting of the import, a renamed file)
+    // would ship a bundle browsers keep from their cache: refuse the build.
+    if (!readFileSync('dist/boot.js', 'utf8').includes(`${NAME}.esm.js?v=`))
+      throw new Error('dist/boot.js does not import the digested bundle');
   },
 });
 

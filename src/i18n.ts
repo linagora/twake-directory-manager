@@ -1358,7 +1358,8 @@ const mn: Catalogue = {
   'policy.attr.pwdCheckModule': 'Шалгах модуль',
 };
 
-const catalogues: Record<string, Catalogue> = { en, fr, mn };
+// Exported for the test that keeps the catalogues complete.
+export const catalogues: Record<string, Catalogue> = { en, fr, mn };
 
 /** Languages the console ships with. */
 export const availableLanguages = Object.keys(catalogues);
