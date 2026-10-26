@@ -80,7 +80,6 @@ export function listFailure(err: unknown, translator: Translator): string {
   if (!tooBroad(err) && status !== 500) return message;
   if (status === 422) return translator.t('list.tooMany');
   if (tooBroad(err)) return translator.t('list.failed');
-  if (status !== 500) return message;
   const cause = message.trim();
   return GENERIC_FAILURE.test(cause)
     ? translator.t('list.error')

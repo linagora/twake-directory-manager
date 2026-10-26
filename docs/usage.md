@@ -361,8 +361,8 @@ the plain key.
   reached by searching, not by paging. That needs a server that honours
   `limit` on the list endpoint: ldap-rest 0.12.0 ignores it, still fetches a
   branch or a search in full, and fails once the directory's size limit is
-  exceeded — with a `500` the console shows as a plain failure, since that
-  version is no longer read for. Across origins, the deployment's CORS policy has to expose
+  exceeded, with a `500` the console shows as a server failure: it no longer
+  reads that version's `500` as a search too broad. Across origins, the deployment's CORS policy has to expose
   `X-Result-Truncated` (`Access-Control-Expose-Headers`), or the list looks
   complete and shows no notice.
 - Moving an entry between two organizations the caller writes has no control

@@ -223,7 +223,7 @@ docker build --build-arg LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:<version> \
 An older ldap-rest serves the console as far as its API matches, but is not
 tested: one older than 0.25.0 lacks parts of the scope answer the console
 reads, and offers less; one that still reports a search too broad as a `500`
-(before 0.12.x) has large lists and pointer selects fail with a plain
+(before 0.13.0) has large lists and pointer selects fail with a plain
 error, and no search offered in their place.
 
 ### Kubernetes

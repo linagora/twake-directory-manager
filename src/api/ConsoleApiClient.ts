@@ -739,7 +739,7 @@ export class ConsoleApiClient {
    *
    * Without a limit the server runs the search unbounded, and a directory
    * refuses one that matches more entries than its own size limit: ldap-rest
-   * then answers `422` (an ldap-rest before 0.12.x answered `500`, which the
+   * then answers `422` (an ldap-rest before 0.13.0 answered `500`, which the
    * console no longer reads as that refusal). With one, it answers the first
    * `limit` entries and says in
    * `X-Result-Truncated` that there were more. A server that predates `limit`
