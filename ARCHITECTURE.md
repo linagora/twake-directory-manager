@@ -70,7 +70,8 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── api/ConsoleApiClient.ts fetch, discovery, every endpoint, the error
     │                           model, compatibility with older ldap-rest answers
         ├── importer.ts, csv.ts     reading a CSV file and resolving its values
-    ├── format.ts               labels, values, sizes, dates, refusals in words
+    ├── format.ts               labels, values, sizes, dates, refusals in words,
+    │                           the id of an entry just created
     ├── i18n.ts                 Translator and the en/fr/mn catalogues
     ├── session.ts              signing in again after a 401
         ├── rights.ts               Rights: what the scope lets the caller do, the one reader of Scope
@@ -106,8 +107,7 @@ scripts/qa-environment/     OpenLDAP + Dex + the image, for e2e and by hand
 `DirectoryConsole.ts` is still too large (about 1,450 lines): it holds the
 boot, the shell, the routing, the overview and the page of an address naming
 none, the names and the reads the pages share, and the one-line methods each
-move leaves behind; splitting it into views and actions behind a small shell
-is
+move leaves behind; splitting it into views and actions behind a small shell is
 [#220](https://github.com/linagora/twake-directory-manager/issues/220), under
 way. A view is a class of `src/views/` given a `ConsoleContext`
 (`src/console/context.ts`) — the client, the words, the rights, the panel and
@@ -142,7 +142,10 @@ selection is given), or of another view (the list of users opened on a
 department's path, which the context asks of `ListsView`).
 The console keeps a one-line method for each view, each action and the
 panel and dialog services while the other callers move, deleted at the last
-step, or as soon as no caller is left. ESLint keeps the direction: a view
+step, or as soon as no caller is left; `openPanel` and `confirmAction` have
+none left in `src/`, and stay only because `test/console/panel.test.ts` still
+calls them through private members: they go when that test moves onto the
+page (#221). ESLint keeps the direction: a view
 imports no other view and no action, an action neither a view nor another
 action, and `components/` imports neither `views/` nor `actions/`.
 Until a feature's turn comes, a new page is a view, a new action an action, a
