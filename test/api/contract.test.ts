@@ -44,6 +44,16 @@ describe('the contract with the ldap-rest tested', () => {
   });
   afterEach(() => nock.cleanAll());
 
+  it('should replay the answers of the version the console is tested against', () => {
+    // The fixtures are what one version answered: the recorder writes which,
+    // and a tested version that moved on asks for a recording again.
+    const recorded = read<{ ldapRest: string }>('recorded.json');
+    const { ldapRest } = read<{ ldapRest: { tested: string } }>(
+      '../../package.json'
+    );
+    expect(recorded.ldapRest).to.equal(ldapRest.tested);
+  });
+
   it('should find in the configuration what the console is built from', () => {
     expect(entities.map(entity => entity.key)).to.include.members([
       'users',
@@ -89,7 +99,7 @@ describe('the contract with the ldap-rest tested', () => {
     const recorded = read<Recorded>('contract/users-list-limited.json');
     nock(baseUrl)
       .get('/api/v1/ldap/users')
-      .query(true)
+      .query({ limit: '2' })
       .reply(recorded.status, recorded.body as object, recorded.headers);
     const list = await api.listBounded(users, undefined, undefined, 2);
     expect(list.truncated).to.equal(true);

@@ -15,35 +15,62 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const { ldapRest } = JSON.parse(readFileSync('package.json', 'utf8'));
-const TAG = /compat\(ldap-rest<(\d+\.\d+\.\d+)\)/g;
+// A tag written otherwise (`compat(ldap-rest < 1.2)`) would escape the check
+// and linger as surely as none: every mention has to take the one form.
+const MENTION = /compat\(ldap-rest[^)\n]*\)?/g;
+const TAG = /^compat\(ldap-rest<(\d+\.\d+\.\d+)\)$/;
 
-const parse = version => version.split('.').map(Number);
+// `1.2.0-rc.1` compares as 1.2.0: a prerelease of the floor is below it.
+const parse = version => version.split('-')[0].split('.').map(Number);
 const atMost = (a, b) => {
   const [x, y] = [parse(a), parse(b)];
   for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i];
   return true;
 };
 
+// Everything that could hold a fallback: the sources, the page, the image's
+// plugins and script, the chart, the QA stack, the e2e suite. Not the docs,
+// which speak of the tag, nor this script, nor what is installed or built.
+const SKIPPED = new Set([
+  'node_modules',
+  'dist',
+  '.generated',
+  'playwright-report',
+  'test-results',
+]);
+const SELF = join('scripts', 'check-compat.mjs');
 function* files(dir) {
   for (const name of readdirSync(dir)) {
+    if (SKIPPED.has(name)) continue;
     const path = join(dir, name);
     if (statSync(path).isDirectory()) yield* files(path);
     else if (
-      /\.(ts|mjs|js|css|sh|yaml|yml)$/.test(name) ||
-      name === 'Dockerfile'
+      path !== SELF &&
+      (/\.(ts|mjs|js|css|sh|yaml|yml|json)$/.test(name) ||
+        name === 'Dockerfile')
     )
       yield path;
   }
 }
 
 const failures = [];
-for (const path of [...files('src'), ...files('docker'), 'Dockerfile']) {
+const scanned = ['src', 'public', 'docker', 'scripts', 'helm', 'e2e'].flatMap(
+  dir => [...files(dir)]
+);
+for (const path of [...scanned, 'Dockerfile']) {
   const text = readFileSync(path, 'utf8');
-  for (const match of text.matchAll(TAG)) {
-    const line = text.slice(0, match.index).split('\n').length;
-    if (atMost(match[1], ldapRest.min))
+  for (const mention of text.matchAll(MENTION)) {
+    const line = text.slice(0, mention.index).split('\n').length;
+    const tag = mention[0].match(TAG);
+    if (!tag) {
       failures.push(
-        `${path}:${line}: compat(ldap-rest<${match[1]}) serves no supported server (the floor is ${ldapRest.min}): remove the fallback`
+        `${path}:${line}: "${mention[0]}" is not written compat(ldap-rest<X.Y.Z), the one form this checks`
+      );
+      continue;
+    }
+    if (atMost(tag[1], ldapRest.min))
+      failures.push(
+        `${path}:${line}: compat(ldap-rest<${tag[1]}) serves no supported server (the floor is ${ldapRest.min}): remove the fallback`
       );
   }
 }

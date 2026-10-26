@@ -223,8 +223,8 @@ The console supports ldap-rest from the floor `package.json` declares
 (`ldapRest.min`, 1.1.0: the first to serve the page's
 `Content-Security-Policy`) to the version the `Dockerfile` builds on and CI
 tests against (`ldapRest.tested`); a fallback for an older server is tagged
-`compat(ldap-rest<X.Y.Z)` where it stands and removed, by `npm run lint`,
-once the floor passes it. The base image is a build argument:
+`compat(ldap-rest<X.Y.Z)` where it stands, and `npm run lint` refuses it once
+the floor passes it, until it is removed. The base image is a build argument:
 
 ```sh
 docker build --build-arg LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:<version> \

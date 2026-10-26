@@ -171,7 +171,10 @@ RECORD_SCOPES=1 npx playwright test record-scopes
 ```
 
 Run it again, and commit what changed, whenever `scripts/qa-environment/ldap/seed.ldif` or the
-authorization settings of `scripts/qa-environment/docker-compose.yaml` change.
+authorization settings of `scripts/qa-environment/docker-compose.yaml` change, and whenever the
+ldap-rest version the console is tested against (`ldapRest.tested` in `package.json`) moves: the
+recorder writes which version answered (`test/fixtures/recorded.json`), and the contract test
+holds the fixtures to it.
 
 ### Flakiness
 

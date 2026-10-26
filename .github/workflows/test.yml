@@ -102,14 +102,22 @@ jobs:
       ldap-rest: ${{ steps.range.outputs.list }}
     steps:
       - uses: actions/checkout@v7
+
       - id: range
+        env:
+          ASKED: ${{ inputs.ldap-rest }}
         run: |
           node -e '
             const { ldapRest } = require("./package.json");
-            const asked = (process.argv[1] || "min,tested").split(",");
-            const list = [...new Set(asked.map(end => ldapRest[end.trim()]))];
+            const asked = (process.env.ASKED || "min,tested").split(",").map(end => end.trim());
+            const unknown = asked.filter(end => !(end in ldapRest));
+            if (unknown.length) {
+              console.error(`ldap-rest: ${unknown.join(", ")} is not an end of the range (min, tested)`);
+              process.exit(1);
+            }
+            const list = [...new Set(asked.map(end => ldapRest[end]))];
             console.log("list=" + JSON.stringify(list));
-          ' "${{ inputs.ldap-rest }}" >> "$GITHUB_OUTPUT"
+          ' >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
   # The Playwright suite of e2e/ against the image built from this tree, behind the stack of

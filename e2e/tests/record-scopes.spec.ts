@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { type APIResponse } from '@playwright/test';
@@ -16,7 +16,8 @@ import { expect, test } from '../support/fixtures';
  * (`scripts/qa-environment/ldap/seed.ldif`) or the authorization settings of
  * the stack change.
  */
-const FIXTURES = join(__dirname, '..', '..', 'test', 'fixtures');
+const ROOT = join(__dirname, '..', '..');
+const FIXTURES = join(ROOT, 'test', 'fixtures');
 const PERSONAS = [ADMIN, SOPHIE, ERIC, ALICE, GRACE];
 
 function save(file: string, body: unknown): void {
@@ -47,6 +48,18 @@ async function answer(response: APIResponse): Promise<unknown> {
 
 test.describe('record the personas’ scopes', () => {
   test.skip(!process.env.RECORD_SCOPES, 'a recorder, run on demand');
+
+  test('record which version answered', () => {
+    // The stack runs the image built on `ldapRest.tested`: the fixtures are
+    // that version's answers, and the contract test holds them to it.
+    const { ldapRest } = JSON.parse(
+      readFileSync(join(ROOT, 'package.json'), 'utf8')
+    ) as { ldapRest: { tested: string } };
+    save('recorded.json', {
+      ldapRest: ldapRest.tested,
+      date: new Date().toISOString().slice(0, 10),
+    });
+  });
 
   for (const account of PERSONAS) {
     test(`record ${account.uid}`, async ({ page }) => {
@@ -95,7 +108,7 @@ test.describe('record the personas’ scopes', () => {
         data: body,
       });
       save(file, await answer(response));
-      // Not refused after all: leave nothing behind.
+      // Not refused after all: leave nothing behind, and say so.
       if (response.ok()) {
         const created = (await response.json()) as { uid?: string };
         if (created.uid)
@@ -103,6 +116,7 @@ test.describe('record the personas’ scopes', () => {
             `/api/v1/ldap/users/${encodeURIComponent(created.uid)}`
           );
       }
+      expect(response.ok(), `${file} records a refusal`).toBe(false);
     };
     // An address already taken (alice's).
     await refused(
@@ -135,6 +149,13 @@ test.describe('record the personas’ scopes', () => {
       },
     });
     save('contract/refusal-forbidden.json', await answer(response));
+    if (response.ok()) {
+      const created = (await response.json()) as { uid?: string };
+      if (created.uid)
+        await page.request.delete(
+          `/api/v1/ldap/users/${encodeURIComponent(created.uid)}`
+        );
+    }
     expect(response.ok()).toBe(false);
   });
 });
