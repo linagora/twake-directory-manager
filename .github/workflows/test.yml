@@ -16,6 +16,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     strategy:
       fail-fast: false
@@ -55,8 +56,9 @@ jobs:
         if: matrix.node-version == '24.x'
         run: npm run test:coverage
 
+      # Kept when the thresholds fail too: that is when the report is read.
       - uses: actions/upload-artifact@v7
-        if: matrix.node-version == '24.x'
+        if: ${{ !cancelled() && matrix.node-version == '24.x' }}
         with:
           name: coverage
           path: coverage/lcov.info
@@ -118,6 +120,7 @@ jobs:
 
   helm:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 

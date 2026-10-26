@@ -28,15 +28,15 @@ const rules = {
   'no-undef': 'off',
 };
 
-// The files over the line budget when it was set. Remove a file from the list
-// when it goes under; never add one.
+// The files over the line budget when it was set, each held to its size then
+// (comments and blank lines aside): it may shrink, not grow. Lower a figure
+// when the file does; remove the file when it goes under the budget; never
+// add one.
 const oversized = {
-  src: [
-    'src/DirectoryConsole.ts',
-    'src/components/EntityForm.ts',
-    'src/i18n.ts',
-  ],
-  test: ['test/console.test.ts'],
+  'src/DirectoryConsole.ts': 3927,
+  'src/components/EntityForm.ts': 1404,
+  'src/i18n.ts': 1334,
+  'test/console.test.ts': 11411,
 };
 
 export default [
@@ -70,12 +70,14 @@ export default [
       ],
     },
   },
+  ...Object.entries(oversized).map(([file, max]) => ({
+    files: [file],
+    rules: {
+      'max-lines': ['error', { max, skipComments: true, skipBlankLines: true }],
+    },
+  })),
   {
-    files: [...oversized.src, ...oversized.test],
-    rules: { 'max-lines': 'off' },
-  },
-  {
-    files: ['*.mjs', 'docker/*.mjs'],
+    files: ['*.mjs', 'docker/*.mjs', 'scripts/*.mjs'],
     languageOptions: { globals: globals.node },
   },
   { ignores: ['dist/', 'node_modules/', 'coverage/'] },

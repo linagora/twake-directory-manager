@@ -58,12 +58,17 @@ jobs:
           if [ "$APP" != "$VERSION" ]; then
             echo "::error::Chart.yaml appVersion is $APP, the tag says $VERSION"; failed=1
           fi
-          # The heading release-notes reads: `## v1.2.3` alone or followed by a space.
-          if ! awk -v hdr="## v$VERSION" '
-            index($0, hdr) == 1 && (length($0) == length(hdr) || substr($0, length(hdr) + 1, 1) == " ") { found = 1 }
-            END { exit !found }
-          ' CHANGELOG.md; then
-            echo "::error::CHANGELOG.md has no section '## v$VERSION'"; failed=1
+          # The section the release job will publish: the heading `## v1.2.3`,
+          # alone or followed by a space, and something under it.
+          NOTES=$(awk -v hdr="## v$VERSION" '
+            /^## v/ {
+              if (inSection) exit
+              if (index($0, hdr) == 1 && (length($0) == length(hdr) || substr($0, length(hdr) + 1, 1) == " ")) { inSection = 1; next }
+            }
+            inSection { print }
+          ' CHANGELOG.md)
+          if [ -z "$(printf '%s' "$NOTES" | tr -d '[:space:]')" ]; then
+            echo "::error::CHANGELOG.md has no section '## v$VERSION', or nothing under it"; failed=1
           fi
           exit $failed
 
