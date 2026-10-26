@@ -75,7 +75,9 @@ const create = async (
   // The first match is the active one: Enter takes it, as the reader does.
   press('Enter');
   click(body, 'button[type="submit"]');
-  // Read by the console a few turns after nock answers it.
+  // Read by the console a few turns after nock answers it. Too short a wait
+  // fails the test — the password expected behind the panel is not there —
+  // rather than passing it.
   return {
     answered: answered.then(
       () => new Promise(resolve => setTimeout(resolve, 20))
@@ -195,7 +197,6 @@ describe('Directory console: the side panel and the toast', () => {
         app: {
           closePanel(force?: boolean): void;
           openPanel(title: string, build: (body: unknown) => void): void;
-          panelGuard: (() => boolean) | null;
         };
         els: Record<string, ReturnType<typeof control>>;
         panel: { hidden: boolean };
@@ -250,7 +251,6 @@ describe('Directory console: the side panel and the toast', () => {
         resetPassword(entity: unknown, id: string): void;
         closePanel(force?: boolean): void;
         openPanel(title: string, build: (body: unknown) => void): void;
-        panelGuard: (() => boolean) | null;
       };
       let calls = 0;
       app.api = {

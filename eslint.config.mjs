@@ -114,7 +114,7 @@ const rules = {
 // when the file does; remove the file when it goes under the budget; never
 // add one.
 const oversized = {
-  'src/DirectoryConsole.ts': 3425,
+  'src/DirectoryConsole.ts': 3423,
   'src/components/EntityForm.ts': 1406,
 };
 
@@ -228,7 +228,7 @@ export default [
         {
           patterns: [
             {
-              regex: '^\\./|(^|/)views/',
+              regex: '^\\./|(^|/)views(/|$)',
               message:
                 'A view imports no other view: what two views share goes to src/console, src/ui or a component.',
             },

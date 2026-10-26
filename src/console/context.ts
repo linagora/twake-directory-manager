@@ -51,6 +51,4 @@ export interface ConsoleContext {
   titlePage(name?: string): void;
   /** Draw the page the address names again, after a change of what it shows */
   refresh(): Promise<void>;
-  /** Go to an address, as after `#/`: the hash change draws it */
-  go(path: string): void;
 }

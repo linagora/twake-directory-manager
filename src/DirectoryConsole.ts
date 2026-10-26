@@ -379,7 +379,6 @@ export class DirectoryConsole {
       current: generation => this.current(generation),
       titlePage: name => this.titlePage(name),
       refresh: () => this.renderMain(),
-      go: path => this.go(path),
     };
   }
 
@@ -1810,8 +1809,7 @@ export class DirectoryConsole {
     // not opened over it.
     if (
       (typeof window !== 'undefined' && window.location.hash !== address) ||
-      this.container?.querySelector<HTMLElement>('[data-panel]')?.hidden ===
-        false
+      this.panelShown()
     )
       return false;
     const total = kept.length;

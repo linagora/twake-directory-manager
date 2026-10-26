@@ -119,6 +119,9 @@ describe('views/policies', () => {
     click(root, '[data-main] [data-new]');
     const name = body.querySelector<HTMLInputElement>('#dc-policy-cn');
     type(name, 'default');
+    // From the button, so that the focus found on the field is the refusal's:
+    // a click moves no focus in happy-dom, and the field had it from typing.
+    body.querySelector<HTMLElement>('button[type="submit"]')?.focus();
     click(body, 'button[type="submit"]');
     const error = body.querySelector<HTMLElement>('#dc-policy-cn-error');
     await until(() => error?.hidden === false);
