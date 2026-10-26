@@ -9,6 +9,11 @@ on:
       - main
   pull_request:
   workflow_call:
+    inputs:
+      ldap-rest:
+        description: Which ldap-rest versions the e2e suite runs against, `min,tested` (both ends of the supported range) or `tested`
+        type: string
+        default: min,tested
 
 permissions:
   contents: read
@@ -86,14 +91,42 @@ jobs:
         run: npm audit --audit-level=high
         working-directory: e2e
 
+  # The ldap-rest versions the e2e suite runs against: both ends of the
+  # supported range package.json declares (`ldapRest.min`, `ldapRest.tested`),
+  # or only the tested one when the caller asks (a release). One job when they
+  # are the same version.
+  versions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ldap-rest: ${{ steps.range.outputs.list }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: range
+        run: |
+          node -e '
+            const { ldapRest } = require("./package.json");
+            const asked = (process.argv[1] || "min,tested").split(",");
+            const list = [...new Set(asked.map(end => ldapRest[end.trim()]))];
+            console.log("list=" + JSON.stringify(list));
+          ' "${{ inputs.ldap-rest }}" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
   # The Playwright suite of e2e/ against the image built from this tree, behind the stack of
-  # scripts/qa-environment/ (OpenLDAP + Dex).
+  # scripts/qa-environment/ (OpenLDAP + Dex), once per ldap-rest version of the range.
   e2e:
+    needs: versions
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        ldap-rest: ${{ fromJSON(needs.versions.outputs.ldap-rest) }}
     defaults:
       run:
         working-directory: e2e
+    env:
+      LDAP_REST_IMAGE: ghcr.io/linagora/ldap-rest:${{ matrix.ldap-rest }}
     steps:
       - uses: actions/checkout@v7
 
@@ -139,7 +172,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
-          name: e2e-report
+          name: e2e-report-${{ matrix.ldap-rest }}
           path: |
             e2e/playwright-report/
             e2e/test-results/
