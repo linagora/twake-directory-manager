@@ -838,11 +838,29 @@ export class EntityList {
 
   private rowMarkup(id: string, entry: Entry): SafeHtml {
     const { translator, entity } = this.options;
+    /** A value as the column shows it: a nomenclature's by its name. */
+    const shownText = (name: string): string => {
+      const value = entryValue(entry, name);
+      return text(
+        (Array.isArray(value) ? value : [value])
+          .filter((v): v is string => v !== undefined)
+          .map(
+            v =>
+              ownValueLabel(entity, name, String(v), translator.language) ||
+              displayValue(
+                entity.schema.attributes[name],
+                String(v),
+                this.options.pointerLabel,
+                translator.language
+              )
+          )
+      );
+    };
     // The box is named after the row, as its first column shows it: ten
     // boxes all called "Select this row" told nobody which account they
     // ticked.
     const first = this.columns[0];
-    const rowName = (first && text(entryValue(entry, first))) || id;
+    const rowName = (first && shownText(first)) || id;
     return html`
       <tr data-id="${id}">
         <td class="dc-checkbox-cell">
@@ -853,23 +871,9 @@ export class EntityList {
             })}" />
         </td>
         ${this.columns.map((name, index) => {
-          const attr = entity.schema.attributes[name];
           const value = entryValue(entry, name);
           const raw = text(value);
-          const shown = text(
-            (Array.isArray(value) ? value : [value])
-              .filter((v): v is string => v !== undefined)
-              .map(
-                v =>
-                  ownValueLabel(entity, name, String(v), translator.language) ||
-                  displayValue(
-                    attr,
-                    String(v),
-                    this.options.pointerLabel,
-                    translator.language
-                  )
-              )
-          );
+          const shown = shownText(name);
           const isPath = name === entity.organizationPath;
           const state =
             typeof value === 'string'

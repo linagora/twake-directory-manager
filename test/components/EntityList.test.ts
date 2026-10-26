@@ -341,6 +341,10 @@ describe('EntityList', () => {
     expect(markup).to.include(
       'title="custom"><a class="dc-row-link" href="#/mailboxTypes/custom">custom</a></td>'
     );
+    // The box is named as the column shows the value, not as it is stored
+    expect(markup)
+      .to.include('aria-label="Sélectionner Boîte partagée"')
+      .and.include('aria-label="Sélectionner custom"');
   });
 
   it('should open each row from a link in its first column', async () => {
