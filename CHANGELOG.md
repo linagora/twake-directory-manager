@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.13.0 (2026-10-28)
+
+Built on ldap-rest 1.2.0, whose
+[`core/twake/migrationProxy`](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/integrations/mail-migration.md)
+plugin, loaded through `DM_EXTRA_PLUGINS` with `DM_MIGRATION_PROXY_URL`,
+`DM_MIGRATION_PROXY_TOKEN` and `DM_MIGRATION_PROXY_BRANCHES`, puts the
+accounts the console creates on the Twake Mail migration proxy's list while
+a mail platform moves to Twake Mail. The image also takes 1.2.0's
+operational changes: the process ends on an uncaught exception, where it
+kept serving, `GET /healthz` and `GET /readyz` answer without
+authentication, `core/metrics` serves Prometheus metrics on port 9464 when
+loaded, and every answer carries an `X-Request-Id`,
+[upgrading](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md#from-11-to-120).
+Nothing the console sends falls under 1.2.0's stricter checks of a value's
+shape.
+
+### Features
+
+- A high-contrast mode, chosen under Language in the sidebar or taken from
+  the system's `prefers-contrast`; the choice is kept in the browser (#210)
+- For keyboard and screen-reader users: the page declares its language, every
+  view has a title, a skip link leads to the content, the navigation is a
+  list; tables name their columns and the searches and boxes their purpose;
+  the results, the selection and the import steps are announced; the focus
+  stays where it was when a list or the tree is redrawn, and a field's help
+  is a button it reaches (#207, #208, #209, #211, #212, #213, #214, #215,
+  #216, #217, #218, #219). Every view is checked against WCAG 2.2 AA with
+  axe-core in the e2e suite
+- The page runs under a strict `Content-Security-Policy`: no inline script
+  or style, and every value drawn is escaped by construction, so a value
+  written in the directory cannot run in the console (#223)
+- A failure in the background, a load or a save the page did not wait for,
+  is reported in the page instead of being lost (#229)
+- The supported ldap-rest range is declared in `package.json` (`ldapRest.min`
+  to `ldapRest.tested`) and the e2e suite runs against both ends; the README
+  says what an older server lacks (#225)
+
+### Bug Fixes
+
+- A server error on a list or a pointer field is reported as such: it was
+  read as a search too broad for the directory and said to narrow it (#230)
+- The French Claim button reads "Rattacher…", as its name says
+- The page no longer scrolls by a few pixels on every view: the LINAGORA
+  badge took no room in the layout (#206)
+
 ## v0.12.0 (2026-10-25)
 
 Built on ldap-rest 1.1.0: a page of another origin that frames the console

@@ -1,6 +1,6 @@
 {
   "name": "twake-directory-manager",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Administration console for an enterprise directory served by ldap-rest",
   "keywords": [
     "ldap",
