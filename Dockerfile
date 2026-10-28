@@ -8,7 +8,7 @@
 # package.json, which `npm run lint` checks this matches. The supported range
 # (`ldapRest.min` to it) is in the README; the console needs `--static-csp`
 # (1.1.0) for the policy set below, and the scope answer of 0.25.0.
-ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:1.1.0
+ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:1.2.0
 
 # The console builds to JavaScript and CSS, which are the same whatever the
 # target architecture, so this stage runs natively. Left to follow the target
