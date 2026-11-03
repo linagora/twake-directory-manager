@@ -8,7 +8,7 @@
 # package.json, which `npm run lint` checks this matches. The supported range
 # (`ldapRest.min` to it) is in the README; the console needs `--static-csp`
 # (1.1.0) for the policy set below, and the scope answer of 0.25.0.
-ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:1.2.0
+ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:2.0.1
 
 # The console builds to JavaScript and CSS, which are the same whatever the
 # target architecture, so this stage runs natively. Left to follow the target
@@ -26,6 +26,15 @@ COPY public ./public
 RUN npm run build && rm -f dist/*.map dist/twake-directory-manager.js dist/twake-directory-manager.min.js
 
 FROM ${LDAP_REST_IMAGE}
+
+# The base image's Alpine packages age between its release and this build:
+# upgrade them as root, and npm too, whose bundled tar 7.5.11 in 2.0.1's base
+# image still carries CVE-2026-59873 (fixed in 7.5.19); npm 11.21.1 bundles
+# tar 7.5.22. The image's CMD runs as the base image's node user, restored
+# below.
+USER root
+RUN apk upgrade --no-cache && npm install -g npm@11.21.1 && npm cache clean --force
+USER node
 
 # Inside ldap-rest's own static directory rather than in place of it, so the
 # schemas that directory serves stay reachable for other clients.
