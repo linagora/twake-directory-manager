@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.13.1 (2026-11-04)
+
+Built on ldap-rest 2.0.3. Nothing the console calls changed shape between
+1.2.0 and 2.0.3; the image takes ldap-rest's operational changes, among
+them an undeclared `DM_*` variable named at startup and a `HEALTHCHECK`
+in the image,
+[upgrading](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md).
+
+### Security
+
+- A page on another site can no longer sign an administrator out by linking
+  to `/logout`
+  ([GHSA-v2cg-hch2-c7fx](https://github.com/linagora/ldap-rest/security/advisories/GHSA-v2cg-hch2-c7fx)).
+  The console signs out from its own origin and needs nothing; a console
+  served from another origin than the server is named in
+  `DM_OIDC_LOGOUT_ORIGINS`,
+  [upgrading](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md#a-console-on-another-origin-must-be-trusted-for-logout)
+- A branch administrator no longer reads the other branches of the
+  organization tree, their descriptions or their local administrators
+  ([GHSA-qgm2-pmv5-9g66](https://github.com/linagora/ldap-rest/security/advisories/GHSA-qgm2-pmv5-9g66))
+- The image upgrades its Alpine packages and installs npm 11.21.1, whose
+  bundled tar fixes CVE-2026-59873
+
+### Known issues
+
+- For a branch administrator, the account form offers every mail domain:
+  the organizations above the branch are no longer readable, so the console
+  cannot tell which domains the tree allows. The server still refuses a
+  domain the branch may not use, on save
+
 ## v0.13.0 (2026-10-28)
 
 Built on ldap-rest 1.2.0, whose
