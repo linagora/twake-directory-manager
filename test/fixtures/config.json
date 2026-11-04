@@ -8,22 +8,6 @@
         "logout": "/logout"
       }
     },
-    "console": {
-      "hiddenAttributes": [
-        "twakeOtherMailbox",
-        "twakeDeliveryMode"
-      ],
-      "fullNameFormat": ""
-    },
-    "static": {
-      "enabled": true,
-      "staticPath": "/static",
-      "endpoints": {
-        "schema": "/static/schemas/:name",
-        "schemaInSubdir": "/static/schemas/:dir/:name",
-        "files": "/static/*"
-      }
-    },
     "ldapGroups": {
       "enabled": true,
       "base": "ou=groups,dc=example,dc=com",
@@ -77,7 +61,7 @@
             "test": "^(?!.*\\.\\.)[a-zA-Z0-9!#$%&'*+/=?^_`{|}.-]{1,64}$",
             "hint": {
               "en": "Must match an email local part: letters, digits and ! # $ % & ' * + / = ? ^ _ ` { | } . -, no consecutive dots",
-              "fr": "Partie locale d'une adresse électronique : lettres, chiffres et ! # $ % & ' * + / = ? ^ _ ` { | } . -, sans points consécutifs",
+              "fr": "Partie locale d’une adresse électronique : lettres, chiffres et ! # $ % & ' * + / = ? ^ _ ` { | } . -, sans points consécutifs",
               "mn": "Имэйл хаягийн @-ээс өмнөх хэсэг: үсэг, тоо болон ! # $ % & ' * + / = ? ^ _ ` { | } . -, дараалсан цэггүй"
             },
             "required": true,
@@ -101,7 +85,7 @@
           "mail": {
             "type": "string",
             "searchable": true,
-            "test": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+            "test": "^[^@\\s]+@[^@\\s.]+(\\.[^@\\s.]+)+$",
             "hint": {
               "en": "Expected an email address, e.g. all-staff@lists.example.org",
               "fr": "Une adresse électronique est attendue, par ex. all-staff@lists.example.org",
@@ -170,7 +154,7 @@
               "test": "^[a-zA-Z]+=.*,dc=example,dc=com$",
               "hint": {
                 "en": "Expected the DN of an entry of this directory",
-                "fr": "Le DN d'une entrée de cet annuaire est attendu",
+                "fr": "Le DN d’une entrée de cet annuaire est attendu",
                 "mn": "Энэ лавлахын бичлэгийн DN оруулна уу"
               }
             },
@@ -189,7 +173,7 @@
               "test": "^[a-zA-Z]+=.*,dc=example,dc=com$",
               "hint": {
                 "en": "Expected the DN of an entry of this directory",
-                "fr": "Le DN d'une entrée de cet annuaire est attendu",
+                "fr": "Le DN d’une entrée de cet annuaire est attendu",
                 "mn": "Энэ лавлахын бичлэгийн DN оруулна уу"
               }
             },
@@ -446,6 +430,22 @@
         "validateComplexity": false
       }
     },
+    "console": {
+      "hiddenAttributes": [
+        "twakeOtherMailbox",
+        "twakeDeliveryMode"
+      ],
+      "fullNameFormat": ""
+    },
+    "static": {
+      "enabled": true,
+      "staticPath": "/static",
+      "endpoints": {
+        "schema": "/static/schemas/:name",
+        "schemaInSubdir": "/static/schemas/:dir/:name",
+        "files": "/static/*"
+      }
+    },
     "ldapFlatGeneric": {
       "flatResources": [
         {
@@ -543,7 +543,7 @@
                 },
                 "help": {
                   "en": "The person's registration number, as the personnel records hold it. Unique in the directory, except UNIT, which the accounts of no one in particular (shared, technical) take.",
-                  "fr": "Le matricule de la personne, tel que le tient la gestion du personnel. Unique dans l'annuaire, sauf UNIT, que prennent les comptes qui ne sont à personne en particulier (partagés, techniques).",
+                  "fr": "Le matricule de la personne, tel que le tient la gestion du personnel. Unique dans l’annuaire, sauf UNIT, que prennent les comptes qui ne sont à personne en particulier (partagés, techniques).",
                   "mn": "Хүний нөөцийн бүртгэлд байгаа ажилтны дугаар. Лавлахад давхцахгүй байх ёстой; хэн нэгэн хүнд хамааралгүй (дундын, техникийн) бүртгэлүүд UNIT утгыг авна."
                 }
               },
@@ -566,7 +566,7 @@
                 "required": false,
                 "label": {
                   "en": "Common name",
-                  "fr": "Nom d'annuaire",
+                  "fr": "Nom d’annuaire",
                   "mn": "Лавлахын нэр"
                 }
               },
@@ -641,7 +641,7 @@
               "mail": {
                 "type": "string",
                 "searchable": true,
-                "test": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+                "test": "^[^@\\s]+@[^@\\s.]+(\\.[^@\\s.]+)+$",
                 "hint": {
                   "en": "Expected an email address, e.g. jane.doe@example.org",
                   "fr": "Une adresse électronique est attendue, par ex. jane.doe@example.org",
@@ -668,7 +668,7 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "test": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+                  "test": "^[^@\\s]+@[^@\\s.]+(\\.[^@\\s.]+)+$",
                   "hint": {
                     "en": "Expected an email address, e.g. jane.doe@example.org",
                     "fr": "Une adresse électronique est attendue, par ex. jane.doe@example.org",
@@ -696,7 +696,7 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "test": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+                  "test": "^[^@\\s]+@[^@\\s.]+(\\.[^@\\s.]+)+$",
                   "hint": {
                     "en": "Expected an email address, e.g. jane.doe@example.org",
                     "fr": "Une adresse électronique est attendue, par ex. jane.doe@example.org",
@@ -722,7 +722,7 @@
                 "normalize": "byteSize",
                 "hint": {
                   "en": "Expected pattern xGB, xMB, xKB or a number of bytes",
-                  "fr": "Format attendu : xGB, xMB, xKB ou un nombre d'octets",
+                  "fr": "Format attendu : xGB, xMB, xKB ou un nombre d’octets",
                   "mn": "Хэлбэр: xGB, xMB, xKB эсвэл байтын тоо"
                 },
                 "group": {
@@ -868,7 +868,7 @@
                 "role": "accountExpiry",
                 "hint": {
                   "en": "Expected a date not earlier than today",
-                  "fr": "Une date à partir d'aujourd'hui est attendue",
+                  "fr": "Une date à partir d’aujourd’hui est attendue",
                   "mn": "Өнөөдөр эсвэл түүнээс хойших огноо оруулна уу"
                 },
                 "label": {
@@ -1679,5 +1679,6 @@
         }
       ]
     }
-  }
+  },
+  "version": "2.0.1"
 }
