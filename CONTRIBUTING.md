@@ -163,10 +163,10 @@ table, field, announcement or help is written.
 One concern per PR, with tests where behaviour changes, and a description
 that says what changes and why in words a reader without the diff can
 follow. `CHANGELOG.md` is written at release time, not in feature PRs. A PR
-that changes a recorded decision adds an ADR. Nothing enforces a review yet
-(#224 leaves CODEOWNERS and required reviews to the maintainers); ask for a
-second reader on `src/DirectoryConsole.ts`, `src/api/`, the rights
-predicates, `docker/`, `helm/` and `.github/`.
+that changes a recorded decision adds an ADR. Nothing enforces a review
+(ADR 0006 records that choice); ask for a second reader on
+`src/DirectoryConsole.ts`, `src/api/`, the rights predicates, `docker/`,
+`helm/` and `.github/`.
 
 ## Cutting a release
 

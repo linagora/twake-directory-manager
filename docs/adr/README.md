@@ -12,3 +12,4 @@ page or less. The template is [0000-template.md](0000-template.md).
 | 0003 | [Rights are derived from the scope, and the server decides](0003-rights-derived-from-the-scope.md)   | accepted |
 | 0004 | [ldap-rest compatibility: a declared range, tested at both ends](0004-ldap-rest-compatibility.md)    | accepted |
 | 0005 | [The end-to-end suite gates every release](0005-e2e-suite-as-release-gate.md)                        | accepted |
+| 0006 | [No CODEOWNERS nor required review yet](0006-no-codeowners-yet.md)                                   | accepted |
