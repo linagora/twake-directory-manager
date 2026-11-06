@@ -758,7 +758,7 @@ export class DirectoryConsole {
       return this.renderOrganizations(main, generation);
     if (this.route.id)
       return this.renderDetail(main, entity, this.route.id, generation);
-    return this.renderList(main, entity);
+    return this.renderList(main, entity, generation);
   }
 
   private entity(key?: string): EntityDescriptor | undefined {
@@ -1110,9 +1110,10 @@ export class DirectoryConsole {
    */
   private renderList(
     main: HTMLElement,
-    entity: EntityDescriptor
+    entity: EntityDescriptor,
+    generation: number
   ): Promise<void> {
-    return this.listsView.render(main, entity);
+    return this.listsView.render(main, entity, generation);
   }
 
   /**

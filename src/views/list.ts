@@ -92,8 +92,13 @@ export class ListsView {
    *
    * @param main the console's main area
    * @param entity the entity listed
+   * @param generation the ticket of the page, checked after each `await`
    */
-  async render(main: HTMLElement, entity: EntityDescriptor): Promise<void> {
+  async render(
+    main: HTMLElement,
+    entity: EntityDescriptor,
+    generation: number
+  ): Promise<void> {
     const { ctx } = this;
     const t = ctx.t;
     const readOnly = ctx.rights().readsReferenceOnly(entity);
@@ -154,6 +159,9 @@ export class ListsView {
       return;
     }
     const named = await ctx.pointerNames(entity);
+    // The page was left while its pointers were read: no list is drawn for it,
+    // and its entries are not read for nothing.
+    if (!ctx.current(generation)) return;
     const view = this.left.get(entity.key) ?? {};
     this.left.set(entity.key, view);
     const list = new EntityList({

@@ -736,4 +736,91 @@ describe('views/list', () => {
       expect(reads(calls, 'positions')).to.equal(2);
     });
   });
+
+  describe('a page left behind', () => {
+    it('should neither read its list again nor announce it once the page is gone', async () => {
+      const held = gate();
+      const { root, server, calls, idle } = await mountConsole({
+        hash: 'users',
+        scope: null,
+        answers: answer => {
+          answer
+            .get(/\/api\/v1\/ldap\/titles(\?.*)?$/)
+            .reply(200, { Mr: { cn: 'Mr' } });
+        },
+      });
+      server.get(/\/api\/v1\/ldap\/users\?/).reply(async () => {
+        await held.opened;
+        return [
+          200,
+          { dave: account('dave', 'Dave'), erin: account('erin', 'Erin') },
+        ];
+      });
+      click(root, '[data-main] [data-list-all]');
+      await until(() => reads(calls, 'users') === 1);
+      // The answer comes while another page is shown: it is neither drawn
+      // nor said, and the list is not read again.
+      await visit(root, 'titles');
+      held.open();
+      await idle();
+      await settled(root);
+      expect(window.location.hash).to.equal('#/titles');
+      expect(reads(calls, 'users')).to.equal(1);
+      expect(
+        root.querySelector('[data-announce]')?.textContent ?? ''
+      ).to.not.include('of 2');
+    });
+
+    it('should not read a list whose page was left while its pointers were read', async () => {
+      const held = gate();
+      let armed = false;
+      const { root, server, calls, idle } = await mountConsole({
+        hash: 'groups',
+        scope: null,
+        answers: answer => {
+          answer.get('/api/v1/config').reply(200, namedListTypes());
+          answer.get(/\/api\/v1\/ldap\/listTypes(\?.*)?$/).reply(async () => {
+            if (armed) await held.opened;
+            return [
+              200,
+              {
+                open: {
+                  dn: `cn=open,${listTypes}`,
+                  objectClass: ['top', 'applicationProcess'],
+                  cn: 'open',
+                  description: 'Anyone may write',
+                },
+              },
+            ];
+          });
+          answer
+            .get(/\/api\/v1\/ldap\/titles(\?.*)?$/)
+            .reply(200, { Mr: { cn: 'Mr' } });
+        },
+      });
+      server.get(/\/api\/v1\/ldap\/groups\?/).reply(200, {
+        staff: { dn: `cn=staff,${groupsBase}`, cn: 'staff' },
+      });
+      // The list reads its pointers before asking for its entries.
+      click(root, '[data-main] [data-list-all]');
+      await until(() => reads(calls, 'groups') === 1);
+      await visit(root, 'titles');
+      // Back on the list, its pointers are read again, and held back.
+      armed = true;
+      await visit(root, 'groups');
+      await until(
+        () =>
+          callsOf(calls, 'pointerOptions').filter(call =>
+            call.includes(listTypes)
+          ).length >= 2
+      );
+      // Another page before they answer: the list is not read for nothing.
+      await visit(root, 'titles');
+      held.open();
+      await idle();
+      await settled(root);
+      expect(window.location.hash).to.equal('#/titles');
+      expect(reads(calls, 'groups')).to.equal(1);
+    });
+  });
 });
