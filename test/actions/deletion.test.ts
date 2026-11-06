@@ -35,6 +35,17 @@ const sales = `ou=Sales,${top}`;
 const transit = `ou=Transit,${top}`;
 const engineering = `ou=Engineering,${top}`;
 const qa = `ou=QA Lab,${engineering}`;
+/** Sophie's scope, plus a branch she only reads. */
+const readOnly: Scope = (() => {
+  const scope = read<Scope>('scopes/sophie.martin.json');
+  return {
+    ...scope,
+    branches: [
+      ...scope.branches,
+      { dn: engineering, read: true, name: 'Engineering', path: 'Engineering' },
+    ],
+  };
+})();
 
 /** The toast's message, or nothing while it is hidden. */
 const toast = (root: HTMLElement): string => {
@@ -417,6 +428,21 @@ describe('actions/deletion', () => {
         ['grace'],
         { scope: 'sophie.martin' },
         { grace: transit }
+      );
+      click(root, '[data-main] [data-delete-selected]');
+      await until(() => toast(root) !== '');
+      expect(toast(root)).to.equal(
+        '1 compte que vous n’administrez pas est laissé de côté.'
+      );
+      expect(panelOf(root).body.querySelector('[data-confirm]')).to.equal(null);
+      expect(callsOf(calls, 'remove')).to.deep.equal([]);
+    });
+
+    it('should leave out an entry in a branch the caller only reads', async () => {
+      const { root, calls } = await selecting(
+        ['eric'],
+        { scope: readOnly },
+        { eric: engineering }
       );
       click(root, '[data-main] [data-delete-selected]');
       await until(() => toast(root) !== '');
