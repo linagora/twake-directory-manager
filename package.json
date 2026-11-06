@@ -74,7 +74,7 @@
     "safari >= 16.2"
   ],
   "ldapRest": {
-    "min": "1.1.0",
+    "min": "2.0.5",
     "tested": "2.0.5"
   },
   "allowScripts": {

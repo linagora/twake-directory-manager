@@ -5,9 +5,10 @@
 #   docker build --build-arg LDAP_REST_IMAGE=ldap-rest:local -t … .
 #
 # The ldap-rest the console is tested against: `ldapRest.tested` in
-# package.json, which `npm run lint` checks this matches. The supported range
-# (`ldapRest.min` to it) is in the README; the console needs `--static-csp`
-# (1.1.0) for the policy set below, and the scope answer of 0.25.0.
+# package.json, which `npm run lint` checks this matches. The supported
+# version (`ldapRest.min` and `ldapRest.tested`, 2.0.5 today) is in the
+# README; the console needs `--static-csp` (1.1.0) for the policy set below,
+# and the scope answer of 0.25.0.
 ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:2.0.5
 
 # The console builds to JavaScript and CSS, which are the same whatever the

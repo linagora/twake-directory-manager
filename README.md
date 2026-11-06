@@ -219,12 +219,12 @@ Japan.
 
 ### ldap-rest version
 
-The console supports ldap-rest from the floor `package.json` declares
-(`ldapRest.min`, 1.1.0: the first to serve the page's
-`Content-Security-Policy`) to the version the `Dockerfile` builds on and CI
-tests against (`ldapRest.tested`); a fallback for an older server is tagged
-`compat(ldap-rest<X.Y.Z)` where it stands, and `npm run lint` refuses it once
-the floor passes it, until it is removed. The base image is a build argument:
+The console supports the ldap-rest version `package.json` declares: the
+floor (`ldapRest.min`) and the version the `Dockerfile` builds on and CI
+tests against (`ldapRest.tested`) are both 2.0.5 today. A fallback for an
+older server is tagged `compat(ldap-rest<X.Y.Z)` where it stands, and
+`npm run lint` refuses it once the floor passes it, until it is removed. The
+base image is a build argument:
 
 ```sh
 docker build --build-arg LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:<version> \
@@ -232,11 +232,9 @@ docker build --build-arg LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:<version> \
 ```
 
 An older ldap-rest serves the console as far as its API matches, but is
-neither tested nor supported: one older than 1.1.0 ignores the
-Content-Security-Policy setting, one older than 0.25.0 lacks parts of the
-scope answer the console reads, and offers less; one that still reports a
-search too broad as a `500` (before 0.13.0) has large lists and pointer
-selects fail with a plain error.
+neither tested nor supported: below 2.0.5 it is out of the supported range
+(0.25.0 lacked parts of the scope answer, and 1.1.0 was the first to serve
+the page's `Content-Security-Policy`).
 
 ### Kubernetes
 

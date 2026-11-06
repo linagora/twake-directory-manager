@@ -241,7 +241,7 @@ report)`; `DirectoryConsole.report` shows _Something went wrong: …_, logs
   `readFailure` and `explainRefusal` turn it into words for the reader; a `401` goes to `signInAgain`, guarded against a reload
   loop.
 - **The supported ldap-rest range is declared.** `package.json` says it
-  (`ldapRest.min` to `ldapRest.tested`, both 1.1.0 today); `npm run lint`
+  (`ldapRest.min` to `ldapRest.tested`, both 2.0.5 today); `npm run lint`
   runs `scripts/check-compat.mjs`, which holds the `Dockerfile` to the tested
   version and refuses a `compat(ldap-rest<X.Y.Z)` fallback once the floor
   passes it, until it is removed (a rule for fallbacks added from now on: none
@@ -249,7 +249,8 @@ report)`; `DirectoryConsole.report` shows _Something went wrong: …_, logs
   branch behind them); `test/api/contract.test.ts` replays the answers
   recorded from the tested server (`test/fixtures/`: the configuration, the
   scopes, a list, an entry, the refusals, and which version answered); the
-  e2e suite runs against both ends of the range
+  e2e suite runs against both ends of the range (one job while they are the
+  same version, as they are today)
   ([ADR 0004](docs/adr/0004-ldap-rest-compatibility.md)).
 
 ## Components
