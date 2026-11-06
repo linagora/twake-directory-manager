@@ -278,12 +278,13 @@ test.describe('LIST lists, search and bulk actions', () => {
     await expect(alice.list().deleteSelectionButton).toHaveCount(0);
   });
 
-  test('LIST-07 delete the selection: an entry the server refuses is named and kept', async ({
+  test('LIST-07 delete the selection: an entry the caller does not administer is left out', async ({
     page,
     directory,
     tenant,
   }) => {
-    // entries in transit show in every administrator's list, but only admin deletes them
+    // entries in transit show in every administrator's list, but only admin
+    // deletes them
     const lastName = `Mixed${uniquePart()}`;
     const own = await directory.createUser({ org: tenant.org, lastName });
     const inTransit = await directory.createUser({ org: TRANSIT, lastName });
@@ -295,13 +296,18 @@ test.describe('LIST lists, search and bulk actions', () => {
     await list.selectAll.check();
     const confirm = new ConfirmDialog(page);
     await list.deleteSelectionButton.click();
-    await confirm.expectOpen('Delete 2 entries?');
+    // The question counts and names only what will go, and says what it
+    // left out before asking (#266).
+    await confirm.expectOpen('Delete 1 entry?');
+    await expect(confirm.paragraphs).toContainText([
+      'This cannot be undone.',
+      '1 account you do not administer is left out.',
+    ]);
+    await expect(confirm.items).toHaveCount(1);
+    await expect(confirm.items).toContainText(own.uid);
     await confirm.confirm();
 
-    await expect(app.errorToast).toContainText(inTransit.uid);
-    await expect(app.errorToast).not.toHaveText(
-      /Internal Server Error|check logs/
-    );
+    await expect(app.toast).toHaveText('Deleted');
     await expect(list.ids()).toHaveText([inTransit.uid]);
     expect(await directory.exists(inTransit.dn)).toBe(true);
     expect(await directory.exists(own.dn)).toBe(false);

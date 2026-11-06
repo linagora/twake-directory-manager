@@ -202,6 +202,41 @@ export function writesEntry(
 }
 
 /**
+ * Whether the caller may delete one entry, as its card offers Delete: an
+ * entry in transit only where a branch above the transit branch grants
+ * delete; an entry attached to an organization by a branch holding it with
+ * delete; reference data, and an organization itself, by whether the caller
+ * deletes anywhere — the server still judges those.
+ *
+ * @param scope what `GET /v1/authz/scope` answered
+ * @param entity entity the entry belongs to
+ * @param entry the entry as read
+ * @returns false only when the scope says the server would refuse
+ */
+export function deletesEntry(
+  scope: Scope | null,
+  entity: EntityDescriptor,
+  entry: Entry
+): boolean {
+  if (!scopeRestricts(scope)) return true;
+  const transit = transitState(scope, entity, entry);
+  if (transit.rights) return transit.rights.delete;
+  // Reference data hangs outside the organization tree: the scope says
+  // nothing of the branch that holds it, and the server judges.
+  if (!entity.organizationLink)
+    return !!scope && scope.branches.some(branch => branch.delete);
+  const raw = entryValue(entry, entity.organizationLink);
+  const link = String((Array.isArray(raw) ? raw[0] : raw) ?? '').trim();
+  const parent = parentOf(String(entry.dn ?? ''));
+  const deletes = (dn: string | undefined): boolean =>
+    !!dn &&
+    !!scope &&
+    scope.branches.some(branch => branch.delete && withinDn(dn, branch.dn));
+  if (scope?.transit) return deletes(link || parent);
+  return deletes(link) || deletes(parent);
+}
+
+/**
  * The branches an entry in transit can be claimed into: those the caller
  * writes, each standing for its subtree.
  *
@@ -494,6 +529,14 @@ export class Rights {
    */
   writes(entity: EntityDescriptor, entry: Entry): boolean {
     return this.canWrite() && writesEntry(this.scope, entity, entry);
+  }
+
+  /**
+   * Whether the caller may delete an entry, judged on the entry itself
+   * rather than on the scope as a whole (see {@link deletesEntry}).
+   */
+  deletes(entity: EntityDescriptor, entry: Entry): boolean {
+    return deletesEntry(this.scope, entity, entry);
   }
 
   /**

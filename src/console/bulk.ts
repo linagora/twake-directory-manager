@@ -40,9 +40,50 @@ export function bulkWritable(
   entity: EntityDescriptor,
   selected: [string, Entry][]
 ): { kept: [string, Entry][]; leftOut: string | undefined } {
-  const kept = selected.filter(
-    ([, entry]) => entry.dn && rights.writes(entity, entry)
+  return bulkKept(
+    translator,
+    selected,
+    entry => !!entry.dn && rights.writes(entity, entry)
   );
+}
+
+/**
+ * The entries selected that the caller may delete, and how many others were
+ * left out: an account in transit, or an entry in a branch only read, is
+ * listed as well, and deleting it is not the caller's to ask.
+ *
+ * @param rights what the caller may do
+ * @param translator the words of the sentence saying who was left out
+ * @param entity the entity listed
+ * @param selected the selection, its entries with their identifiers
+ */
+export function bulkDeletable(
+  rights: Rights,
+  translator: Translator,
+  entity: EntityDescriptor,
+  selected: [string, Entry][]
+): { kept: [string, Entry][]; leftOut: string | undefined } {
+  return bulkKept(
+    translator,
+    selected,
+    entry => !!entry.dn && rights.deletes(entity, entry)
+  );
+}
+
+/**
+ * The selection narrows to the entries a rule keeps, and the sentence
+ * saying how many were left out.
+ *
+ * @param translator the words of the sentence saying who was left out
+ * @param selected the selection, its entries with their identifiers
+ * @param keeps whether the caller may act on this entry
+ */
+function bulkKept(
+  translator: Translator,
+  selected: [string, Entry][],
+  keeps: (entry: Entry) => boolean
+): { kept: [string, Entry][]; leftOut: string | undefined } {
+  const kept = selected.filter(([, entry]) => keeps(entry));
   const count = selected.length - kept.length;
   return {
     kept,

@@ -31,6 +31,8 @@ const forbidden = read<{ body: object }>(
 
 const states = 'ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com';
 const top = 'ou=organization,dc=example,dc=com';
+const sales = `ou=Sales,${top}`;
+const transit = `ou=Transit,${top}`;
 const engineering = `ou=Engineering,${top}`;
 const qa = `ou=QA Lab,${engineering}`;
 
@@ -334,7 +336,8 @@ describe('actions/deletion', () => {
     /** The list of users, every account listed, these selected. */
     const selecting = async (
       ids: string[],
-      options: MountOptions = {}
+      options: MountOptions = {},
+      links: Record<string, string> = {}
     ): Promise<Mounted> => {
       const mounted = await mountConsole({
         hash: 'users',
@@ -342,17 +345,21 @@ describe('actions/deletion', () => {
         ...options,
       });
       const { root, server } = mounted;
-      server
-        .get(/\/api\/v1\/ldap\/users\?/)
-        .reply(
-          200,
-          Object.fromEntries(
-            ids.map(id => [
-              id,
-              { dn: `uid=${id},ou=users,dc=example,dc=com`, uid: id },
-            ])
-          )
-        );
+      server.get(/\/api\/v1\/ldap\/users\?/).reply(
+        200,
+        Object.fromEntries(
+          ids.map(id => [
+            id,
+            {
+              dn: `uid=${id},ou=users,dc=example,dc=com`,
+              uid: id,
+              // Accounts are attached to an organization; the scope judges
+              // a change and a deletion on that link.
+              twakeDepartmentLink: links[id] ?? top,
+            },
+          ])
+        )
+      );
       click(root, '[data-main] [data-list-all]');
       await settled(root);
       for (const id of ids) click(root, `[data-select="${id}"]`);
@@ -401,6 +408,50 @@ describe('actions/deletion', () => {
         action: 'Supprimer 1 entrée',
         alternative: undefined,
       });
+    });
+
+    it('should ask nothing when the selection holds no entry the caller may delete', async () => {
+      // An account in Transit is not a local administrator's to delete: her
+      // card offers Claim… and no Delete (#266).
+      const { root, calls } = await selecting(
+        ['grace'],
+        { scope: 'sophie.martin' },
+        { grace: transit }
+      );
+      click(root, '[data-main] [data-delete-selected]');
+      await until(() => toast(root) !== '');
+      expect(toast(root)).to.equal(
+        '1 compte que vous n’administrez pas est laissé de côté.'
+      );
+      expect(panelOf(root).body.querySelector('[data-confirm]')).to.equal(null);
+      expect(callsOf(calls, 'remove')).to.deep.equal([]);
+    });
+
+    it('should delete only the entries the caller may delete, and say how many it left out', async () => {
+      const { root, calls, server } = await selecting(
+        ['alice', 'grace'],
+        { scope: 'sophie.martin' },
+        { alice: sales, grace: transit }
+      );
+      server.delete('/api/v1/ldap/users/alice').reply(200, {});
+      click(root, '[data-main] [data-delete-selected]');
+      await question(root);
+      // The question counts and names the entries that will go, and says
+      // what it left out before asking.
+      expect(asked(root)).to.deep.equal({
+        title: 'Supprimer 1 entrée ?',
+        lines: [
+          'Cette action est irréversible.',
+          '1 compte que vous n’administrez pas est laissé de côté.',
+        ],
+        items: ['alice'],
+        action: 'Supprimer 1 entrée',
+        alternative: undefined,
+      });
+      click(panelOf(root).body, '[data-confirm]');
+      await until(() => toast(root) !== '');
+      expect(toast(root)).to.equal('Supprimé');
+      expect(callsOf(calls, 'remove')).to.deep.equal(['remove(users, alice)']);
     });
 
     it('should say each refusal on its own, and read the list again once one went', async () => {

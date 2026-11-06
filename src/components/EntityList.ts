@@ -183,8 +183,12 @@ export interface ListOptions {
   /** Whether the branch is small enough to show without a search */
   listable: boolean;
   onOpen(id: string): void;
-  /** Delete the selection once asked; resolves to whether any entry went */
-  onDelete(ids: string[]): Promise<boolean>;
+  /**
+   * Delete the selection once asked, the entries themselves as well as their
+   * identifiers: the caller keeps only those its rights allow and says how
+   * many it left out; resolves to whether any entry went
+   */
+  onDelete(selected: [string, Entry][]): Promise<boolean>;
   canDelete: boolean;
   /**
    * What the selection may be given at once besides an export and a
@@ -1233,10 +1237,17 @@ export class EntityList {
       ?.addEventListener('click', () => {
         // Read again only once something went: a Cancel leaves the page,
         // the selection and the focus, back on this button, as they were.
+        // The selection's own order, as the reader ticked the rows: the
+        // refusals are said in that order, not the table's.
+        const entries = new Map(this.entries);
+        const selected = [...this.selected].flatMap(id => {
+          const entry = entries.get(id);
+          return entry ? ([[id, entry]] as [string, Entry][]) : [];
+        });
         background(
           () =>
             this.options
-              .onDelete([...this.selected])
+              .onDelete(selected)
               .then(deleted => (deleted ? this.reload() : undefined)),
           'options.onDelete',
           this.options.report
