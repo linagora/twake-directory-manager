@@ -96,6 +96,8 @@ describe('Rights, from the scopes the QA server describes', () => {
     expect(admin.createsUnder(TRANSIT)).to.equal(true);
     expect(admin.writes(users, person('x', FRANCE))).to.equal(true);
     expect(admin.writes(users, person('x', TRANSIT))).to.equal(true);
+    expect(admin.deletes(users, person('x', FRANCE))).to.equal(true);
+    expect(admin.deletes(users, person('x', TRANSIT))).to.equal(true);
     expect(admin.transitOf(users, person('x', TRANSIT))).to.deep.equal({
       inTransit: true,
       claim: true,
@@ -161,6 +163,8 @@ describe('Rights, from the scopes the QA server describes', () => {
       expect(local.administersExactly(child)).to.equal(false);
       expect(local.writes(users, person('x', child))).to.equal(true);
       expect(local.writes(users, person('x', other))).to.equal(false);
+      expect(local.deletes(users, person('x', child))).to.equal(true);
+      expect(local.deletes(users, person('x', other))).to.equal(false);
       // An entry in transit can be claimed, and changed by nobody local.
       expect(local.transitOf(users, person('x', TRANSIT))).to.deep.equal({
         inTransit: true,
@@ -169,6 +173,7 @@ describe('Rights, from the scopes the QA server describes', () => {
         rights: { write: false, delete: false },
       });
       expect(local.writes(users, person('x', TRANSIT))).to.equal(false);
+      expect(local.deletes(users, person('x', TRANSIT))).to.equal(false);
       // Their own entries can be handed over, not another's.
       expect(local.transitOf(users, person('x', child)).handOver).to.equal(
         true
@@ -201,12 +206,44 @@ describe('Rights, from the scopes the QA server describes', () => {
         delete: false,
       });
       expect(none.writes(users, person('x', FRANCE))).to.equal(false);
+      expect(none.deletes(users, person('x', FRANCE))).to.equal(false);
       expect(none.transitOf(users, person('x', TRANSIT)).claim).to.equal(false);
       expect(none.claimRoots()).to.deep.equal([]);
       expect(none.changesReference(domains)).to.equal(false);
       expect(none.summary.kind).to.equal('nothing');
     });
   }
+
+  it('should judge a deletion on the entry itself, and reference data by deleting anywhere', () => {
+    const admin = of('admin');
+    const position = { dn: 'cn=x,ou=positions,dc=example,dc=com' };
+    // Reference data hangs outside the tree: the scope says nothing of the
+    // branch holding it, so deleting anywhere is what is asked.
+    expect(admin.deletes(positions, position)).to.equal(true);
+    expect(of('sophie.martin').deletes(positions, position)).to.equal(true);
+    // An account with no organization link is judged on its parent, which
+    // the global administrator's branch does not hold.
+    expect(
+      admin.deletes(users, { dn: 'uid=x,ou=users,dc=example,dc=com' })
+    ).to.equal(false);
+    // Without a transit branch, the link or the parent is taken.
+    const base = read<Scope>('scopes/sophie.martin.json');
+    const noTransit = new Rights(
+      {
+        ...base,
+        transit: null,
+        branches: [
+          ...base.branches,
+          { dn: 'ou=users,dc=example,dc=com', delete: true },
+        ],
+      },
+      null,
+      false
+    );
+    expect(
+      noTransit.deletes(users, { dn: 'uid=x,ou=users,dc=example,dc=com' })
+    ).to.equal(true);
+  });
 
   it('should offer a claim on what waits in transit to whoever writes a branch', () => {
     const waiting = { dn: 'uid=x,ou=users,dc=example,dc=com', label: 'x' };
@@ -248,12 +285,14 @@ describe('Rights, from the scopes the QA server describes', () => {
     });
     expect(unrestricted.transit).to.equal(undefined);
     expect(unrestricted.readsWhole(SALES)).to.equal(true);
+    expect(unrestricted.deletes(users, person('x', FRANCE))).to.equal(true);
     expect(unrestricted.summary.kind).to.equal('unrestricted');
 
     const failed = new Rights(null, 'Gateway Timeout', false);
     expect(failed.canWrite()).to.equal(false);
     expect(failed.canCreate(users)).to.equal(false);
     expect(failed.canDelete()).to.equal(false);
+    expect(failed.deletes(users, person('x', FRANCE))).to.equal(false);
     expect(failed.readsReferenceOnly(domains)).to.equal(false);
     expect(failed.writesWithin(SALES)).to.equal(false);
     expect(failed.readsWhole(SALES)).to.equal(false);

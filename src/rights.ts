@@ -161,20 +161,70 @@ export function transitState(
   };
 }
 
+/** RDNs of a branch, by the commas no backslash escapes. */
+function branchDepth(dn: string): number {
+  return (comparableDn(dn).match(/(?:^|[^\\]),/g) ?? []).length + 1;
+}
+
 /**
- * Whether the caller may change one entry, as the server judges it.
+ * Whether the caller's scope grants `right` on one entry.
  *
- * ldap-rest judges a change on the organization the entry is attached to
- * only when it filters entries by attachment — always under `authzLinid1`,
- * under the other plugins only with `--authz-filter-attached-entries`, off
- * by default — and on the entry's parent otherwise: `ou=groups` for every
+ * An entry in transit is judged as {@link transitState} judges it: a local
+ * administrator changes nothing in it before claiming it. Otherwise the
+ * narrowest branch holding the entry decides, as the server's own rule does
+ * (see `organizationRights`): a branch written below one that is not grants
+ * nothing there.
+ *
+ * A change is judged on the organization the entry is attached to only when
+ * ldap-rest filters entries by attachment — always under `authzLinid1`,
+ * under the other plugins only with `--authz-filter-attached-entries`, off by
+ * default — and on the entry's parent otherwise: `ou=groups` for every
  * group. The scope does not say which, but a transit branch is named only
  * where entries are judged by attachment. Without one, either is taken, so
  * that nothing the server allows is hidden: what it refuses after all is
  * said in the console's words.
  *
- * An entry in transit is judged as {@link transitState} judges it: a local
- * administrator changes nothing in it before claiming it.
+ * Reference data hangs outside the organization tree, where the scope says
+ * nothing of the branch holding it: a deletion is offered there when the
+ * caller deletes anywhere, and a change keeps the link-or-parent rule.
+ *
+ * @param scope what `GET /v1/authz/scope` answered
+ * @param entity entity the entry belongs to
+ * @param entry the entry as read
+ * @param right the right asked for
+ * @returns false only when the scope says the server would refuse
+ */
+function entryGrants(
+  scope: Scope | null,
+  entity: EntityDescriptor,
+  entry: Entry,
+  right: 'write' | 'delete'
+): boolean {
+  if (!scopeRestricts(scope)) return true;
+  const transit = transitState(scope, entity, entry);
+  if (transit.rights) return transit.rights[right];
+  const branches = scope?.branches ?? [];
+  const grants = (dn: string | undefined): boolean => {
+    if (!dn) return false;
+    const holding = branches
+      .filter(branch => withinDn(dn, branch.dn))
+      .sort((a, b) => branchDepth(b.dn) - branchDepth(a.dn))[0];
+    return !!holding?.[right];
+  };
+  if (right === 'delete' && !entity.organizationLink)
+    return branches.some(branch => branch.delete);
+  const raw = entity.organizationLink
+    ? entryValue(entry, entity.organizationLink)
+    : undefined;
+  const link = String((Array.isArray(raw) ? raw[0] : raw) ?? '').trim();
+  const parent = parentOf(String(entry.dn ?? ''));
+  if (scope?.transit) return grants(link || parent);
+  return grants(link) || grants(parent);
+}
+
+/**
+ * Whether the caller may change one entry, as the server judges it (see
+ * {@link entryGrants}).
  *
  * @param scope what `GET /v1/authz/scope` answered
  * @param entity entity the entry belongs to
@@ -186,27 +236,15 @@ export function writesEntry(
   entity: EntityDescriptor,
   entry: Entry
 ): boolean {
-  if (!scopeRestricts(scope)) return true;
-  const transit = transitState(scope, entity, entry);
-  if (transit.rights) return transit.rights.write;
-  const writes = (dn: string | undefined): boolean =>
-    !!dn &&
-    scope.branches.some(branch => branch.write && withinDn(dn, branch.dn));
-  const raw = entity.organizationLink
-    ? entryValue(entry, entity.organizationLink)
-    : undefined;
-  const link = String((Array.isArray(raw) ? raw[0] : raw) ?? '').trim();
-  const parent = parentOf(String(entry.dn ?? ''));
-  if (scope.transit) return writes(link || parent);
-  return writes(link) || writes(parent);
+  return entryGrants(scope, entity, entry, 'write');
 }
 
 /**
- * Whether the caller may delete one entry, as its card offers Delete: an
- * entry in transit only where a branch above the transit branch grants
- * delete; an entry attached to an organization by a branch holding it with
- * delete; reference data, and an organization itself, by whether the caller
- * deletes anywhere — the server still judges those.
+ * Whether the caller may delete one entry, as its card offers Delete (see
+ * {@link entryGrants}): an entry in transit only where a branch above the
+ * transit branch grants delete; an entry attached to an organization by the
+ * narrowest branch holding it; reference data by whether the caller deletes
+ * anywhere.
  *
  * @param scope what `GET /v1/authz/scope` answered
  * @param entity entity the entry belongs to
@@ -218,22 +256,7 @@ export function deletesEntry(
   entity: EntityDescriptor,
   entry: Entry
 ): boolean {
-  if (!scopeRestricts(scope)) return true;
-  const transit = transitState(scope, entity, entry);
-  if (transit.rights) return transit.rights.delete;
-  // Reference data hangs outside the organization tree: the scope says
-  // nothing of the branch that holds it, and the server judges.
-  if (!entity.organizationLink)
-    return !!scope && scope.branches.some(branch => branch.delete);
-  const raw = entryValue(entry, entity.organizationLink);
-  const link = String((Array.isArray(raw) ? raw[0] : raw) ?? '').trim();
-  const parent = parentOf(String(entry.dn ?? ''));
-  const deletes = (dn: string | undefined): boolean =>
-    !!dn &&
-    !!scope &&
-    scope.branches.some(branch => branch.delete && withinDn(dn, branch.dn));
-  if (scope?.transit) return deletes(link || parent);
-  return deletes(link) || deletes(parent);
+  return entryGrants(scope, entity, entry, 'delete');
 }
 
 /**
@@ -536,7 +559,7 @@ export class Rights {
    * rather than on the scope as a whole (see {@link deletesEntry}).
    */
   deletes(entity: EntityDescriptor, entry: Entry): boolean {
-    return deletesEntry(this.scope, entity, entry);
+    return this.canDelete() && deletesEntry(this.scope, entity, entry);
   }
 
   /**
@@ -575,13 +598,10 @@ export class Rights {
     // Offered on Sales to its administrator, Edit ended in "You do not
     // administer Sales" once the form was typed in.
     const parent = parentOf(dn);
-    // RDNs, by the commas no backslash escapes.
-    const depth = (branch: string): number =>
-      (comparableDn(branch).match(/(?:^|[^\\]),/g) ?? []).length + 1;
     const holding = parent
       ? scope.branches
           .filter(branch => withinDn(parent, branch.dn))
-          .sort((a, b) => depth(b.dn) - depth(a.dn))[0]
+          .sort((a, b) => branchDepth(b.dn) - branchDepth(a.dn))[0]
       : undefined;
     const judged = (right: 'write' | 'delete'): boolean =>
       !this.scopeError &&

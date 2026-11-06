@@ -301,7 +301,7 @@ test.describe('LIST lists, search and bulk actions', () => {
     await confirm.expectOpen('Delete 1 entry?');
     await expect(confirm.paragraphs).toContainText([
       'This cannot be undone.',
-      '1 account you do not administer is left out.',
+      '1 entry you do not administer is left out.',
     ]);
     await expect(confirm.items).toHaveCount(1);
     await expect(confirm.items).toContainText(own.uid);

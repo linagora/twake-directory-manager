@@ -43,7 +43,8 @@ export function bulkWritable(
   return bulkKept(
     translator,
     selected,
-    entry => !!entry.dn && rights.writes(entity, entry)
+    entry => !!entry.dn && rights.writes(entity, entry),
+    'bulk.leftOut'
   );
 }
 
@@ -66,7 +67,8 @@ export function bulkDeletable(
   return bulkKept(
     translator,
     selected,
-    entry => !!entry.dn && rights.deletes(entity, entry)
+    entry => !!entry.dn && rights.deletes(entity, entry),
+    'bulk.leftOutEntries'
   );
 }
 
@@ -77,17 +79,19 @@ export function bulkDeletable(
  * @param translator the words of the sentence saying who was left out
  * @param selected the selection, its entries with their identifiers
  * @param keeps whether the caller may act on this entry
+ * @param key the sentence to say, whose noun is the entity's kind
  */
 function bulkKept(
   translator: Translator,
   selected: [string, Entry][],
-  keeps: (entry: Entry) => boolean
+  keeps: (entry: Entry) => boolean,
+  key: string
 ): { kept: [string, Entry][]; leftOut: string | undefined } {
   const kept = selected.filter(([, entry]) => keeps(entry));
   const count = selected.length - kept.length;
   return {
     kept,
-    leftOut: count ? translator.t('bulk.leftOut', { count }) : undefined,
+    leftOut: count ? translator.t(key, { count }) : undefined,
   };
 }
 

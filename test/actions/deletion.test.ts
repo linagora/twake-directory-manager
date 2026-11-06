@@ -432,7 +432,7 @@ describe('actions/deletion', () => {
       click(root, '[data-main] [data-delete-selected]');
       await until(() => toast(root) !== '');
       expect(toast(root)).to.equal(
-        '1 compte que vous n’administrez pas est laissé de côté.'
+        '1 entrée que vous n’administrez pas est laissée de côté.'
       );
       expect(panelOf(root).body.querySelector('[data-confirm]')).to.equal(null);
       expect(callsOf(calls, 'remove')).to.deep.equal([]);
@@ -447,7 +447,7 @@ describe('actions/deletion', () => {
       click(root, '[data-main] [data-delete-selected]');
       await until(() => toast(root) !== '');
       expect(toast(root)).to.equal(
-        '1 compte que vous n’administrez pas est laissé de côté.'
+        '1 entrée que vous n’administrez pas est laissée de côté.'
       );
       expect(panelOf(root).body.querySelector('[data-confirm]')).to.equal(null);
       expect(callsOf(calls, 'remove')).to.deep.equal([]);
@@ -468,7 +468,7 @@ describe('actions/deletion', () => {
         title: 'Supprimer 1 entrée ?',
         lines: [
           'Cette action est irréversible.',
-          '1 compte que vous n’administrez pas est laissé de côté.',
+          '1 entrée que vous n’administrez pas est laissée de côté.',
         ],
         items: ['alice'],
         action: 'Supprimer 1 entrée',
