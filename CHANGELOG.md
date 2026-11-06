@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.13.2 (2026-11-06)
+
+Built on ldap-rest 2.0.5.
+
 ## v0.13.1 (2026-11-04)
 
 Built on ldap-rest 2.0.3. Nothing the console calls changed shape between
@@ -209,7 +213,7 @@ Built on ldap-rest 0.24.0.
 - The import's rules call the department an _organisation_ in French and
   _байгууллага_ in Mongolian, as its field and the template's column do (#119)
 - An empty required field says _Required_ under it, no longer the form's
-  legend _Fields marked with * are required_ once per field (#120)
+  legend _Fields marked with \* are required_ once per field (#120)
 - A password policy offers only the settings the directory knows: OpenLDAP
   2.4 refused _Maximum length_, _Account unused for_ and the delays after a
   failure. Takes effect with an ldap-rest that lists them
