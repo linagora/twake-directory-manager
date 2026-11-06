@@ -498,9 +498,16 @@ export class EntityDetail {
       return html`<a href="#/organizations/${encodeURIComponent(
         link
       )}" class="dc-path-link" title="${value}">${value}</a>`;
-    // An organization's managers and local administrators are accounts as
-    // well, and lead to them: who administers a branch was only a name.
-    if (RELATION_ROLES.some(role => hasRole(attr, role)) && isDnShaped(value))
+    // An entry this card points at leads to its card: a group's members and
+    // owners, an organization's managers and local administrators, and any
+    // other DN a schema stores without a role — an account's Delegates were
+    // plain text beside Owners and Managers that led to their accounts
+    // (#267). What no page shows stays a name, as before.
+    if (
+      isDnShaped(value) &&
+      (RELATION_ROLES.some(role => hasRole(attr, role)) ||
+        this.options.relationHref?.(value))
+    )
       return this.relationLink(
         value,
         this.options.pointerLabel?.(value) || rdnValue(value),

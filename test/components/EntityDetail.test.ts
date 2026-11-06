@@ -545,6 +545,59 @@ describe('EntityDetail', () => {
     );
   });
 
+  it('should lead to an account a pointer names with no role, as a delegate', () => {
+    // Delegates are pointers into the users' branch with no role: the card
+    // showed them as plain text beside owners and managers, which lead to
+    // their accounts (#267).
+    const delegated: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          ...users.schema.attributes,
+          twakeDelegatedUsers: {
+            type: 'array',
+            items: {
+              type: 'pointer',
+              branch: ['ou=users,dc=example,dc=com'],
+            },
+            label: { en: 'Delegates' },
+          },
+        },
+      },
+    };
+    const delegate = 'uid=alice,ou=users,dc=example,dc=com';
+    const card = (
+      relationHref?: (dn: string) => string | undefined
+    ): string => {
+      const container = stubContainer();
+      new EntityDetail({
+        entity: delegated,
+        entry: {
+          dn: 'uid=bob,ou=users,dc=example,dc=com',
+          uid: 'bob',
+          twakeDelegatedUsers: [delegate],
+        },
+        translator: new Translator('en'),
+        canWrite: true,
+        canDelete: true,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        onStatus: () => undefined,
+        onResetPassword: () => undefined,
+        relationHref,
+      }).render(container);
+      return container.innerHTML;
+    };
+    // A link to the delegate's card, as Owners and Managers are.
+    expect(card(dn => `#/users/${rdnValue(dn)}`)).to.include(
+      `<a href="#&#x2F;users&#x2F;alice" class="dc-link" data-relation="${delegate}" title="${delegate}">alice</a>`
+    );
+    // An entry no page shows is named all the same, with no link to nowhere.
+    expect(card(() => undefined)).to.include(
+      `<span class="dc-value" title="${delegate}">alice</span>`
+    );
+  });
+
   it('should say how many related entries the list leaves out', () => {
     const card = (
       language: string,

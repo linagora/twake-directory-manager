@@ -682,6 +682,10 @@ test.describe('USER user accounts', () => {
     await app.expectToast('Saved');
     await expect(card.detail('Delegates')).toContainText('dave');
     await expect(card.detail('Delegates')).toContainText('erin');
+    // Each delegate leads to their card, as Owners and Managers do (#267).
+    await expect(
+      card.detail('Delegates').getByRole('link', { name: 'dave' })
+    ).toHaveAttribute('href', '#/users/dave');
     expect(
       (await directory.values(user.dn, 'twakeDelegatedUsers')).sort()
     ).toEqual([
