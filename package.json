@@ -76,5 +76,9 @@
   "ldapRest": {
     "min": "1.1.0",
     "tested": "2.0.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "re2@1.27.0": true
   }
 }
