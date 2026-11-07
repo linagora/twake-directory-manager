@@ -142,7 +142,7 @@ async function catching<T>(
 export async function mountConsole(
   options: MountOptions = {}
 ): Promise<Mounted> {
-  const { scope = 'admin', hash = '', language = 'en' } = options;
+  const { scope = 'admin', hash = '', language } = options;
   // An address of its own: the answers of an earlier mount in the same test
   // would otherwise be this one's.
   const url = mountUrl(++mounts);
