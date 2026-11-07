@@ -137,13 +137,16 @@ export interface ImportedView {
 
 /**
  * Where the reader left a list: what they searched, in which field, whether
- * they asked for the whole branch, and the page they were on.
+ * they asked for the whole branch, the page they were on, and the entries
+ * they ticked.
  */
 export interface ListView {
   search?: string;
   searchAttribute?: string;
   listEverything?: boolean;
   page?: number;
+  /** The entries ticked, as the list was drawn again */
+  selected?: string[];
   /** The entries of the last import, when the list shows them */
   imported?: ImportedView;
   /**
@@ -296,6 +299,7 @@ export class EntityList {
   constructor(options: ListOptions) {
     this.options = options;
     this.columns = EntityList.chooseColumns(options.entity);
+    this.selected = new Set(options.view?.selected ?? []);
     // Searching everywhere is the default: someone looking for a person by
     // surname should not have to know which attribute holds it first.
     this.searchAttribute = options.view?.searchAttribute ?? SEARCH_ANYWHERE;
@@ -410,7 +414,7 @@ export class EntityList {
         this.query.length >= SEARCH_MINIMUM) &&
       !this.loaded
     )
-      await this.reload(true);
+      await this.reload(true, true);
   }
 
   /** Whether the branch may be shown without a search. */
@@ -423,10 +427,13 @@ export class EntityList {
    *
    * @param keepPage stay on the current page, as far as the answer reaches,
    *   rather than go back to the first
+   * @param keepSelection keep the rows ticked, for a list drawn again in the
+   *   same place
    */
-  private async reload(keepPage = false): Promise<void> {
+  private async reload(keepPage = false, keepSelection = false): Promise<void> {
     const generation = ++this.generation;
-    if (this.imported) return this.reloadImported(generation, keepPage);
+    if (this.imported)
+      return this.reloadImported(generation, keepPage, keepSelection);
     if (
       !this.listable() &&
       this.under === undefined &&
@@ -462,7 +469,8 @@ export class EntityList {
         Math.ceil(this.entries.length / this.pageSize) - 1
       );
       this.page = keepPage ? Math.min(this.page, last) : 0;
-      this.selected.clear();
+      if (keepSelection) this.pruneSelection();
+      else this.selected.clear();
     } catch (err) {
       if (generation !== this.generation) return;
       this.error = listFailure(err, this.options.translator);
@@ -549,14 +557,15 @@ export class EntityList {
    */
   private async reloadImported(
     generation: number,
-    keepPage: boolean
+    keepPage: boolean,
+    keepSelection: boolean
   ): Promise<void> {
     const imported = this.imported as ImportedView;
     imported.ids = [...new Set(imported.ids)].sort((a, b) =>
       a.localeCompare(b, undefined, { sensitivity: 'base' })
     );
     this.importedRead.clear();
-    this.selected.clear();
+    if (!keepSelection) this.selected.clear();
     if (!keepPage) this.page = 0;
     await this.showImported(generation);
   }
@@ -645,6 +654,7 @@ export class EntityList {
     this.loading = false;
     this.loaded = true;
     if (this.root?.isConnected === false) return;
+    this.pruneSelection();
     this.draw();
     this.announceLoaded();
   }
@@ -790,8 +800,15 @@ export class EntityList {
       listEverything: this.listEverything,
       page: this.imported ? this.searchPage : this.page,
       under: this.under,
+      selected: [...this.selected],
     });
     if (this.imported) this.imported.page = this.page;
+  }
+
+  /** Drop from the selection the entries the list no longer holds. */
+  private pruneSelection(): void {
+    const held = new Set(this.entries.map(([id]) => id));
+    for (const id of this.selected) if (!held.has(id)) this.selected.delete(id);
   }
 
   /**
