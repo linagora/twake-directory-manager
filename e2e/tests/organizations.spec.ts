@@ -598,6 +598,10 @@ test.describe('ORG organizations', () => {
     await expect(france.attached('Groups').getByRole('button')).toHaveText(
       'New group here'
     );
+    // An empty table of groups says no group, not no one (#271).
+    await expect(france.attached('Groups')).toContainText(
+      'No group is attached to France.'
+    );
     const alice = await loginInNewContext(
       ALICE,
       `organizations/${encodeURIComponent(ORG.france)}`

@@ -279,6 +279,12 @@ export class AttachedTables {
     // Fifty listed of more is not fifty.
     const count = truncated ? `${rows.length}+` : rows.length;
     const create = onCreate?.[kind];
+    // A table of groups says no group, as the people's table says no one.
+    const empty = partial
+      ? 'org.noneManaged'
+      : kind === 'groups'
+        ? 'org.noGroup'
+        : 'org.nobody';
     // The heading names the table (#218): a reader moving by table hears
     // "People (1)", "Groups (1)", not "table" twice.
     const heading = `dc-attached-${kind}-${this.instance}`;
@@ -307,12 +313,9 @@ export class AttachedTables {
         </header>
         ${
           rows.length === 0
-            ? html`<p class="dc-muted">${translator.t(
-                partial ? 'org.noneManaged' : 'org.nobody',
-                {
-                  name,
-                }
-              )}</p>`
+            ? html`<p class="dc-muted">${translator.t(empty, {
+                name,
+              })}</p>`
             : dataTable({
                 className: 'dc-attached-table',
                 name: { labelledBy: heading },
