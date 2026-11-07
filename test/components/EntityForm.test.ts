@@ -529,55 +529,19 @@ describe('EntityForm', () => {
         },
       },
     };
-    /** Inputs firing `input` as typed, found by the form's selectors. */
-    const typing = (): {
-      root: HTMLElement;
+    /** The form drawn in the page, its fields typed into as a reader does. */
+    const drawn = async (
+      entry?: Entry,
+      fullNameFormat?: string
+    ): Promise<{
+      container: HTMLElement;
+      form: EntityForm;
       type(name: string, value: string): void;
       value(name: string): string;
-    } => {
-      const inputs = new Map<
-        string,
-        { value: string; listeners: (() => void)[] }
-      >();
-      const input = (name: string) => {
-        if (!inputs.has(name)) inputs.set(name, { value: '', listeners: [] });
-        return inputs.get(name)!;
-      };
-      return {
-        root: {
-          querySelector: (selector: string) => {
-            const name = /data-field="([^"]+)"\] \.dc-input/.exec(
-              selector
-            )?.[1];
-            if (!name) return null;
-            const held = input(name);
-            return {
-              get value() {
-                return held.value;
-              },
-              set value(value: string) {
-                held.value = value;
-              },
-              addEventListener: (_event: string, listener: () => void) =>
-                held.listeners.push(listener),
-            };
-          },
-        } as unknown as HTMLElement,
-        type(name, value) {
-          input(name).value = value;
-          input(name).listeners.forEach(listener => listener());
-        },
-        value: name => input(name).value,
-      };
-    };
-    /** What the tests reach of a form: its values, and its binding. */
-    interface Named {
-      values: Record<string, string[]>;
-      bindFullName(root: HTMLElement): void;
-      render(container: HTMLElement): Promise<void>;
-    }
-    const form = (entry?: Entry, fullNameFormat?: string): Named =>
-      new EntityForm({
+    }> => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const form = new EntityForm({
         entity: people,
         entry,
         fullNameFormat,
@@ -585,32 +549,43 @@ describe('EntityForm', () => {
         pointerOptions: () => Promise.resolve([]),
         onSubmit: () => Promise.resolve(),
         onCancel: () => undefined,
-      }) as unknown as Named;
+      });
+      await form.render(container);
+      const field = (name: string): HTMLInputElement => {
+        const found = container.querySelector<HTMLInputElement>(
+          `#dc-field-${name}`
+        );
+        if (!found) throw new Error(`no ${name}`);
+        return found;
+      };
+      return {
+        container,
+        form,
+        type: (name, value) => typeInto(field(name), value),
+        value: name => field(name).value,
+      };
+    };
 
-    it('should write the full name once both parts are typed', () => {
-      const created = form();
-      const page = typing();
-      created.bindFullName(page.root);
+    it('should write the full name once both parts are typed', async () => {
+      const page = await drawn();
       page.type('givenName', 'Bat');
       expect(page.value('displayName')).to.equal('');
       page.type('sn', 'Dorj ');
       expect(page.value('displayName')).to.equal('Bat Dorj');
-      expect(created.values.displayName).to.deep.equal(['Bat Dorj']);
+      expect(page.form.draft().values.displayName).to.deep.equal(['Bat Dorj']);
       page.type('givenName', 'Bataa');
       expect(page.value('displayName')).to.equal('Bataa Dorj');
     });
 
-    it('should write it in the deployment’s order', () => {
-      const page = typing();
-      form(undefined, '{surname} {givenName}').bindFullName(page.root);
+    it('should write it in the deployment’s order', async () => {
+      const page = await drawn(undefined, '{surname} {givenName}');
       page.type('givenName', 'Bat');
       page.type('sn', 'Dorj');
       expect(page.value('displayName')).to.equal('Dorj Bat');
     });
 
-    it('should leave alone a full name someone wrote', () => {
-      const page = typing();
-      form().bindFullName(page.root);
+    it('should leave alone a full name someone wrote', async () => {
+      const page = await drawn();
       page.type('displayName', 'The boss');
       page.type('givenName', 'Bat');
       page.type('sn', 'Dorj');
@@ -621,16 +596,14 @@ describe('EntityForm', () => {
       expect(page.value('displayName')).to.equal('Bat Dorjiin');
     });
 
-    it('should write the common name from the full name, on a new entry', () => {
+    it('should write the common name from the full name, on a new entry', async () => {
       // The member pickers match names through cn: an account created
       // with none was not found by its full name.
-      const created = form();
-      const page = typing();
-      created.bindFullName(page.root);
+      const page = await drawn();
       page.type('givenName', 'Ux');
       page.type('sn', 'Audit');
       expect(page.value('cn')).to.equal('Ux Audit');
-      expect(created.values.cn).to.deep.equal(['Ux Audit']);
+      expect(page.form.draft().values.cn).to.deep.equal(['Ux Audit']);
       // The full name typed whole is followed too.
       page.type('displayName', 'Dr Ux Audit');
       expect(page.value('cn')).to.equal('Dr Ux Audit');
@@ -641,60 +614,41 @@ describe('EntityForm', () => {
       expect(page.value('cn')).to.equal('ux');
     });
 
-    it('should leave an entry’s common name alone', () => {
-      const page = typing();
-      const entry = {
+    it('should leave an entry’s common name alone', async () => {
+      const page = await drawn({
         uid: 'bat',
         givenName: 'Bat',
         sn: 'Dorj',
         displayName: 'Bat Dorj',
-      };
-      // Filled from the entry, as the form renders it; no common name.
-      for (const [name, value] of Object.entries(entry)) page.type(name, value);
-      form(entry).bindFullName(page.root);
+      });
       page.type('sn', 'Bold');
       expect(page.value('displayName')).to.equal('Bat Bold');
       expect(page.value('cn')).to.equal('');
     });
 
-    it('should carry along the full name of an entry its parts made', () => {
-      const made = typing();
+    it('should carry along the full name of an entry its parts made', async () => {
       const entry = { uid: 'bat', givenName: 'Bat', sn: 'Dorj' };
-      // Filled from the entry, as the form renders it.
-      for (const [name, value] of Object.entries({
-        ...entry,
-        displayName: 'Bat Dorj',
-      }))
-        made.type(name, value);
-      form({ ...entry, displayName: 'Bat Dorj' }).bindFullName(made.root);
+      const made = await drawn({ ...entry, displayName: 'Bat Dorj' });
       made.type('sn', 'Bold');
       expect(made.value('displayName')).to.equal('Bat Bold');
 
-      const chosen = typing();
-      // Filled from the entry, as the form renders it.
-      for (const [name, value] of Object.entries({
-        ...entry,
-        displayName: 'Dr Bat',
-      }))
-        chosen.type(name, value);
-      form({ ...entry, displayName: 'Dr Bat' }).bindFullName(chosen.root);
+      const chosen = await drawn({ ...entry, displayName: 'Dr Bat' });
       chosen.type('sn', 'Bold');
       expect(chosen.value('displayName')).to.equal('Dr Bat');
     });
 
     it('should explain a field on demand', async () => {
-      const container = stubContainer();
-      await form().render(container);
+      const page = await drawn();
       // A button the keyboard reaches, named after the field (#216); the
       // panel's first focus skips it.
-      expect(container.innerHTML).to.match(
+      expect(page.container.innerHTML).to.match(
         /<button type="button" class="dc-help" aria-label="Help on Employee Number"\s+aria-describedby="dc-help-employeeNumber" aria-expanded="false">\?<\/button>/
       );
-      expect(container.innerHTML).to.match(
+      expect(page.container.innerHTML).to.match(
         /<span class="dc-tooltip" role="tooltip" id="dc-help-employeeNumber">The number HR knows the person by<\/span>/
       );
       // No help, no button.
-      expect(container.innerHTML).not.to.include('dc-help-sn');
+      expect(page.container.innerHTML).not.to.include('dc-help-sn');
     });
   });
 
