@@ -41,7 +41,7 @@ describe('html', () => {
   });
 
   it('should render markup into an element', () => {
-    const element = { innerHTML: '' } as unknown as Element;
+    const element = document.createElement('div');
     render(element, html`<p>${'<x>'}</p>`);
     expect(element.innerHTML).to.equal('<p>&lt;x&gt;</p>');
     expect(html``).to.be.instanceOf(SafeHtml);

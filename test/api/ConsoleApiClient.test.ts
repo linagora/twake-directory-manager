@@ -1553,9 +1553,21 @@ describe('ConsoleApiClient', () => {
       other: { dn: dn('other'), dc: 'other', associatedDomain: 'other.org' },
       any: { dn: dn('any'), dc: 'any', associatedDomain: '*' },
     };
-    const client = (): ConsoleApiClient => {
+    /**
+     * A client on a directory whose organizations hang from `top`, as the
+     * server says in its configuration.
+     */
+    const client = async (): Promise<ConsoleApiClient> => {
       const made = new ConsoleApiClient(baseUrl);
-      Object.assign(made as unknown as object, { topOrganization: top });
+      nock(baseUrl)
+        .get('/api/v1/config')
+        .reply(200, {
+          apiPrefix: '/api',
+          features: {
+            ldapOrganizations: { enabled: true, topOrganization: top },
+          },
+        });
+      await made.discover();
       return made;
     };
     const organization = (at: string, links: string[]): nock.Scope =>
@@ -1563,18 +1575,20 @@ describe('ConsoleApiClient', () => {
         .get(`/api/v1/ldap/organizations/${encodeURIComponent(at)}`)
         .reply(200, { dn: at, twakeDomainLink: links });
 
-    it('should know the domains’ branch by the role of their name', () => {
+    it('should know the domains’ branch by the role of their name', async () => {
       const entities = [users, organizations, domains];
       expect(isDomainBranch(entities, domainsBase)).to.equal(true);
       expect(isDomainBranch(entities, domainsBase.toUpperCase())).to.equal(
         true
       );
       expect(isDomainBranch(entities, users.base)).to.equal(false);
-      expect(client().mailDomains([users, organizations])).to.equal(undefined);
+      expect((await client()).mailDomains([users, organizations])).to.equal(
+        undefined
+      );
     });
 
     it('should offer what the organization and those above it link, read once', async () => {
-      const lookup = client().mailDomains([organizations, domains])!;
+      const lookup = (await client()).mailDomains([organizations, domains])!;
       nock(baseUrl).get('/api/v1/ldap/domains').reply(200, tree);
       organization(europe, [dn('lists')]);
       organization(sales, [dn('example')]);
@@ -1597,7 +1611,7 @@ describe('ConsoleApiClient', () => {
     });
 
     it('should offer every domain but "*" where nothing narrows them', async () => {
-      const lookup = client().mailDomains([organizations, domains])!;
+      const lookup = (await client()).mailDomains([organizations, domains])!;
       nock(baseUrl).get('/api/v1/ldap/domains').reply(200, tree);
       const every = ['example.com', 'lists.example.com', 'other.org'];
       // Attached to nothing.
@@ -1619,7 +1633,7 @@ describe('ConsoleApiClient', () => {
     });
 
     it('should refuse to name any when the domains cannot be read', async () => {
-      const lookup = client().mailDomains([organizations, domains])!;
+      const lookup = (await client()).mailDomains([organizations, domains])!;
       nock(baseUrl)
         .get('/api/v1/ldap/domains')
         .reply(403, { error: 'Forbidden' });

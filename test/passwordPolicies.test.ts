@@ -49,35 +49,6 @@ function policyConfig(): nock.Scope {
   return nock(baseUrl).get('/api/v1/config').reply(200, POLICY_CONFIG);
 }
 
-/**
- * A form control the form reads its value from, marks and focuses.
- *
- * @param value its value
- * @param attributes its attributes
- */
-function control(value: string, attributes: Record<string, string> = {}) {
-  return {
-    value,
-    attributes,
-    focused: 0,
-    getAttribute: (name: string): string | null => attributes[name] ?? null,
-    setAttribute: (name: string, text: string): void => {
-      attributes[name] = text;
-    },
-    removeAttribute: (name: string): void => {
-      delete attributes[name];
-    },
-    focus(): void {
-      this.focused++;
-    },
-  };
-}
-
-/** An error slot, which records what the form says in it. */
-function errorSlot(): { textContent: string; hidden: boolean } {
-  return { textContent: '', hidden: true };
-}
-
 describe('Password policies', () => {
   afterEach(() => nock.cleanAll());
 
@@ -184,12 +155,14 @@ describe('Password policies', () => {
   });
 
   describe('the form', () => {
-    /** A form over a container holding these controls. */
-    function formWith(
-      controls: Record<string, unknown>,
+    /** A policy form drawn in the page. */
+    const drawn = (
+      edited: PasswordPolicy | null,
       saved: { cn: string; values: Record<string, unknown> }[],
-      edited: PasswordPolicy | null = policy
-    ): PolicyForm {
+      onCancel: () => void = () => undefined
+    ): { form: PolicyForm; container: HTMLElement } => {
+      const container = document.createElement('div');
+      document.body.append(container);
       const form = new PolicyForm({
         translator: en,
         policy: edited ?? undefined,
@@ -198,40 +171,49 @@ describe('Password policies', () => {
           saved.push({ cn, values });
         },
         onDelete: () => undefined,
-        onCancel: () => undefined,
+        onCancel,
       });
-      form.render({
-        innerHTML: '',
-        querySelector: (selector: string) => controls[selector] ?? null,
-        querySelectorAll: (selector: string) =>
-          selector === '[data-error]'
-            ? Object.entries(controls)
-                .filter(([key]) => key.endsWith('[data-error]'))
-                .map(([, value]) => value)
-            : [],
-      } as unknown as HTMLElement);
-      return form;
-    }
+      form.render(container);
+      // happy-dom chooses the second option of every select, whatever
+      // `selected` says: put each back where the markup put it, as a browser
+      // would, before a test reads or changes one.
+      for (const select of Array.from(
+        container.querySelectorAll<HTMLSelectElement>('select')
+      )) {
+        const chosen =
+          select.querySelector<HTMLOptionElement>('option[selected]');
+        if (chosen) select.value = chosen.value;
+      }
+      return { form, container };
+    };
 
-    const submit = (form: PolicyForm): Promise<void> =>
-      (form as unknown as { submit(): Promise<void> }).submit();
+    /** A control of the form drawn, by the attribute it sets. */
+    const control = <
+      T extends HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
+    >(
+      container: HTMLElement,
+      name: string
+    ): T => container.querySelector<T>(`#dc-policy-${name}`) as T;
+
+    /** Press Save or Create, as the reader does, and let it answer. */
+    const save = async (container: HTMLElement): Promise<void> => {
+      const button = container.querySelector<HTMLElement>(
+        'form button[type="submit"]'
+      );
+      if (!button) throw new Error('no submit');
+      button.click();
+      await new Promise(resolve => setTimeout(resolve, 0));
+    };
 
     it('should send what changed, in seconds', async () => {
       const saved: { cn: string; values: Record<string, unknown> }[] = [];
-      await submit(
-        formWith(
-          {
-            '#dc-policy-pwdMaxAge': control('30'),
-            '[data-field="pwdMaxAge"] [data-unit]': control('days'),
-            '#dc-policy-pwdLockout': control(''),
-            '#dc-policy-pwdMinLength': control('8'),
-            '#dc-policy-pwdCheckModuleArg': control(
-              policy.pwdCheckModuleArg as string
-            ),
-          },
-          saved
-        )
-      );
+      const { container } = drawn(policy, saved);
+      control<HTMLInputElement>(container, 'pwdMaxAge').value = '30';
+      container.querySelector<HTMLSelectElement>(
+        '[data-field="pwdMaxAge"] [data-unit]'
+      )!.value = 'days';
+      control<HTMLSelectElement>(container, 'pwdLockout').value = '';
+      await save(container);
       expect(saved).to.deep.equal([
         { cn: 'default', values: { pwdMaxAge: 2592000, pwdLockout: null } },
       ]);
@@ -239,117 +221,80 @@ describe('Password policies', () => {
 
     it('should send nothing while a field holds a wrong value', async () => {
       const saved: { cn: string; values: Record<string, unknown> }[] = [];
-      const error = errorSlot();
-      await submit(
-        formWith(
-          {
-            '#dc-policy-pwdMinLength': control('eight'),
-            '[data-field="pwdMinLength"] [data-error]': error,
-          },
-          saved
-        )
-      );
+      const { container } = drawn(policy, saved);
+      const length = control<HTMLInputElement>(container, 'pwdMinLength');
+      length.value = '-1';
+      await save(container);
       expect(saved).to.deep.equal([]);
+      const error = container.querySelector<HTMLElement>(
+        '[data-field="pwdMinLength"] [data-error]'
+      ) as HTMLElement;
       expect(error.hidden).to.equal(false);
       expect(error.textContent).to.equal('A whole number, 0 or more');
+      // A refused field says so to assistive technology, and takes the focus.
+      expect(length.getAttribute('aria-invalid')).to.equal('true');
+      expect(document.activeElement).to.equal(length);
     });
 
     it('should be changed once typed in, and saved unchanged close as saved', async () => {
       // Saved with nothing that differs, it asked "Discard what you typed?"
-      let typed = (): void => undefined;
       let cancelled = 0;
-      const form = new PolicyForm({
-        translator: en,
-        policy,
-        canDelete: true,
-        onSave: async () => undefined,
-        onDelete: () => undefined,
-        onCancel: () => {
-          cancelled++;
-        },
+      const saved: { cn: string; values: Record<string, unknown> }[] = [];
+      const { form, container } = drawn(policy, saved, () => {
+        cancelled++;
       });
-      const controls: Record<string, unknown> = {
-        form: {
-          addEventListener: (type: string, listener: () => void): void => {
-            if (type === 'input') typed = listener;
-          },
-        },
-        '#dc-policy-pwdMinLength': control(String(policy.pwdMinLength ?? '')),
-      };
-      form.render({
-        innerHTML: '',
-        querySelector: (selector: string) => controls[selector] ?? null,
-        querySelectorAll: () => [],
-      } as unknown as HTMLElement);
       expect(form.isDirty()).to.equal(false);
-      typed();
+      control<HTMLInputElement>(container, 'pwdMinLength').dispatchEvent(
+        new Event('input', { bubbles: true })
+      );
       expect(form.isDirty()).to.equal(true);
-      await submit(form);
+      await save(container);
       expect(cancelled).to.equal(1);
       expect(form.isDirty()).to.equal(false);
+      expect(saved).to.deep.equal([]);
     });
 
     it('should mark the refused fields and focus the first', async () => {
       // As in the entry forms: the messages alone left the keyboard on Create.
       const saved: { cn: string; values: Record<string, unknown> }[] = [];
-      const name = control('');
-      const age = control('-1', {
-        'aria-describedby': 'dc-policy-pwdMaxAge-hint',
-      });
-      const length = control('-1');
-      const form = formWith(
-        {
-          '#dc-policy-cn': name,
-          '[data-field="cn"] [data-error]': errorSlot(),
-          '#dc-policy-pwdMaxAge': age,
-          '[data-field="pwdMaxAge"] [data-unit]': control('days'),
-          '[data-field="pwdMaxAge"] [data-error]': errorSlot(),
-          '#dc-policy-pwdMinLength': length,
-          '[data-field="pwdMinLength"] [data-error]': errorSlot(),
-        },
-        saved,
-        null
-      );
-      await submit(form);
+      const { container } = drawn(null, saved);
+      const name = control<HTMLInputElement>(container, 'cn');
+      const age = control<HTMLInputElement>(container, 'pwdMaxAge');
+      const length = control<HTMLInputElement>(container, 'pwdMinLength');
+      age.value = '-1';
+      length.value = '-1';
+      await save(container);
       expect(saved).to.deep.equal([]);
-      expect(name.attributes).to.deep.equal({
-        'aria-invalid': 'true',
-        'aria-describedby': 'dc-policy-cn-error',
-      });
-      expect(age.attributes).to.deep.equal({
-        'aria-invalid': 'true',
-        'aria-describedby':
-          'dc-policy-pwdMaxAge-hint dc-policy-pwdMaxAge-error',
-      });
-      expect([name.focused, age.focused, length.focused]).to.deep.equal([
-        1, 0, 0,
-      ]);
+      expect(name.getAttribute('aria-invalid')).to.equal('true');
+      expect(name.getAttribute('aria-describedby')).to.equal(
+        'dc-policy-cn-error'
+      );
+      expect(age.getAttribute('aria-invalid')).to.equal('true');
+      expect(age.getAttribute('aria-describedby')).to.equal(
+        'dc-policy-pwdMaxAge-hint dc-policy-pwdMaxAge-error'
+      );
+      expect(document.activeElement).to.equal(name);
       // Put right, a field loses its mark and keeps its hint.
       name.value = 'software';
       age.value = '30';
-      await submit(form);
-      expect(name.attributes).to.deep.equal({});
-      expect(age.attributes).to.deep.equal({
-        'aria-describedby': 'dc-policy-pwdMaxAge-hint',
-      });
-      expect(length.attributes['aria-invalid']).to.equal('true');
-      expect(length.focused).to.equal(1);
+      await save(container);
+      expect(name.getAttribute('aria-invalid')).to.equal(null);
+      expect(name.getAttribute('aria-describedby')).to.equal(null);
+      expect(age.getAttribute('aria-invalid')).to.equal(null);
+      expect(age.getAttribute('aria-describedby')).to.equal(
+        'dc-policy-pwdMaxAge-hint'
+      );
+      expect(length.getAttribute('aria-invalid')).to.equal('true');
+      expect(document.activeElement).to.equal(length);
       expect(saved).to.deep.equal([]);
     });
 
     it('should create a policy with the fields filled in', async () => {
       const saved: { cn: string; values: Record<string, unknown> }[] = [];
-      await submit(
-        formWith(
-          {
-            '#dc-policy-cn': control(' software '),
-            '#dc-policy-pwdMaxFailure': control('10'),
-            '#dc-policy-pwdMinLength': control(''),
-          },
-          saved,
-          null
-        )
-      );
+      const { container } = drawn(null, saved);
+      control<HTMLInputElement>(container, 'cn').value = ' software ';
+      control<HTMLInputElement>(container, 'pwdMaxFailure').value = '10';
+      await save(container);
       expect(saved).to.deep.equal([
         { cn: 'software', values: { pwdMaxFailure: 10 } },
       ]);
@@ -373,7 +318,7 @@ describe('Password policies', () => {
           ].includes(name)
       );
       const markup = (attributes?: string[]): string => {
-        const container = { innerHTML: '', querySelector: () => null };
+        const container = document.createElement('div');
         new PolicyForm({
           translator: en,
           policy,
@@ -382,7 +327,7 @@ describe('Password policies', () => {
           onSave: async () => undefined,
           onDelete: () => undefined,
           onCancel: () => undefined,
-        }).render(container as unknown as HTMLElement);
+        }).render(container);
         return container.innerHTML;
       };
       const offered = markup(defined);
@@ -399,7 +344,7 @@ describe('Password policies', () => {
     });
 
     it('should not offer to delete the default policy', () => {
-      const container = { innerHTML: '', querySelector: () => null };
+      const container = document.createElement('div');
       new PolicyForm({
         translator: en,
         policy,
@@ -407,7 +352,7 @@ describe('Password policies', () => {
         onSave: async () => undefined,
         onDelete: () => undefined,
         onCancel: () => undefined,
-      }).render(container as unknown as HTMLElement);
+      }).render(container);
       expect(container.innerHTML).not.to.include('data-delete');
       // What the server refuses to write is shown, not offered
       expect(container.innerHTML).to.include('<code>userPassword</code>');
