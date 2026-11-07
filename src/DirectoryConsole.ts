@@ -16,12 +16,8 @@ import {
   roleAttribute,
 } from './api/ConsoleApiClient';
 import { LINAGORA_LOGO } from './assets';
-import { applyContrast, initial, sidebarMarkup } from './console/shell';
-import {
-  AttachedTables,
-  attachedClass,
-  attachedEntity,
-} from './components/AttachedTables';
+import { applyContrast, sidebarMarkup } from './console/shell';
+import { attachedClass, attachedEntity } from './components/AttachedTables';
 import {
   comparableDn,
   entryValue,
@@ -74,6 +70,7 @@ import {
   storedLanguage,
 } from './console/settings';
 import { announcer } from './ui/announce';
+import { DashboardView } from './views/dashboard';
 import { PoliciesView } from './views/policies';
 import { OrganizationsView } from './views/organizations';
 import { EntryView } from './views/entry';
@@ -342,6 +339,7 @@ export class DirectoryConsole {
       refresh: () => this.renderMain(),
       main: () => this.main(),
       entities: () => this.entities,
+      account: () => this.account,
       personName: (entity, entry, id) => this.personName(entity, entry, id),
       submittedName: (entity, values, id) =>
         this.submittedName(entity, values, id),
@@ -899,191 +897,32 @@ export class DirectoryConsole {
   }
 
   /**
-   * The overview: the scope, and the entities with what can be done to them.
-   * A page of four cards that only repeat the sidebar is decoration; this one
-   * answers "what am I allowed to do here?". It is a heading, a greeting and
-   * a list of sections, each drawn by its own method.
+   * Draw the Overview (see `DashboardView`): kept for `renderMain` and the
+   * routing tests that replace it until #220's last step.
    */
   private renderDashboard(main: HTMLElement): void {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
     const generation = this.viewGeneration;
-    this.titlePage(t('nav.dashboard'));
-    // What waits in transit goes first, once read: it is what may need
-    // doing today.
-    const sections = this.rights.administersNothing()
-      ? [this.noRightsMarkup()]
-      : [
-          html`<div data-transit-waiting></div>`,
-          this.manageMarkup(),
-          this.referenceMarkup(),
-        ];
-    render(
-      main,
-      html`
-      <section class="dc-dashboard">
-        <h1>${t('app.title')}</h1>
-        ${this.welcomeMarkup()}
-        ${sections}
-      </section>`
-    );
-
-    for (const button of Array.from(
-      main.querySelectorAll<HTMLElement>('[data-open]')
-    ))
-      button.addEventListener('click', () =>
-        this.go(button.dataset.open as string)
-      );
-    for (const button of Array.from(
-      main.querySelectorAll<HTMLElement>('[data-new]')
-    ))
-      button.addEventListener('click', () => {
-        const entity = this.entity(button.dataset.new);
-        if (entity)
-          background(() => this.openForm(entity), 'openForm', this.report);
-      });
     background(
-      () => this.showTransitWaiting(main, generation),
-      'showTransitWaiting',
+      () => new DashboardView(this.viewContext()).render(main, generation),
+      'renderDashboard',
       this.report
     );
   }
 
-  /**
-   * _Waiting in transit (N)_, on the Overview: what other administrators
-   * handed over, each with Claim…. Nothing told the receiving side of a
-   * hand-over, and an entry nobody noticed stayed in transit, managed by no
-   * one. Absent when nothing waits.
-   *
-   * @param main the Overview
-   * @param generation the view it was drawn for
-   */
-  private async showTransitWaiting(
+  /** The transit section of the Overview (see `DashboardView`). */
+  private showTransitWaiting(
     main: HTMLElement,
     generation: number
   ): Promise<void> {
-    const waiting = await this.readTransit();
-    if (!this.current(generation) || !waiting?.entries.length) return;
-    const names = await this.attachedNames();
-    const holder = main.querySelector<HTMLElement>('[data-transit-waiting]');
-    if (!this.current(generation) || !holder) return;
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const tables = new AttachedTables({
-      entities: this.entities,
-      members: waiting,
-      translator: this.translator,
-      name: rdnValue(this.rights.transit || ''),
-      pointerLabel: names,
-      hideEmpty: true,
-      rowAction: this.claimAction(),
-      onOpen: (href: string): void => {
-        window.location.hash = href;
-      },
-    });
-    render(
-      holder,
-      html`
-      <section class="dc-transit-waiting" data-transit-section>
-        <h2>${t('transit.waiting', {
-          count: `${waiting.entries.length}${waiting.truncated ? '+' : ''}`,
-        })}</h2>
-        <p class="dc-muted">${t('transit.waitingHelp')}</p>
-        ${tables.markup()}
-      </section>`
+    return new DashboardView(this.viewContext()).showTransitWaiting(
+      main,
+      generation
     );
-    tables.bind(holder);
   }
 
-  /** Who is signed in: by name and address, else as the scope gives it. */
-  private welcomeMarkup(): SafeHtml {
-    const user = this.rights.user;
-    if (!user) return html``;
-    const account = this.account;
-    const text = account?.email
-      ? this.translator.t('dashboard.welcomeNamed', {
-          name: account.name,
-          email: account.email,
-        })
-      : this.translator.t('dashboard.welcome', {
-          user: account?.name || user,
-        });
-    return html`<p class="dc-muted">${text}</p>`;
-  }
-
-  /** The cards of the entities, with what can be done to them. */
-  private manageMarkup(): SafeHtml {
-    const t = (key: string): string => this.translator.t(key);
-    const { primary } = splitEntities(this.entities);
-    return html`
-      <h2>${t('dashboard.entities')}</h2>
-      <ul class="dc-cards">
-        ${primary.map(entity => {
-          const allowed = this.rights.canCreate(entity);
-          return html`<li class="dc-card">
-              <header class="dc-card-title">
-                <span class="dc-entity-icon" aria-hidden="true">${initial(
-                  this.plural(entity)
-                )}</span>
-                <h3>${this.plural(entity)}</h3>
-              </header>
-              <div class="dc-card-actions">
-                <button type="button" class="dc-button" data-open="${
-                  entity.key
-                }">${t('list.open')}</button>
-                ${
-                  allowed
-                    ? html`<button type="button" class="dc-button dc-button-primary" data-new="${
-                        entity.key
-                      }">${this.createLabel(entity)}</button>`
-                    : html`<span class="dc-muted">${t('dashboard.noCreate')}</span>`
-                }
-              </div>
-            </li>`;
-        })}
-      </ul>`;
-  }
-
-  /** The links to the reference data and the password policies. */
-  private referenceMarkup(): SafeHtml {
-    const settings = this.settings(splitEntities(this.entities).reference);
-    if (!settings.length) return html``;
-    return html`
-      <h2>${this.translator.t('nav.reference')}</h2>
-      <ul class="dc-reference">
-        ${settings.map(
-          ({ key, label }) =>
-            html`<li><button type="button" class="dc-reference-link" data-open="${
-              key
-            }">${label}</button></li>`
-        )}
-      </ul>`;
-  }
-
-  /**
-   * The overview of an account administering nothing. Three cards, each
-   * opening on "nothing to manage", were three dead ends: this says it
-   * once, and where to turn.
-   */
-  private noRightsMarkup(): SafeHtml {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const user = this.rights.user || '';
-    const logout = this.api.logoutUrl;
-    return html`
-      <div class="dc-no-rights" data-no-rights>
-        <h2>${t('dashboard.noRightsTitle')}</h2>
-        <p>${t('dashboard.noRightsBody', {
-          name: this.account?.name || user,
-        })}</p>
-        ${
-          logout
-            ? html`<a class="dc-button dc-button-primary" href="${
-                logout
-              }">${t('app.logout')}</a>`
-            : ''
-        }
-      </div>`;
+  /** The context, built on first use when a test drives a view directly. */
+  private viewContext(): ConsoleContext {
+    return (this.context ??= this.contextOf());
   }
 
   /**

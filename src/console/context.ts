@@ -99,6 +99,8 @@ export interface ConsoleContext {
   main(): HTMLElement | null;
   /** The entities the directory serves, as discovered: none before */
   entities(): EntityDescriptor[];
+  /** The signed-in account, as the overview names it: none when not read */
+  account(): { name: string; email?: string } | null;
   /**
    * A person as a colleague names them: their full name, else as their card
    * names them. The console's own until the names move out with the views
