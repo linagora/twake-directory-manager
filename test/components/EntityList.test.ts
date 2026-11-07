@@ -17,7 +17,8 @@ import {
 import { Translator } from '../../src/i18n';
 import type { EntityDescriptor, Entry, EntryList } from '../../src/types';
 import { writeCsv } from '../../src/csv';
-import { baseUrl, pretendHoverless, stubContainer } from '../support/stubs';
+import { baseUrl, pretendHoverless } from '../support/stubs';
+import { page } from '../support/dom';
 import { drivenImport } from '../support/importer';
 import { users, groups, mailboxTypes } from '../fixtures/entities';
 
@@ -63,7 +64,7 @@ describe('EntityList', () => {
     // A touch screen shows no title: the row carries the whole path there,
     // and the shortened one where a mouse can hover (#272).
     const render = async (): Promise<string> => {
-      const container = stubContainer();
+      const container = page();
       await new EntityList({
         entity: users,
         translator: new Translator('en'),
@@ -90,7 +91,7 @@ describe('EntityList', () => {
     try {
       const touch = await render();
       expect(touch).to.include(
-        '<span class="dc-path-full">Sales &#x2F; France &#x2F; Lyon &#x2F; Center</span>'
+        '<span class="dc-path-full">Sales / France / Lyon / Center</span>'
       );
       expect(touch).to.not.include('dc-path-short');
     } finally {
@@ -121,7 +122,7 @@ describe('EntityList', () => {
     // "Sales" in every field found nobody, and the path was not offered;
     // offered under Every field, a name search would match departments.
     const asked: string[] = [];
-    const container = stubContainer();
+    const container = page();
     const list = new EntityList({
       entity: users,
       translator: new Translator('en'),
@@ -151,14 +152,14 @@ describe('EntityList', () => {
       onDelete: () => Promise.resolve(false),
       canDelete: false,
     });
-    await everywhere.render(stubContainer());
+    await everywhere.render(page());
     expect(asked[1].split(',')).to.not.include('twakeDepartmentPath');
   });
 
   it('should list a department of a short name, and say a cut answer is', async () => {
     // "IT" drew the three-character guard, and asked without a search.
     const asked: unknown[] = [];
-    const container = stubContainer();
+    const container = page();
     await new EntityList({
       entity: users,
       translator: new Translator('en'),
@@ -192,7 +193,7 @@ describe('EntityList', () => {
     // placeholder, gone as soon as one typed (#211).
     const announced: string[] = [];
     const listed = async (title?: string): Promise<string> => {
-      const container = stubContainer();
+      const container = page();
       await new EntityList({
         entity: users,
         title,
@@ -237,7 +238,7 @@ describe('EntityList', () => {
 
   it('should say to a screen reader that nothing matched', async () => {
     const announced: string[] = [];
-    const container = stubContainer();
+    const container = page();
     await new EntityList({
       entity: users,
       translator: new Translator('fr'),
@@ -363,7 +364,7 @@ describe('EntityList', () => {
 
   it('should cut a department’s list to it and what lies under it', async () => {
     // A search of the path matches a substring: "Sales" found Presales.
-    const container = stubContainer();
+    const container = page();
     await new EntityList({
       entity: users,
       translator: new Translator('en'),
@@ -392,7 +393,7 @@ describe('EntityList', () => {
 
   it('should offer the selection’s own actions between Export and Delete', async () => {
     // Forty accounts imported took forty visits to join a group (#170).
-    const container = stubContainer();
+    const container = page();
     const list = new EntityList({
       entity: users,
       translator: new Translator('en'),
@@ -422,7 +423,7 @@ describe('EntityList', () => {
   it('should show an account’s state as a badge when it is an exception', async () => {
     // "Disabled" read like the "Active" around it: a scan down the column
     // missed it (#172). The text stays; Active stays plain.
-    const container = stubContainer();
+    const container = page();
     await new EntityList({
       entity: users,
       translator: new Translator('en'),
@@ -446,7 +447,7 @@ describe('EntityList', () => {
   });
 
   it('should show an account’s state on its card as the list does', () => {
-    const container = stubContainer();
+    const container = page();
     new EntityDetail({
       entity: users,
       entry: { uid: 'frank', twakeAccountStatus: 'cn=disabled' },
@@ -489,7 +490,7 @@ describe('EntityList', () => {
   });
 
   it('should name a nomenclature’s values, and keep the others as stored', async () => {
-    const container = stubContainer();
+    const container = page();
     await new EntityList({
       entity: mailboxTypes,
       translator: new Translator('fr'),
@@ -525,7 +526,7 @@ describe('EntityList', () => {
       [groups, 'sales team', '#/groups/sales%20team'],
       [mailboxTypes, 'a/b', '#/mailboxTypes/a%2Fb'],
     ] as const) {
-      const container = stubContainer();
+      const container = page();
       await new EntityList({
         entity,
         translator: new Translator('en'),
@@ -607,7 +608,7 @@ describe('EntityList', () => {
       onDelete: () => Promise.resolve(false),
       canDelete: false,
     });
-    await list.render(stubContainer());
+    await list.render(page());
     // Marked attributes only: an unmarked one is not offered, because the
     // marker says which the directory indexed.
     expect(asked).to.deep.equal(['uid,sn']);
@@ -637,7 +638,7 @@ describe('EntityList', () => {
       onDelete: () => Promise.resolve(false),
       canDelete: false,
     });
-    await list.render(stubContainer());
+    await list.render(page());
     // Everything returnable, single-valued and not a DN.
     expect(asked).to.deep.equal(['uid']);
   });
@@ -657,7 +658,7 @@ describe('EntityList', () => {
       onDelete: () => Promise.resolve(false),
       canDelete: false,
     });
-    const container = stubContainer();
+    const container = page();
 
     const first = list.render(container);
     const second = list.refresh();
@@ -694,7 +695,7 @@ describe('EntityList', () => {
       onDelete: () => Promise.resolve(false),
       canDelete: false,
     });
-    const container = stubContainer();
+    const container = page();
     await list.render(container);
     expect(container.innerHTML).to.contain('jsmith@example.com');
   });
@@ -763,7 +764,7 @@ describe('EntityList', () => {
       onDelete: () => Promise.resolve(false),
       canDelete: false,
     });
-    const container = stubContainer();
+    const container = page();
     await list.render(container);
     return container.innerHTML;
   }
@@ -831,7 +832,7 @@ describe('EntityList', () => {
       onDelete: () => Promise.resolve(false),
       canDelete: false,
     });
-    const container = stubContainer();
+    const container = page();
     const cut: EntryList = {
       entries: { a: { dn: 'uid=a', uid: 'a' } },
       truncated: true,
@@ -865,7 +866,7 @@ describe('EntityList', () => {
       onDelete: () => Promise.resolve(false),
       canDelete: false,
     });
-    const container = stubContainer();
+    const container = page();
     await list.render(container);
     // Even an entry named after the flag is read as an entry.
     expect(container.innerHTML).to.contain('data-id="truncated"');
@@ -1022,7 +1023,7 @@ describe('EntityList', () => {
       canDelete: false,
       view,
     };
-    const container = stubContainer();
+    const container = page();
     await new EntityList(options).render(container);
     // Each read whole: the creation answered little more than its name
     expect(read).to.have.members(['amartin', 'bob', 'carol']);
@@ -1030,7 +1031,7 @@ describe('EntityList', () => {
     expect(container.innerHTML)
       .to.contain('Just imported (3)')
       .and.contain('Back to search')
-      .and.contain('href="#&#x2F;users&#x2F;amartin"')
+      .and.contain('href="#/users/amartin"')
       .and.contain('Bob Brown')
       .and.contain('c@example.com')
       .and.not.contain('data-search ');
@@ -1047,7 +1048,7 @@ describe('EntityList', () => {
         : id === 'carol'
           ? refusal(403)
           : Promise.resolve(stored[id]);
-    const again = stubContainer();
+    const again = page();
     await new EntityList(options).render(again);
     expect(again.innerHTML)
       .to.contain('Just imported (1)')
@@ -1058,7 +1059,7 @@ describe('EntityList', () => {
 
     // A real failure is said, the count kept
     answer = () => refusal(500);
-    const failing = stubContainer();
+    const failing = page();
     await new EntityList(options).render(failing);
     expect(failing.innerHTML)
       .to.contain('Just imported (1)')
