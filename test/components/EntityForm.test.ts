@@ -10,7 +10,7 @@ import type {
   SchemaAttribute,
 } from '../../src/types';
 import { type as typeInto } from '../support/act';
-import { stubContainer } from '../support/stubs';
+import { page } from '../support/dom';
 import {
   usersSchema,
   users,
@@ -194,7 +194,7 @@ describe('EntityForm', () => {
         },
       },
     };
-    const container = stubContainer();
+    const container = page();
     await new EntityForm({
       entity: grouped,
       translator: new Translator('en'),
@@ -221,7 +221,7 @@ describe('EntityForm', () => {
       },
     };
     const render = async (entry?: Entry): Promise<string> => {
-      const container = stubContainer();
+      const container = page();
       await new EntityForm({
         entity: passworded,
         entry,
@@ -246,7 +246,7 @@ describe('EntityForm', () => {
       language: string,
       memberSearch?: () => Promise<{ dn: string; label: string }[]>
     ): Promise<string> => {
-      const container = stubContainer();
+      const container = page();
       await new EntityForm({
         entity,
         translator: new Translator(language),
@@ -275,7 +275,7 @@ describe('EntityForm', () => {
     };
     expect(await render(sized, 'en'))
       .to.include(
-        '<p class="dc-hint" id="dc-hint-mailQuotaSize" data-hint>A size such as 4 GB, 500 MB or 100 KB</p>'
+        '<p class="dc-hint" id="dc-hint-mailQuotaSize" data-hint="">A size such as 4 GB, 500 MB or 100 KB</p>'
       )
       .and.not.include('xGB');
     expect(await render(sized, 'fr')).to.include(
@@ -686,7 +686,7 @@ describe('EntityForm', () => {
       });
 
     it('should fold what the schema does not require below what it does', async () => {
-      const container = stubContainer();
+      const container = page();
       await form(located).render(container);
       const html = container.innerHTML;
       const fold = html.indexOf('<details');
@@ -716,10 +716,10 @@ describe('EntityForm', () => {
     });
 
     it('should fold nothing when editing, nor in a short form', async () => {
-      const edited = stubContainer();
+      const edited = page();
       await form(located, { uid: 'va.val', cn: 'Va Val' }).render(edited);
       expect(edited.innerHTML).not.to.include('<details');
-      const short = stubContainer();
+      const short = page();
       await form(users).render(short);
       expect(short.innerHTML).not.to.include('<details');
     });
@@ -853,7 +853,7 @@ describe('EntityForm', () => {
       },
     };
     let asked = '';
-    const container = stubContainer();
+    const container = page();
     await new EntityForm({
       entity: delegates,
       entry: {
@@ -1352,7 +1352,7 @@ describe('EntityForm', () => {
     });
 
     it('should keep a plain token box when there is no search', async () => {
-      const container = stubContainer();
+      const container = page();
       await new EntityForm({
         entity: groups,
         entry: staff,
@@ -1541,7 +1541,7 @@ describe('EntityForm', () => {
     it('should build the form when the caller’s search throws', async () => {
       // Read as "no search": thrown from the constructor or from render,
       // it left the form half-built.
-      const container = stubContainer();
+      const container = page();
       await new EntityForm({
         entity: users,
         entry: { uid: 'bob' },
@@ -1560,7 +1560,7 @@ describe('EntityForm', () => {
   });
 
   it('should offer neither computed nor read-only attributes', async () => {
-    const container = stubContainer();
+    const container = page();
     await build().render(container);
     expect(container.innerHTML).to.not.include('data-field="uid"');
     expect(container.innerHTML).to.not.include(
@@ -1571,7 +1571,7 @@ describe('EntityForm', () => {
   });
 
   it('should show the hint under the field, not only on failure', async () => {
-    const container = stubContainer();
+    const container = page();
     await build().render(container);
     expect(container.innerHTML).to.include('Expected pattern 999 9999');
     expect(container.innerHTML).to.include('Expected an email address');
@@ -1599,7 +1599,7 @@ describe('EntityForm', () => {
         },
       },
     };
-    const container = stubContainer();
+    const container = page();
     await new EntityForm({
       entity: translated,
       translator: new Translator('fr'),
@@ -1617,7 +1617,7 @@ describe('EntityForm', () => {
   });
 
   it('should mark required fields and say what the mark means', async () => {
-    const container = stubContainer();
+    const container = page();
     await build().render(container);
     // The mark is markup, not the text of its tag.
     expect(container.innerHTML).to.include(
@@ -1658,7 +1658,7 @@ describe('EntityForm', () => {
   });
 
   it('should ask for a token list on a multi-valued attribute', async () => {
-    const container = stubContainer();
+    const container = page();
     await build().render(container);
     expect(container.innerHTML).to.include(
       'data-tokens="mailAlternateAddress"'
@@ -1683,7 +1683,7 @@ describe('EntityForm', () => {
         },
       },
     };
-    const container = stubContainer();
+    const container = page();
     await new EntityForm({
       entity: domains,
       translator: new Translator('en'),
@@ -1750,7 +1750,7 @@ describe('EntityForm', () => {
   });
 
   it('should not offer the identifier for editing once it exists', async () => {
-    const container = stubContainer();
+    const container = page();
     await build({ uid: 'jsmith', cn: 'John' }).render(container);
     expect(container.innerHTML).to.not.include('data-field="uid"');
   });
@@ -1758,7 +1758,7 @@ describe('EntityForm', () => {
   it('should prefill a field from a value the directory answered in another case', async () => {
     // The schema spells the attribute `cn`; a directory that answered `CN`
     // instead used to leave the field blank on an entry that has a name.
-    const container = stubContainer();
+    const container = page();
     await build({ uid: 'jsmith', CN: 'John Smith' }).render(container);
     expect(container.innerHTML).to.include('value="John Smith"');
   });

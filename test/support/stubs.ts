@@ -1,9 +1,7 @@
 /**
- * Hand-made stand-ins for what the console renders into, and a console built
- * with them: the unit suite has a DOM (test/support/dom.ts) but most of its
- * tests predate it and drive the code through these stubs, which record what
- * was written and answer the few DOM calls the code makes. New tests mount
- * into `document.body` instead (#221).
+ * What the tests share besides the DOM (test/support/dom.ts): the address
+ * the console asks, and a hoverless screen. A component is rendered into a
+ * real element now (`page()`), so no container stand-in is left (#221).
  */
 export const baseUrl = 'http://localhost:8099';
 
@@ -26,20 +24,4 @@ export function pretendHoverless(): () => void {
   return () => {
     window.matchMedia = media;
   };
-}
-
-/** What a real element answers when there is nothing under it. */
-function noElements(): NodeListOf<Element> {
-  return document.createElement('div').querySelectorAll('*');
-}
-
-/** Minimal stand-in for the element a component renders into. */
-export function stubContainer(): HTMLElement & { innerHTML: string } {
-  return {
-    innerHTML: '',
-    querySelector: () => null,
-    querySelectorAll: () => noElements(),
-    addEventListener: () => undefined,
-    removeEventListener: () => undefined,
-  } as unknown as HTMLElement & { innerHTML: string };
 }
