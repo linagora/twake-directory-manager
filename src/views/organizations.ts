@@ -149,7 +149,7 @@ export class OrganizationsView {
     if (id) {
       const node = { dn: id, name: id };
       await tree.reveal(id);
-      if (ctx.current(generation)) await this.show(node);
+      if (ctx.current(generation)) await this.show(node, generation);
       return;
     }
     // Opened on "Select an organization" beside a tree of one root, the page
@@ -160,7 +160,7 @@ export class OrganizationsView {
     if (!top) return;
     ctx.record(`organizations/${encodeURIComponent(top.dn)}`, true);
     tree.select(top.dn);
-    await this.show(top);
+    await this.show(top, generation);
   }
 
   /**
@@ -212,7 +212,10 @@ export class OrganizationsView {
   }
 
   /** Show one organization in the right-hand pane, tree still visible. */
-  private async show(node: OrganizationNode): Promise<void> {
+  private async show(
+    node: OrganizationNode,
+    generation?: number
+  ): Promise<void> {
     const { ctx } = this;
     const entities = ctx.entities();
     const entity = entities.find(item => item.kind === 'organization');
@@ -220,9 +223,11 @@ export class OrganizationsView {
     // another page took its place has nowhere to go.
     const holder = this.main?.querySelector<HTMLElement>('[data-org-detail]');
     if (!holder?.isConnected || !entity) return;
-    // Clicking through a tree is navigation like any other: the node asked
-    // for last is the node whose card should end up on screen.
-    const generation = ctx.ticket();
+    // A card drawn for the page belongs to that page's ticket: it must not
+    // take one of its own, which would drop the card a later page asks for
+    // (#257). A click in the tree is navigation like any other, and takes a
+    // ticket, so the node asked for last is the card on screen.
+    const ticket = generation ?? ctx.ticket();
     // Until its card is drawn, the tab no longer names the organization
     // shown before, but the page: a card that fails to load leaves it so.
     ctx.titlePage(ctx.plural(entity));
@@ -237,9 +242,9 @@ export class OrganizationsView {
     let entry: Entry;
     try {
       entry = await ctx.api.organization(node.dn);
-      if (!ctx.current(generation)) return;
+      if (!ctx.current(ticket)) return;
     } catch (err) {
-      if (!ctx.current(generation)) return;
+      if (!ctx.current(ticket)) return;
       const failure = readFailure(err, ctx.translator());
       render(
         holder,
@@ -265,7 +270,7 @@ export class OrganizationsView {
       ctx.attachedNames(),
       listEveryone ? this.holdsOthers(node.dn) : false,
     ]);
-    if (!ctx.current(generation)) return;
+    if (!ctx.current(ticket)) return;
 
     const rights = ctx.rights();
     const translator = ctx.translator();
