@@ -682,6 +682,10 @@ test.describe('USER user accounts', () => {
     await app.expectToast('Saved');
     await expect(card.detail('Delegates')).toContainText('dave');
     await expect(card.detail('Delegates')).toContainText('erin');
+    // Each delegate leads to their card, as Owners and Managers do (#267).
+    await expect(
+      card.detail('Delegates').getByRole('link', { name: 'dave' })
+    ).toHaveAttribute('href', '#/users/dave');
     expect(
       (await directory.values(user.dn, 'twakeDelegatedUsers')).sort()
     ).toEqual([
@@ -730,6 +734,11 @@ test.describe('USER user accounts', () => {
 
     await app.open(`users/${disabled.uid}`);
     await expect(card.detail('Status')).toHaveText('Disabled');
+    // The badge stays a badge: the state is a nomenclature pointer, not a
+    // link to the account state's page.
+    await expect(
+      card.detail('Status').locator('.dc-state-disabled')
+    ).toHaveText('Disabled');
     await card.changeStateTo('Active');
     await expect(card.detail('Status')).toHaveText('Active');
   });

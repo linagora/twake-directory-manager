@@ -512,7 +512,9 @@ describe('EntityDetail', () => {
       },
     };
     const owner = 'uid=sophie.martin,ou=users,dc=example,dc=com';
-    const card = (relationHref?: (dn: string) => string | undefined) => {
+    const card = (
+      relationHref?: (dn: string, primaryOnly?: boolean) => string | undefined
+    ) => {
       const container = stubContainer();
       new EntityDetail({
         entity: owned,
@@ -529,8 +531,13 @@ describe('EntityDetail', () => {
       }).render(container);
       return container.innerHTML;
     };
-    // A link, which a middle click opens in a new tab (#174).
-    expect(card(dn => `#/users/${rdnValue(dn)}`))
+    // A link, which a middle click opens in a new tab (#174). A role-based
+    // row keeps it even when the role-less filter would leave the target out.
+    expect(
+      card((dn, primaryOnly) =>
+        primaryOnly ? undefined : `#/users/${rdnValue(dn)}`
+      )
+    )
       .to.include(
         `<a href="#&#x2F;users&#x2F;sophie.martin" class="dc-link" data-relation="${owner}" title="${owner}">sophie.martin</a>`
       )
@@ -543,6 +550,104 @@ describe('EntityDetail', () => {
     expect(card()).to.include(
       '<span class="dc-value" title="not a dn">not a dn</span>'
     );
+  });
+
+  it('should lead to an account a pointer names with no role, as a delegate', () => {
+    // Delegates are pointers into the users' branch with no role: the card
+    // showed them as plain text beside owners and managers, which lead to
+    // their accounts (#267).
+    const delegated: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          ...users.schema.attributes,
+          twakeDelegatedUsers: {
+            type: 'array',
+            items: {
+              type: 'pointer',
+              branch: ['ou=users,dc=example,dc=com'],
+            },
+            label: { en: 'Delegates' },
+          },
+        },
+      },
+    };
+    const delegate = 'uid=alice,ou=users,dc=example,dc=com';
+    const card = (
+      relationHref?: (dn: string, primaryOnly?: boolean) => string | undefined
+    ): string => {
+      const container = stubContainer();
+      new EntityDetail({
+        entity: delegated,
+        entry: {
+          dn: 'uid=bob,ou=users,dc=example,dc=com',
+          uid: 'bob',
+          twakeDelegatedUsers: [delegate],
+        },
+        translator: new Translator('en'),
+        canWrite: true,
+        canDelete: true,
+        onEdit: () => undefined,
+        onDelete: () => undefined,
+        onStatus: () => undefined,
+        onResetPassword: () => undefined,
+        relationHref,
+      }).render(container);
+      return container.innerHTML;
+    };
+    // A link to the delegate's card, as Owners and Managers are.
+    expect(card(dn => `#/users/${rdnValue(dn)}`)).to.include(
+      `<a href="#&#x2F;users&#x2F;alice" class="dc-link" data-relation="${delegate}" title="${delegate}">alice</a>`
+    );
+    // An entry no page shows is named all the same, with no link to nowhere.
+    expect(card(() => undefined)).to.include(
+      `<span class="dc-value" title="${delegate}">alice</span>`
+    );
+    // A role-less pointer asks for a primary target: reference data, which
+    // the unfiltered address would reach, stays a name.
+    expect(
+      card((dn, primaryOnly) =>
+        primaryOnly ? undefined : `#/users/${rdnValue(dn)}`
+      )
+    ).to.include(`<span class="dc-value" title="${delegate}">alice</span>`);
+  });
+
+  it('should keep an account’s state a badge, not a link to its value', () => {
+    // The state is a pointer into the nomenclature: a relationHref that
+    // knows that entity must not turn Disabled into a link to its page.
+    const states = 'ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com';
+    const disabled = `cn=disabled,${states}`;
+    const stated: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          ...users.schema.attributes,
+          twakeAccountStatus: {
+            ...users.schema.attributes.twakeAccountStatus,
+            states: { disabled },
+          },
+        },
+      },
+    };
+    const container = stubContainer();
+    new EntityDetail({
+      entity: stated,
+      entry: { uid: 'bob', twakeAccountStatus: disabled },
+      translator: new Translator('en'),
+      canWrite: true,
+      canDelete: true,
+      onEdit: () => undefined,
+      onDelete: () => undefined,
+      onStatus: () => undefined,
+      onResetPassword: () => undefined,
+      pointerLabel: dn => (dn === disabled ? 'Disabled' : undefined),
+      relationHref: dn =>
+        dn === disabled ? '#/accountStatuses/disabled' : undefined,
+    }).render(container);
+    expect(container.innerHTML).to.include(
+      '<span class="dc-state dc-state-disabled">Disabled</span>'
+    );
+    expect(container.innerHTML).to.not.include('#&#x2F;accountStatuses');
   });
 
   it('should say how many related entries the list leaves out', () => {

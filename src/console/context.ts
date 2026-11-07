@@ -163,8 +163,12 @@ export interface ConsoleContext {
    * asked apart
    */
   readMembers(dn: string): Promise<AttachedEntries>;
-  /** The address of a related entry's card, in whichever entity owns its DN */
-  relationHref(dn: string): string | undefined;
+  /**
+   * The address of a related entry's card, in whichever entity owns its DN.
+   * `primaryOnly` leaves reference data out, for a pointer the schema stores
+   * without a role.
+   */
+  relationHref(dn: string, primaryOnly?: boolean): string | undefined;
   /** Claim…, at the end of each row listing what waits in transit */
   claimAction(): NonNullable<AttachedOptions['rowAction']>;
   /**

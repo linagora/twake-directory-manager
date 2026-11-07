@@ -319,7 +319,8 @@ export class OrganizationsView {
           window.location.hash = href;
         },
       }),
-      relationHref: (dn: string): string | undefined => ctx.relationHref(dn),
+      relationHref: (dn: string, primaryOnly?: boolean): string | undefined =>
+        ctx.relationHref(dn, primaryOnly),
       onEdit: (): void => {
         background(
           () => ctx.openOrganizationForm(entity, entry),

@@ -140,9 +140,10 @@ export interface DetailOptions {
   };
   /**
    * The address of a related entry's card, from its DN: none for an entry
-   * no page shows, which is then named without a link
+   * no page shows, which is then named without a link. `primaryOnly` leaves
+   * reference data out, for a pointer stored without a relation role.
    */
-  relationHref?(dn: string): string | undefined;
+  relationHref?(dn: string, primaryOnly?: boolean): string | undefined;
   /** Add the account to groups, when the caller may write it */
   onAddToGroups?: () => void;
   /** Add members to the group, when the caller may write it */
@@ -498,9 +499,24 @@ export class EntityDetail {
       return html`<a href="#/organizations/${encodeURIComponent(
         link
       )}" class="dc-path-link" title="${value}">${value}</a>`;
-    // An organization's managers and local administrators are accounts as
-    // well, and lead to them: who administers a branch was only a name.
-    if (RELATION_ROLES.some(role => hasRole(attr, role)) && isDnShaped(value))
+    // An account's state is a badge, not a link: it points into reference
+    // data. Kept out of the branch below even when a deployment puts the
+    // state somewhere linkable.
+    const state = accountState(entity, name, value);
+    // An entry this card points at leads to its card: a group's members and
+    // owners, an organization's managers and local administrators, and any
+    // other DN a schema stores without a role — an account's Delegates were
+    // plain text beside Owners and Managers that led to their accounts
+    // (#267). A pointer with no role leads into the tree and the entries
+    // attached to it only; reference data stays the name its card gives it.
+    // What no page shows stays a name, as before.
+    if (
+      !state &&
+      name !== entity.accountStatus &&
+      isDnShaped(value) &&
+      (RELATION_ROLES.some(role => hasRole(attr, role)) ||
+        this.options.relationHref?.(value, true))
+    )
       return this.relationLink(
         value,
         this.options.pointerLabel?.(value) || rdnValue(value),
@@ -518,7 +534,7 @@ export class EntityDetail {
       ownValueLabel(entity, name, value, language) ||
       displayValue(attr, value, this.options.pointerLabel, language);
     return html`<span class="dc-value" title="${value}">${stateMarkup(
-      accountState(entity, name, value),
+      state,
       shown
     )}</span>`;
   }

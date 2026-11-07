@@ -19,6 +19,7 @@ import {
   pointerLabel,
   rdnValue,
 } from '../format';
+import { splitEntities } from '../rights';
 import type { EntityDescriptor, Entry } from '../types';
 import type { ConsoleContext, Relations } from './context';
 
@@ -179,19 +180,34 @@ export function groupType(
 /**
  * The card of a related entry, in whichever entity owns its DN.
  *
+ * A role-less pointer gets the same answer only when it names an entry the
+ * administrator works in every day, through `primaryOnly`: reference data —
+ * positions, titles, account states, mail domains — is named by the entry it
+ * describes, not followed from it. Role-based rows keep their links even
+ * when their schema has no `organizationLink`.
+ *
  * @param entities the entities the directory serves
  * @param dn the related entry
- * @returns its address, none when no entity holds it
+ * @param primaryOnly leave out reference data, whose entries name the value
+ *   rather than lead from it
+ * @returns its address, none when no entity holds it or it is left out
  */
 export function relationHref(
   entities: EntityDescriptor[],
-  dn: string
+  dn: string,
+  primaryOnly = false
 ): string | undefined {
   const owner = entities.find(
     entity =>
       entity.base && dn.toLowerCase().endsWith(`,${entity.base.toLowerCase()}`)
   );
   if (!owner) return undefined;
+  if (primaryOnly && splitEntities(entities).reference.includes(owner))
+    return undefined;
+  // An organization's page takes its whole DN: the tree reveals the entry,
+  // where an id alone would open on a department named after its first RDN.
+  if (owner.kind === 'organization')
+    return `#/${owner.key}/${encodeURIComponent(dn)}`;
   // `rdnValue`, not a split on the first comma: `cn=Smith\, John,…` holds
   // one, and the truncated id it produced answered "no longer exists".
   const id = rdnValue(dn);
