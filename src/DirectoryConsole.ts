@@ -301,9 +301,10 @@ export class DirectoryConsole {
     });
 
     this.drawShell();
-    // The Overview reads it for its own section; any other first page has
-    // the banner count it.
-    this.refreshTransit();
+    // The Overview reads it for its own section, and the transit branch's
+    // page reads it as its card's members: no other first page has the
+    // banner count it.
+    if (!this.readsTransitOnPage()) this.refreshTransit();
     await this.renderMain();
   }
 
@@ -641,22 +642,26 @@ export class DirectoryConsole {
     const rights = this.rights;
     const transit = rights.transit;
     if (!transit || rights.administersNothing()) return null;
-    // Read again after every hand-over and claim: an answer arriving after
-    // a later one's is older, and must not count over it.
-    const read = ++this.transitReads;
-    let waiting: AttachedEntries | null;
     try {
-      waiting = await this.readMembers(transit);
+      // The read counts on the banner itself (see `readMembers`).
+      return await this.readMembers(transit);
     } catch {
-      waiting = null;
+      return null;
     }
-    if (read !== this.transitReads) return waiting;
+  }
+
+  /**
+   * Count what waits in transit on the banner, as the last answer to a read
+   * of the branch said, and leave the link's name alone meanwhile.
+   *
+   * @param waiting what the branch holds, or null when it could not be read
+   */
+  private countTransit(waiting: AttachedEntries | null): void {
     this.transitWaiting = waiting;
     const link = this.container?.querySelector<HTMLElement>(
       '[data-transit-link]'
     );
     if (link) link.textContent = this.transitLabel();
-    return waiting;
   }
 
   /**
@@ -668,6 +673,22 @@ export class DirectoryConsole {
    */
   private inTransit(entity: EntityDescriptor, entry: Entry): boolean {
     return this.rights.transitOf(entity, entry).inTransit;
+  }
+
+  /**
+   * Whether the first page reads the transit branch itself: the Overview
+   * lists it, and its own card lists its members, which counts it on the
+   * banner as well. Read once the shell is drawn, before the page is.
+   */
+  private readsTransitOnPage(): boolean {
+    if (this.route.view === 'dashboard') return true;
+    const transit = this.rights.transit;
+    return (
+      this.route.view === 'organizations' &&
+      !!transit &&
+      !!this.route.id &&
+      comparableDn(this.route.id) === comparableDn(transit)
+    );
   }
 
   /**
@@ -941,10 +962,32 @@ export class DirectoryConsole {
    * One answer for both shares one cap, and the count it gives says nothing
    * of which kind it cut.
    *
+   * The transit branch's answer also counts on the banner: its card lists
+   * the entries the banner would otherwise read the same subnodes for. A
+   * later read is the one that counts, whichever page asked.
+   *
    * @param dn the organization
    * @returns what the server listed
    */
   private async readMembers(dn: string): Promise<AttachedEntries> {
+    const transit = this.rights.transit;
+    const counting = !!transit && comparableDn(dn) === comparableDn(transit);
+    // Read again after every hand-over and claim, and by each page: an
+    // answer arriving after a later one's is older, and must not count over
+    // it.
+    const read = counting ? ++this.transitReads : 0;
+    try {
+      const answer = await this.requestMembers(dn);
+      if (counting && read === this.transitReads) this.countTransit(answer);
+      return answer;
+    } catch (err) {
+      if (counting && read === this.transitReads) this.countTransit(null);
+      throw err;
+    }
+  }
+
+  /** Read an organization's members, without counting the transit branch. */
+  private async requestMembers(dn: string): Promise<AttachedEntries> {
     const kinds = (['people', 'groups'] as const).map(kind => ({
       kind,
       objectClass: attachedClass(this.entities, kind),

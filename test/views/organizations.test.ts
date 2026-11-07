@@ -361,6 +361,15 @@ describe('views/organizations', () => {
   describe('the card', () => {
     const acme = `ou=Acme,${top}`;
     const salesDomain = `dc=sales,dc=example,dc=org,${domains}`;
+    /** Bob, handed over by another administrator: waiting in transit. */
+    const bob: Entry = {
+      dn: 'uid=bob,ou=users,dc=example,dc=com',
+      objectClass: ['top', 'twakeAccount'],
+      uid: 'bob',
+      displayName: 'Bob Schneider',
+      twakeDepartmentLink: transit,
+      twakeDepartmentPath: 'Transit',
+    };
     /** Acme, with a mail domain, its card opened; the domains answered so. */
     const acmeCard = async (
       domainsAnswer: [number, object]
@@ -383,6 +392,36 @@ describe('views/organizations', () => {
       Array.from(
         root.querySelectorAll<HTMLElement>('[data-org-detail] [title]')
       ).find(element => element.title === dn)?.textContent ?? undefined;
+
+    it('should read the transit branch once for its card and the banner', async () => {
+      // The banner counts the branch as the card lists it: one read serves
+      // both, rather than the same subnodes asked twice.
+      const { root, calls } = await page(of(transit), {
+        answers: server => {
+          server.get(attached(transit, 'twakeAccount')).reply(200, [bob]);
+        },
+      });
+      await shown(root, 'Transit');
+      const reads = (): number =>
+        callsOf(calls, 'organizationMembers').filter(call =>
+          call.startsWith(`organizationMembers(${transit},`)
+        ).length;
+      // One per class the card asks apart: the banner's ask shared it.
+      expect(reads()).to.equal(2);
+      await until(
+        () =>
+          root.querySelector('[data-transit-link]')?.textContent ===
+          'Transit (1)'
+      );
+      // Left and come back to, the branch is read afresh: nothing is kept
+      // from one page to the next.
+      const counted = reads();
+      click(root, `[data-tree] [data-select="${sales}"]`);
+      await shown(root, 'Sales');
+      click(root, `[data-tree] [data-select="${transit}"]`);
+      await shown(root, 'Transit');
+      expect(reads()).to.be.greaterThan(counted);
+    });
 
     it('should name a mail domain on a card the way the select does', async () => {
       // The card read `sales`, the RDN, where the form's select offered
