@@ -79,7 +79,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── shared/html.ts          html`…`, SafeHtml, render: the only way to the page
     ├── shared/background.ts    background(): work nobody waits for, reported
     ├── shared/dom.ts           escapeHtml and small DOM helpers
-    ├── console/shell.ts        the sidebar's markup (the frame moves here, #220)
+    ├── console/shell.ts        the frame's markup: sidebar, scope banner, main area, side panel
     ├── console/settings.ts     what the browser remembers: language, reference section, contrast
     ├── console/panel.ts        the overlay (panel, toast region, announcer), what Tab reaches in the panel,
     │                           PanelService: opening, closing, guards, what waits for the panel
