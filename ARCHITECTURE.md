@@ -73,7 +73,8 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── format.ts               labels, values, sizes, dates, refusals in words,
     │                           the id of an entry just created
     ├── i18n.ts                 Translator and the en/fr/mn catalogues
-    ├── session.ts              signing in again after a 401
+    ├── session.ts              signing in again after a 401, and the draft of
+    │                           the form open across it
         ├── rights.ts               Rights: what the scope lets the caller do, the one reader of Scope
     ├── shared/html.ts          html`…`, SafeHtml, render: the only way to the page
     ├── shared/background.ts    background(): work nobody waits for, reported
@@ -239,7 +240,9 @@ report)`; `DirectoryConsole.report` shows _Something went wrong: …_, logs
   when the server gave one, a structured `Refusal` (`code`, `attribute`,
   `value`, `domains`); a body that is not JSON never hides the status.
   `readFailure` and `explainRefusal` turn it into words for the reader; a `401` goes to `signInAgain`, guarded against a reload
-  loop.
+  loop. What the open form held is kept in `sessionStorage` first — recent,
+  for the same account, without a password — and offered back once signed in
+  again, never replayed.
 - **The supported ldap-rest range is declared.** `package.json` says it
   (`ldapRest.min` to `ldapRest.tested`, both 2.1.0 today); `npm run lint`
   runs `scripts/check-compat.mjs`, which holds the `Dockerfile` to the tested

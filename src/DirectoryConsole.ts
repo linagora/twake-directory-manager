@@ -30,7 +30,7 @@ import {
 } from './format';
 import { Translator } from './i18n';
 import { Rights, splitEntities } from './rights';
-import { signInAgain } from './session';
+import { saveDraft, signInAgain, takeDraft, type Draft } from './session';
 import type {
   Confirmation,
   AttachedEntries,
@@ -167,6 +167,11 @@ export class DirectoryConsole {
    * card finds as it was left
    */
   private listsView!: ListsView;
+  /**
+   * What the form open holds, asked when the server ends the session: none
+   * when no form is open. The actions register it when they open one.
+   */
+  private draftOf: (() => Draft | null) | null = null;
 
   /**
    * @param options what the page gives the console
@@ -178,6 +183,10 @@ export class DirectoryConsole {
     this.api =
       deps.api ?? new ConsoleApiClient(options.apiBaseUrl, options.apiPrefix);
     this.api.onSessionEnded = (): void => {
+      // What the form open holds is kept before the page goes: the reload
+      // would take it with the page (see `Draft`).
+      const draft = this.draftOf?.();
+      if (draft) saveDraft(draft);
       signInAgain();
     };
     this.translator = new Translator(options.language || storedLanguage());
@@ -306,6 +315,8 @@ export class DirectoryConsole {
     // banner count it.
     if (!this.readsTransitOnPage()) this.refreshTransit();
     await this.renderMain();
+    // A form a reload took away, once its draft was kept, is offered back.
+    await this.offerDraft();
   }
 
   /**
@@ -341,6 +352,9 @@ export class DirectoryConsole {
       readTransit: () => this.readTransit(),
       inTransit: (entity, entry) => this.inTransit(entity, entry),
       refreshTransit: () => this.refreshTransit(),
+      watchDraft: (ask): void => {
+        this.draftOf = ask;
+      },
       tree: () => this.organizationsView?.tree() ?? null,
       relations: (entity, entry, strict) =>
         readRelations(this.context, entity, entry, strict),
@@ -385,6 +399,25 @@ export class DirectoryConsole {
   }
 
   /* ---------------------------------------------------------------- routing */
+
+  /**
+   * Offer back the draft a form held when the session ended: its page, then
+   * its form, prefilled and said to be restored (see `FormActions.restore`).
+   * Taken once, and only for the account that kept it.
+   */
+  private async offerDraft(): Promise<void> {
+    const draft = takeDraft(this.rights.user);
+    if (!draft) return;
+    const entity = this.entities.find(item => item.key === draft.entity);
+    if (!entity) return;
+    if (draft.page && draft.page !== this.pageName()) this.go(draft.page);
+    await this.forms.restore(entity, draft);
+  }
+
+  /** The page the address names, after `#/`, as a draft records it. */
+  private pageName(): string {
+    return window.location.hash.replace(/^#\//, '');
+  }
 
   /**
    * Draw the page a new hash names. A side panel belongs to the page it was

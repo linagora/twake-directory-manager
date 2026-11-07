@@ -8,6 +8,7 @@
 
 import { isDomainBranch } from '../api/ConsoleApiClient';
 import { EntityForm } from '../components/EntityForm';
+import type { FormDraft } from '../components/formDraft';
 import type { ConsoleContext } from '../console/context';
 import {
   comparableDn,
@@ -16,11 +17,30 @@ import {
   explainRefusal,
   parentDn as parentOf,
   pointerLabel,
+  readFailure,
   rdnValue,
 } from '../format';
+import { forgetDraft, type Draft } from '../session';
 import { background } from '../shared/background';
 import { html, render } from '../shared/html';
 import type { EntityDescriptor, Entry } from '../types';
+
+/** What a form a draft was taken from is opened with again. */
+interface Kept {
+  draft: FormDraft;
+  notice: string;
+}
+
+/** What a form is opened for: where it goes, and what follows its creation. */
+interface Here {
+  preset?: Entry;
+  created?(): void;
+}
+
+/** The first value of an attribute, when there is one. */
+function firstValue(value: string | string[] | undefined): string | undefined {
+  return (Array.isArray(value) ? value[0] : value) || undefined;
+}
 
 /**
  * The create and edit forms, in the side panel. A class given the context,
@@ -43,7 +63,8 @@ export class FormActions {
   open(
     entity: EntityDescriptor,
     entry?: Entry,
-    here?: { preset: Entry; created(): void }
+    here?: Here,
+    kept?: Kept
   ): void {
     const { ctx } = this;
     // Organizations are written through their own endpoints, whatever offered
@@ -61,6 +82,8 @@ export class FormActions {
       entity,
       entry,
       preset: here?.preset,
+      draft: kept?.draft,
+      notice: kept?.notice,
       translator: ctx.translator(),
       typeAhead: (branch: string): boolean =>
         isDomainBranch(ctx.entities(), branch),
@@ -92,7 +115,10 @@ export class FormActions {
       externalMembers: ctx.api.externalMembers,
       teamMailboxesKeepDomain: ctx.api.teamMailboxesKeepDomain,
       fullNameFormat: ctx.api.fullNameFormat,
-      onCancel: (): void => ctx.panel.close(),
+      onCancel: (): void => {
+        forgetDraft();
+        ctx.panel.close();
+      },
       onSubmit: async (
         values: Record<string, string | string[]>,
         cleared: string[]
@@ -113,19 +139,21 @@ export class FormActions {
           if (entry) {
             // The entry as stored: what a membership change is diffed against.
             await ctx.api.update(entity, id, values, cleared, entry);
+            forgetDraft();
             counted();
             ctx.toast(t('save.done'));
             ctx.panel.close(true);
             await ctx.refresh();
           } else {
             const created = await ctx.api.create(entity, values);
+            forgetDraft();
             counted();
             const createdId = createdEntryId(entity, created, values);
             ctx.toast(this.createdToast(entity, values, createdId));
             // Created from an organization's card, the entry joins its table
             // there: the next one is often created right after it.
             const next = (): void => {
-              if (here) here.created();
+              if (here?.created) here.created();
               else
                 ctx.go(
                   createdId
@@ -169,6 +197,14 @@ export class FormActions {
       },
     });
 
+    // A 401 keeps what the form holds, and the console offers it back once
+    // signed in again (see `Draft`).
+    const link = entity.organizationLink;
+    const parent = link
+      ? firstValue(entryValue(here?.preset, link))
+      : undefined;
+    ctx.watchDraft(() => this.held(entity, form, entry, parent));
+
     ctx.panel.open(
       entry
         ? `${t('app.edit')} — ${ctx.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
@@ -179,6 +215,85 @@ export class FormActions {
       },
       !form.wantsPanel
     );
+  }
+
+  /**
+   * What a form holds, to keep across a sign-in again: its page, its entity,
+   * whether it edits an entry or creates one, the entry when it edits and the
+   * organization a creation goes under, and the fields changed. Null once the
+   * form is closed, for nothing to be kept.
+   *
+   * @param entity the entity the form writes
+   * @param form the form open
+   * @param entry the entry edited; none for a creation
+   * @param parent the organization a creation goes under, when it says
+   * @returns the draft, or null
+   */
+  private held(
+    entity: EntityDescriptor,
+    form: EntityForm,
+    entry?: Entry,
+    parent?: string
+  ): Draft | null {
+    if (!form.isShown()) return null;
+    const dn = entry?.dn ? String(entry.dn) : parent;
+    return {
+      at: Date.now(),
+      user: this.ctx.rights().user,
+      page: window.location.hash.replace(/^#\//, ''),
+      entity: entity.key,
+      ...(entry ? { edit: true } : {}),
+      ...(dn ? { dn } : {}),
+      ...form.draft(),
+    };
+  }
+
+  /**
+   * Open again the form a draft was taken from, on the page it was opened on,
+   * with what it held and a notice to check it before saving: the entry read
+   * again when the form edited one, the organization a creation goes under
+   * kept.
+   *
+   * @param entity the entity the form writes
+   * @param draft what the form held, once its page is back
+   */
+  async restore(entity: EntityDescriptor, draft: Draft): Promise<void> {
+    const { ctx } = this;
+    const kept: Kept = {
+      draft: { values: draft.values, cleared: draft.cleared },
+      notice: ctx.t('form.draftRestored'),
+    };
+    try {
+      if (!draft.edit) {
+        const link = entity.organizationLink;
+        const preset: Entry = link && draft.dn ? { [link]: draft.dn } : {};
+        if (entity.kind === 'organization')
+          this.openOrganization(entity, undefined, draft.dn, kept);
+        else this.open(entity, undefined, { preset }, kept);
+        return;
+      }
+      if (entity.kind === 'organization')
+        this.openOrganization(
+          entity,
+          await ctx.api.organization(String(draft.dn)),
+          undefined,
+          kept
+        );
+      else
+        this.open(
+          entity,
+          await ctx.api.get(entity, String(draft.dn)),
+          undefined,
+          kept
+        );
+    } catch (err) {
+      ctx.toast(
+        ctx.t('form.draftLost', {
+          reason: readFailure(err, ctx.translator()).message,
+        }),
+        true
+      );
+    }
   }
 
   /**
@@ -196,7 +311,8 @@ export class FormActions {
   openOrganization(
     entity: EntityDescriptor,
     entry?: Entry,
-    parentDn?: string
+    parentDn?: string,
+    kept?: Kept
   ): void {
     const { ctx } = this;
     const t = ctx.t;
@@ -217,6 +333,8 @@ export class FormActions {
       entity,
       entry,
       translator: ctx.translator(),
+      draft: kept?.draft,
+      notice: kept?.notice,
       typeAhead: (branch: string): boolean =>
         isDomainBranch(ctx.entities(), branch),
       // The organization the new one goes under, or the one an edited one
@@ -243,13 +361,19 @@ export class FormActions {
             query: string
           ) => Promise<{ dn: string; label: string; token?: string }[]>)
         | undefined => ctx.api.pointerSearch(branch, ctx.entities(), failed),
-      onCancel: (): void => ctx.panel.close(),
+      onCancel: (): void => {
+        forgetDraft();
+        ctx.panel.close();
+      },
       onSubmit: (
         values: Record<string, string | string[]>,
         cleared: string[]
       ): Promise<void> =>
         this.submitOrganization(entity, values, cleared, entry, parent(), form),
     });
+
+    // A 401 keeps what the form holds, the parent picked included.
+    ctx.watchDraft(() => this.held(entity, form, entry, parent()));
 
     ctx.panel.open(
       entry
@@ -325,6 +449,7 @@ export class FormActions {
       if (entry?.dn) {
         const dn = String(entry.dn);
         await ctx.api.updateOrganization(dn, values, cleared);
+        forgetDraft();
         ctx.toast(t('save.done'));
         ctx.panel.close(true);
         // Its parent's children are read again, for a changed name. The
@@ -337,6 +462,7 @@ export class FormActions {
         if (tree) await tree.refresh(parent ?? undefined).catch(() => []);
       } else {
         await ctx.api.createOrganization(values, parentDn);
+        forgetDraft();
         ctx.toast(
           this.createdToast(
             entity,
