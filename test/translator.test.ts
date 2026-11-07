@@ -4,9 +4,9 @@ import { EntityImport } from '../src/components/EntityImport';
 import { attributeLabel, resolveText } from '../src/format';
 import { createLabel } from '../src/console/labels';
 import { Translator, availableLanguages } from '../src/i18n';
-import type { SafeHtml } from '../src/shared/html';
-import type { Entry } from '../src/types';
+import type { EntityDescriptor, Entry } from '../src/types';
 import { usersSchema, users, groups } from './fixtures/entities';
+import { drivenImport } from './support/importer';
 
 describe('Translator', () => {
   it('should fall back to English for an unknown language', () => {
@@ -88,164 +88,168 @@ describe('Translator', () => {
     expect(root.innerHTML).to.equal(drawn);
   });
 
-  it('should say the accounts it created have no password', () => {
+  it('should say the accounts it created have no password', async () => {
     // "2 created" hid that their owners could not sign in yet (#164), and
     // a Password column left empty creates them without one as well.
-    const importer = new EntityImport({
-      entity: { ...users, password: 'userPassword' },
-      translator: new Translator('en'),
-      pointerOptions: () => Promise.resolve([]),
-      create: () => Promise.resolve(),
-      onDone: () => undefined,
-      onClose: () => undefined,
-    });
-    const state = importer as unknown as {
-      created: number;
-      successes: { row: { values: Record<string, string> }; id: string }[];
-      doneMarkup(): SafeHtml;
+    const sales = 'ou=Sales,ou=organization,dc=example,dc=com';
+    const importing = async (
+      content: string,
+      mapping: string[]
+    ): Promise<HTMLElement> => {
+      const driven = drivenImport({
+        entity: { ...users, password: 'userPassword' },
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([{ dn: sales, label: 'Sales' }]),
+        create: () => Promise.resolve(),
+        onDone: () => undefined,
+        onClose: () => undefined,
+      });
+      await driven.choose(content);
+      await driven.map(mapping);
+      await driven.check();
+      await driven.run();
+      return driven.root;
     };
-    const created = (
-      password?: string
-    ): { row: { values: Record<string, string> }; id: string } => ({
-      row: { values: password ? { userPassword: password } : {} },
-      id: 'x',
-    });
-    state.created = 2;
-    state.successes = [created(), created()];
-    expect(state.doneMarkup().markup).to.include(
+    const without = await importing(
+      'Name,Mail,Department\nAlice,alice@example.com,Sales\nBob,bob@example.com,Sales\n',
+      ['cn', 'mail', 'twakeDepartmentLink']
+    );
+    expect(without.innerHTML).to.include(
       '2 accounts were created without a password: give each one from its card (Reset password)'
     );
-    state.successes = [created('Typed-1!'), created('Typed-2!')];
-    expect(state.doneMarkup().markup).to.not.include('without a password');
-    state.successes = [created('Typed-1!'), created()];
-    expect(state.doneMarkup().markup).to.include(
+    const withPasswords = await importing(
+      'Name,Mail,Department,Password\nAlice,alice@example.com,Sales,Typed-1!\nBob,bob@example.com,Sales,Typed-2!\n',
+      ['cn', 'mail', 'twakeDepartmentLink', 'userPassword']
+    );
+    expect(withPasswords.innerHTML).to.not.include('without a password');
+    const one = await importing(
+      'Name,Mail,Department,Password\nAlice,alice@example.com,Sales,Typed-1!\nBob,bob@example.com,Sales,\n',
+      ['cn', 'mail', 'twakeDepartmentLink', 'userPassword']
+    );
+    expect(one.innerHTML).to.include(
       '1 account was created without a password: give it one from its card'
     );
   });
 
-  it('should say the import counts of one in the singular', () => {
-    const importer = new EntityImport({
+  it('should say the import counts of one in the singular', async () => {
+    const sales = 'ou=Sales,ou=organization,dc=example,dc=com';
+    const driven = drivenImport({
       entity: users,
       translator: new Translator('fr'),
-      pointerOptions: () => Promise.resolve([]),
+      pointerOptions: () => Promise.resolve([{ dn: sales, label: 'Sales' }]),
       create: () => Promise.resolve(),
       onDone: () => undefined,
       onClose: () => undefined,
     });
-    const state = importer as unknown as {
-      rows: {
-        line: number;
-        cells: string[];
-        values: object;
-        errors: string[];
-      }[];
-      reviewMarkup(): SafeHtml;
-    };
-    state.rows = [
-      { line: 2, cells: [], values: {}, errors: [] },
-      { line: 3, cells: [], values: {}, errors: ['Nom est obligatoire'] },
-    ];
-    expect(state.reviewMarkup().markup)
+    // One row with no name, refused before the server sees it; one ready.
+    await driven.choose(
+      'Nom;Mail;Organisation\n;alice@example.com;Sales\nBob;bob@example.com;Sales\n'
+    );
+    await driven.map(['cn', 'mail', 'twakeDepartmentLink']);
+    await driven.check();
+    expect(driven.root.innerHTML)
       .to.contain('prête à importer<')
       .and.contain('en erreur, non importée<')
       .and.contain('Importer 1 entrée<');
   });
 
   it('should name a field the server refused on import by its label', async () => {
-    const importer = new EntityImport({
+    const sales = 'ou=Sales,ou=organization,dc=example,dc=com';
+    const driven = drivenImport({
       entity: users,
       translator: new Translator('fr'),
-      pointerOptions: () => Promise.resolve([]),
+      pointerOptions: () => Promise.resolve([{ dn: sales, label: 'Sales' }]),
       create: () =>
         Promise.reject(new Error('Attribute "cn" must not be empty')),
       onDone: () => undefined,
       onClose: () => undefined,
     });
-    const state = importer as unknown as {
-      rows: {
-        line: number;
-        cells: string[];
-        values: object;
-        errors: string[];
-      }[];
-      failures: { message: string }[];
-      run(): Promise<void>;
-    };
-    state.rows = [{ line: 2, cells: [], values: {}, errors: [] }];
-    await state.run();
-    expect(state.failures.map(failure => failure.message)).to.deep.equal([
-      'Attribute "Nom" must not be empty',
-    ]);
+    await driven.choose(
+      'Nom;Mail;Organisation\nAlice;alice@example.com;Sales\n'
+    );
+    await driven.map(['cn', 'mail', 'twakeDepartmentLink']);
+    await driven.check();
+    await driven.run();
+    expect(
+      Array.from(
+        driven.root.querySelectorAll('.dc-import-problems .dc-import-message')
+      ).map(message => message.textContent)
+    ).to.deep.equal(['Attribute "Nom" must not be empty']);
   });
 
   it('should say a refused row in the interface language, as a form does', async () => {
-    const refusals = [
-      Object.assign(new Error('user: "alice@example.com" is already used'), {
-        status: 409,
-        refusal: {
-          code: 'unique',
-          attribute: 'mail',
-          value: 'alice@example.com',
+    const sales = 'ou=Sales,ou=organization,dc=example,dc=com';
+    const forbidden = (): Error =>
+      Object.assign(new Error('Token does not have permission'), {
+        status: 403,
+        refusal: { code: 'forbidden' },
+      });
+    const refusals: Record<string, Error> = {
+      'alice@example.com': Object.assign(
+        new Error('user: "alice@example.com" is already used'),
+        {
+          status: 409,
+          refusal: {
+            code: 'unique',
+            attribute: 'mail',
+            value: 'alice@example.com',
+          },
+        }
+      ),
+      'eva@example.com': forbidden(),
+      'gilles@example.com': Object.assign(
+        new Error('Attribute "cn" must not be empty'),
+        { status: 400 }
+      ),
+      'fay@example.com': forbidden(),
+      'gil@example.com': forbidden(),
+    };
+    // The department is not what this test is about: a row attached to none
+    // is judged on the entry it would create.
+    const optional: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          ...users.schema.attributes,
+          twakeDepartmentLink: {
+            ...users.schema.attributes.twakeDepartmentLink,
+            required: false,
+          },
         },
-      }),
-      Object.assign(new Error('Token does not have permission'), {
-        status: 403,
-        refusal: { code: 'forbidden' },
-      }),
-      Object.assign(new Error('Attribute "cn" must not be empty'), {
-        status: 400,
-      }),
-      Object.assign(new Error('Token does not have permission'), {
-        status: 403,
-        refusal: { code: 'forbidden' },
-      }),
-      Object.assign(new Error('Token does not have permission'), {
-        status: 403,
-        refusal: { code: 'forbidden' },
-      }),
-    ];
-    const importer = new EntityImport({
-      entity: users,
+      },
+    };
+    const driven = drivenImport({
+      entity: optional,
       translator: new Translator('fr'),
-      pointerOptions: () => Promise.resolve([]),
-      create: () => Promise.reject(refusals.shift()),
+      pointerOptions: () =>
+        Promise.resolve([
+          { dn: sales, label: 'Sales' },
+          // The file names the organization as the form shows it.
+          { dn: sales, label: 'Acme / Sales' },
+        ]),
+      create: values => {
+        const mail = Array.isArray(values.mail) ? values.mail[0] : values.mail;
+        return Promise.reject(refusals[mail]);
+      },
       onDone: () => undefined,
       onClose: () => undefined,
     });
-    const state = importer as unknown as {
-      rows: {
-        line: number;
-        cells: string[];
-        values: object;
-        errors: string[];
-      }[];
-      failures: { message: string }[];
-      mapping: string[];
-      run(): Promise<void>;
-    };
-    const sales = 'ou=Sales,ou=organization,dc=example,dc=com';
-    state.mapping = ['cn', 'twakeDepartmentLink'];
-    state.rows = [
-      { line: 2, cells: [], values: {}, errors: [] },
-      { line: 3, cells: [], values: { cn: 'Eva Ernst' }, errors: [] },
-      { line: 4, cells: [], values: {}, errors: [] },
-      // A new entry is judged on the organization it goes to: that one is
-      // named, as the file names it, else by its RDN.
-      {
-        line: 5,
-        cells: ['Fay Fox', 'Acme / Sales'],
-        values: { cn: 'Fay Fox', twakeDepartmentLink: sales },
-        errors: [],
-      },
-      {
-        line: 6,
-        cells: ['Gil Gray'],
-        values: { cn: 'Gil Gray', twakeDepartmentLink: sales },
-        errors: [],
-      },
-    ];
-    await state.run();
-    expect(state.failures.map(failure => failure.message)).to.deep.equal([
+    await driven.choose(
+      'Nom;Mail;Organisation\n' +
+        'Alice;alice@example.com;Sales\n' +
+        'Eva Ernst;eva@example.com;\n' +
+        'Gilles;gilles@example.com;\n' +
+        'Fay Fox;fay@example.com;Acme / Sales\n' +
+        'Gil Gray;gil@example.com;Sales\n'
+    );
+    await driven.map(['cn', 'mail', 'twakeDepartmentLink']);
+    await driven.check();
+    await driven.run();
+    expect(
+      Array.from(
+        driven.root.querySelectorAll('.dc-import-problems .dc-import-message')
+      ).map(message => message.textContent)
+    ).to.deep.equal([
       'Mail « alice@example.com » : déjà utilisé par une autre entrée.',
       'Vous n’administrez pas Eva Ernst : cette modification ne vous revient pas.',
       'Le serveur a refusé : Attribute "Nom" must not be empty',
@@ -263,41 +267,37 @@ describe('Translator', () => {
       // An answer naming nothing: the row's identifier names it
       undefined,
     ];
-    const importer = new EntityImport({
-      entity: users,
+    const entity: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          uid: { type: 'string', role: 'identifier' },
+          cn: { type: 'string', role: 'displayName' },
+          mail: { type: 'string', role: 'primaryEmail' },
+        },
+      },
+    };
+    const driven = drivenImport({
+      entity,
       translator: new Translator('en'),
       pointerOptions: () => Promise.resolve([]),
       create: values =>
-        Promise.resolve(createdEntryId(users, answers.shift(), values)),
+        Promise.resolve(createdEntryId(entity, answers.shift(), values)),
       onDone: created => done.push(created),
       onClose: () => undefined,
     });
-    const state = importer as unknown as {
-      rows: {
-        line: number;
-        cells: string[];
-        values: object;
-        errors: string[];
-      }[];
-      run(): Promise<void>;
-      doneMarkup(): SafeHtml;
-    };
-    state.rows = [
-      {
-        line: 2,
-        cells: [],
-        values: { mail: 'alice@example.com', cn: 'Alice Martin' },
-        errors: [],
-      },
-      { line: 3, cells: [], values: { uid: 'bob' }, errors: [] },
-    ];
-    await state.run();
-    const markup = state.doneMarkup().markup;
-    expect(markup)
-      .to.contain('href="#&#x2F;users&#x2F;amartin">Alice Martin</a>')
+    await driven.choose(
+      'Mail,Name,Identifier\nalice@example.com,Alice Martin,\n,,bob\n'
+    );
+    await driven.map(['mail', 'cn', 'uid']);
+    await driven.check();
+    await driven.run();
+    const created = driven.root.querySelector('.dc-import-created');
+    expect(created?.innerHTML)
+      .to.contain('href="#/users/amartin">Alice Martin</a>')
       .and.contain('(amartin)')
       // Named by its identifier alone, not twice
-      .and.contain('href="#&#x2F;users&#x2F;bob">bob</a></td>');
+      .and.contain('href="#/users/bob">bob</a></td>');
     expect(done).to.deep.equal([['amartin', 'bob']]);
   });
 

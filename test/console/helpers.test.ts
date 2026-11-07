@@ -14,7 +14,7 @@ import {
   writesEntry,
 } from '../../src/rights';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
-import { baseUrl, stubContainer, treeContainer } from '../support/stubs';
+import { baseUrl, stubContainer } from '../support/stubs';
 import { users, groups, mailboxTypes } from '../fixtures/entities';
 
 describe('DirectoryConsole helpers', () => {
@@ -439,7 +439,8 @@ describe('DirectoryConsole helpers', () => {
     });
 
     it('should mark the transit branch where it stands in the tree', async () => {
-      const container = treeContainer();
+      const container = document.createElement('div');
+      document.body.append(container);
       await new OrganizationTree({
         translator: new Translator('en'),
         root: async () => ({ dn: top, name: 'organization' }),
