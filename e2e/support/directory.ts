@@ -120,11 +120,31 @@ export class Directory {
 
   async #ldap(): Promise<Client> {
     if (this.#client === null) {
-      const client = new Client({ url: `ldap://${stack().ldap}:389` });
+      const client = new Client({
+        url: `ldap://${stack().ldap}:${stack().ldapPort}`,
+      });
       await client.bind(BIND_DN, BIND_PASSWORD);
       this.#client = client;
     }
     return this.#client;
+  }
+
+  /**
+   * Whether the directory's schema defines an attribute type: some ppolicy
+   * fields exist from OpenLDAP 2.5 only, so what the form offers depends on the
+   * stack's image (#118).
+   */
+  async defines(attribute: string): Promise<boolean> {
+    const { searchEntries } = await (
+      await this.#ldap()
+    ).search('cn=subschema', {
+      scope: 'base',
+      filter: '(objectClass=subschema)',
+      attributes: ['attributeTypes'],
+    });
+    const types = searchEntries[0]?.attributeTypes;
+    const list = Array.isArray(types) ? types : [types ?? ''];
+    return list.some(type => String(type).includes(`NAME '${attribute}'`));
   }
 
   /** Registers an entry for removal after the test (removed in the reverse order) */

@@ -1,0 +1,7 @@
+# The naming context a 2.6 image leaves out when its default tree is skipped:
+# start.sh adds it before the seed, which fills what hangs under it (#230).
+dn: dc=example,dc=com
+objectClass: dcObject
+objectClass: organization
+dc: example
+o: Example Corp

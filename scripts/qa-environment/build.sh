@@ -1,7 +1,8 @@
 #!/bin/bash
 #
 # Builds the console image start.sh runs, from the working tree, with the release Dockerfile
-# (ldap-rest + the console), and pulls the OpenLDAP and Dex images.
+# (ldap-rest + the console), and pulls the OpenLDAP and Dex images. OpenLDAP is 2.6 by default;
+# QA_LDAP_IMAGE=osixia/openldap:1.5.0 pulls the 2.4 image of the compatibility check (#118).
 #
 #   scripts/qa-environment/build.sh    # once, and whenever the code under test changes
 #   LDAP_REST_IMAGE=ldap-rest:local scripts/qa-environment/build.sh   # on another ldap-rest
@@ -19,6 +20,6 @@ fi
 docker build "${build_args[@]}" -t twake-directory-manager-qa -f "$REPO_DIR/Dockerfile" "$REPO_DIR"
 
 # Pinned tags: a local copy is as good when the registry does not answer
-for image in "${QA_LDAP_IMAGE:-osixia/openldap:1.5.0}" ghcr.io/dexidp/dex:v2.41.1; do
+for image in "${QA_LDAP_IMAGE:-bitnamilegacy/openldap:2.6.10}" ghcr.io/dexidp/dex:v2.41.1; do
   docker pull -q "$image" || docker image inspect "$image" >/dev/null
 done
