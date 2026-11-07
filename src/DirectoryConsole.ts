@@ -10,11 +10,7 @@
  * @module twake-directory-manager/DirectoryConsole
  */
 
-import {
-  ConsoleApiClient,
-  isLarge,
-  roleAttribute,
-} from './api/ConsoleApiClient';
+import { ConsoleApiClient, roleAttribute } from './api/ConsoleApiClient';
 import {
   applyContrast,
   frameMarkup,
@@ -22,15 +18,12 @@ import {
   scopeMarkup,
   sidebarMarkup,
 } from './console/shell';
-import { attachedClass, attachedEntity } from './components/AttachedTables';
+import { attachedClass } from './components/AttachedTables';
 import {
   comparableDn,
   entryValue,
   isDnShaped,
-  ownValueLabel,
-  pointerLabel,
   rdnValue,
-  resolveText,
   withinDn,
 } from './format';
 import { Translator } from './i18n';
@@ -49,6 +42,7 @@ import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render } from './shared/html';
 import type { ConsoleContext } from './console/context';
 import { createLabel } from './console/labels';
+import { Names } from './console/names';
 import { consoleReporter } from './console/report';
 import type { ConsoleDeps } from './console/deps';
 import { DialogService } from './console/dialog';
@@ -177,6 +171,8 @@ export class DirectoryConsole {
    * when no form is open. The actions register it when they open one.
    */
   private draftOf: (() => Draft | null) | null = null;
+  /** What the console calls things, as views ask (see `Names`). */
+  private names!: Names;
 
   /**
    * @param options what the page gives the console
@@ -225,6 +221,11 @@ export class DirectoryConsole {
     this.mounted.abort();
     this.mounted = new AbortController();
     const { signal } = this.mounted;
+    this.names = new Names({
+      api: this.api,
+      entities: (): EntityDescriptor[] => this.entities,
+      translator: (): Translator => this.translator,
+    });
     this.context = this.contextOf();
     this.passwords = new PasswordActions(this.context);
     this.states = new StateActions(this.context);
@@ -346,11 +347,13 @@ export class DirectoryConsole {
       main: () => this.main(),
       entities: () => this.entities,
       account: () => this.account,
-      personName: (entity, entry, id) => this.personName(entity, entry, id),
+      personName: (entity, entry, id) =>
+        this.names.personName(entity, entry, id),
       submittedName: (entity, values, id) =>
-        this.submittedName(entity, values, id),
-      entryName: (entity, id) => this.entryName(entity, id),
-      roleValue: (entity, entry, role) => this.roleValue(entity, entry, role),
+        this.names.submittedName(entity, values, id),
+      entryName: (entity, id) => this.names.entryName(entity, id),
+      roleValue: (entity, entry, role) =>
+        this.names.roleValue(entity, entry, role),
       go: path => this.go(path),
       record: (path, replace) => this.record(path, replace),
       route: () => this.route,
@@ -387,9 +390,9 @@ export class DirectoryConsole {
       createLabel: entity => createLabel(this.translator, entity),
       givePassword: (entity, values, id, next, own) =>
         this.passwords.give(entity, values, id, next, own),
-      plural: entity => this.plural(entity),
-      pointerNames: entity => this.pointerNames(entity),
-      attachedNames: () => this.attachedNames(),
+      plural: entity => this.names.plural(entity),
+      pointerNames: entity => this.names.pointerNames(entity),
+      attachedNames: () => this.names.attachedNames(),
       readMembers: dn => this.readMembers(dn),
       relationHref: (dn, primaryOnly) =>
         relationHref(this.entities, dn, primaryOnly),
@@ -517,7 +520,7 @@ export class DirectoryConsole {
           t,
           primary: primary.map(entity => ({
             key: entity.key,
-            label: this.plural(entity),
+            label: this.names.plural(entity),
           })),
           reference: settings,
           language: this.translator.language,
@@ -770,24 +773,6 @@ export class DirectoryConsole {
   }
 
   /**
-   * What to call a collection: the schema's label in the current language,
-   * falling back to the name the schema gives it.
-   *
-   * @param entity entity to name
-   * @returns the plural name to show
-   */
-  private plural(entity: EntityDescriptor): string {
-    return (
-      resolveText(entity.label, this.translator.language) ||
-      // The organization tree is the one collection the product itself names,
-      // because it is the product that draws it.
-      (entity.kind === 'organization'
-        ? this.translator.t('tree.title')
-        : entity.pluralName)
-    );
-  }
-
-  /**
    * Whether the caller manages the password policies. Who holds them is the
    * server's rule (`--authz-global-branches`), outside the tree the scope's
    * branches name, so the scope says it in `passwordPolicies`. Only a server
@@ -860,7 +845,7 @@ export class DirectoryConsole {
     return [
       ...reference.map(entity => ({
         key: entity.key,
-        label: this.plural(entity),
+        label: this.names.plural(entity),
       })),
       ...(this.rights.managesPolicies()
         ? [{ key: POLICIES_KEY, label: this.translator.t('nav.policies') }]
@@ -898,21 +883,6 @@ export class DirectoryConsole {
   private titlePage(name?: string): void {
     if (typeof document === 'undefined' || !this.pageTitle) return;
     document.title = name ? `${name} — ${this.pageTitle}` : this.pageTitle;
-  }
-
-  /**
-   * Readable names of what the attached entries point at — a position, a
-   * state, a type of group — read for both the accounts and the groups.
-   */
-  private async attachedNames(): Promise<(dn: string) => string | undefined> {
-    const named = await Promise.all(
-      (['people', 'groups'] as const)
-        .map(kind => attachedEntity(this.entities, kind))
-        .filter((entity): entity is EntityDescriptor => !!entity)
-        .map(entity => this.pointerNames(entity))
-    );
-    return (dn: string): string | undefined =>
-      named.map(name => name(dn)).find(Boolean);
   }
 
   /**
@@ -996,61 +966,6 @@ export class DirectoryConsole {
     this.forms.open(entity, entry, here);
   }
 
-  /**
-   * How a card or a list names the entries an entity's pointers land on.
-   *
-   * A schema names a nomenclature's values itself, and `pointerLabel` reads
-   * them there. An entry that carries its own name — a mail domain, stored
-   * as `dc=sales` and called `sales.example.org` — has to be read:
-   * its branch is listed, as the form's select lists it, when its entity
-   * marks a display name and is small enough to list. Read on every view
-   * rather than kept, so a domain renamed a moment ago reads renamed. A
-   * branch that cannot be read leaves its entries named by their RDN.
-   *
-   * @param entity the entity whose entries are shown
-   * @returns the names, by DN, falling back on the schema's
-   */
-  private async pointerNames(
-    entity: EntityDescriptor
-  ): Promise<(dn: string) => string | undefined> {
-    const { language } = this.translator;
-    const branches = new Set<string>();
-    for (const attr of Object.values(entity.schema.attributes)) {
-      if (attr.type !== 'pointer' && attr.items?.type !== 'pointer') continue;
-      for (const branch of attr.branch || attr.items?.branch || []) {
-        const owner = this.entities.find(
-          candidate =>
-            candidate.base &&
-            comparableDn(candidate.base) === comparableDn(branch)
-        );
-        if (
-          owner &&
-          !isLarge(owner) &&
-          roleAttribute(owner.schema, 'displayName')
-        )
-          branches.add(owner.base);
-      }
-    }
-    const names = new Map<string, string>();
-    await Promise.all(
-      [...branches].map(async branch => {
-        try {
-          const options = await this.api.pointerOptions(
-            branch,
-            this.entities,
-            language
-          );
-          for (const { dn, label } of options)
-            names.set(comparableDn(dn), label);
-        } catch {
-          // Named by their RDN, as before the branch was read.
-        }
-      })
-    );
-    return (dn: string): string | undefined =>
-      names.get(comparableDn(dn)) ?? pointerLabel(this.entities, dn, language);
-  }
-
   /* --------------------------------------------------------------- actions */
 
   /**
@@ -1063,81 +978,6 @@ export class DirectoryConsole {
     name = id
   ): Promise<void> {
     return this.transits.claim(entity, id, name);
-  }
-
-  /**
-   * An entry named as its card and its list name it: a nomenclature's by the
-   * label its schema gives it, _Members only_ for `memberRestrictedList`.
-   *
-   * @param entity the entity the entry belongs to
-   * @param id the entry's main attribute value
-   * @returns the name
-   */
-  private entryName(entity: EntityDescriptor, id: string): string {
-    return (
-      ownValueLabel(
-        entity,
-        entity.mainAttribute,
-        id,
-        this.translator.language
-      ) || id
-    );
-  }
-
-  /**
-   * A new entry named by its full name, else as its card names it.
-   *
-   * @param entity the entity the entry belongs to
-   * @param values what the form sent
-   * @param id the entry's main attribute value; empty when unknown
-   * @returns the name, empty when the form gave none
-   */
-  private submittedName(
-    entity: EntityDescriptor,
-    values: Record<string, string | string[]>,
-    id: string
-  ): string {
-    const display = roleAttribute(entity.schema, 'displayName');
-    const full = display ? values[display] : undefined;
-    return (
-      (Array.isArray(full) ? full[0] : full)?.trim() ||
-      (id ? this.entryName(entity, id) : '')
-    );
-  }
-
-  /*
-   * A person as a colleague names them: their full name, else the name
-   * {@link entryName} gives.
-   */
-  private personName(
-    entity: EntityDescriptor,
-    entry: Entry,
-    id: string
-  ): string {
-    const display = roleAttribute(entity.schema, 'displayName');
-    const full = display
-      ? [entryValue(entry, display) ?? []].flat()[0]
-      : undefined;
-    return full && String(full).trim()
-      ? String(full).trim()
-      : this.entryName(entity, id);
-  }
-
-  /**
-   * The first value of the attribute playing a role, trimmed.
-   *
-   * @returns the value, or undefined when the entry has none
-   */
-  private roleValue(
-    entity: EntityDescriptor,
-    entry: Entry,
-    role: string
-  ): string | undefined {
-    const attribute = roleAttribute(entity.schema, role);
-    const value = attribute
-      ? [entryValue(entry, attribute) ?? []].flat()[0]
-      : undefined;
-    return value && String(value).trim() ? String(value).trim() : undefined;
   }
 
   /** Show a short message. */

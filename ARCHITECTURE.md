@@ -89,6 +89,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── console/context.ts      ConsoleContext: what a view or an action is given of the console
     ├── console/bulk.ts         what the list's bulk actions share: the accounts written, the panel held
     ├── console/relations.ts    an entry's members or groups, a group's type, a related entry's address
+    ├── console/names.ts        what the console calls things: a collection, an entry, a person, pointers
     ├── ui/table.ts             dataTable: the one way to draw a table (#226)
     ├── ui/search.ts            searchBox: a named search box, with the select of its scope
     ├── ui/announce.ts          the hidden live region: said to a screen reader, not shown
