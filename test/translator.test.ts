@@ -59,7 +59,7 @@ describe('Translator', () => {
     );
   });
 
-  it('should draw no more once its panel is closed', () => {
+  it('should draw no more once its panel is closed', async () => {
     // Its panel closed while it ran, an import filled the hidden panel
     // again row after row, or wrote over the form opened next.
     const importer = new EntityImport({
@@ -70,19 +70,22 @@ describe('Translator', () => {
       onDone: () => undefined,
       onClose: () => undefined,
     });
-    const view = { isConnected: true };
-    const root = {
-      innerHTML: '',
-      querySelector: (selector: string) =>
-        selector === '.dc-import' ? view : null,
-      querySelectorAll: () => [],
-    };
-    importer.render(root as unknown as HTMLElement);
+    const root = document.createElement('div');
+    document.body.append(root);
+    importer.render(root);
     expect(root.innerHTML).to.contain('class="dc-import"');
-    view.isConnected = false;
-    root.innerHTML = '';
-    (importer as unknown as { paint(): void }).paint();
-    expect(root.innerHTML).to.equal('');
+    // The panel closed: what it drew goes with it.
+    root.remove();
+    const drawn = root.innerHTML;
+    const input = root.querySelector<HTMLInputElement>('[data-import-file]');
+    if (!input) throw new Error('no file input');
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [new File(['Identifier,Name\nA1,Ann\n'], 'x.csv')],
+    });
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(root.innerHTML).to.equal(drawn);
   });
 
   it('should say the accounts it created have no password', () => {
