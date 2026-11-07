@@ -317,7 +317,7 @@ describe('EntityForm', () => {
     let sent: Record<string, string | string[]> | undefined;
     const container = document.createElement('div');
     document.body.append(container);
-    const form = new EntityForm({
+    await new EntityForm({
       entity: quota,
       entry: { uid: 'bob', mailQuotaSize: '4500000000' },
       translator: new Translator('fr'),
@@ -327,19 +327,18 @@ describe('EntityForm', () => {
         return Promise.resolve();
       },
       onCancel: () => undefined,
-    }) as unknown as {
-      values: Record<string, string[]>;
-      submit(): Promise<void>;
-      render(container: HTMLElement): Promise<void>;
-    };
-    await form.render(container);
-    expect(
-      container.querySelector<HTMLInputElement>('#dc-field-mailQuotaSize')
-        ?.value
-    ).to.equal('4,5 Go');
-    form.values.mailQuotaSize = ['4,5 Go'];
-    await form.submit();
-    // The server reads bytes, not Go: the console sends the count.
+    }).render(container);
+    const size = container.querySelector<HTMLInputElement>(
+      '#dc-field-mailQuotaSize'
+    );
+    if (!size) throw new Error('no size');
+    expect(size.value).to.equal('4,5 Go');
+    // Typed back as the reader read it: the server reads bytes, not Go.
+    size.value = '4,5 Go';
+    size.dispatchEvent(new Event('input', { bubbles: true }));
+    size.dispatchEvent(new Event('change', { bubbles: true }));
+    container.querySelector<HTMLElement>('form button[type="submit"]')?.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(sent?.mailQuotaSize).to.equal('4500000000');
   });
 
@@ -418,6 +417,11 @@ describe('EntityForm', () => {
       schema: {
         attributes: {
           ...usersSchema.attributes,
+          // The department is not what this test is about.
+          twakeDepartmentLink: {
+            ...usersSchema.attributes.twakeDepartmentLink,
+            required: false,
+          },
           mailQuotaSize: {
             type: 'number',
             normalize: 'byteSize',
@@ -430,15 +434,13 @@ describe('EntityForm', () => {
     const now = new Date();
     const today = `${now.getUTCFullYear()}${String(
       now.getUTCMonth() + 1
-    ).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}000000Z`;
-    const filled = {
-      cn: 'Va Val',
-      mail: 'va.val@example.com',
-      twakeDepartmentLink: 'ou=HR,dc=example,dc=com',
-    };
+    ).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}`;
     let sent = 0;
-    const form = (entry?: Entry) =>
-      new EntityForm({
+    /** The form drawn in the page, its field typed into like a reader's. */
+    const drawn = async (entry?: Entry) => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      await new EntityForm({
         entity: lifecycle,
         entry,
         translator: new Translator('en'),
@@ -448,40 +450,60 @@ describe('EntityForm', () => {
           return Promise.resolve();
         },
         onCancel: () => undefined,
-      }) as unknown as {
-        values: Record<string, string[]>;
-        errors: Record<string, string>;
-        submit(): Promise<void>;
+      }).render(container);
+      const type = (name: string, value: string): void => {
+        const input = container.querySelector<HTMLInputElement>(
+          `#dc-field-${name}`
+        );
+        if (!input) throw new Error(`no ${name}`);
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
       };
+      const save = async (): Promise<void> => {
+        container
+          .querySelector<HTMLElement>('form button[type="submit"]')
+          ?.click();
+        await new Promise(resolve => setTimeout(resolve, 0));
+      };
+      const error = (name: string): HTMLElement | null =>
+        container.querySelector<HTMLElement>(
+          `[data-field="${name}"] [data-error]`
+        );
+      return { container, type, save, error };
+    };
 
-    const created = form();
-    for (const [name, value] of Object.entries(filled))
-      created.values[name] = [value];
-    created.values.mailQuotaSize = ['lots'];
-    created.values.twakeDeletionDate = ['20201008000000Z'];
-    await created.submit();
+    const created = await drawn();
+    created.type('cn', 'Va Val');
+    created.type('mail', 'va.val@example.com');
+    created.type('mailQuotaSize', 'lots');
+    created.type('twakeDeletionDate', '2020-10-08');
+    await created.save();
     expect(sent).to.equal(0);
-    expect(created.errors).to.deep.equal({
-      // Said with examples, not by repeating the hint shown before.
-      mailQuotaSize:
-        'Expected a size such as 4 GB, 500 MB or 100 KB, or a number of bytes',
-      twakeDeletionDate: 'Expected a date not earlier than today',
-    });
+    // Said with examples, not by repeating the hint shown before.
+    expect(created.error('mailQuotaSize')?.hidden).to.equal(false);
+    expect(created.error('mailQuotaSize')?.textContent).to.equal(
+      'Expected a size such as 4 GB, 500 MB or 100 KB, or a number of bytes'
+    );
+    expect(created.error('twakeDeletionDate')?.textContent).to.equal(
+      'Expected a date not earlier than today'
+    );
 
-    created.values.mailQuotaSize = ['4 GB'];
-    created.values.twakeDeletionDate = [today];
-    await created.submit();
-    expect(created.errors).to.deep.equal({});
+    created.type('mailQuotaSize', '4 GB');
+    created.type('twakeDeletionDate', today);
+    await created.save();
+    expect(created.error('mailQuotaSize')?.hidden).to.equal(true);
+    expect(created.error('twakeDeletionDate')?.hidden).to.equal(true);
     expect(sent).to.equal(1);
 
     // A date already stored is not sent back, and not judged again.
-    const edited = form({
+    const edited = await drawn({
       uid: 'va.val',
-      ...filled,
+      cn: 'Va Val',
+      mail: 'va.val@example.com',
       twakeDeletionDate: '20201008000000Z',
     });
-    await edited.submit();
-    expect(edited.errors).to.deep.equal({});
+    await edited.save();
     expect(sent).to.equal(2);
   });
 
