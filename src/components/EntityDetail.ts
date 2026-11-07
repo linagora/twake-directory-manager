@@ -498,12 +498,18 @@ export class EntityDetail {
       return html`<a href="#/organizations/${encodeURIComponent(
         link
       )}" class="dc-path-link" title="${value}">${value}</a>`;
+    // An account's state is a badge, not a link: it points into reference
+    // data, and `relationHref` says nothing for that. Kept out of the branch
+    // below even when a deployment puts the state somewhere linkable.
+    const state = accountState(entity, name, value);
     // An entry this card points at leads to its card: a group's members and
     // owners, an organization's managers and local administrators, and any
     // other DN a schema stores without a role — an account's Delegates were
     // plain text beside Owners and Managers that led to their accounts
     // (#267). What no page shows stays a name, as before.
     if (
+      !state &&
+      name !== entity.accountStatus &&
       isDnShaped(value) &&
       (RELATION_ROLES.some(role => hasRole(attr, role)) ||
         this.options.relationHref?.(value))
@@ -525,7 +531,7 @@ export class EntityDetail {
       ownValueLabel(entity, name, value, language) ||
       displayValue(attr, value, this.options.pointerLabel, language);
     return html`<span class="dc-value" title="${value}">${stateMarkup(
-      accountState(entity, name, value),
+      state,
       shown
     )}</span>`;
   }

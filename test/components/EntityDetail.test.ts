@@ -598,6 +598,44 @@ describe('EntityDetail', () => {
     );
   });
 
+  it('should keep an account’s state a badge, not a link to its value', () => {
+    // The state is a pointer into the nomenclature: a relationHref that
+    // knows that entity must not turn Disabled into a link to its page.
+    const states = 'ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com';
+    const disabled = `cn=disabled,${states}`;
+    const stated: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          ...users.schema.attributes,
+          twakeAccountStatus: {
+            ...users.schema.attributes.twakeAccountStatus,
+            states: { disabled },
+          },
+        },
+      },
+    };
+    const container = stubContainer();
+    new EntityDetail({
+      entity: stated,
+      entry: { uid: 'bob', twakeAccountStatus: disabled },
+      translator: new Translator('en'),
+      canWrite: true,
+      canDelete: true,
+      onEdit: () => undefined,
+      onDelete: () => undefined,
+      onStatus: () => undefined,
+      onResetPassword: () => undefined,
+      pointerLabel: dn => (dn === disabled ? 'Disabled' : undefined),
+      relationHref: dn =>
+        dn === disabled ? '#/accountStatuses/disabled' : undefined,
+    }).render(container);
+    expect(container.innerHTML).to.include(
+      '<span class="dc-state dc-state-disabled">Disabled</span>'
+    );
+    expect(container.innerHTML).to.not.include('#&#x2F;accountStatuses');
+  });
+
   it('should say how many related entries the list leaves out', () => {
     const card = (
       language: string,

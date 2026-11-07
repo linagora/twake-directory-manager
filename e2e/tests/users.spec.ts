@@ -734,6 +734,11 @@ test.describe('USER user accounts', () => {
 
     await app.open(`users/${disabled.uid}`);
     await expect(card.detail('Status')).toHaveText('Disabled');
+    // The badge stays a badge: the state is a nomenclature pointer, not a
+    // link to the account state's page.
+    await expect(
+      card.detail('Status').locator('.dc-state-disabled')
+    ).toHaveText('Disabled');
     await card.changeStateTo('Active');
     await expect(card.detail('Status')).toHaveText('Active');
   });
