@@ -746,19 +746,24 @@ export class DirectoryConsole {
 
     if (this.route.view === 'dashboard') return this.renderDashboard(main);
     if (this.route.view === 'organizations')
-      return this.renderOrganizations(main, generation);
+      return this.organizationsView.render(main, generation);
     if (this.route.view === 'policies')
       return this.rights.managesPolicies()
-        ? this.renderPolicies(main, generation)
+        ? new PoliciesView(this.context).render(main, generation)
         : this.renderDashboard(main);
 
     const entity = this.entity(this.route.entity);
     if (!entity) return this.renderNotFound(main);
     if (entity.kind === 'organization')
-      return this.renderOrganizations(main, generation);
+      return this.organizationsView.render(main, generation);
     if (this.route.id)
-      return this.renderDetail(main, entity, this.route.id, generation);
-    return this.renderList(main, entity, generation);
+      return new EntryView(this.context).render(
+        main,
+        entity,
+        this.route.id,
+        generation
+      );
+    return this.listsView.render(main, entity, generation);
   }
 
   private entity(key?: string): EntityDescriptor | undefined {
@@ -946,32 +951,6 @@ export class DirectoryConsole {
   }
 
   /**
-   * Draw an entity's list (see `ListsView`): kept for `renderMain` and the
-   * routing tests that replace it until #220's last step.
-   */
-  private renderList(
-    main: HTMLElement,
-    entity: EntityDescriptor,
-    generation: number
-  ): Promise<void> {
-    return this.listsView.render(main, entity, generation);
-  }
-
-  /**
-   * Draw an entry's card (see `EntryView`): kept for `renderMain` and the
-   * routing tests that replace it until #220's last step. A view is made
-   * for each drawing, as the card holds nothing from one to the next.
-   */
-  private renderDetail(
-    main: HTMLElement,
-    entity: EntityDescriptor,
-    id: string,
-    generation: number
-  ): Promise<void> {
-    return new EntryView(this.context).render(main, entity, id, generation);
-  }
-
-  /**
    * Title the browser tab after the page on screen — "Users — Twake Directory
    * Manager", "Alice Moreau — Twake Directory Manager" — so that the tabs of
    * several open pages, the history and a screen reader say which is which.
@@ -981,18 +960,6 @@ export class DirectoryConsole {
   private titlePage(name?: string): void {
     if (typeof document === 'undefined' || !this.pageTitle) return;
     document.title = name ? `${name} — ${this.pageTitle}` : this.pageTitle;
-  }
-
-  /**
-   * Draw the organizations page (see `OrganizationsView`): kept for
-   * `renderMain` and the routing tests that replace it until #220's last
-   * step.
-   */
-  private renderOrganizations(
-    main: HTMLElement,
-    generation: number
-  ): Promise<void> {
-    return this.organizationsView.render(main, generation);
   }
 
   /**
@@ -1060,10 +1027,6 @@ export class DirectoryConsole {
    * something between drawings, as the lists keep where the reader was, is
    * kept by the console instead (#220).
    */
-  private renderPolicies(main: HTMLElement, generation: number): Promise<void> {
-    return new PoliciesView(this.context).render(main, generation);
-  }
-
   /** Create or edit an entry of a flat or group entity (see `FormActions`). */
   private openForm(
     entity: EntityDescriptor,
