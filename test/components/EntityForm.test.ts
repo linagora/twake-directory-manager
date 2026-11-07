@@ -1070,25 +1070,66 @@ describe('EntityForm', () => {
     };
   };
 
+  /** The picker of a field drawn in the page. */
+  const picker = (
+    container: HTMLElement,
+    field = 'twakeDelegatedUsers'
+  ): HTMLInputElement => {
+    const found = container.querySelector<HTMLInputElement>(
+      `[data-field="${field}"] [data-picker-input]`
+    );
+    if (!found) throw new Error(`no picker for ${field}`);
+    return found;
+  };
+  /** The names of the values a picker holds, as the field shows them. */
+  const shownValues = (
+    container: HTMLElement,
+    field = 'twakeDelegatedUsers'
+  ): (string | null)[] =>
+    Array.from(
+      container.querySelectorAll(
+        `[data-field="${field}"] .dc-token-list .dc-token span`
+      )
+    ).map(span => span.textContent);
+  /** Type a search into a picker, and wait for the answer it draws. */
+  const search = async (
+    container: HTMLElement,
+    text: string,
+    field = 'twakeDelegatedUsers'
+  ): Promise<void> => {
+    typeInto(picker(container, field), text);
+    await new Promise(resolve => setTimeout(resolve, 300));
+  };
+  /** Take the offer the picker shows first, as Enter does. */
+  const take = (
+    container: HTMLElement,
+    field = 'twakeDelegatedUsers'
+  ): void => {
+    picker(container, field).dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  };
+  /** What the picker offers, or says in place of an offer. */
+  const offered = (
+    container: HTMLElement,
+    field = 'twakeDelegatedUsers'
+  ): string =>
+    container.querySelector<HTMLElement>(
+      `[data-field="${field}"] .dc-picker-results`
+    )?.innerHTML ?? '';
+
   it('should add a second choice to a multi-valued pointer, not replace the first', async () => {
     // The picker read "multiple" from the field element, which never
     // carried it: choosing a second delegate dropped the first.
     const alice = 'uid=alice,ou=users,dc=example,dc=com';
     const jane = 'uid=jane,ou=users,dc=example,dc=com';
-    const input = recorder();
-    const results = recorder();
-    const tokens = recorder();
-    const field = recorder({
-      '[data-picker-input]': input,
-      '.dc-picker-results': results,
-      '.dc-token-list': tokens,
-    });
-    const container = stubContainer();
-    (
-      container as unknown as { querySelector(s: string): unknown }
-    ).querySelector = selector =>
-      selector === '[data-field="twakeDelegatedUsers"]' ? field : null;
-    const form = new EntityForm({
+    const container = document.createElement('div');
+    document.body.append(container);
+    await new EntityForm({
       entity: {
         ...users,
         schema: {
@@ -1107,48 +1148,23 @@ describe('EntityForm', () => {
       pointerSearch: () => () => Promise.resolve([{ dn: jane, label: 'Jane' }]),
       onSubmit: () => Promise.resolve(),
       onCancel: () => undefined,
-    });
-    await form.render(container);
-
-    input.value = 'jane';
-    input.fire('input');
-    // Past the debounce, and the search it then issues.
-    await new Promise(resolve => setTimeout(resolve, 300));
-    input.fire('keydown', { key: 'Enter', preventDefault: () => undefined });
-    expect(
-      (form as unknown as { values: Record<string, string[]> }).values
-        .twakeDelegatedUsers
-    ).to.deep.equal([alice, jane]);
+    }).render(container);
+    await search(container, 'jane');
+    take(container);
+    expect(shownValues(container)).to.deep.equal(['alice', 'Jane']);
   });
 
   describe('a group’s members', () => {
     const alice = 'uid=alice,ou=users,dc=example,dc=com';
     const jane = 'uid=jane,ou=users,dc=example,dc=com';
 
-    /** A group form whose member field is wired to recorders. */
+    /** A group form drawn in the page, its member field a real picker. */
     const memberForm = async (
       search: (query: string) => Promise<{ dn: string; label: string }[]>,
       externalMembers?: ExternalMembers
-    ): Promise<{
-      form: EntityForm;
-      input: ReturnType<typeof recorder>;
-      results: ReturnType<typeof recorder>;
-      tokens: ReturnType<typeof recorder>;
-      container: HTMLElement & { innerHTML: string };
-    }> => {
-      const input = recorder();
-      const results = recorder();
-      const tokens = recorder();
-      const field = recorder({
-        '[data-picker-input]': input,
-        '.dc-picker-results': results,
-        '.dc-token-list': tokens,
-      });
-      const container = stubContainer();
-      (
-        container as unknown as { querySelector(s: string): unknown }
-      ).querySelector = selector =>
-        selector === '[data-field="member"]' ? field : null;
+    ): Promise<{ form: EntityForm; container: HTMLElement }> => {
+      const container = document.createElement('div');
+      document.body.append(container);
       const form = new EntityForm({
         entity: groups,
         entry: { ...staff, member: [alice] },
@@ -1160,11 +1176,16 @@ describe('EntityForm', () => {
         onCancel: () => undefined,
       });
       await form.render(container);
-      return { form, input, results, tokens, container };
+      return { form, container };
     };
-    const members = (form: EntityForm): string[] =>
-      (form as unknown as { values: Record<string, string[]> }).values.member;
-    const enter = { key: 'Enter', preventDefault: () => undefined };
+    /** Type into the member picker, and wait for its search. */
+    const type = async (container: HTMLElement, text: string): Promise<void> =>
+      search(container, text, 'member');
+    const enter = (container: HTMLElement): void => take(container, 'member');
+    const members = (container: HTMLElement): (string | null)[] =>
+      shownValues(container, 'member');
+    const results = (container: HTMLElement): string =>
+      offered(container, 'member');
 
     it('should name each remove button after the member it removes', async () => {
       const { container } = await memberForm(() => Promise.resolve([]));
@@ -1174,7 +1195,7 @@ describe('EntityForm', () => {
 
     it('should find a member by email address rather than ask for a DN', async () => {
       const asked: string[] = [];
-      const { form, input, container } = await memberForm(query => {
+      const { container } = await memberForm(query => {
         asked.push(query);
         return Promise.resolve([
           { dn: jane, label: 'Jane Doe <jane@example.com>' },
@@ -1186,48 +1207,46 @@ describe('EntityForm', () => {
         'of a name, an email address or an employee ID'
       );
 
-      input.value = 'jane@exa';
-      input.fire('input');
-      await new Promise(resolve => setTimeout(resolve, 300));
-      input.fire('keydown', enter);
+      await type(container, 'jane@exa');
+      enter(container);
       expect(asked).to.deep.equal(['jane@exa']);
-      expect(members(form)).to.deep.equal([alice, jane]);
+      expect(members(container)).to.deep.equal([
+        'alice',
+        'Jane Doe <jane@example.com>',
+      ]);
     });
 
     it('should take a DN typed whole, without searching it', async () => {
       let searched = false;
-      const { form, input } = await memberForm(() => {
+      const { container } = await memberForm(() => {
         searched = true;
         return Promise.resolve([]);
       });
-      input.value = ` ${jane} `;
-      input.fire('input');
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await type(container, ` ${jane} `);
       expect(searched).to.equal(false);
-      input.fire('keydown', enter);
-      expect(members(form)).to.deep.equal([alice, jane]);
-      expect(input.value).to.equal('');
+      enter(container);
+      expect(members(container)).to.deep.equal(['alice', 'jane']);
+      expect(picker(container, 'member').value).to.equal('');
     });
 
     it('should add a DN left in the box, once', async () => {
-      const { form, input } = await memberForm(() => Promise.resolve([]));
-      input.value = jane;
-      input.fire('blur');
+      const { container } = await memberForm(() => Promise.resolve([]));
+      const input = picker(container, 'member');
+      typeInto(input, jane);
+      input.dispatchEvent(new Event('blur'));
       // The same DN in another case is the same member.
-      input.value = jane.toUpperCase();
-      input.fire('blur');
-      expect(members(form)).to.deep.equal([alice, jane]);
+      typeInto(input, jane.toUpperCase());
+      input.dispatchEvent(new Event('blur'));
+      expect(members(container)).to.deep.equal(['alice', 'jane']);
     });
 
     it('should not pick a member twice in another case', async () => {
-      const { form, input } = await memberForm(() =>
+      const { container } = await memberForm(() =>
         Promise.resolve([{ dn: alice.toUpperCase(), label: 'Alice' }])
       );
-      input.value = 'alice';
-      input.fire('input');
-      await new Promise(resolve => setTimeout(resolve, 300));
-      input.fire('keydown', enter);
-      expect(members(form)).to.deep.equal([alice]);
+      await type(container, 'alice');
+      enter(container);
+      expect(members(container)).to.deep.equal(['alice']);
     });
 
     describe('outside the directory', () => {
@@ -1236,66 +1255,57 @@ describe('EntityForm', () => {
         rdnAttribute: 'mail',
         managedDomains: ['example.com'],
       };
-      /** Type an address, and wait for the search it issues. */
-      const type = async (
-        input: ReturnType<typeof recorder>,
-        text: string
-      ): Promise<void> => {
-        input.value = text;
-        input.fire('input');
-        await new Promise(resolve => setTimeout(resolve, 300));
-      };
 
       it('should offer to add an address no entry holds as an external member', async () => {
         // Only the full DN worked, which administrators do not know (#59).
-        const { form, input, results, tokens } = await memberForm(
+        const { container } = await memberForm(
           () => Promise.resolve([]),
           external
         );
-        await type(input, 'Some.One+lists@partner.org');
-        expect(results.innerHTML).to.include(
+        await type(container, 'Some.One+lists@partner.org');
+        expect(results(container)).to.include(
           'Add Some.One+lists@partner.org as an external member'
         );
-        input.fire('keydown', enter);
+        enter(container);
         // Escaped as a DN value: a bare `+` joins a second attribute.
-        expect(members(form)).to.deep.equal([
-          alice,
-          'mail=Some.One\\+lists@partner.org,ou=external,dc=example,dc=com',
+        expect(members(container)).to.deep.equal([
+          'alice',
+          'Some.One+lists@partner.org',
         ]);
         // Named by its address, not by the offer.
-        expect(tokens.innerHTML).to.include('Some.One+lists@partner.org<');
+        expect(container.innerHTML).to.include('Some.One+lists@partner.org<');
       });
 
       it('should offer the account, not an external member, for an address an entry holds', async () => {
-        const { results, input } = await memberForm(
+        const { container } = await memberForm(
           () =>
             Promise.resolve([
               { dn: jane, label: 'Jane Doe <jane@partner.org>' },
             ]),
           external
         );
-        await type(input, 'JANE@partner.org');
-        expect(results.innerHTML).to.include('Jane Doe');
-        expect(results.innerHTML).not.to.include('external member');
+        await type(container, 'JANE@partner.org');
+        expect(results(container)).to.include('Jane Doe');
+        expect(results(container)).not.to.include('external member');
       });
 
       it('should say an address at a domain of the directory is an account’s', async () => {
-        const { form, input, results } = await memberForm(
+        const { container } = await memberForm(
           () => Promise.resolve([]),
           external
         );
-        await type(input, 'nobody@Example.com');
-        expect(results.innerHTML).to.include(
+        await type(container, 'nobody@Example.com');
+        expect(results(container)).to.include(
           'example.com is a domain of this directory: choose the account instead'
         );
-        input.fire('keydown', enter);
-        expect(members(form)).to.deep.equal([alice]);
+        enter(container);
+        expect(members(container)).to.deep.equal(['alice']);
       });
 
       it('should offer nothing outside when the server takes no external member', async () => {
-        const { results, input } = await memberForm(() => Promise.resolve([]));
-        await type(input, 'someone@partner.org');
-        expect(results.innerHTML).to.include('No entry matches this search');
+        const { container } = await memberForm(() => Promise.resolve([]));
+        await type(container, 'someone@partner.org');
+        expect(results(container)).to.include('No entry matches this search');
       });
     });
 
@@ -1336,34 +1346,28 @@ describe('EntityForm', () => {
         },
       ];
 
-      /** Type into the member field of a group, and wait for its search. */
+      /** Draw a group of the mailbox type, and type a member search into it. */
       const typed = async (
         text: string,
-        type: string,
+        mailboxType: string,
         options: {
           keep?: boolean;
           answer?: { dn: string; label: string; mail?: string }[];
         } = {}
-      ): Promise<{ form: EntityForm; html: string }> => {
-        const input = recorder();
-        const results = recorder();
-        const field = recorder({
-          '[data-picker-input]': input,
-          '.dc-picker-results': results,
-          '.dc-token-list': recorder(),
-        });
-        const container = stubContainer();
-        (
-          container as unknown as { querySelector(s: string): unknown }
-        ).querySelector = selector =>
-          selector === '[data-field="member"]' ? field : null;
+      ): Promise<{
+        form: EntityForm;
+        container: HTMLElement;
+        html: string;
+      }> => {
+        const container = document.createElement('div');
+        document.body.append(container);
         const form = new EntityForm({
           entity: mailboxes,
           entry: {
             ...staff,
             member: [alice],
             mail: 'sales@example.com',
-            twakeMailboxType: type,
+            twakeMailboxType: mailboxType,
           },
           translator: new Translator('en'),
           pointerOptions: () => Promise.resolve([]),
@@ -1377,10 +1381,8 @@ describe('EntityForm', () => {
           onCancel: () => undefined,
         });
         await form.render(container);
-        input.value = text;
-        input.fire('input');
-        await new Promise(resolve => setTimeout(resolve, 300));
-        return { form, html: results.innerHTML };
+        if (text) await type(container, text);
+        return { form, container, html: results(container) };
       };
 
       it('should offer the accounts of its domain only', async () => {
@@ -1399,23 +1401,24 @@ describe('EntityForm', () => {
       });
 
       it('should offer no external member', async () => {
-        const { form, html } = await typed('someone@partner.org', team, {
+        const { container, html } = await typed('someone@partner.org', team, {
           answer: [],
         });
         expect(html).not.to.include('external member');
         expect(html).to.include('only takes accounts of example.com');
-        expect(members(form)).to.deep.equal([alice]);
+        expect(members(container)).to.deep.equal(['alice']);
       });
 
       it('should follow an address changed in the form', async () => {
-        const { form } = await typed('', team);
-        (form as unknown as { values: Record<string, string[]> }).values.mail =
-          ['sales@other.org'];
-        expect(
-          (
-            form as unknown as { teamMailboxDomain(): string | undefined }
-          ).teamMailboxDomain()
-        ).to.equal('other.org');
+        const { container } = await typed('', team);
+        typeInto(
+          container.querySelector<HTMLInputElement>('#dc-field-mail'),
+          'sales@other.org'
+        );
+        await type(container, 'bob');
+        expect(results(container)).to.include('Bob &lt;bob@other.org&gt;');
+        // The accounts of the address left are no longer of its domain.
+        expect(results(container)).not.to.include('Jane Doe');
       });
 
       it('should offer every domain, and outside, to a mailing list', async () => {
