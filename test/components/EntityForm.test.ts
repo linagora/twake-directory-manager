@@ -945,17 +945,17 @@ describe('EntityForm', () => {
     };
   };
 
-  /** Render a form whose one pointer control is that select. */
-  const renderWith = async (
-    select: HTMLSelectElement,
-    entry: Record<string, string | string[]>,
+  const held = 'ou=Demo,dc=example,dc=com';
+
+  /** A form with a pointer select, drawn in the page. */
+  const drawnPointer = async (
+    entry: Entry,
     pointerOptions: () => Promise<{ dn: string; label: string }[]>,
-    entity: EntityDescriptor = users
-  ): Promise<HTMLElement & { innerHTML: string }> => {
-    const container = stubContainer();
-    (
-      container as unknown as { querySelectorAll: () => unknown[] }
-    ).querySelectorAll = (): unknown[] => [select];
+    entity: EntityDescriptor = users,
+    name = 'twakeDepartmentLink'
+  ): Promise<{ container: HTMLElement; select: HTMLSelectElement }> => {
+    const container = document.createElement('div');
+    document.body.append(container);
     await new EntityForm({
       entity,
       entry,
@@ -964,34 +964,49 @@ describe('EntityForm', () => {
       onSubmit: () => Promise.resolve(),
       onCancel: () => undefined,
     }).render(container);
-    return container;
+    const select = container.querySelector<HTMLSelectElement>(
+      `select#dc-field-${name}`
+    );
+    if (!select) throw new Error(`no select for ${name}`);
+    return { container, select };
   };
 
-  const held = 'ou=Demo,dc=example,dc=com';
-
   it('should keep a pointer inert until its candidates are known', async () => {
-    const select = stubSelect('dc=example,dc=com', held);
-    const container = await renderWith(
-      select,
-      { uid: 'bob', twakeDepartmentLink: [held] },
-      () => Promise.resolve([])
-    );
     // A click meant to open the list would otherwise take the empty choice
     // and clear the organization the entry holds.
-    expect(container.innerHTML).to.include('data-required="true"');
-    expect(container.innerHTML).to.include('disabled aria-busy="true"');
-    expect(container.innerHTML).to.include('<option value="" disabled>');
+    let answer: (options: { dn: string; label: string }[]) => void = () =>
+      undefined;
+    const container = document.createElement('div');
+    document.body.append(container);
+    const rendering = new EntityForm({
+      entity: users,
+      entry: { uid: 'bob', twakeDepartmentLink: [held] },
+      translator: new Translator('en'),
+      pointerOptions: () => new Promise(resolve => (answer = resolve)),
+      onSubmit: () => Promise.resolve(),
+      onCancel: () => undefined,
+    }).render(container);
+    const select = container.querySelector<HTMLSelectElement>(
+      'select#dc-field-twakeDepartmentLink'
+    );
+    if (!select) throw new Error('no select');
+    expect(select.disabled).to.equal(true);
+    expect(select.getAttribute('aria-busy')).to.equal('true');
+    expect(select.dataset.required).to.equal('true');
+    expect(select.innerHTML).to.match(/<option value="" disabled(="")?>/);
+    answer([]);
+    await rendering;
   });
 
   it('should not offer the empty choice on a required field', async () => {
-    const select = stubSelect('dc=example,dc=com', held, true);
-    await renderWith(select, { uid: 'bob', twakeDepartmentLink: [held] }, () =>
-      Promise.resolve([{ dn: held, label: 'Demo' }])
+    const { select } = await drawnPointer(
+      { uid: 'bob', twakeDepartmentLink: [held] },
+      () => Promise.resolve([{ dn: held, label: 'Demo' }])
     );
     // The form refuses to save without it: a choice that cannot be taken is
     // not offered.
     expect(select.disabled).to.equal(false);
-    expect(select.innerHTML).to.include('<option value="" disabled>');
+    expect(select.innerHTML).to.match(/<option value="" disabled(="")?>/);
     expect(select.innerHTML).to.include('>Demo</option>');
     expect(select.value).to.equal(held);
   });
@@ -1007,12 +1022,11 @@ describe('EntityForm', () => {
         },
       },
     };
-    const select = stubSelect('dc=example,dc=com', held);
-    await renderWith(
-      select,
+    const { select } = await drawnPointer(
       { uid: 'bob', title: [held] },
       () => Promise.resolve([{ dn: held, label: 'Demo' }]),
-      optional
+      optional,
+      'title'
     );
     expect(select.disabled).to.equal(false);
     // The empty choice is there and carries no `disabled`: taking it is a
@@ -1023,16 +1037,15 @@ describe('EntityForm', () => {
   });
 
   it('should keep the value of a branch that answered nothing', async () => {
-    const select = stubSelect('dc=example,dc=com', held);
-    await renderWith(select, { uid: 'bob', twakeDepartmentLink: [held] }, () =>
-      Promise.reject(Object.assign(new Error('Forbidden'), { status: 403 }))
+    const { select } = await drawnPointer(
+      { uid: 'bob', twakeDepartmentLink: [held] },
+      () =>
+        Promise.reject(Object.assign(new Error('Forbidden'), { status: 403 }))
     );
     // Nothing to choose: the empty choice cannot be taken, and the value the
     // directory holds stays selected rather than being silently dropped.
-    // An unreadable branch has nothing more to say: the stub has no
-    // `closest`, and looking for the field to write a message in would throw.
     expect(select.disabled).to.equal(false);
-    expect(select.innerHTML).to.include('<option value="" disabled>');
+    expect(select.innerHTML).to.match(/<option value="" disabled(="")?>/);
     expect(select.innerHTML).to.include(`${held}" selected`);
     expect(select.value).to.equal(held);
   });
@@ -1522,82 +1535,36 @@ describe('EntityForm', () => {
       expect(asked).to.equal(false);
     });
 
-    /** A select inside its field, both just real enough for the form. */
-    const inField = (
-      name: string,
-      branch: string,
-      value: string
-    ): {
-      select: HTMLSelectElement;
-      field: { innerHTML: string };
-      note: { textContent: string; hidden: boolean; id: string };
-      describedBy: () => string | undefined;
-    } => {
-      const select = stubSelect(branch, value) as unknown as Record<
-        string,
-        unknown
-      >;
-      let describedBy: string | undefined;
-      select.setAttribute = (attribute: string, text: string): void => {
-        if (attribute === 'aria-describedby') describedBy = text;
-      };
-      const note = {
-        textContent: '',
-        hidden: true,
-        id: `dc-note-${name}`,
-      };
-      const field = {
-        innerHTML: '',
-        dataset: { field: name },
-        querySelector: (selector: string): unknown =>
-          selector === '[data-pointer-note]'
-            ? note
-            : selector.includes('[data-pointer]')
-              ? select
-              : null,
-      };
-      select.closest = (): unknown => field;
-      return {
-        select: select as unknown as HTMLSelectElement,
-        field,
-        note,
-        describedBy: () => describedBy,
-      };
-    };
-
     it('should keep the select and say why it offers nothing', async () => {
-      const { select, field, note, describedBy } = inField(
-        'twakeDepartmentLink',
-        'dc=example,dc=com',
-        held
-      );
-      await renderWith(
-        select,
+      const { container, select } = await drawnPointer(
         { uid: 'bob', twakeDepartmentLink: [held] },
         () => Promise.reject(failure(504, 'Gateway Timeout'))
       );
       expect(select.disabled).to.equal(false);
       expect(select.innerHTML).to.include(`${held}" selected`);
-      expect(field.innerHTML).to.equal('');
-      expect(note.hidden).to.equal(false);
-      // Filled a moment after it is shown, for a screen reader to say it.
+      // The select stays, and no search replaces it.
+      expect(
+        container.querySelector('[data-picker="twakeDepartmentLink"]')
+      ).to.equal(null);
+      const note = container.querySelector<HTMLElement>(
+        '#dc-note-twakeDepartmentLink'
+      );
+      // Shown empty at first, and filled a moment later, for a screen reader
+      // to say it.
+      expect(note?.hidden).to.equal(false);
+      expect(note?.textContent).to.equal('');
       await new Promise(resolve => setTimeout(resolve, 150));
-      expect(note.textContent).to.equal(
+      expect(note?.textContent).to.equal(
         'The list could not be loaded. If the directory holds many entries, narrow the search.'
       );
-      expect(describedBy()).to.equal('dc-note-twakeDepartmentLink');
+      expect(select.getAttribute('aria-describedby')).to.equal(
+        'dc-note-twakeDepartmentLink'
+      );
     });
 
     it('should trade the select for a search when the branch has one', async () => {
-      const { select, field, note } = inField(
-        'twakeDepartmentLink',
-        'dc=example,dc=com',
-        held
-      );
-      const container = stubContainer();
-      (
-        container as unknown as { querySelectorAll: () => unknown[] }
-      ).querySelectorAll = (): unknown[] => [select];
+      const container = document.createElement('div');
+      document.body.append(container);
       const asked: [string, boolean | undefined][] = [];
       await new EntityForm({
         entity: users,
@@ -1613,15 +1580,20 @@ describe('EntityForm', () => {
       }).render(container);
       // Asked once as usual, then once more after the failure.
       expect(asked).to.deep.include(['dc=example,dc=com', true]);
-      expect(field.innerHTML).to.include('data-picker="twakeDepartmentLink"');
-      // The value held is still there, as a token of the search.
-      expect(field.innerHTML).to.include('>Demo</span>');
-      await new Promise(resolve => setTimeout(resolve, 150));
-      expect(note.textContent).to.equal(
-        'Too many entries to show them all: narrow the search.'
+      const field = container.querySelector(
+        '[data-field="twakeDepartmentLink"]'
       );
+      expect(field?.innerHTML).to.include('data-picker="twakeDepartmentLink"');
+      // The value held is still there, as a token of the search.
+      expect(field?.innerHTML).to.include('>Demo</span>');
       // The select was not filled: it is gone.
-      expect(select.disabled).to.equal(true);
+      expect(
+        container.querySelector('select[data-pointer="dc=example,dc=com"]')
+      ).to.equal(null);
+      await new Promise(resolve => setTimeout(resolve, 150));
+      expect(
+        container.querySelector('#dc-note-twakeDepartmentLink')?.textContent
+      ).to.equal('Too many entries to show them all: narrow the search.');
     });
 
     it('should remove one value per click once a token list became a search', async () => {
@@ -1629,29 +1601,9 @@ describe('EntityForm', () => {
       // left alone, it removed a value on the same click as the search did.
       const alice = 'uid=alice,ou=users,dc=example,dc=com';
       const bob = 'uid=bob,ou=users,dc=example,dc=com';
-      const tokens = recorder();
-      const note = { textContent: '', hidden: true, id: 'note' };
-      const field = recorder(
-        {
-          '[data-picker-input]': recorder(),
-          '.dc-picker-results': recorder(),
-          '.dc-token-list': tokens,
-          '[data-pointer-note]': note,
-        },
-        { field: 'twakeDelegatedUsers' }
-      );
-      const select = stubSelect(users.base as string, '') as unknown as {
-        closest(): unknown;
-      };
-      select.closest = (): unknown => field;
-      const container = stubContainer() as unknown as {
-        querySelector(selector: string): unknown;
-        querySelectorAll(): unknown[];
-      };
-      container.querySelector = selector =>
-        selector === '[data-field="twakeDelegatedUsers"]' ? field : null;
-      container.querySelectorAll = (): unknown[] => [select];
-      const form = new EntityForm({
+      const container = document.createElement('div');
+      document.body.append(container);
+      await new EntityForm({
         entity: {
           ...users,
           schema: {
@@ -1670,21 +1622,22 @@ describe('EntityForm', () => {
         pointerSearch: (_branch, failed) => (failed ? search : undefined),
         onSubmit: () => Promise.resolve(),
         onCancel: () => undefined,
-      });
-      await form.render(container as unknown as HTMLElement);
-      expect(field.innerHTML).to.include('data-picker="twakeDelegatedUsers"');
+      }).render(container);
+      const field = container.querySelector(
+        '[data-field="twakeDelegatedUsers"]'
+      );
+      expect(field?.innerHTML).to.include('data-picker="twakeDelegatedUsers"');
 
       // One click on the first token's button, bubbling from the token
       // list up to the field.
-      const click = {
-        target: { closest: () => ({ dataset: { remove: '0' } }) },
-      };
-      tokens.fire('click', click);
-      field.fire('click', click);
-      expect(
-        (form as unknown as { values: Record<string, string[]> }).values
-          .twakeDelegatedUsers
-      ).to.deep.equal([bob]);
+      container
+        .querySelector<HTMLElement>(
+          '[data-field="twakeDelegatedUsers"] .dc-token-list [data-remove="0"]'
+        )
+        ?.click();
+      expect(shownValues(container, 'twakeDelegatedUsers')).to.deep.equal([
+        'bob',
+      ]);
     });
 
     it('should build the form when the caller’s search throws', async () => {
@@ -1783,18 +1736,24 @@ describe('EntityForm', () => {
       ['en', 'Required'],
       ['fr', 'Obligatoire'],
     ]) {
-      const form = new EntityForm({
+      const container = document.createElement('div');
+      document.body.append(container);
+      await new EntityForm({
         entity: users,
         translator: new Translator(language),
         pointerOptions: () => Promise.resolve([]),
         onSubmit: () => Promise.resolve(),
         onCancel: () => undefined,
-      }) as unknown as {
-        errors: Record<string, string>;
-        submit(): Promise<void>;
-      };
-      await form.submit();
-      const errors = Object.values(form.errors);
+      }).render(container);
+      container
+        .querySelector<HTMLElement>('form button[type="submit"]')
+        ?.click();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      const errors = Array.from(
+        container.querySelectorAll<HTMLElement>('[data-error]')
+      )
+        .filter(error => !error.hidden)
+        .map(error => error.textContent);
       expect(errors, language).not.to.be.empty;
       for (const error of errors) expect(error, language).to.equal(word);
     }
@@ -1863,34 +1822,33 @@ describe('EntityForm', () => {
         },
       },
     };
-    // The token select, inside its field, as `fillPointers` finds it.
-    const list = { innerHTML: '' };
-    const field = {
-      dataset: { tokens: 'twakeDomainLink' },
-      querySelector: (selector: string) =>
-        selector === '.dc-token-list' ? list : null,
-    };
-    const select = Object.assign(stubSelect(branch, ''), {
-      closest: (selector: string) =>
-        selector === '[data-tokens]' ? field : null,
-    });
-    (select.dataset as Record<string, string>).tokenInput = '';
-    const container = await renderWith(
-      select,
-      { uid: 'hr', twakeDomainLink: [example] },
-      () => Promise.resolve([{ dn: example, label: 'example.com' }]),
-      domains
-    );
+    let answer: (options: { dn: string; label: string }[]) => void = () =>
+      undefined;
+    const container = document.createElement('div');
+    document.body.append(container);
+    const rendering = new EntityForm({
+      entity: domains,
+      entry: { uid: 'hr', twakeDomainLink: [example] },
+      translator: new Translator('en'),
+      pointerOptions: () => new Promise(resolve => (answer = resolve)),
+      onSubmit: () => Promise.resolve(),
+      onCancel: () => undefined,
+    }).render(container);
     // Before the options are known: the RDN, not the DN.
     expect(container.innerHTML).to.include('>example</span>');
     expect(container.innerHTML).to.not.include(`>${example}</span>`);
+    expect(container.innerHTML).to.include('aria-label="Remove example"');
+    answer([{ dn: example, label: 'example.com' }]);
+    await rendering;
     // Once they are: the name the select offers, the DN in the title.
-    expect(list.innerHTML).to.include(
+    const list = container.querySelector(
+      '[data-field="twakeDomainLink"] .dc-token-list'
+    );
+    expect(list?.innerHTML).to.include(
       `<span title="${example}">example.com</span>`
     );
     // Its remove button says which value it removes.
-    expect(container.innerHTML).to.include('aria-label="Remove example"');
-    expect(list.innerHTML).to.include('aria-label="Remove example.com"');
+    expect(list?.innerHTML).to.include('aria-label="Remove example.com"');
   });
 
   it('should not offer the identifier for editing once it exists', async () => {
