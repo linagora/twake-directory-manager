@@ -5,7 +5,6 @@ import { expect } from 'chai';
 import nock from 'nock';
 
 import { ConsoleApiClient } from '../src/api/ConsoleApiClient';
-import { DirectoryConsole } from '../src/DirectoryConsole';
 import {
   POLICY_GROUPS,
   PolicyForm,
@@ -17,6 +16,7 @@ import {
   splitDuration,
 } from '../src/components/PasswordPolicies';
 import { availableLanguages, Translator } from '../src/i18n';
+import { mountConsole, type Mounted } from './support/mount';
 import type { PasswordPolicy, Scope } from '../src/types';
 
 const baseUrl = 'http://localhost:8099';
@@ -36,17 +36,17 @@ const policy: PasswordPolicy = {
 };
 
 /** Configuration of a server managing password policies. */
+const POLICY_CONFIG = {
+  apiPrefix: '/api',
+  features: {
+    ldapPasswordPolicy: {
+      endpoints: { listPolicies: '/api/v1/password-policies' },
+    },
+  },
+};
+
 function policyConfig(): nock.Scope {
-  return nock(baseUrl)
-    .get('/api/v1/config')
-    .reply(200, {
-      apiPrefix: '/api',
-      features: {
-        ldapPasswordPolicy: {
-          endpoints: { listPolicies: '/api/v1/password-policies' },
-        },
-      },
-    });
+  return nock(baseUrl).get('/api/v1/config').reply(200, POLICY_CONFIG);
 }
 
 /**
@@ -463,163 +463,127 @@ describe('Password policies', () => {
   });
 
   describe('the console', () => {
-    /** A console whose server manages policies, for a caller of this scope. */
-    async function consoleFor(
-      scope: Scope | null,
-      elements: Record<string, unknown> = {}
-    ): Promise<DirectoryConsole> {
-      const app = new DirectoryConsole({
-        containerId: 'console',
-        apiBaseUrl: baseUrl,
-        language: 'fr',
-      });
-      const inner = app as unknown as {
-        container: unknown;
-        api: ConsoleApiClient;
-        scope: Scope | null;
-      };
-      inner.container = {
-        querySelector: (selector: string) => elements[selector] ?? null,
-        querySelectorAll: () => [],
-      };
-      policyConfig();
-      await inner.api.discover();
-      inner.scope = scope;
-      return app;
-    }
+    const local: Scope = {
+      user: 'uid=sophie.martin,ou=users,dc=example,dc=com',
+      unrestricted: false,
+      described: true,
+      branches: [{ dn: 'ou=sales,dc=example,dc=com', read: true, write: true }],
+      entities: [],
+    };
 
-    const reads = (app: DirectoryConsole): Promise<boolean> =>
-      (app as unknown as { readsPolicies(): Promise<boolean> }).readsPolicies();
+    /** The console mounted on the overview, its server serving policies. */
+    const mountPolicies = (
+      scope: Scope | null,
+      answer?: (server: nock.Scope) => void,
+      config: object = POLICY_CONFIG
+    ): Promise<Mounted> =>
+      mountConsole({
+        hash: '',
+        scope,
+        answers: server => {
+          server.get('/api/v1/config').reply(200, config);
+          answer?.(server);
+        },
+      });
+
+    /** The reference entry opening the policies, when the console offers it. */
+    const navPolicies = (mounted: Mounted): Element | null =>
+      mounted.root.querySelector('[data-nav="password-policies"]');
+
+    /** What the console asked of the policies, by client method. */
+    const asked = (mounted: Mounted): string[] =>
+      mounted.calls.filter(call => call.startsWith('readsPasswordPolicies'));
 
     it('should offer the policies to whoever the server lets read them', async () => {
       // Its rule, not the scope's: a local administrator of the branch the
       // policies belong to holds them (ldap-rest --authz-global-organization)
-      const app = await consoleFor({
-        unrestricted: false,
-        branches: [
-          { dn: 'ou=sales,dc=example,dc=com', read: true, write: true },
-        ],
-        entities: [],
-      } as unknown as Scope);
-      nock(baseUrl)
-        .get('/api/v1/password-policies')
-        .reply(200, { policies: [] });
-      expect(await reads(app)).to.equal(true);
-      nock(baseUrl)
-        .get('/api/v1/password-policies')
-        .reply(403, { error: 'Forbidden' });
-      expect(await reads(app)).to.equal(false);
-      // Any other failure is shown on the page rather than hiding it
-      nock(baseUrl)
-        .get('/api/v1/password-policies')
-        .reply(500, { error: 'LDAP error' });
-      expect(await reads(app)).to.equal(true);
+      const allowed = await mountPolicies(local, server => {
+        server.get('/api/v1/password-policies').reply(200, { policies: [] });
+      });
+      expect(navPolicies(allowed)).to.not.equal(null);
+      expect(asked(allowed)).to.not.deep.equal([]);
+      allowed.unmount();
+
+      const refused = await mountPolicies(local, server => {
+        server
+          .get('/api/v1/password-policies')
+          .reply(403, { error: 'Forbidden' });
+      });
+      expect(navPolicies(refused)).to.equal(null);
+      refused.unmount();
+
+      // Any other failure is shown on the page rather than hiding it.
+      const broken = await mountPolicies(local, server => {
+        server
+          .get('/api/v1/password-policies')
+          .reply(500, { error: 'LDAP error' });
+      });
+      expect(navPolicies(broken)).to.not.equal(null);
     });
 
     describe('read from the scope', () => {
-      const local = {
-        user: 'uid=sophie.martin,ou=users,dc=example,dc=com',
-        unrestricted: false,
-        described: true,
-        branches: [
-          { dn: 'ou=sales,dc=example,dc=com', read: true, write: true },
-        ],
-        entities: [],
-      } as Scope;
-      /** Every request to the policies, which none of these should send. */
-      let asked = 0;
-      beforeEach(() => {
-        asked = 0;
-        nock(baseUrl)
-          .get('/api/v1/password-policies')
-          .times(2)
-          .reply(() => {
-            asked++;
-            return [200, { policies: [] }];
-          });
-      });
-      afterEach(() => nock.cleanAll());
-
       it('should offer the policies the scope says the caller manages, without asking for them', async () => {
-        expect(
-          await reads(await consoleFor({ ...local, passwordPolicies: true }))
-        ).to.equal(true);
-        expect(
-          await reads(
-            await consoleFor({
-              ...local,
-              unrestricted: true,
-              branches: [],
-              passwordPolicies: true,
-            })
-          )
-        ).to.equal(true);
-        expect(asked).to.equal(0);
+        for (const scope of [
+          { ...local, passwordPolicies: true },
+          {
+            ...local,
+            unrestricted: true,
+            branches: [],
+            passwordPolicies: true,
+          },
+        ]) {
+          const mounted = await mountPolicies(scope);
+          expect(navPolicies(mounted)).to.not.equal(null);
+          expect(asked(mounted)).to.deep.equal([]);
+          mounted.unmount();
+        }
       });
 
       it('should hide the policies the scope says the caller does not manage, without asking for them', async () => {
-        // A local administrator's every page load logged a 403 on them
-        expect(
-          await reads(await consoleFor({ ...local, passwordPolicies: false }))
-        ).to.equal(false);
-        expect(asked).to.equal(0);
+        // A local administrator's every page load logged a 403 on them.
+        const mounted = await mountPolicies({
+          ...local,
+          passwordPolicies: false,
+        });
+        expect(navPolicies(mounted)).to.equal(null);
+        expect(asked(mounted)).to.deep.equal([]);
       });
 
       it('should ask the server that does not say, or whose scope cannot', async () => {
         // An ldap-rest before 0.25.0, and an undescribed scope, whose
-        // `false` is for want of a model
-        expect(await reads(await consoleFor(local))).to.equal(true);
-        expect(
-          await reads(
-            await consoleFor({
-              ...local,
-              described: false,
-              branches: [],
-              passwordPolicies: false,
-            })
-          )
-        ).to.equal(true);
-        expect(asked).to.equal(2);
+        // `false` is for want of a model.
+        for (const scope of [
+          local,
+          {
+            ...local,
+            described: false,
+            branches: [],
+            passwordPolicies: false,
+          },
+        ]) {
+          const mounted = await mountPolicies(scope);
+          expect(navPolicies(mounted)).to.not.equal(null);
+          expect(asked(mounted)).to.not.deep.equal([]);
+          mounted.unmount();
+        }
       });
     });
 
     it('should list the policies with the reference data', async () => {
-      const container = {
-        innerHTML: '',
-        querySelector: () => null,
-        querySelectorAll: () => [],
-      };
-      const app = await consoleFor(null);
-      const inner = app as unknown as {
-        container: unknown;
-        policiesReadable: boolean;
-        drawShell(): void;
-      };
-      inner.container = container;
-      inner.policiesReadable = true;
-      inner.drawShell();
-      const section = container.innerHTML.slice(
-        container.innerHTML.indexOf('id="dc-nav-reference"')
-      );
-      expect(section).to.match(
-        /class="dc-nav-item dc-nav-item-reference" data-nav="password-policies"/
-      );
+      const mounted = await mountPolicies(null);
+      expect(navPolicies(mounted)).to.not.equal(null);
       expect(
-        container.innerHTML.match(/data-nav="password-policies"/g)
+        mounted.root.querySelectorAll('[data-nav="password-policies"]')
       ).to.have.length(1);
     });
 
     it('should not ask a server that manages no policy', async () => {
-      const app = new DirectoryConsole({
-        containerId: 'console',
-        apiBaseUrl: baseUrl,
+      const mounted = await mountPolicies(null, undefined, {
+        apiPrefix: '/api',
+        features: {},
       });
-      nock(baseUrl)
-        .get('/api/v1/config')
-        .reply(200, { apiPrefix: '/api', features: {} });
-      await (app as unknown as { api: ConsoleApiClient }).api.discover();
-      expect(await reads(app)).to.equal(false);
-      expect(nock.pendingMocks()).to.deep.equal([]);
+      expect(navPolicies(mounted)).to.equal(null);
+      expect(asked(mounted)).to.deep.equal([]);
     });
   });
 
