@@ -15,8 +15,13 @@ import {
   isLarge,
   roleAttribute,
 } from './api/ConsoleApiClient';
-import { LINAGORA_LOGO } from './assets';
-import { applyContrast, sidebarMarkup } from './console/shell';
+import {
+  applyContrast,
+  frameMarkup,
+  logoutMarkup,
+  scopeMarkup,
+  sidebarMarkup,
+} from './console/shell';
 import { attachedClass, attachedEntity } from './components/AttachedTables';
 import {
   comparableDn,
@@ -41,7 +46,7 @@ import type {
   Scope,
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
-import { html, render, type SafeHtml } from './shared/html';
+import { html, render } from './shared/html';
 import type { ConsoleContext } from './console/context';
 import { createLabel } from './console/labels';
 import { consoleReporter } from './console/report';
@@ -505,11 +510,10 @@ export class DirectoryConsole {
 
     render(
       container,
-      html`
-      <div class="dc-app${highContrast() ? ' dc-contrast-high' : ''}">
-        <a class="dc-skip-link dc-button dc-button-primary" href="#dc-main"
-          data-skip>${t('app.skipToContent')}</a>
-        ${sidebarMarkup({
+      frameMarkup({
+        t,
+        contrast: highContrast(),
+        sidebar: sidebarMarkup({
           t,
           primary: primary.map(entity => ({
             key: entity.key,
@@ -518,17 +522,11 @@ export class DirectoryConsole {
           reference: settings,
           language: this.translator.language,
           contrast: highContrast(),
-        })}
-        <div class="dc-content">
-          <header class="dc-header">${this.scopeMarkup()}${this.logoutMarkup()}</header>
-          <main class="dc-main" id="dc-main" data-main tabindex="-1"></main>
-          <a class="dc-powered" href="https://linagora.com" target="_blank"
-            rel="noopener noreferrer">
-            <img src="${LINAGORA_LOGO}" alt="LINAGORA" width="100" height="21" />
-          </a>
-        </div>
-        ${overlayMarkup(t('app.close'))}
-      </div>`
+        }),
+        scope: scopeMarkup(t, this.rights.summary, this.transitLabel()),
+        logout: logoutMarkup(t, this.api.logoutUrl),
+        overlay: overlayMarkup(t('app.close')),
+      })
     );
 
     for (const button of Array.from(
@@ -574,77 +572,6 @@ export class DirectoryConsole {
     container
       .querySelector('[data-panel-close]')
       ?.addEventListener('click', () => this.panel.close());
-  }
-
-  /** The sign-out control, when the server offers a way to sign out. */
-  private logoutMarkup(): SafeHtml {
-    const url = this.api.logoutUrl;
-    if (!url) return html``;
-    return html`<a class="dc-button dc-logout" href="${url}">${this.translator.t(
-      'app.logout'
-    )}</a>`;
-  }
-
-  /**
-   * The branches the caller administers, shown permanently.
-   *
-   * In a local-administration model this is the single most useful thing on
-   * the screen, and the interface this replaces showed it nowhere.
-   */
-  private scopeMarkup(): SafeHtml {
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    const summary = this.rights.summary;
-    if (summary.kind === 'error')
-      return html`<span class="dc-scope-error">${t('scope.unavailable', {
-        error: summary.error,
-      })}</span>`;
-    if (summary.kind === 'unrestricted')
-      return html`<span class="dc-scope-empty">${t('scope.unrestricted')}</span>`;
-    if (summary.kind === 'undescribed')
-      return html`<span class="dc-scope-empty">${t('scope.undescribed')}</span>`;
-    // Grey, not the green of a scope in order: there is nothing to be had.
-    if (summary.kind === 'nothing')
-      return html`<span class="dc-scope-empty dc-scope-none">${t(
-        'scope.none'
-      )}</span>`;
-    const transit = summary.transit;
-    return html`
-      <span class="dc-scope-label">${t('scope.title')}</span>
-      <ul class="dc-scope">
-        ${summary.branches.map(branch => {
-          const rights = [
-            branch.read ? t('scope.read') : '',
-            branch.write ? t('scope.write') : '',
-            branch.delete ? t('scope.delete') : '',
-          ]
-            .filter(Boolean)
-            .join(', ');
-          return html`<li title="${branch.path || branch.dn}">
-              <strong>${branch.name || branch.dn}</strong>
-              <span class="dc-muted">${rights}</span>
-            </li>`;
-        })}
-      </ul>
-            ${
-              transit
-                ? html`${
-                    // "Transit Transit (1)" said its name twice: the label goes
-                    // when the branch's name is that word already.
-                    rdnValue(transit).toLowerCase() ===
-                    t('transit.branch').toLowerCase()
-                      ? ''
-                      : html`<span class="dc-scope-label">${t('transit.branch')}</span>`
-                  }
-            <a class="dc-scope-transit" data-transit-link href="#/organizations/${encodeURIComponent(
-              transit
-            )}" title="${
-              // Readable, like the branches' paths: the scope gives the
-              // transit branch no path, and its name stands in for one.
-              rdnValue(transit)
-            }">${this.transitLabel()}</a>`
-                : ''
-            }`;
   }
 
   /**
