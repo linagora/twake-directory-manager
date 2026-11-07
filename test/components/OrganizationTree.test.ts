@@ -2,15 +2,46 @@ import { expect } from 'chai';
 import { ConsoleApiClient } from '../../src/api/ConsoleApiClient';
 import { OrganizationTree } from '../../src/components/OrganizationTree';
 import { Translator } from '../../src/i18n';
-import { baseUrl, treeContainer } from '../support/stubs';
+import { until } from '../support/act';
+import { baseUrl } from '../support/stubs';
 
 describe('OrganizationTree', () => {
+  /** A container the tree draws into, in the page. */
+  const treeOnPage = (): HTMLElement => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    return container;
+  };
+  /** The filter the tree drew. */
+  const filterOf = (container: HTMLElement): HTMLInputElement =>
+    container.querySelector<HTMLInputElement>(
+      '[data-filter]'
+    ) as HTMLInputElement;
+  /** What the tree drew below its filter. */
+  const listOf = (container: HTMLElement): HTMLElement =>
+    container.querySelector<HTMLElement>('[data-tree-list]') as HTMLElement;
+  /** Type in the filter, as the reader does. */
+  const type = (container: HTMLElement, text: string): void => {
+    const input = filterOf(container);
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  /** Click the tree's control this selector names. */
+  const click = (container: HTMLElement, selector: string): void => {
+    const control = container.querySelector<HTMLElement>(selector);
+    if (!control) throw new Error(`no ${selector}`);
+    control.click();
+  };
+  /** Let the work a click or a keystroke started answer. */
+  const settle = (): Promise<void> =>
+    new Promise(resolve => setImmediate(resolve));
+
   describe('OrganizationTree filter', () => {
     const top = 'ou=organization,dc=example,dc=com';
     const sales = `ou=Sales,${top}`;
 
     it('should keep the filter input across keystrokes', async () => {
-      const container = treeContainer();
+      const container = treeOnPage();
       await new OrganizationTree({
         translator: new Translator('en'),
         root: async () => ({ dn: top, name: 'organization' }),
@@ -20,19 +51,16 @@ describe('OrganizationTree', () => {
         ],
         onSelect: () => undefined,
       }).render(container);
-      const input = container.filter;
-      const builds = container.builds;
       expect(container.innerHTML).to.include('>Sales</button>');
 
-      // The browser edits the value and its caret; a redraw that replaced the
-      // input would drop both, and the next letter would land before them.
+      // A redraw that replaced the input would take its value and its caret
+      // with it: the input the reader types in stays the one drawn.
+      const input = filterOf(container);
       for (const typed of ['l', 'li', 'lin']) {
-        input.value = typed;
-        input.fire();
-        expect(container.filter).to.equal(input);
-        expect(container.filter.value).to.equal(typed);
+        type(container, typed);
+        expect(filterOf(container)).to.equal(input);
+        expect(filterOf(container).value).to.equal(typed);
       }
-      expect(container.builds).to.equal(builds);
       // The list was filtered all the same.
       expect(container.innerHTML)
         .to.include('>Lin</button>')
@@ -40,7 +68,7 @@ describe('OrganizationTree', () => {
     });
 
     it('should name its buttons after their organization, and expose the selected one', async () => {
-      const container = treeContainer();
+      const container = treeOnPage();
       const tree = new OrganizationTree({
         translator: new Translator('en'),
         root: async () => ({ dn: top, name: 'organization' }),
@@ -50,7 +78,7 @@ describe('OrganizationTree', () => {
       });
       await tree.render(container);
       tree.select(sales);
-      const html = container.list.innerHTML.replace(/\s+/g, ' ');
+      const html = listOf(container).innerHTML.replace(/\s+/g, ' ');
       expect(html)
         .to.include('aria-expanded="true" aria-label="Collapse organization"')
         .and.include('aria-expanded="false" aria-label="Expand Sales"')
@@ -64,22 +92,20 @@ describe('OrganizationTree', () => {
     });
 
     it('should say when the filter hides every opened organization', async () => {
-      const container = treeContainer();
+      const container = treeOnPage();
       await new OrganizationTree({
         translator: new Translator('en'),
         root: async () => ({ dn: top, name: 'organization' }),
         children: async () => [{ dn: sales, name: 'Sales' }],
         onSelect: () => undefined,
       }).render(container);
-      container.filter.value = 'zzz';
-      container.filter.fire();
-      expect(container.list.innerHTML)
+      type(container, 'zzz');
+      expect(listOf(container).innerHTML)
         .to.include('No organization matches “zzz”')
         .and.not.include('dc-tree-list');
       // Cleared, the tree is back.
-      container.filter.value = '';
-      container.filter.fire();
-      expect(container.list.innerHTML).to.include('>Sales</button>');
+      type(container, '');
+      expect(listOf(container).innerHTML).to.include('>Sales</button>');
     });
   });
 
@@ -87,8 +113,6 @@ describe('OrganizationTree', () => {
     const top = 'ou=organization,dc=example,dc=com';
     const sales = `ou=Sales,${top}`;
     const france = `ou=France,${sales}`;
-    const settle = (): Promise<void> =>
-      new Promise(resolve => setImmediate(resolve));
     const options = (asked: string[], selected: string[] = []) => ({
       translator: new Translator('en'),
       root: async () => ({ dn: top, name: 'organization' }),
@@ -110,31 +134,31 @@ describe('OrganizationTree', () => {
         partial: false,
       }),
     });
-    type Hidden = {
-      choose(dn: string, label: string): Promise<void>;
-      pick(dn: string): Promise<void>;
-    };
+    /** Open a node as the reader does, the label of the tree clicked. */
+    const pick = (container: HTMLElement, dn: string): void =>
+      click(container, `[data-select="${dn}"]`);
 
     it('should find an organization under a branch never opened', async () => {
       const asked: string[] = [];
       const selected: string[] = [];
-      const container = treeContainer();
+      const container = treeOnPage();
       const tree = new OrganizationTree(options(asked, selected));
       await tree.render(container);
-      container.filter.value = 'Fra';
-      container.filter.fire();
+      type(container, 'Fra');
       await settle();
-      expect(container.list.innerHTML)
+      expect(listOf(container).innerHTML)
         .to.include(`data-found="${france}"`)
-        .and.include('>Sales &#x2F; France</button>')
+        .and.include('>Sales / France</button>')
         .and.not.include('data-select');
       expect(asked).to.deep.equal([top]);
 
       // Chosen, it is shown in the tree, opened down to it, and selected.
-      await (tree as unknown as Hidden).choose(france, 'Sales / France');
-      expect(container.filter.value).to.equal('');
+      click(container, `[data-found="${france}"]`);
+      await until(() => selected.length === 1);
+      await settle();
+      expect(filterOf(container).value).to.equal('');
       expect(selected).to.deep.equal([france]);
-      expect(container.list.innerHTML).to.match(
+      expect(listOf(container).innerHTML).to.match(
         /dc-selected[^]*?data-select="ou=France,ou=Sales,/
       );
     });
@@ -143,7 +167,7 @@ describe('OrganizationTree', () => {
       // The top hangs from nothing: refreshing its children kept the name it
       // was first read with, and the filter went on finding the old one.
       let topName = 'Old organization';
-      const container = treeContainer();
+      const container = treeOnPage();
       const tree = new OrganizationTree({
         translator: new Translator('en'),
         root: async () => ({ dn: top, name: topName }),
@@ -151,34 +175,34 @@ describe('OrganizationTree', () => {
         onSelect: () => undefined,
       });
       await tree.render(container);
-      container.filter.value = 'Old';
-      container.filter.fire();
-      expect(container.list.innerHTML).to.include('>Old organization</button>');
+      type(container, 'Old');
+      expect(listOf(container).innerHTML).to.include(
+        '>Old organization</button>'
+      );
 
       topName = 'New organization';
       await tree.refresh();
-      container.filter.value = 'New';
-      container.filter.fire();
-      expect(container.list.innerHTML).to.include('>New organization</button>');
-      container.filter.value = 'Old';
-      container.filter.fire();
-      expect(container.list.innerHTML).to.not.include('>Old organization<');
+      type(container, 'New');
+      expect(listOf(container).innerHTML).to.include(
+        '>New organization</button>'
+      );
+      type(container, 'Old');
+      expect(listOf(container).innerHTML).to.not.include('>Old organization<');
     });
 
     it('should say when no organization of the whole tree matches', async () => {
-      const container = treeContainer();
+      const container = treeOnPage();
       await new OrganizationTree(options([])).render(container);
-      container.filter.value = 'zzz';
-      container.filter.fire();
+      type(container, 'zzz');
       await settle();
-      expect(container.list.innerHTML)
+      expect(listOf(container).innerHTML)
         .to.include('No organization matches “zzz”')
         .and.not.include('among the opened branches');
     });
 
     it('should read the whole tree once, and again once a branch changed', async () => {
       let reads = 0;
-      const container = treeContainer();
+      const container = treeOnPage();
       const tree = new OrganizationTree({
         ...options([]),
         everywhere: async () => {
@@ -191,8 +215,7 @@ describe('OrganizationTree', () => {
       });
       await tree.render(container);
       for (const typed of ['Sa', 'Sal', 'S', 'Sa']) {
-        container.filter.value = typed;
-        container.filter.fire();
+        type(container, typed);
         await settle();
       }
       expect(reads).to.equal(1);
@@ -202,45 +225,57 @@ describe('OrganizationTree', () => {
     });
 
     it('should filter the opened branches when the whole tree cannot be read', async () => {
-      const container = treeContainer();
+      const container = treeOnPage();
       await new OrganizationTree({
         ...options([]),
         everywhere: async () => {
           throw new Error('refused');
         },
       }).render(container);
-      container.filter.value = 'Sal';
-      container.filter.fire();
+      type(container, 'Sal');
       await settle();
-      expect(container.list.innerHTML).to.include('>Sales</button>');
+      expect(listOf(container).innerHTML).to.include('>Sales</button>');
     });
 
     it('should open a node when it is selected', async () => {
       const asked: string[] = [];
       const selected: string[] = [];
-      const container = treeContainer();
+      const container = treeOnPage();
       const tree = new OrganizationTree(options(asked, selected));
       await tree.render(container);
-      await (tree as unknown as Hidden).pick(sales);
+      pick(container, sales);
+      await until(() =>
+        listOf(container).innerHTML.includes('>France</button>')
+      );
       expect(selected).to.deep.equal([sales]);
       expect(asked).to.deep.equal([top, sales]);
-      expect(container.list.innerHTML)
+      expect(listOf(container).innerHTML)
         .to.include('aria-label="Collapse Sales"')
         .and.include('>France</button>');
       // Selected again, it stays open.
-      await (tree as unknown as Hidden).pick(sales);
-      expect(container.list.innerHTML).to.include('>France</button>');
+      pick(container, sales);
+      await settle();
+      expect(listOf(container).innerHTML).to.include('>France</button>');
     });
 
     it('should not say a selected leaf is expanded', async () => {
-      const container = treeContainer();
+      const container = treeOnPage();
       const tree = new OrganizationTree(options([]));
       await tree.render(container);
-      await (tree as unknown as Hidden).pick(sales);
-      await (tree as unknown as Hidden).pick(france);
-      const html = container.list.innerHTML.replace(/\s+/g, ' ');
+      pick(container, sales);
+      await until(() =>
+        listOf(container).innerHTML.includes('>France</button>')
+      );
+      pick(container, france);
+      await until(
+        () =>
+          container
+            .querySelector(`[data-select="${france}"]`)
+            ?.getAttribute('aria-current') === 'true'
+      );
+      const html = listOf(container).innerHTML.replace(/\s+/g, ' ');
       expect(html).to.match(
-        /data-toggle="ou=France,[^"]*" disabled aria-label="France has no sub-organization"/
+        /data-toggle="ou=France,[^"]*" disabled(?:="")? aria-label="France has no sub-organization"/
       );
       expect(html).to.include(
         'aria-expanded="true" aria-label="Collapse Sales"'
@@ -250,7 +285,7 @@ describe('OrganizationTree', () => {
     it('should leave a branch whose children could not be read to be opened again', async () => {
       let refuse = true;
       const asked: string[] = [];
-      const container = treeContainer();
+      const container = treeOnPage();
       const tree = new OrganizationTree({
         ...options(asked),
         children: async (dn: string) => {
@@ -261,25 +296,27 @@ describe('OrganizationTree', () => {
         },
       });
       await tree.render(container);
-      await (tree as unknown as Hidden).pick(sales);
+      pick(container, sales);
+      const note = (): string => listOf(container).innerHTML;
+      await until(() => note().includes('dc-tree-note'));
       // Not taken for a leaf: closed, and still offered to open.
-      expect(container.list.innerHTML.replace(/\s+/g, ' ')).to.include(
+      expect(note().replace(/\s+/g, ' ')).to.include(
         'aria-expanded="false" aria-label="Expand Sales"'
       );
       // And said, under the tree, so the arrow does not seem to do nothing.
-      expect(container.list.innerHTML).to.include(
+      expect(note()).to.include(
         'Could not read what Sales holds (Service Unavailable). Open it again to retry.'
       );
       refuse = false;
-      await (tree as unknown as Hidden).pick(sales);
+      pick(container, sales);
+      await until(() => note().includes('>France</button>'));
       expect(asked).to.deep.equal([top, sales, sales]);
-      expect(container.list.innerHTML).to.include('>France</button>');
       // Read, the note goes.
-      expect(container.list.innerHTML).to.not.include('dc-tree-note');
+      expect(note()).to.not.include('dc-tree-note');
     });
 
     it('should merge the opened branches into a walk cut short, and hedge its "no match"', async () => {
-      const container = treeContainer();
+      const container = treeOnPage();
       const tree = new OrganizationTree({
         ...options([]),
         // The walk stopped before France, which an opened branch holds.
@@ -289,15 +326,16 @@ describe('OrganizationTree', () => {
         }),
       });
       await tree.render(container);
-      await (tree as unknown as Hidden).pick(sales);
-      container.filter.value = 'Fra';
-      container.filter.fire();
+      pick(container, sales);
+      await until(() =>
+        listOf(container).innerHTML.includes('>France</button>')
+      );
+      type(container, 'Fra');
       await settle();
-      expect(container.list.innerHTML).to.include(`data-found="${france}"`);
-      container.filter.value = 'zzz';
-      container.filter.fire();
+      expect(listOf(container).innerHTML).to.include(`data-found="${france}"`);
+      type(container, 'zzz');
       await settle();
-      expect(container.list.innerHTML).to.include(
+      expect(listOf(container).innerHTML).to.include(
         'No organization matches “zzz” among the opened branches'
       );
     });
@@ -314,28 +352,29 @@ describe('OrganizationTree', () => {
           });
         },
       });
-      const container = treeContainer();
+      const container = treeOnPage();
       const tree = new OrganizationTree({
         ...options([]),
         everywhere: () => client.organizationWalk(),
       });
       await tree.render(container);
-      await (tree as unknown as Hidden).pick(sales);
-      container.filter.value = 'Fra';
-      container.filter.fire();
+      pick(container, sales);
+      await until(() =>
+        listOf(container).innerHTML.includes('>France</button>')
+      );
+      type(container, 'Fra');
       await settle();
-      expect(container.list.innerHTML).to.include(`data-found="${france}"`);
-      container.filter.value = 'zzz';
-      container.filter.fire();
+      expect(listOf(container).innerHTML).to.include(`data-found="${france}"`);
+      type(container, 'zzz');
       await settle();
-      expect(container.list.innerHTML).to.include(
+      expect(listOf(container).innerHTML).to.include(
         'No organization matches “zzz” among the opened branches'
       );
     });
 
     it('should read the whole tree again in the next view after a failure, hedging meanwhile', async () => {
       let reads = 0;
-      const container = treeContainer();
+      const container = treeOnPage();
       const everywhere = async () => {
         reads++;
         if (reads === 1) throw new Error('refused');
@@ -346,24 +385,22 @@ describe('OrganizationTree', () => {
       };
       const first = new OrganizationTree({ ...options([]), everywhere });
       await first.render(container);
-      container.filter.value = 'zzz';
-      container.filter.fire();
+      type(container, 'zzz');
       await settle();
-      expect(container.list.innerHTML).to.include(
+      expect(listOf(container).innerHTML).to.include(
         'No organization matches “zzz” among the opened branches'
       );
-      const again = treeContainer();
+      const again = treeOnPage();
       const second = new OrganizationTree(
         { ...options([]), everywhere },
         first
       );
       await second.render(again);
       await settle();
-      again.filter.value = 'Fra';
-      again.filter.fire();
+      type(again, 'Fra');
       await settle();
       expect(reads).to.equal(2);
-      expect(again.list.innerHTML).to.include(`data-found="${france}"`);
+      expect(listOf(again).innerHTML).to.include(`data-found="${france}"`);
     });
 
     it('should ask the server once the typing pauses, keeping only the answer to the last text', async () => {
@@ -378,7 +415,7 @@ describe('OrganizationTree', () => {
         }) => void
       >();
       let walks = 0;
-      const container = treeContainer();
+      const container = treeOnPage();
       await new OrganizationTree({
         ...options([]),
         everywhere: async () => {
@@ -391,16 +428,12 @@ describe('OrganizationTree', () => {
         },
       }).render(container);
       // Typed in one go: one request.
-      for (const typed of ['Sa', 'Sal']) {
-        container.filter.value = typed;
-        container.filter.fire();
-      }
+      for (const typed of ['Sa', 'Sal']) type(container, typed);
       await pause();
       expect(searched).to.deep.equal([['Sal', top]]);
-      expect(container.list.innerHTML).to.include('Loading');
+      expect(listOf(container).innerHTML).to.include('Loading');
       // Typed on while it is under way: its answer, late, is dropped.
-      container.filter.value = 'Fra';
-      container.filter.fire();
+      type(container, 'Fra');
       await pause();
       answers.get('Fra')?.({
         organizations: [{ dn: france, label: 'Sales / France' }],
@@ -412,7 +445,7 @@ describe('OrganizationTree', () => {
         truncated: false,
       });
       await settle();
-      expect(container.list.innerHTML)
+      expect(listOf(container).innerHTML)
         .to.include(`data-found="${france}"`)
         .and.not.include(`data-found="${sales}"`)
         // A whole answer is not said to be cut.
@@ -421,16 +454,14 @@ describe('OrganizationTree', () => {
 
       // Its "no match" is the whole tree's; a failure leaves the opened
       // branches, hedged.
-      container.filter.value = 'zzz';
-      container.filter.fire();
+      type(container, 'zzz');
       await pause();
       answers.get('zzz')?.({ organizations: [], truncated: false });
       await settle();
-      expect(container.list.innerHTML)
+      expect(listOf(container).innerHTML)
         .to.include('No organization matches “zzz”')
         .and.not.include('among the opened branches');
-      container.filter.value = 'yyy';
-      container.filter.fire();
+      type(container, 'yyy');
       await pause();
       expect(searched.map(([query]) => query)).to.deep.equal([
         'Sal',
@@ -441,7 +472,7 @@ describe('OrganizationTree', () => {
     });
 
     it('should say when the server kept only the first matches', async () => {
-      const container = treeContainer();
+      const container = treeOnPage();
       await new OrganizationTree({
         ...options([]),
         search: async () => ({
@@ -452,11 +483,10 @@ describe('OrganizationTree', () => {
           truncated: true,
         }),
       }).render(container);
-      container.filter.value = 'Sa';
-      container.filter.fire();
+      type(container, 'Sa');
       await new Promise(resolve => setTimeout(resolve, 300));
       await settle();
-      expect(container.list.innerHTML)
+      expect(listOf(container).innerHTML)
         .to.include(`data-found="${france}"`)
         .and.include(`data-found="${sales}"`)
         .and.include(
@@ -466,23 +496,21 @@ describe('OrganizationTree', () => {
     });
 
     it('should show the opened branches, hedged, when the server search fails', async () => {
-      const container = treeContainer();
+      const container = treeOnPage();
       await new OrganizationTree({
         ...options([]),
         search: async () => {
           throw new Error('Service Unavailable');
         },
       }).render(container);
-      container.filter.value = 'Sal';
-      container.filter.fire();
+      type(container, 'Sal');
       await new Promise(resolve => setTimeout(resolve, 300));
       await settle();
-      expect(container.list.innerHTML).to.include('>Sales</button>');
-      container.filter.value = 'zzz';
-      container.filter.fire();
+      expect(listOf(container).innerHTML).to.include('>Sales</button>');
+      type(container, 'zzz');
       await new Promise(resolve => setTimeout(resolve, 300));
       await settle();
-      expect(container.list.innerHTML).to.include(
+      expect(listOf(container).innerHTML).to.include(
         'No organization matches “zzz” among the opened branches'
       );
     });
@@ -616,7 +644,7 @@ describe('OrganizationTree', () => {
 
     it('should find a node however its DN is spelled', async () => {
       const asked: string[] = [];
-      const container = treeContainer();
+      const container = treeOnPage();
       const tree = new OrganizationTree(options(asked));
       await tree.render(container);
       expect(
@@ -631,7 +659,7 @@ describe('OrganizationTree', () => {
 
     it('should select nothing for a node it does not hold', async () => {
       const tree = new OrganizationTree(options([]));
-      await tree.render(treeContainer());
+      await tree.render(treeOnPage());
       expect(await tree.reveal('ou=Elsewhere,dc=example,dc=org')).to.be.false;
       expect(await tree.reveal(`ou=Gone,${engineering}`)).to.be.false;
     });
@@ -654,7 +682,7 @@ describe('OrganizationTree', () => {
           return [];
         },
       });
-      const container = treeContainer();
+      const container = treeOnPage();
       await tree.render(container);
       late = true;
       expect(await tree.reveal(`ou=Legal,${top}`)).to.be.true;
@@ -665,9 +693,9 @@ describe('OrganizationTree', () => {
     it('should carry the open branches over to the tree drawn in its place', async () => {
       const asked: string[] = [];
       const first = new OrganizationTree(options(asked));
-      await first.render(treeContainer());
+      await first.render(treeOnPage());
       await first.reveal(backend);
-      const container = treeContainer();
+      const container = treeOnPage();
       await new OrganizationTree(options(asked), first).render(container);
       // Nothing read again, and Backend still drawn under an open Engineering.
       expect(asked).to.deep.equal([top, engineering]);
