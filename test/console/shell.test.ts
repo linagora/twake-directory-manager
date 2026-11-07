@@ -1,12 +1,9 @@
 import { expect } from 'chai';
 import nock from 'nock';
-import { DirectoryConsole } from '../../src/DirectoryConsole';
 import { Translator, availableLanguages, languageName } from '../../src/i18n';
-import { referenceOpen } from '../../src/console/settings';
 import { click, panelOf, until } from '../support/act';
 import { mountConsole, settled, type Mounted } from '../support/mount';
 import type { Entry, Scope } from '../../src/types';
-import { baseUrl } from '../support/stubs';
 import { users } from '../fixtures/entities';
 
 describe('Directory console: the shell and the overview', () => {
@@ -32,23 +29,20 @@ describe('Directory console: the shell and the overview', () => {
       afterEach(() => {
         Object.defineProperty(globalThis, 'localStorage', original);
       });
-      const fresh = () =>
-        new DirectoryConsole({
-          containerId: 'console',
-          apiBaseUrl: baseUrl,
-        }) as unknown as {
-          translator: Translator;
-        };
-
-      it('should start in the language of the last visit, with the reference section as it was left', () => {
+      it('should start in the language of the last visit, with the reference section as it was left', async () => {
         localStorage.setItem('ldap-rest.console.language', 'fr');
         localStorage.setItem('ldap-rest.console.referenceOpen', '1');
-        const app = fresh();
-        expect(app.translator.language).to.equal('fr');
-        expect(referenceOpen()).to.equal(true);
+        const { root } = await mountConsole({ hash: '' });
+        expect(document.documentElement.lang).to.equal('fr');
+        expect(
+          root.querySelector<HTMLElement>('#dc-nav-reference')?.hidden
+        ).to.equal(false);
+        expect(
+          root.querySelector('[data-nav=""] .dc-nav-label')?.textContent
+        ).to.equal('Vue d’ensemble');
       });
 
-      it('should start in English with the section closed when storage is denied', () => {
+      it('should start in English with the section closed when storage is denied', async () => {
         // A browser that refuses storage (a private window with it blocked)
         // throws on the property itself.
         Object.defineProperty(globalThis, 'localStorage', {
@@ -57,10 +51,12 @@ describe('Directory console: the shell and the overview', () => {
             throw new Error('denied');
           },
         });
-        const app = fresh();
+        const { root } = await mountConsole({ hash: '' });
         // The browser's language then, which happy-dom fixes at en-US.
-        expect(app.translator.language).to.equal('en');
-        expect(referenceOpen()).to.equal(false);
+        expect(document.documentElement.lang).to.equal('en');
+        expect(
+          root.querySelector<HTMLElement>('#dc-nav-reference')?.hidden
+        ).to.equal(true);
       });
     });
 

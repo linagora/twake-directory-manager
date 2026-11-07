@@ -13,9 +13,9 @@ import { pointerLabel, rdnValue } from '../../src/format';
 import { Translator } from '../../src/i18n';
 import { Rights } from '../../src/rights';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
-import { baseUrl, consoleIn } from '../support/stubs';
+import { baseUrl } from '../support/stubs';
 import { until } from '../support/act';
-import { mountConsole } from '../support/mount';
+import { mountConsole, settled } from '../support/mount';
 import {
   usersSchema,
   users,
@@ -426,7 +426,9 @@ describe('Directory console: organizations', () => {
       expect(attachedClass(entities, 'groups')).to.equal(undefined);
     });
 
-    it('should open the New user form with the department already set', () => {
+    it('should open the New user form with the department already set', async () => {
+      const container = document.createElement('div');
+      document.body.append(container);
       const form = new EntityForm({
         entity: users,
         preset: {
@@ -438,12 +440,13 @@ describe('Directory console: organizations', () => {
         pointerSearch: () => async () => [],
         onSubmit: () => Promise.resolve(),
         onCancel: () => undefined,
-      }) as unknown as {
-        values: Record<string, string[]>;
-        picked: Map<string, string>;
-      };
-      expect(form.values.twakeDepartmentLink).to.deep.equal([france]);
-      expect(form.picked.get(france)).to.equal('Sales / France');
+      });
+      await form.render(container);
+      const token = container.querySelector<HTMLElement>(
+        '[data-picker="twakeDepartmentLink"] .dc-token > span'
+      );
+      expect(token?.textContent).to.equal('Sales / France');
+      expect(token?.getAttribute('title')).to.equal(france);
     });
 
     it('should send a form once while the server answers', async () => {
@@ -452,25 +455,39 @@ describe('Directory console: organizations', () => {
       let sent = 0;
       const form = new EntityForm({
         entity: users,
+        entry: {
+          uid: 'alice',
+          cn: 'Alice',
+          mail: 'alice@example.com',
+          twakeDepartmentLink: france,
+        },
         translator: new Translator('en'),
-        pointerOptions: () => Promise.resolve([]),
-        pointerSearch: () => async () => [],
+        pointerOptions: () =>
+          Promise.resolve([{ dn: france, label: 'Sales / France' }]),
         onSubmit: () => {
           sent++;
           return new Promise<void>(resolve => (release = resolve));
         },
         onCancel: () => undefined,
-      }) as unknown as { validate(): boolean; submit(): Promise<void> };
-      form.validate = () => true;
-      const first = form.submit();
-      await form.submit();
+      });
+      const container = document.createElement('div');
+      document.body.append(container);
+      await form.render(container);
+      const element = container.querySelector('form');
+      if (!element) throw new Error('no form');
+      const submit = (): void => {
+        element.dispatchEvent(
+          new Event('submit', { bubbles: true, cancelable: true })
+        );
+      };
+      submit();
+      submit();
       expect(sent).to.equal(1);
       release();
-      await first;
-      const again = form.submit();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      submit();
       expect(sent).to.equal(2);
       release();
-      await again;
     });
 
     describe('what waits in transit', () => {
@@ -554,33 +571,52 @@ describe('Directory console: organizations', () => {
       });
 
       it('should not let an older answer count over a newer one', async () => {
-        // Read again after every hand-over and claim: the answers may come
+        // Read again when the page is drawn again: the answers may come
         // back in any order.
-        const link = { textContent: 'Transit' };
-        const app = consoleIn({ '[data-transit-link]': link });
-        Object.assign(app as unknown as object, { entities, scope: eric() });
-        const answers: ((value: unknown) => void)[] = [];
-        Object.assign((app as unknown as { api: object }).api, {
-          organizationMembers: () =>
-            new Promise(resolve => answers.push(resolve)),
-          pointerOptions: async () => [],
+        const answers: ((entries: Entry[]) => void)[] = [];
+        const { root, unmount } = await mountConsole({
+          hash: '',
+          scope: eric(),
+          answers: server => {
+            server
+              .get(
+                uri =>
+                  decodeURIComponent(uri).includes(
+                    `/organizations/${transit}/subnodes`
+                  ) && decodeURIComponent(uri).includes('twakeAccount')
+              )
+              .times(2)
+              .reply(async () => {
+                const entries = await new Promise<Entry[]>(resolve =>
+                  answers.push(resolve)
+                );
+                return [200, entries];
+              });
+            server
+              .get(uri =>
+                decodeURIComponent(uri).includes(
+                  `/organizations/${transit}/subnodes`
+                )
+              )
+              .times(2)
+              .reply(200, []);
+          },
         });
-        const read = (
-          app as unknown as { readTransit(): Promise<unknown> }
-        ).readTransit.bind(app);
-        const first = read();
-        const second = read();
-        answers[1]({
-          entries: [attachedEntry(grace, entities)],
-          truncated: false,
-        });
-        await second;
-        answers[0]({
-          entries: [bob, grace].map(entry => attachedEntry(entry, entities)),
-          truncated: false,
-        });
-        await first;
-        expect(link.textContent).to.equal('Transit (1)');
+        await until(() => answers.length === 1);
+        const language =
+          root.querySelector<HTMLSelectElement>('[data-language]');
+        if (!language) throw new Error('no language select');
+        language.value = 'fr';
+        language.dispatchEvent(new Event('change', { bubbles: true }));
+        await until(() => answers.length === 2);
+        const link = (): string | null | undefined =>
+          root.querySelector('[data-transit-link]')?.textContent;
+        answers[1]([grace]);
+        await until(() => link() === 'Transit (1)');
+        answers[0]([bob, grace]);
+        await settled(root);
+        expect(link()).to.equal('Transit (1)');
+        unmount();
       });
 
       it('should say nothing when nothing waits', async () => {
