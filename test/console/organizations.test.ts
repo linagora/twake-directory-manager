@@ -11,13 +11,11 @@ import {
 import { EntityForm } from '../../src/components/EntityForm';
 import { pointerLabel, rdnValue } from '../../src/format';
 import { Translator } from '../../src/i18n';
+import { Rights } from '../../src/rights';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
-import {
-  baseUrl,
-  stubContainer,
-  consoleIn,
-  toastElement,
-} from '../support/stubs';
+import { baseUrl, consoleIn } from '../support/stubs';
+import { until } from '../support/act';
+import { mountConsole } from '../support/mount';
 import {
   usersSchema,
   users,
@@ -37,21 +35,6 @@ describe('Directory console: organizations', () => {
     const top = 'ou=organization,dc=example,dc=com';
     const government = `ou=Government of Mongolia,${top}`;
     const transit = `ou=Transit,${top}`;
-    const organizations: EntityDescriptor = {
-      key: 'organizations',
-      pluralName: 'organizations',
-      singularName: 'organization',
-      mainAttribute: 'ou',
-      base: top,
-      schema: {
-        attributes: {
-          ou: { type: 'string', role: 'identifier' },
-          description: { type: 'string' },
-        },
-      },
-      endpoint: '/api/v1/ldap/organizations',
-      kind: 'organization',
-    };
     const scope = (over: Partial<Scope>): Scope => ({
       user: 'alice',
       unrestricted: false,
@@ -69,32 +52,44 @@ describe('Directory console: organizations', () => {
       write: true,
     });
 
-    /** The overview's markup under a scope. */
-    const setup = (granted: Scope) => {
-      const main = { innerHTML: '', querySelectorAll: () => [] };
-      const app = consoleIn({
-        '[data-main]': main,
-        '[data-toast]': toastElement(),
-      });
-      Object.assign(app, {
-        entities: [organizations],
-        scope: granted,
-        // Counted on the overview; the transit branch is not served.
-        readMembers: async () => null,
-      });
-      const views = app as unknown as {
-        renderDashboard(main: unknown): void;
-      };
-      return {
-        dashboard: (): string => {
-          views.renderDashboard(main);
-          return main.innerHTML;
+    /** The overview mounted under a scope, with organizations alone. */
+    const setup = async (granted: Scope): Promise<string> => {
+      const configured = {
+        apiPrefix: '/api',
+        features: {
+          ldapOrganizations: {
+            enabled: true,
+            topOrganization: top,
+            schema: {
+              entity: {
+                singularName: 'organization',
+                pluralName: 'organizations',
+                mainAttribute: 'ou',
+                base: top,
+              },
+              attributes: {
+                ou: { type: 'string', role: 'identifier' },
+                description: { type: 'string' },
+              },
+            },
+          },
         },
       };
+      const { root } = await mountConsole({
+        hash: '',
+        scope: granted,
+        answers: server => {
+          server.get('/api/v1/config').reply(200, configured);
+          server
+            .get(/\/api\/v1\/ldap\/organizations\/.*\/subnodes.*/)
+            .reply(200, []);
+        },
+      });
+      return root.querySelector('[data-main]')?.innerHTML ?? '';
     };
 
-    it('should still refuse a creation to an administrator writing no organization', () => {
-      const { dashboard } = setup(
+    it('should still refuse a creation to an administrator writing no organization', async () => {
+      const dashboard = await setup(
         scope({
           branches: [
             { dn: government, name: 'Government of Mongolia', read: true },
@@ -103,7 +98,7 @@ describe('Directory console: organizations', () => {
           ],
         })
       );
-      expect(dashboard())
+      expect(dashboard)
         .to.include('Creation not allowed here')
         .and.not.include('data-new="organizations"');
     });
@@ -493,36 +488,6 @@ describe('Directory console: organizations', () => {
         displayName: 'Grace Kim',
         mail: 'grace@example.com',
       };
-      type Waiting = {
-        scope: Scope | null;
-        readTransit(): Promise<unknown>;
-        showTransitWaiting(main: unknown, generation: number): Promise<void>;
-        rights: {
-          organizationRights(dn: string): { write: boolean; delete: boolean };
-        };
-      };
-      /** A console of this scope, the transit branch holding these entries */
-      const setup = (scope: Scope | null, waiting: Entry[]) => {
-        const link = { textContent: 'Transit' };
-        const holder = stubContainer();
-        const app = consoleIn({ '[data-transit-link]': link });
-        Object.assign(app as unknown as object, { entities, scope });
-        Object.assign((app as unknown as { api: object }).api, {
-          organizationMembers: async (dn: string) => {
-            expect(dn).to.equal(transit);
-            return {
-              entries: waiting.map(entry => attachedEntry(entry, entities)),
-              truncated: false,
-            };
-          },
-          pointerOptions: async () => [],
-        });
-        const main = {
-          querySelector: (selector: string) =>
-            selector === '[data-transit-waiting]' ? holder : null,
-        };
-        return { app: app as unknown as Waiting, link, holder, main };
-      };
       const eric = (): Scope => ({
         ...localAdmin(`ou=Engineering,${top}`),
         branches: [
@@ -534,40 +499,77 @@ describe('Directory console: organizations', () => {
           },
         ],
       });
+      /** The Overview of this scope, the transit branch holding these entries. */
+      const mounted = (scope: Scope | null, waiting: Entry[]) =>
+        mountConsole({
+          hash: '',
+          scope,
+          answers: server => {
+            server
+              .get(
+                uri =>
+                  decodeURIComponent(uri).includes(
+                    `/organizations/${transit}/subnodes`
+                  ) && decodeURIComponent(uri).includes('twakeAccount')
+              )
+              .reply(200, waiting);
+            server
+              .get(uri =>
+                decodeURIComponent(uri).includes(
+                  `/organizations/${transit}/subnodes`
+                )
+              )
+              .reply(200, []);
+          },
+        });
 
       it('should count what waits on the banner, and list it on the Overview', async () => {
-        const { app, link, holder, main } = setup(eric(), [bob, grace]);
-        await app.showTransitWaiting(main, 0);
-        expect(link.textContent).to.equal('Transit (2)');
-        expect(holder.innerHTML).to.include('Waiting in transit (2)');
-        expect(holder.innerHTML).to.include(
+        const { root, unmount } = await mounted(eric(), [bob, grace]);
+        await until(() => !!root.querySelector('[data-transit-section]'));
+        expect(root.querySelector('[data-transit-link]')?.textContent).to.equal(
+          'Transit (2)'
+        );
+        const section = root.querySelector<HTMLElement>(
+          '[data-transit-section]'
+        ) as HTMLElement;
+        expect(section.textContent).to.include('Waiting in transit (2)');
+        expect(section.textContent).to.include(
           'Handed over between administrators: claim those that belong to you.'
         );
-        expect(holder.innerHTML).to.include('>Bob Schneider<');
-        expect(holder.innerHTML).to.include('>Grace Kim<');
-        expect(holder.innerHTML.match(/>Claim…</g)).to.have.length(2);
+        expect(section.textContent).to.include('Bob Schneider');
+        expect(section.textContent).to.include('Grace Kim');
+        expect(section.innerHTML.match(/>Claim…</g)).to.have.length(2);
         // Each button named after its row for a screen reader, and the
         // column holding them named too.
-        expect(holder.innerHTML).to.include('aria-label="Claim Bob Schneider"');
-        expect(holder.innerHTML).to.include('aria-label="Claim Grace Kim"');
-        expect(holder.innerHTML).to.include(
+        expect(section.innerHTML).to.include(
+          'aria-label="Claim Bob Schneider"'
+        );
+        expect(section.innerHTML).to.include('aria-label="Claim Grace Kim"');
+        expect(section.innerHTML).to.include(
           '<th scope="col"><span class="dc-visually-hidden">Actions</span></th>'
         );
         // No group waits: no Groups table saying so.
-        expect(holder.innerHTML).to.not.include('data-attached="groups"');
+        expect(section.innerHTML).to.not.include('data-attached="groups"');
+        unmount();
       });
 
       it('should not let an older answer count over a newer one', async () => {
         // Read again after every hand-over and claim: the answers may come
         // back in any order.
-        const { app, link } = setup(eric(), []);
+        const link = { textContent: 'Transit' };
+        const app = consoleIn({ '[data-transit-link]': link });
+        Object.assign(app as unknown as object, { entities, scope: eric() });
         const answers: ((value: unknown) => void)[] = [];
         Object.assign((app as unknown as { api: object }).api, {
           organizationMembers: () =>
             new Promise(resolve => answers.push(resolve)),
+          pointerOptions: async () => [],
         });
-        const first = app.readTransit();
-        const second = app.readTransit();
+        const read = (
+          app as unknown as { readTransit(): Promise<unknown> }
+        ).readTransit.bind(app);
+        const first = read();
+        const second = read();
         answers[1]({
           entries: [attachedEntry(grace, entities)],
           truncated: false,
@@ -582,89 +584,90 @@ describe('Directory console: organizations', () => {
       });
 
       it('should say nothing when nothing waits', async () => {
-        const { app, link, holder, main } = setup(eric(), []);
-        await app.showTransitWaiting(main, 0);
-        expect(link.textContent).to.equal('Transit');
-        expect(holder.innerHTML).to.equal('');
+        const none = await mounted(eric(), []);
+        await none.idle();
+        expect(none.root.querySelector('[data-transit-section]')).to.equal(
+          null
+        );
+        expect(
+          none.root.querySelector('[data-transit-link]')?.textContent
+        ).to.equal('Transit');
+        none.unmount();
 
         // Nor to a scope without a transit branch, which is not asked.
-        const none = setup({ ...eric(), transit: null }, [bob]);
-        await none.app.showTransitWaiting(none.main, 0);
-        expect(none.holder.innerHTML).to.equal('');
+        const without = await mounted({ ...eric(), transit: null }, [bob]);
+        await without.idle();
+        expect(without.root.querySelector('[data-transit-section]')).to.equal(
+          null
+        );
+        expect(without.root.querySelector('[data-transit-link]')).to.equal(
+          null
+        );
       });
 
       it('should offer Edit and Delete on the transit branch to its writer above only', () => {
         // Every administrator writes the transit branch to hand entries
         // over: Edit was offered on it, and Save refused at the end.
-        const local = setup(eric(), []).app;
-        expect(local.rights.organizationRights(transit)).to.deep.equal({
+        const rights = (scope: Scope): Rights => new Rights(scope, null, false);
+        expect(rights(eric()).organizationRights(transit)).to.deep.equal({
           write: false,
           delete: false,
         });
         // An organization is judged by its parent: Engineering is changed
         // from above it, what it holds by its administrator (#167).
         expect(
-          local.rights.organizationRights(`ou=Engineering,${top}`)
+          rights(eric()).organizationRights(`ou=Engineering,${top}`)
         ).to.deep.equal({ write: false, delete: false });
         expect(
-          local.rights.organizationRights(`ou=Backend,ou=Engineering,${top}`)
+          rights(eric()).organizationRights(`ou=Backend,ou=Engineering,${top}`)
         ).to.deep.equal({ write: true, delete: true });
         expect(
-          local.rights.organizationRights(`ou=Sales,${top}`)
+          rights(eric()).organizationRights(`ou=Sales,${top}`)
         ).to.deep.equal({
           write: false,
           delete: false,
         });
-        const admin = setup(
-          {
-            ...eric(),
-            branches: [{ dn: top, read: true, write: true, delete: true }],
-          },
-          []
-        ).app;
-        expect(admin.rights.organizationRights(transit)).to.deep.equal({
+        const admin = rights({
+          ...eric(),
+          branches: [{ dn: top, read: true, write: true, delete: true }],
+        });
+        expect(admin.organizationRights(transit)).to.deep.equal({
           write: true,
           delete: true,
         });
         // A branch naming the organization itself must grant it too.
-        const narrowed = setup(
-          {
-            ...eric(),
-            branches: [
-              { dn: top, read: true, write: true, delete: true },
-              {
-                dn: `ou=Engineering,${top}`,
-                read: true,
-                write: true,
-                delete: false,
-              },
-            ],
-          },
-          []
-        ).app;
+        const narrowed = rights({
+          ...eric(),
+          branches: [
+            { dn: top, read: true, write: true, delete: true },
+            {
+              dn: `ou=Engineering,${top}`,
+              read: true,
+              write: true,
+              delete: false,
+            },
+          ],
+        });
         expect(
-          narrowed.rights.organizationRights(`ou=Engineering,${top}`)
+          narrowed.organizationRights(`ou=Engineering,${top}`)
         ).to.deep.equal({ write: true, delete: false });
         // The most specific branch holding the parent judges, as the
         // server's does; and Delete needs every branch below as well.
         const backend = `ou=Backend,ou=Engineering,${top}`;
-        expect(narrowed.rights.organizationRights(backend)).to.deep.equal({
+        expect(narrowed.organizationRights(backend)).to.deep.equal({
           write: true,
           delete: false,
         });
-        const below = setup(
-          {
-            ...eric(),
-            branches: [
-              { dn: top, read: true, write: true, delete: true },
-              { dn: backend, read: true, write: true, delete: false },
-            ],
-          },
-          []
-        ).app;
-        expect(
-          below.rights.organizationRights(`ou=Engineering,${top}`)
-        ).to.deep.equal({ write: true, delete: false });
+        const below = rights({
+          ...eric(),
+          branches: [
+            { dn: top, read: true, write: true, delete: true },
+            { dn: backend, read: true, write: true, delete: false },
+          ],
+        });
+        expect(below.organizationRights(`ou=Engineering,${top}`)).to.deep.equal(
+          { write: true, delete: false }
+        );
       });
     });
   });

@@ -744,13 +744,18 @@ export class DirectoryConsole {
         button.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }
 
-    if (this.route.view === 'dashboard') return this.renderDashboard(main);
+    if (this.route.view === 'dashboard') {
+      new DashboardView(this.context).render(main, generation);
+      return;
+    }
     if (this.route.view === 'organizations')
       return this.organizationsView.render(main, generation);
-    if (this.route.view === 'policies')
-      return this.rights.managesPolicies()
-        ? new PoliciesView(this.context).render(main, generation)
-        : this.renderDashboard(main);
+    if (this.route.view === 'policies') {
+      if (this.rights.managesPolicies())
+        return new PoliciesView(this.context).render(main, generation);
+      new DashboardView(this.context).render(main, generation);
+      return;
+    }
 
     const entity = this.entity(this.route.entity);
     if (!entity) return this.renderNotFound(main);
@@ -899,35 +904,6 @@ export class DirectoryConsole {
         ? [{ key: POLICIES_KEY, label: this.translator.t('nav.policies') }]
         : []),
     ];
-  }
-
-  /**
-   * Draw the Overview (see `DashboardView`): kept for `renderMain` and the
-   * routing tests that replace it until #220's last step.
-   */
-  private renderDashboard(main: HTMLElement): void {
-    const generation = this.viewGeneration;
-    background(
-      () => new DashboardView(this.viewContext()).render(main, generation),
-      'renderDashboard',
-      this.report
-    );
-  }
-
-  /** The transit section of the Overview (see `DashboardView`). */
-  private showTransitWaiting(
-    main: HTMLElement,
-    generation: number
-  ): Promise<void> {
-    return new DashboardView(this.viewContext()).showTransitWaiting(
-      main,
-      generation
-    );
-  }
-
-  /** The context, built on first use when a test drives a view directly. */
-  private viewContext(): ConsoleContext {
-    return (this.context ??= this.contextOf());
   }
 
   /**
