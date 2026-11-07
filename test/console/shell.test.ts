@@ -3,11 +3,11 @@ import nock from 'nock';
 import { DirectoryConsole } from '../../src/DirectoryConsole';
 import { Translator, availableLanguages, languageName } from '../../src/i18n';
 import { referenceOpen } from '../../src/console/settings';
-import { mountConsole, settled } from '../support/mount';
-import type { SafeHtml } from '../../src/shared/html';
+import { click, panelOf, until } from '../support/act';
+import { mountConsole, settled, type Mounted } from '../support/mount';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
-import { baseUrl, consoleIn } from '../support/stubs';
-import { users, groups, mailboxTypes } from '../fixtures/entities';
+import { baseUrl } from '../support/stubs';
+import { users, mailboxTypes } from '../fixtures/entities';
 
 describe('Directory console: the shell and the overview', () => {
   afterEach(() => nock.cleanAll());
@@ -323,76 +323,73 @@ describe('Directory console: the shell and the overview', () => {
       });
     });
 
-    it('should keep an open panel, and what was typed, across a change of language', () => {
-      const typed = { hidden: false, value: 'E9901' };
-      let drawn = false;
-      const replaced: unknown[] = [];
-      const fresh = {
-        hidden: true,
-        replaceWith: (element: unknown) => replaced.push(element),
-      };
-      const app = new DirectoryConsole({
-        containerId: 'console',
-        apiBaseUrl: baseUrl,
-        language: 'en',
-      }) as unknown as {
-        container: unknown;
-        translator: Translator;
-        renderMain(): Promise<void>;
-        changeLanguage(code: string): void;
-      };
-      app.container = {
-        set innerHTML(_html: string) {
-          drawn = true;
-        },
-        querySelector: (selector: string) =>
-          selector === '[data-panel]' ? (drawn ? fresh : typed) : null,
-        querySelectorAll: () => [],
-      };
-      app.renderMain = () => Promise.resolve();
-      app.changeLanguage('fr');
-      expect(app.translator.language).to.equal('fr');
-      expect(replaced).to.deep.equal([typed]);
+    it('should keep an open panel, and what was typed, across a change of language', async () => {
+      const { root } = await mountConsole({ hash: '' });
+      click(root, '[data-main] [data-new="users"]');
+      const { panel, body } = panelOf(root);
+      await until(() => !panel.hidden);
+      const field = body.querySelector<HTMLInputElement>(
+        '#dc-field-displayName'
+      );
+      if (!field) throw new Error('no identifier field');
+      field.value = 'E9901';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
 
-      // A closed one is drawn afresh, in the new language.
-      typed.hidden = true;
-      drawn = false;
-      app.changeLanguage('en');
-      expect(replaced).to.have.length(1);
+      const language = root.querySelector<HTMLSelectElement>('[data-language]');
+      if (!language) throw new Error('no language select');
+      language.value = 'fr';
+      language.dispatchEvent(new Event('change', { bubbles: true }));
+      await settled(root);
+      expect(panel.hidden).to.be.false;
+      expect(
+        panel.querySelector<HTMLInputElement>('#dc-field-displayName')?.value
+      ).to.equal('E9901');
     });
 
-    it('should name the transit branch in the scope banner, tooltip included', () => {
-      const app = consoleIn({}) as unknown as {
-        scope: Scope;
-        scopeMarkup(): SafeHtml;
+    it('should name the transit branch in the scope banner, tooltip included', async () => {
+      const branch = {
+        dn: 'ou=Sales,ou=organization,dc=example,dc=com',
+        name: 'Sales',
+        path: 'Sales',
+        read: true,
+        write: true,
       };
-      app.scope = {
+      const scope = (transit: string): Scope => ({
         user: 'sophie.martin',
         unrestricted: false,
-        branches: [
-          {
-            dn: 'ou=Sales,ou=organization,dc=example,dc=com',
-            name: 'Sales',
-            path: 'Sales',
-            read: true,
-            write: true,
-          },
-        ],
+        described: true,
+        branches: [branch],
         entities: [],
-        transit: 'ou=Transit,ou=organization,dc=example,dc=com',
-      };
-      const markup = app.scopeMarkup().markup;
-      expect(markup).to.contain('title="Transit">Transit</a>');
-      expect(markup).to.not.contain('title="ou=Transit');
+        transit,
+      });
+      const transit = 'ou=Transit,ou=organization,dc=example,dc=com';
+      const named = await mountConsole({ scope: scope(transit), hash: '' });
+      const link = named.root.querySelector('[data-transit-link]');
+      expect(link?.textContent).to.equal('Transit');
+      expect(link?.getAttribute('title')).to.equal('Transit');
       // "Transit Transit (1)" said it twice: the label goes (#171), and
       // stays before a branch named otherwise.
-      expect(markup).to.not.contain(
-        '<span class="dc-scope-label">Transit</span>'
-      );
-      app.scope.transit = 'ou=Mobility,ou=organization,dc=example,dc=com';
-      expect(app.scopeMarkup().markup)
-        .to.contain('<span class="dc-scope-label">Transit</span>')
-        .and.contain('title="Mobility">Mobility</a>');
+      expect(
+        Array.from(
+          named.root.querySelectorAll('.dc-scope-label'),
+          label => label.textContent
+        )
+      ).to.not.include('Transit');
+      named.unmount();
+
+      const mobility = await mountConsole({
+        scope: scope('ou=Mobility,ou=organization,dc=example,dc=com'),
+        hash: '',
+      });
+      expect(
+        Array.from(
+          mobility.root.querySelectorAll('.dc-scope-label'),
+          label => label.textContent
+        )
+      ).to.include('Transit');
+      const renamed = mobility.root.querySelector('[data-transit-link]');
+      expect(renamed?.textContent).to.equal('Mobility');
+      expect(renamed?.getAttribute('title')).to.equal('Mobility');
     });
   });
 
@@ -537,63 +534,42 @@ describe('Directory console: the shell and the overview', () => {
      * A console for this scope, the account read as `read` answers, and its
      * server offering to sign out.
      */
-    const setup = (
+    /** The overview drawn for a scope, the account as its server answers it. */
+    const overview = (
       scope: Scope,
-      read: () => Promise<Entry> = async () => ({
-        dn: admin,
-        uid: 'admin',
-        cn: 'Ada Admin',
-        mail: 'admin@example.com',
-      }),
-      language = 'en'
-    ) => {
-      const main = { innerHTML: '', querySelectorAll: () => [] };
-      const app = consoleIn({ '[data-main]': main }, language);
-      const asked: string[] = [];
-      Object.assign(app as unknown as object, {
-        scope,
-        entities: [users, groups, mailboxTypes],
-      });
-      Object.assign((app as unknown as { api: object }).api, {
-        logoutPath: '/logout',
-        get: async (entity: EntityDescriptor, id: string) => {
-          asked.push(`${entity.key} ${id}`);
-          return read();
-        },
-      });
-      const inner = app as unknown as {
-        account: unknown;
-        container: { innerHTML: string };
-        readAccount(): Promise<unknown>;
-        renderDashboard(main: unknown): void;
-        drawShell(): void;
-        scopeMarkup(): SafeHtml;
-      };
-      const overview = async (): Promise<string> => {
-        inner.account = await inner.readAccount();
-        inner.renderDashboard(main);
-        return main.innerHTML;
-      };
-      const shell = (): string => {
-        inner.drawShell();
-        return inner.container.innerHTML;
-      };
-      return { app: inner, asked, overview, shell };
-    };
+      account?: Entry,
+      language = 'en',
+      policies = true
+    ): Promise<Mounted> =>
+      mountConsole({ hash: '', scope, account, language, policies });
+
+    /** The main area's markup. */
+    const main = (mounted: Mounted): string =>
+      mounted.root.querySelector('[data-main]')?.innerHTML ?? '';
+
+    /** What the console asked for the signed-in account. */
+    const asked = (mounted: Mounted): string[] =>
+      mounted.calls.filter(call => call.startsWith('get('));
 
     it('should greet the account by its name and address, read as its card is', async () => {
       // "Signed in as uid=admin,ou=users,dc=example,dc=com"
-      const { asked, overview } = setup(global);
-      const html = await overview();
-      expect(html)
+      const ada: Entry = {
+        dn: admin,
+        uid: 'admin',
+        displayName: 'Ada Admin',
+        mail: 'admin@example.com',
+      };
+      const english = await overview(global, ada);
+      expect(main(english))
         .to.include('Signed in as Ada Admin (admin@example.com)')
         .and.include('What you can manage')
         .and.include('data-open="users"')
         .and.not.include(admin);
-      expect(asked).to.deep.equal(['users admin']);
+      expect(asked(english)).to.deep.equal(['get(users, admin)']);
+      english.unmount();
 
-      const fr = setup(global, undefined, 'fr');
-      expect(await fr.overview()).to.include(
+      const french = await overview(global, ada, 'fr');
+      expect(main(french)).to.include(
         'Connecté en tant que Ada Admin (admin@example.com)'
       );
     });
@@ -601,7 +577,7 @@ describe('Directory console: the shell and the overview', () => {
     it('should fall back to the identifier when the account cannot be read', async () => {
       // A department head's own account, attached to the organization above
       // the one they administer: authz-linid1 hides it from them (#157).
-      const local: Scope = {
+      const localScope: Scope = {
         ...global,
         branches: [
           {
@@ -612,35 +588,39 @@ describe('Directory console: the shell and the overview', () => {
           },
         ],
       };
-      const { asked, overview } = setup(local, async () => {
-        throw Object.assign(new Error('Not found'), { status: 404 });
-      });
-      expect(await overview())
+      const local = await overview(localScope);
+      expect(main(local))
         .to.include('Signed in as admin<')
         .and.not.include(admin);
       // Its link decides, which the scope does not give: it is still asked
-      expect(asked).to.deep.equal(['users admin']);
+      expect(asked(local)).to.deep.equal(['get(users, admin)']);
+      local.unmount();
       // Nor is a DN no entity holds greeted whole
-      const outside = setup({ ...global, user: 'cn=root,dc=example,dc=com' });
-      expect(await outside.overview())
+      const outside = await overview({
+        ...global,
+        user: 'cn=root,dc=example,dc=com',
+      });
+      expect(main(outside))
         .to.include('Signed in as root<')
         .and.not.include('cn=root');
-      expect(outside.asked).to.deep.equal([]);
+      expect(asked(outside)).to.deep.equal([]);
+      outside.unmount();
       // A user the scope names otherwise than by a DN is shown as it comes
-      const plain = setup({ ...global, user: 'admin@example.com' });
-      expect(await plain.overview()).to.include(
-        'Signed in as admin@example.com<'
-      );
+      const plain = await overview({ ...global, user: 'admin@example.com' });
+      expect(main(plain)).to.include('Signed in as admin@example.com<');
+      plain.unmount();
       // An account with no address is still named
-      const nameless = setup(global, async () => ({ dn: admin, cn: 'Ada' }));
-      expect(await nameless.overview()).to.include('Signed in as Ada<');
+      const nameless = await overview(global, {
+        dn: admin,
+        displayName: 'Ada',
+      });
+      expect(main(nameless)).to.include('Signed in as Ada<');
     });
 
     it('should tell an account administering nothing once, and where to turn', async () => {
       // Three cards, each opening on "nothing to manage", and a green dot
-      const { app, asked, overview, shell } = setup(nobody);
-      const html = await overview();
-      expect(html)
+      const none = await overview(nobody, undefined, 'en', false);
+      expect(main(none))
         .to.include('There is nothing for you to manage here')
         .and.include(
           'Your account (alice) does not administer any part of the directory.'
@@ -653,34 +633,33 @@ describe('Directory console: the shell and the overview', () => {
         .and.not.include('dc-card')
         .and.not.include('data-open');
       // The server refuses such an account every read: none is asked
-      expect(asked).to.deep.equal([]);
-      expect(app.scopeMarkup().markup).to.include(
-        'dc-scope-empty dc-scope-none'
-      );
-      expect(shell())
+      expect(asked(none)).to.deep.equal([]);
+      expect(none.root.querySelector('.dc-scope-none')).to.not.equal(null);
+      expect(none.root.innerHTML)
         .to.include('data-nav=""')
         .and.not.include('data-nav="users"')
         .and.not.include('data-nav-toggle');
+      none.unmount();
 
-      const local = setup({
+      const local = await overview({
         ...nobody,
         branches: [
           { dn: 'ou=Sales,dc=example,dc=com', read: true, write: true },
         ],
       });
-      expect(local.app.scopeMarkup().markup).to.not.include('dc-scope-none');
-      expect(local.shell())
+      expect(local.root.querySelector('.dc-scope-none')).to.equal(null);
+      expect(local.root.innerHTML)
         .to.include('data-nav="users"')
         .and.include('data-nav="mailboxTypes"');
-      expect(await local.overview())
+      expect(main(local))
         .to.include('What you can manage')
         .and.not.include('There is nothing for you to manage here');
     });
 
-    it('should name each language in itself', () => {
-      const { shell } = setup(global, undefined, 'fr');
+    it('should name each language in itself', async () => {
+      const mounted = await overview(global, undefined, 'fr');
       const options = [
-        ...shell().matchAll(
+        ...mounted.root.innerHTML.matchAll(
           /<option value="(\w+)" lang="(\w+)"[^>]*>([^<]*)</g
         ),
       ].map(([, value, lang, text]) => [value, lang, text]);
