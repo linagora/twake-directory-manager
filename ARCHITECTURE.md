@@ -79,7 +79,7 @@ src/index.ts                public exports: DirectoryConsole, four components
     ├── shared/html.ts          html`…`, SafeHtml, render: the only way to the page
     ├── shared/background.ts    background(): work nobody waits for, reported
     ├── shared/dom.ts           escapeHtml and small DOM helpers
-    ├── console/shell.ts        the frame's markup: sidebar, scope banner, main area, side panel
+    ├── console/shell.ts        the frame: its markup and its listeners (navigation, language, contrast)
     ├── console/settings.ts     what the browser remembers: language, reference section, contrast
     ├── console/panel.ts        the overlay (panel, toast region, announcer), what Tab reaches in the panel,
     │                           PanelService: opening, closing, guards, what waits for the panel
@@ -107,13 +107,13 @@ e2e/                        the Playwright suite, a package of its own
 scripts/qa-environment/     OpenLDAP + Dex + the image, for e2e and by hand
 ```
 
-`DirectoryConsole.ts` is still too large (about 1,450 lines): it holds the
-boot, the shell, the routing, the overview and the page of an address naming
-none, the names and the reads the pages share, and the one-line methods each
-move leaves behind; splitting it into views and actions behind a small shell is
-[#220](https://github.com/linagora/twake-directory-manager/issues/220), under
-way. A view is a class of `src/views/` given a `ConsoleContext`
-(`src/console/context.ts`) — the client, the words, the rights, the panel and
+`DirectoryConsole.ts` is the console's shell: the boot, the routing, the
+overview and the page of an address naming none, the reads the pages share,
+and the one-line methods a move leaves behind — under 800 lines since #220.
+The frame (sidebar, scope banner, main area) is `src/console/shell.ts`; what
+the console calls things is `src/console/names.ts`; the transit branch is
+`src/console/transit.ts`. A view is a class of `src/views/` given a
+`ConsoleContext` (`src/console/context.ts`) — the client, the words, the rights, the panel and
 the dialog services, the toast, the announcer and the reporter, the page's
 ticket, the entities — built once in `init()`, whose changing parts (the
 translator, the rights, the entities once discovered) are functions asked
