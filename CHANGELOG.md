@@ -2,9 +2,50 @@
 
 ## Unreleased
 
-Built on ldap-rest 2.1.0. A deployment loading `core/auth/openidconnect` now
-needs `DM_OIDC_SESSION_SECRET`, a session key of its own, at least 32
-characters; sessions opened before the upgrade are refused.
+Built on ldap-rest 2.1.0, the only supported server. A deployment loading
+`core/auth/openidconnect` now needs `DM_OIDC_SESSION_SECRET`, a session key
+of its own, at least 32 characters; sessions opened before the upgrade are
+refused.
+
+### Security
+
+- ldap-rest 2.1.0 closes five authentication and authorization advisories
+  the console loads plugins for: the session key above, the case of an
+  authentication path, James and Calendar WebAdmin URL encoding, and two
+  `authzLinid1` rights checks
+  ([GHSA-qmmv-5748-px9r](https://github.com/linagora/ldap-rest/security/advisories/GHSA-qmmv-5748-px9r),
+  [GHSA-rgc7-fv78-p73h](https://github.com/linagora/ldap-rest/security/advisories/GHSA-rgc7-fv78-p73h),
+  [GHSA-jrmm-4w24-qqc5](https://github.com/linagora/ldap-rest/security/advisories/GHSA-jrmm-4w24-qqc5),
+  [GHSA-2g53-22cj-hwfm](https://github.com/linagora/ldap-rest/security/advisories/GHSA-2g53-22cj-hwfm),
+  [GHSA-vg7q-jffp-g33c](https://github.com/linagora/ldap-rest/security/advisories/GHSA-vg7q-jffp-g33c))
+
+### Features
+
+- A form interrupted by an expired session offers back what was typed once
+  signed in again, a password excepted; the request is not replayed and the
+  draft goes on save or when the form is left (#68)
+
+### Bug Fixes
+
+- Delete selection leaves out the entries the caller may not delete and
+  says how many (#266)
+- A DN the card points at, delegates included, leads to its card; account
+  states and reference data stay out of relation links (#267)
+- A field's hint describes its control to assistive technology (#268)
+- A size is read and written in the interface's units, _4 Go_ in French and
+  a decimal comma accepted (#269)
+- A list keeps its selection when the language changes (#270)
+- An empty Groups table says no group instead of no one (#271)
+- A touch screen reads the whole department path and the exact mailbox size
+  that only a tooltip held (#272)
+- The tree says why a branch could not be read and that opening it again
+  retries; the top organization refreshes when it is edited (#163)
+- The transit count follows a save or a deletion, and a read-only
+  administrator is no longer invited to claim (#163)
+- A page left while its entries' names were read sends no read and draws
+  nothing (#264)
+- An organization card is no longer lost after two quick language switches
+  (#257)
 
 ## v0.13.2 (2026-11-06)
 
