@@ -56,6 +56,12 @@ const refused = (root: HTMLElement): boolean =>
 const callsOf = (calls: string[], method: string): string[] =>
   calls.filter(call => call.startsWith(`${method}(`));
 
+/** How many times what waits in transit was read. */
+const transitReads = (calls: string[]): number =>
+  callsOf(calls, 'organizationMembers').filter(call =>
+    call.startsWith(`organizationMembers(${transit}`)
+  ).length;
+
 /** A field of the form open in the panel, by its attribute. */
 const field = (root: HTMLElement, name: string): HTMLInputElement | null =>
   panelOf(root).body.querySelector<HTMLInputElement>(`[name="${name}"]`);
@@ -257,6 +263,54 @@ describe('actions/forms', () => {
           .filter(call => call.startsWith('get(users'))
       ).to.deep.equal(['get(users, alice)']);
       expect(window.location.hash).to.equal('#/users/alice');
+    });
+
+    it('should count the transit branch again when an edit moves the entry into it', async () => {
+      // The banner's "Transit (N)" waited for the next Overview otherwise.
+      const { root, server, calls, idle } = await editAlice({
+        answers: server => {
+          server
+            .get('/api/v1/ldap/organizations/top')
+            .reply(200, { dn: top, ou: 'organization' });
+          server
+            .get(/\/api\/v1\/ldap\/organizations\/[^/]+\/search\?q=/)
+            .reply(200, [
+              { dn: transit, ou: 'Transit', twakeDepartmentPath: 'Transit' },
+            ]);
+        },
+      });
+      const { body } = panelOf(root);
+      type(
+        body.querySelector<HTMLInputElement>('#dc-field-twakeDepartmentLink'),
+        'Tra'
+      );
+      await until(() => !!body.querySelector('[data-candidate="0"]'));
+      press('Enter');
+      server.put('/api/v1/ldap/users/alice').reply(200, {});
+      const counted = transitReads(calls);
+      save(root);
+      await until(() => toast(root) === 'Saved');
+      await idle();
+      await settled(root);
+      const sent = JSON.parse(
+        /^update\(users, alice, (.*), \[\], /.exec(
+          callsOf(calls, 'update')[0] ?? ''
+        )?.[1] ?? '{}'
+      ) as Entry;
+      expect(sent.twakeDepartmentLink).to.equal(transit);
+      await until(() => transitReads(calls) > counted);
+    });
+
+    it('should leave the transit count alone when an edit keeps the entry out of it', async () => {
+      const { root, server, calls, idle } = await editAlice();
+      server.put('/api/v1/ldap/users/alice').reply(200, {});
+      const counted = transitReads(calls);
+      type(field(root, 'l'), 'Paris');
+      save(root);
+      await until(() => toast(root) === 'Saved');
+      await idle();
+      await settled(root);
+      expect(transitReads(calls)).to.equal(counted);
     });
 
     it('should show a refusal under the field at fault, the toast pointing there', async () => {

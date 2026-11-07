@@ -303,8 +303,7 @@ export class DirectoryConsole {
     this.drawShell();
     // The Overview reads it for its own section; any other first page has
     // the banner count it.
-    if (this.route.view !== 'dashboard')
-      background(() => this.readTransit(), 'readTransit', this.report);
+    this.refreshTransit();
     await this.renderMain();
   }
 
@@ -339,6 +338,8 @@ export class DirectoryConsole {
       record: (path, replace) => this.record(path, replace),
       route: () => this.route,
       readTransit: () => this.readTransit(),
+      inTransit: (entity, entry) => this.inTransit(entity, entry),
+      refreshTransit: () => this.refreshTransit(),
       tree: () => this.organizationsView?.tree() ?? null,
       relations: (entity, entry, strict) =>
         readRelations(this.context, entity, entry, strict),
@@ -656,6 +657,28 @@ export class DirectoryConsole {
     );
     if (link) link.textContent = this.transitLabel();
     return waiting;
+  }
+
+  /**
+   * Whether the console counts the entry in transit, as the server judges it
+   * (see {@link transitState}): what a save or a deletion changes.
+   *
+   * @param entity entity the entry belongs to
+   * @param entry the entry as read, or as a change would leave it
+   */
+  private inTransit(entity: EntityDescriptor, entry: Entry): boolean {
+    return this.rights.transitOf(entity, entry).inTransit;
+  }
+
+  /**
+   * Count what waits in transit again, on the banner, after a change that may
+   * have moved an entry into or out of the branch: a save, a deletion. The
+   * Overview reads the branch itself when it is drawn, and a caller with no
+   * transit branch reads nothing.
+   */
+  private refreshTransit(): void {
+    if (this.route.view === 'dashboard') return;
+    background(() => this.readTransit(), 'readTransit', this.report);
   }
 
   /** Claim…, at the end of each row listing what waits in transit. */

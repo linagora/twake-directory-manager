@@ -100,15 +100,26 @@ export class FormActions {
         const id = entry
           ? String(entryValue(entry, entity.mainAttribute) ?? '')
           : createdEntryId(entity, undefined, values);
+        // A save may move the entry into the branch or out of it: the
+        // banner's count then follows rather than waiting for the next
+        // Overview.
+        const wasInTransit = !!entry && ctx.inTransit(entity, entry);
+        const after: Entry = { ...entry, ...values };
+        const counted = (): void => {
+          if (wasInTransit || ctx.inTransit(entity, after))
+            ctx.refreshTransit();
+        };
         try {
           if (entry) {
             // The entry as stored: what a membership change is diffed against.
             await ctx.api.update(entity, id, values, cleared, entry);
+            counted();
             ctx.toast(t('save.done'));
             ctx.panel.close(true);
             await ctx.refresh();
           } else {
             const created = await ctx.api.create(entity, values);
+            counted();
             const createdId = createdEntryId(entity, created, values);
             ctx.toast(this.createdToast(entity, values, createdId));
             // Created from an organization's card, the entry joins its table

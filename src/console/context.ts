@@ -144,6 +144,17 @@ export interface ConsoleContext {
    * there is nothing to read
    */
   readTransit(): Promise<AttachedEntries | null>;
+  /**
+   * Whether the console counts the entry in transit as the server does:
+   * attached to the transit branch, or to no organization at all
+   */
+  inTransit(entity: EntityDescriptor, entry: Entry): boolean;
+  /**
+   * Count what waits in transit again, on the banner, after a change that
+   * may have moved an entry into or out of the branch: a save, a deletion.
+   * The Overview reads the branch itself when it is drawn
+   */
+  refreshTransit(): void;
   /** The organization tree drawn last, when the organizations page drew one */
   tree(): OrganizationTree | null;
   /** What to call a collection: the schema's label in the language now */
