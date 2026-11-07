@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import { EntityForm, pointerFallback } from '../../src/components/EntityForm';
+import type { FormDraft } from '../../src/components/formDraft';
 import { Translator } from '../../src/i18n';
 import type {
   EntityDescriptor,
@@ -28,6 +29,67 @@ describe('EntityForm', () => {
       onSubmit: () => Promise.resolve(),
       onCancel: () => undefined,
     });
+
+  describe('a draft kept across a sign-in again', () => {
+    const alice: Entry = {
+      uid: 'alice',
+      cn: 'Alice Moreau',
+      mail: 'alice@example.com',
+      telephoneNumber: '555 1234',
+    };
+
+    /** Alice's form, its fields drawn in the page. */
+    const editing = async (options: {
+      draft?: FormDraft;
+      notice?: string;
+    }): Promise<{ form: EntityForm; container: HTMLElement }> => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const form = new EntityForm({
+        entity: users,
+        entry: alice,
+        translator: new Translator('en'),
+        pointerOptions: () => Promise.resolve([]),
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+        ...options,
+      });
+      await form.render(container);
+      return { form, container };
+    };
+
+    it('should keep the fields changed and those emptied, never a password', async () => {
+      const { form, container } = await editing({});
+      typeInto(container.querySelector('#dc-field-cn'), 'Alice Duval');
+      typeInto(container.querySelector('#dc-field-telephoneNumber'), '');
+      typeInto(container.querySelector('#dc-field-userPassword'), 'Typed-1!');
+      expect(form.draft()).to.deep.equal({
+        values: { cn: ['Alice Duval'] },
+        cleared: ['telephoneNumber'],
+      });
+    });
+
+    it('should put a draft back, say so, and leave a password out', async () => {
+      const { form, container } = await editing({
+        draft: {
+          values: { cn: ['Alice Duval'], userPassword: ['Draft-1!'] },
+          cleared: ['telephoneNumber'],
+        },
+        notice: 'Draft restored after signing in again',
+      });
+      const value = (name: string): string =>
+        container.querySelector<HTMLInputElement>(`#dc-field-${name}`)?.value ??
+        '';
+      expect(value('cn')).to.equal('Alice Duval');
+      expect(value('telephoneNumber')).to.equal('');
+      expect(value('userPassword')).to.equal('');
+      expect(container.querySelector('.dc-form-notice')?.textContent).to.equal(
+        'Draft restored after signing in again'
+      );
+      // Something to save: the reader is to check it first.
+      expect(form.isDirty()).to.be.true;
+    });
+  });
 
   it('should show a field’s help to the keyboard, and hide it on Escape without closing the form', async () => {
     // The "?" was a span shown on hover only: a keyboard user never saw the

@@ -41,6 +41,7 @@ import { background, type Reporter } from '../shared/background';
 import { selectorValue } from '../shared/dom';
 import { append, html, render, type SafeHtml } from '../shared/html';
 import { bindHelp, describeField, helpMarkup, hintMarkup } from '../ui/field';
+import * as drafts from './formDraft';
 
 /** An entry a pointer field may land on. */
 interface PointerCandidate {
@@ -77,6 +78,16 @@ export interface FormOptions {
    * for on, with that department's path to name it. Ignored when editing
    */
   preset?: Entry;
+  /**
+   * What a form held when a sign-in again reloaded the page, put back in the
+   * form: the values typed and the fields emptied, a password left alone
+   */
+  draft?: drafts.FormDraft;
+  /**
+   * Said above the fields, for a reader to check the form before saving: a
+   * draft put back, say
+   */
+  notice?: string;
   /** Load the candidates of a pointer field */
   pointerOptions(branch: string): Promise<{ dn: string; label: string }[]>;
   /**
@@ -278,6 +289,17 @@ export class EntityForm {
         this.addresses.add(name);
     }
     this.initial = JSON.stringify(this.values);
+    if (options.draft) drafts.putBack(this.fields, this.values, options.draft);
+  }
+
+  /**
+   * What the form holds that its entry does not, as a draft to keep across a
+   * sign-in again (see `changed`): never a password.
+   *
+   * @returns the values, by attribute, and the attributes emptied
+   */
+  draft(): drafts.FormDraft {
+    return drafts.changed(this.fields, this.values, this.options.entry);
   }
 
   /**
@@ -521,6 +543,7 @@ export class EntityForm {
       html`
       <form class="dc-form" novalidate>
         <p class="dc-form-required">${translator.t('form.required')}</p>
+        ${drafts.noticeMarkup(this.options.notice)}
         ${this.groupsMarkup(shown)}
         ${
           folds
