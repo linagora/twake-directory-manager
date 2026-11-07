@@ -11,13 +11,7 @@
  */
 
 import { ConsoleApiClient, roleAttribute } from './api/ConsoleApiClient';
-import {
-  applyContrast,
-  frameMarkup,
-  logoutMarkup,
-  scopeMarkup,
-  sidebarMarkup,
-} from './console/shell';
+import { applyContrast, ShellView } from './console/shell';
 import { attachedClass } from './components/AttachedTables';
 import {
   comparableDn,
@@ -27,7 +21,7 @@ import {
   withinDn,
 } from './format';
 import { Translator } from './i18n';
-import { Rights, splitEntities } from './rights';
+import { Rights } from './rights';
 import { saveDraft, signInAgain, takeDraft, type Draft } from './session';
 import type {
   Confirmation,
@@ -48,14 +42,10 @@ import type { ConsoleDeps } from './console/deps';
 import { DialogService } from './console/dialog';
 import { groupEntity, readRelations, relationHref } from './console/relations';
 import { POLICIES_KEY, type Route, routeOf } from './console/route';
-import { PanelService, overlayMarkup } from './console/panel';
+import { PanelService } from './console/panel';
 import {
   highContrast,
   onContrastChange,
-  referenceOpen,
-  rememberContrast,
-  rememberLanguage,
-  rememberReference,
   storedLanguage,
 } from './console/settings';
 import { announcer } from './ui/announce';
@@ -167,6 +157,8 @@ export class DirectoryConsole {
   private names!: Names;
   /** The transit branch's count and actions (see `TransitService`). */
   private transitService!: TransitService;
+  /** The frame drawn around the pages, and its listeners. */
+  private shell!: ShellView;
 
   /**
    * @param options what the page gives the console
@@ -229,6 +221,23 @@ export class DirectoryConsole {
         null,
       readMembers: (dn): Promise<AttachedEntries> => this.readMembers(dn),
       claim: (entity, id, name): Promise<void> => this.claim(entity, id, name),
+      report: this.report,
+    });
+    this.shell = new ShellView({
+      container: (): HTMLElement | null => this.container,
+      translator: (): Translator => this.translator,
+      rights: (): Rights => this.rights,
+      entities: (): EntityDescriptor[] => this.entities,
+      plural: (entity: EntityDescriptor): string => this.names.plural(entity),
+      logoutUrl: (): string | undefined => this.api.logoutUrl,
+      transitLabel: (): string => this.transitService.label(),
+      main: (): HTMLElement | null => this.main(),
+      go: (path: string): void => this.go(path),
+      closePanel: (): void => this.panel.close(),
+      setLanguage: (code: string): void => {
+        this.translator = new Translator(code);
+      },
+      renderMain: (): Promise<void> => this.renderMain(),
       report: this.report,
     });
     this.context = this.contextOf();
@@ -320,7 +329,7 @@ export class DirectoryConsole {
       event.returnValue = '';
     });
 
-    this.drawShell();
+    this.shell.draw();
     // The Overview reads it for its own section, and the transit branch's
     // page reads it as its card's members: no other first page has the
     // banner count it.
@@ -473,116 +482,6 @@ export class DirectoryConsole {
     this.route = routeOf(window.location.hash);
   }
 
-  /* ------------------------------------------------------------------ shell */
-
-  /**
-   * Draw the console again in another language. An open side panel is kept
-   * as it is, in the language it was opened in: drawn again, it was closed,
-   * and what had been typed into it was lost.
-   *
-   * @param code the language chosen
-   */
-  private changeLanguage(code: string): void {
-    rememberLanguage(code);
-    const panel = this.container?.querySelector<HTMLElement>('[data-panel]');
-    const kept = panel && !panel.hidden ? panel : null;
-    this.translator = new Translator(code);
-    this.drawShell();
-    if (kept)
-      this.container
-        ?.querySelector<HTMLElement>('[data-panel]')
-        ?.replaceWith(kept);
-    // Chosen with the keyboard, the language changes on each arrow: the
-    // focus stays on the select, drawn anew, rather than falling to the page.
-    this.container
-      ?.querySelector<HTMLSelectElement>('[data-language]')
-      ?.focus();
-    background(() => this.renderMain(), 'renderMain', this.report);
-  }
-
-  /** Draw the permanent frame: sidebar, scope, main area, side panel. */
-  private drawShell(): void {
-    const container = this.container;
-    if (!container) return;
-    // The page speaks the interface's language: a screen reader reads a
-    // French label with a French voice only when the document says so.
-    if (typeof document !== 'undefined')
-      document.documentElement.lang = this.translator.language;
-    const t = (key: string, values?: Record<string, string | number>): string =>
-      this.translator.t(key, values);
-    // An account administering nothing finds only "nothing to manage" behind
-    // each entry: the overview says it once, and the entries are not offered.
-    const { primary, reference } = this.rights.administersNothing()
-      ? { primary: [], reference: [] }
-      : splitEntities(this.entities);
-    const settings = this.settings(reference);
-
-    render(
-      container,
-      frameMarkup({
-        t,
-        contrast: highContrast(),
-        sidebar: sidebarMarkup({
-          t,
-          primary: primary.map(entity => ({
-            key: entity.key,
-            label: this.names.plural(entity),
-          })),
-          reference: settings,
-          language: this.translator.language,
-          contrast: highContrast(),
-        }),
-        scope: scopeMarkup(t, this.rights.summary, this.transitService.label()),
-        logout: logoutMarkup(t, this.api.logoutUrl),
-        overlay: overlayMarkup(t('app.close')),
-      })
-    );
-
-    for (const button of Array.from(
-      container.querySelectorAll<HTMLElement>('[data-nav]')
-    )) {
-      button.addEventListener('click', () => this.go(button.dataset.nav || ''));
-    }
-
-    // The console routes on the hash, and "#dc-main" would be read as a page
-    // of that name: the link moves the focus itself and leaves the address.
-    container
-      .querySelector<HTMLElement>('[data-skip]')
-      ?.addEventListener('click', event => {
-        event.preventDefault();
-        this.main()?.focus();
-      });
-
-    // The toggle reads its state from the page, not from what the browser
-    // remembers: a reference page opens the section without storing it, and
-    // the reader's click then closes it rather than storing "open" first.
-    const toggle = container.querySelector<HTMLElement>('[data-nav-toggle]');
-    toggle?.addEventListener('click', () => {
-      const open = toggle.getAttribute('aria-expanded') !== 'true';
-      rememberReference(open);
-      this.showReference(open);
-    });
-    this.showReference(referenceOpen());
-
-    container
-      .querySelector<HTMLSelectElement>('[data-language]')
-      ?.addEventListener('change', event => {
-        this.changeLanguage((event.target as HTMLSelectElement).value);
-      });
-
-    container
-      .querySelector<HTMLInputElement>('[data-contrast]')
-      ?.addEventListener('change', event => {
-        const on = (event.target as HTMLInputElement).checked;
-        rememberContrast(on);
-        applyContrast(this.container, on);
-      });
-
-    container
-      .querySelector('[data-panel-close]')
-      ?.addEventListener('click', () => this.panel.close());
-  }
-
   /* ------------------------------------------------------------------ views */
 
   private main(): HTMLElement | null {
@@ -592,17 +491,6 @@ export class DirectoryConsole {
   /** True while the view this ticket was taken for is still the one asked for. */
   private current(generation: number): boolean {
     return generation === this.viewGeneration;
-  }
-
-  /** Open or close the reference section of the navigation. */
-  private showReference(open: boolean): void {
-    const toggle =
-      this.container?.querySelector<HTMLElement>('[data-nav-toggle]');
-    const section =
-      this.container?.querySelector<HTMLElement>('#dc-nav-reference');
-    if (!toggle || !section) return;
-    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    section.hidden = !open;
   }
 
   /** Draw whatever the current route asks for. */
@@ -627,7 +515,7 @@ export class DirectoryConsole {
       // Reference data is tucked away, not out of reach: a page of it being
       // shown opens its section, or the reader would not see where they are.
       if (active && button.classList.contains('dc-nav-item-reference'))
-        this.showReference(true);
+        this.shell.reference(true);
       // On a phone the navigation is a row that scrolls sideways: bring the
       // current entry into it, or it may sit past the edge of the screen.
       if (active)
@@ -726,24 +614,6 @@ export class DirectoryConsole {
     } catch {
       return identifier;
     }
-  }
-
-  /**
-   * What the reference section lists: the reference data, and the password
-   * policies, set up once and rarely touched like it.
-   */
-  private settings(
-    reference: EntityDescriptor[]
-  ): { key: string; label: string }[] {
-    return [
-      ...reference.map(entity => ({
-        key: entity.key,
-        label: this.names.plural(entity),
-      })),
-      ...(this.rights.managesPolicies()
-        ? [{ key: POLICIES_KEY, label: this.translator.t('nav.policies') }]
-        : []),
-    ];
   }
 
   /**

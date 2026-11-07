@@ -1,16 +1,27 @@
 /**
  * The frame: the sidebar, the scope banner, the main area, the panel and the
- * brand's footer. Markup only, built from what the console decided to offer;
- * the console binds the listeners.
+ * brand's footer, and the listeners they carry — navigation, skip link,
+ * reference section, language, contrast and the panel's close button.
  *
  * @module twake-directory-manager/console/shell
  */
 
 import { CONSOLE_LOGO, LINAGORA_LOGO } from '../assets';
 import { rdnValue } from '../format';
-import { availableLanguages, languageName } from '../i18n';
-import type { Rights } from '../rights';
-import { html, trusted, type SafeHtml } from '../shared/html';
+import { availableLanguages, languageName, type Translator } from '../i18n';
+import { splitEntities, type Rights } from '../rights';
+import { background, type Reporter } from '../shared/background';
+import { html, render, trusted, type SafeHtml } from '../shared/html';
+import type { EntityDescriptor } from '../types';
+import { overlayMarkup } from './panel';
+import { POLICIES_KEY } from './route';
+import {
+  highContrast,
+  referenceOpen,
+  rememberContrast,
+  rememberLanguage,
+  rememberReference,
+} from './settings';
 
 /** What the console translates the frame with. */
 export type FrameText = (
@@ -284,4 +295,191 @@ export function frameMarkup(options: FrameOptions): SafeHtml {
       </div>
       ${overlay}
     </div>`;
+}
+
+/** What drawing the frame asks of the console. */
+export interface ShellDeps {
+  /** What holds the frame */
+  container(): HTMLElement | null;
+  /** The translator of the interface's language now */
+  translator(): Translator;
+  /** What the caller may do, read from the scope as it is now */
+  rights(): Rights;
+  /** The entities the directory serves, as discovered */
+  entities(): EntityDescriptor[];
+  /** What to call a collection: the schema's label in the language now */
+  plural(entity: EntityDescriptor): string;
+  /** Where the server signs out, when it offers a way to */
+  logoutUrl(): string | undefined;
+  /** The banner's transit link: the branch's name and what waits */
+  transitLabel(): string;
+  /** The console's main area, once the frame is drawn */
+  main(): HTMLElement | null;
+  /** Open the page an address names, after `#/` */
+  go(path: string): void;
+  /** Close the side panel, asking first when it holds changes */
+  closePanel(): void;
+  /** The console takes another language, and asks again in it */
+  setLanguage(code: string): void;
+  /** Draw the page the address names again, in the new language */
+  renderMain(): Promise<void>;
+  /** Where work nobody waits for ends when it fails */
+  readonly report: Reporter;
+}
+
+/**
+ * The frame: what it shows, and the listeners it carries. Drawn again when
+ * the console boots and when the language changes; the pages are drawn in
+ * its main area by the console.
+ */
+export class ShellView {
+  /** @param deps the console, as the frame sees it */
+  constructor(private readonly deps: ShellDeps) {}
+
+  /**
+   * Draw the console again in another language. An open side panel is kept
+   * as it is, in the language it was opened in: drawn again, it was closed,
+   * and what had been typed into it was lost.
+   *
+   * @param code the language chosen
+   */
+  changeLanguage(code: string): void {
+    const { deps } = this;
+    rememberLanguage(code);
+    const panel = deps.container()?.querySelector<HTMLElement>('[data-panel]');
+    const kept = panel && !panel.hidden ? panel : null;
+    deps.setLanguage(code);
+    this.draw();
+    if (kept)
+      deps
+        .container()
+        ?.querySelector<HTMLElement>('[data-panel]')
+        ?.replaceWith(kept);
+    // Chosen with the keyboard, the language changes on each arrow: the
+    // focus stays on the select, drawn anew, rather than falling to the page.
+    deps
+      .container()
+      ?.querySelector<HTMLSelectElement>('[data-language]')
+      ?.focus();
+    background(() => deps.renderMain(), 'renderMain', deps.report);
+  }
+
+  /** Draw the permanent frame: sidebar, scope, main area, side panel. */
+  draw(): void {
+    const { deps } = this;
+    const container = deps.container();
+    if (!container) return;
+    const translator = deps.translator();
+    // The page speaks the interface's language: a screen reader reads a
+    // French label with a French voice only when the document says so.
+    if (typeof document !== 'undefined')
+      document.documentElement.lang = translator.language;
+    const t = (key: string, values?: Record<string, string | number>): string =>
+      translator.t(key, values);
+    // An account administering nothing finds only "nothing to manage" behind
+    // each entry: the overview says it once, and the entries are not offered.
+    const { primary, reference } = deps.rights().administersNothing()
+      ? { primary: [], reference: [] }
+      : splitEntities(deps.entities());
+    const settings = this.settings(reference);
+
+    render(
+      container,
+      frameMarkup({
+        t,
+        contrast: highContrast(),
+        sidebar: sidebarMarkup({
+          t,
+          primary: primary.map(entity => ({
+            key: entity.key,
+            label: deps.plural(entity),
+          })),
+          reference: settings,
+          language: translator.language,
+          contrast: highContrast(),
+        }),
+        scope: scopeMarkup(t, deps.rights().summary, deps.transitLabel()),
+        logout: logoutMarkup(t, deps.logoutUrl()),
+        overlay: overlayMarkup(t('app.close')),
+      })
+    );
+
+    for (const button of Array.from(
+      container.querySelectorAll<HTMLElement>('[data-nav]')
+    )) {
+      button.addEventListener('click', () => deps.go(button.dataset.nav || ''));
+    }
+
+    // The console routes on the hash, and "#dc-main" would be read as a page
+    // of that name: the link moves the focus itself and leaves the address.
+    container
+      .querySelector<HTMLElement>('[data-skip]')
+      ?.addEventListener('click', event => {
+        event.preventDefault();
+        deps.main()?.focus();
+      });
+
+    // The toggle reads its state from the page, not from what the browser
+    // remembers: a reference page opens the section without storing it, and
+    // the reader's click then closes it rather than storing "open" first.
+    const toggle = container.querySelector<HTMLElement>('[data-nav-toggle]');
+    toggle?.addEventListener('click', () => {
+      const open = toggle.getAttribute('aria-expanded') !== 'true';
+      rememberReference(open);
+      this.reference(open);
+    });
+    this.reference(referenceOpen());
+
+    container
+      .querySelector<HTMLSelectElement>('[data-language]')
+      ?.addEventListener('change', event => {
+        this.changeLanguage((event.target as HTMLSelectElement).value);
+      });
+
+    container
+      .querySelector<HTMLInputElement>('[data-contrast]')
+      ?.addEventListener('change', event => {
+        const on = (event.target as HTMLInputElement).checked;
+        rememberContrast(on);
+        applyContrast(container, on);
+      });
+
+    container
+      .querySelector('[data-panel-close]')
+      ?.addEventListener('click', () => deps.closePanel());
+  }
+
+  /** Open or close the reference section of the navigation. */
+  reference(open: boolean): void {
+    const container = this.deps.container();
+    const toggle = container?.querySelector<HTMLElement>('[data-nav-toggle]');
+    const section = container?.querySelector<HTMLElement>('#dc-nav-reference');
+    if (!toggle || !section) return;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    section.hidden = !open;
+  }
+
+  /**
+   * What the reference section lists: the reference data, and the password
+   * policies, set up once and rarely touched like it.
+   */
+  private settings(
+    reference: EntityDescriptor[]
+  ): { key: string; label: string }[] {
+    const { deps } = this;
+    return [
+      ...reference.map(entity => ({
+        key: entity.key,
+        label: deps.plural(entity),
+      })),
+      ...(deps.rights().managesPolicies()
+        ? [
+            {
+              key: POLICIES_KEY,
+              label: deps.translator().t('nav.policies'),
+            },
+          ]
+        : []),
+    ];
+  }
 }
