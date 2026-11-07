@@ -22,6 +22,20 @@ export function escapeHtml(text: string | null | undefined): string {
 }
 
 /**
+ * Whether the screen has no hover, as a touch screen has none: what a title
+ * attribute would say must then be written in the page.
+ *
+ * @returns true when the primary pointer cannot hover
+ */
+export function hoverless(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(hover: none)').matches
+  );
+}
+
+/**
  * Convert camelCase or snake_case to Title Case
  */
 export function toTitleCase(text: string): string {

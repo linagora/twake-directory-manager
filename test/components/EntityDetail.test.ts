@@ -3,7 +3,7 @@ import { EntityDetail } from '../../src/components/EntityDetail';
 import { displayValue, rdnValue } from '../../src/format';
 import { Translator } from '../../src/i18n';
 import type { EntityDescriptor, Entry } from '../../src/types';
-import { stubContainer } from '../support/stubs';
+import { pretendHoverless, stubContainer } from '../support/stubs';
 import { usersSchema, users, groups, mailboxTypes } from '../fixtures/entities';
 
 describe('EntityDetail', () => {
@@ -220,12 +220,13 @@ describe('EntityDetail', () => {
         },
       },
     };
-    const sized = card(quota, {
+    const sizedEntry = {
       uid: 'jsmith',
       mail: 'jsmith@example.com',
       mailQuotaSize: '1073741824',
       twakeDeletionDate: '20310115000000Z',
-    });
+    };
+    const sized = card(quota, sizedEntry);
     expect(
       [...sized.matchAll(/<h4>([^<]*)<\/h4>/g)].map(match => match[1])
     ).to.deep.equal([
@@ -238,14 +239,20 @@ describe('EntityDetail', () => {
       'Organization',
       'Contact',
     ]);
-    // Rounded, the exact count in the tooltip, and beside it for a touch
-    // screen, which has no tooltip (#272).
+    // Rounded, the exact count in the tooltip; a touch screen, which has no
+    // tooltip, gets the count beside it (#272).
     expect(sized).to.include('class="dc-value dc-size"');
     expect(sized).to.include('title="1073741824 bytes"');
     expect(sized).to.include('<span class="dc-size-short">1.07 GB</span>');
-    expect(sized).to.include(
-      '<span class="dc-size-exact">1073741824 bytes</span>'
-    );
+    expect(sized).to.not.include('dc-size-exact');
+    const restore = pretendHoverless();
+    try {
+      expect(card(quota, sizedEntry)).to.include(
+        '<span class="dc-size-exact">1073741824 bytes</span>'
+      );
+    } finally {
+      restore();
+    }
   });
 
   it('should leave out a common name that repeats the full name', () => {

@@ -17,7 +17,7 @@ import {
 } from '../../src/format';
 import { Translator } from '../../src/i18n';
 import type { EntityDescriptor, Entry, EntryList } from '../../src/types';
-import { baseUrl, stubContainer } from '../support/stubs';
+import { baseUrl, pretendHoverless, stubContainer } from '../support/stubs';
 import { users, groups, mailboxTypes } from '../fixtures/entities';
 
 afterEach(() => nock.cleanAll());
@@ -58,31 +58,43 @@ describe('EntityList', () => {
     expect(EntityList.shortenPath('A').markup).to.equal('A');
   });
 
-  it('should keep the whole path beside the shortened one for a touch reader', async () => {
-    // A touch screen shows no title: the row carries both, and the
-    // stylesheet picks the whole path there (#272).
-    const container = stubContainer();
-    await new EntityList({
-      entity: users,
-      translator: new Translator('en'),
-      load: () =>
-        Promise.resolve({
-          ann: {
-            uid: 'ann',
-            twakeDepartmentPath: 'Sales / France / Lyon / Center',
-          },
-        }),
-      listable: true,
-      onOpen: () => undefined,
-      onDelete: () => Promise.resolve(false),
-      canDelete: false,
-    }).render(container);
-    expect(container.innerHTML).to.include(
+  it('should show the whole path on a screen with no hover', async () => {
+    // A touch screen shows no title: the row carries the whole path there,
+    // and the shortened one where a mouse can hover (#272).
+    const render = async (): Promise<string> => {
+      const container = stubContainer();
+      await new EntityList({
+        entity: users,
+        translator: new Translator('en'),
+        load: () =>
+          Promise.resolve({
+            ann: {
+              uid: 'ann',
+              twakeDepartmentPath: 'Sales / France / Lyon / Center',
+            },
+          }),
+        listable: true,
+        onOpen: () => undefined,
+        onDelete: () => Promise.resolve(false),
+        canDelete: false,
+      }).render(container);
+      return container.innerHTML;
+    };
+    const desktop = await render();
+    expect(desktop).to.include(
       '<span class="dc-path-short">Sales / … / Center</span>'
     );
-    expect(container.innerHTML).to.include(
-      '<span class="dc-path-full">Sales &#x2F; France &#x2F; Lyon &#x2F; Center</span>'
-    );
+    expect(desktop).to.not.include('dc-path-full');
+    const restore = pretendHoverless();
+    try {
+      const touch = await render();
+      expect(touch).to.include(
+        '<span class="dc-path-full">Sales &#x2F; France &#x2F; Lyon &#x2F; Center</span>'
+      );
+      expect(touch).to.not.include('dc-path-short');
+    } finally {
+      restore();
+    }
   });
 
   it('should not cut a path up with a scanner that squares its length', () => {

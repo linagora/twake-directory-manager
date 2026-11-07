@@ -888,29 +888,6 @@
   color: var(--dc-muted);
 }
 
-/* A touch screen has no hover: show what the title would, in the cell and
-   under the size. A mouse keeps the short form and the tooltip. */
-.dc-path-full,
-.dc-size-exact {
-  display: none;
-}
-
-@media (hover: none) {
-  .dc-path-short {
-    display: none;
-  }
-
-  .dc-path-full {
-    display: inline;
-  }
-
-  .dc-size-exact {
-    display: block;
-    color: var(--dc-muted);
-    font-size: 0.9em;
-  }
-}
-
 .dc-checkbox-cell {
   width: 44px;
 }

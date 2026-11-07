@@ -69,10 +69,9 @@ test.describe('USER user accounts', () => {
       'alice.moreau@example.com'
     );
     await expect(card.detail('Mailbox size')).toHaveText('1.07 GB');
-    await expect(card.detail('Mailbox size').locator('span')).toHaveAttribute(
-      'title',
-      '1073741824 bytes'
-    );
+    await expect(
+      card.detail('Mailbox size').locator('.dc-size')
+    ).toHaveAttribute('title', '1073741824 bytes');
     await expect(card.detail('Comment')).toBeHidden();
     await expect(card.emptyFields.locator('summary')).toHaveText(
       /^Show empty fields \(\d+\)$/

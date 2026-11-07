@@ -32,6 +32,7 @@ import type { AttachedTables } from './AttachedTables';
 import type { Translator } from '../i18n';
 import type { EntityDescriptor, Entry, SchemaAttribute } from '../types';
 import { background, type Reporter } from '../shared/background';
+import { hoverless } from '../shared/dom';
 import { html, render, type SafeHtml } from '../shared/html';
 
 /**
@@ -525,17 +526,20 @@ export class EntityDetail {
     const { language } = this.options.translator;
     // 1073741824 is 1 GiB, which no decimal unit says exactly: the card
     // rounds it, and leaves the exact count in the tooltip. A touch screen
-    // has no tooltip, so the count is beside it, shown there by the
-    // stylesheet (#272).
+    // has no tooltip, so it gets the count beside the rounded size (#272).
     if (attr?.normalize === 'byteSize' && /^\d+$/.test(value.trim())) {
       const exact = this.options.translator.t('detail.bytes', {
         count: value.trim(),
       });
       const rounded = readableByteSize(value, language).text;
-      return html`<span class="dc-value dc-size" title="${exact}">
-        <span class="dc-size-short">${rounded}</span>
-        <span class="dc-size-exact">${exact}</span>
-      </span>`;
+      return hoverless()
+        ? html`<span class="dc-value dc-size" title="${exact}">
+            <span class="dc-size-short">${rounded}</span>
+            <span class="dc-size-exact">${exact}</span>
+          </span>`
+        : html`<span class="dc-value dc-size" title="${exact}">
+            <span class="dc-size-short">${rounded}</span>
+          </span>`;
     }
     const shown =
       ownValueLabel(entity, name, value, language) ||
