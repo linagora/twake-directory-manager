@@ -32,7 +32,6 @@ import { saveDraft, signInAgain, takeDraft, type Draft } from './session';
 import type {
   Confirmation,
   AttachedEntries,
-  AttachedEntry,
   ConsoleOptions,
   EntityDescriptor,
   Entry,
@@ -43,6 +42,7 @@ import { html, render } from './shared/html';
 import type { ConsoleContext } from './console/context';
 import { createLabel } from './console/labels';
 import { Names } from './console/names';
+import { TransitService } from './console/transit';
 import { consoleReporter } from './console/report';
 import type { ConsoleDeps } from './console/deps';
 import { DialogService } from './console/dialog';
@@ -100,14 +100,6 @@ export class DirectoryConsole {
   private policiesReadable = false;
   /** The signed-in account, when it could be named rather than shown as a DN */
   private account: SignedIn | null = null;
-  /**
-   * What waits in the transit branch, as last read: counted on the banner's
-   * Transit link, listed on the Overview. Null until read, or when there is
-   * no transit branch to read
-   */
-  private transitWaiting: AttachedEntries | null = null;
-  /** How many times it was asked for, so that only the last answer counts */
-  private transitReads = 0;
   /**
    * Which view is the current one. Opening an entry, then another before the
    * first has answered, raced exactly the way the entity list did: whichever
@@ -173,6 +165,8 @@ export class DirectoryConsole {
   private draftOf: (() => Draft | null) | null = null;
   /** What the console calls things, as views ask (see `Names`). */
   private names!: Names;
+  /** The transit branch's count and actions (see `TransitService`). */
+  private transitService!: TransitService;
 
   /**
    * @param options what the page gives the console
@@ -225,6 +219,17 @@ export class DirectoryConsole {
       api: this.api,
       entities: (): EntityDescriptor[] => this.entities,
       translator: (): Translator => this.translator,
+    });
+    this.transitService = new TransitService({
+      rights: (): Rights => this.rights,
+      translator: (): Translator => this.translator,
+      route: (): Route => this.route,
+      link: (): HTMLElement | null =>
+        this.container?.querySelector<HTMLElement>('[data-transit-link]') ??
+        null,
+      readMembers: (dn): Promise<AttachedEntries> => this.readMembers(dn),
+      claim: (entity, id, name): Promise<void> => this.claim(entity, id, name),
+      report: this.report,
     });
     this.context = this.contextOf();
     this.passwords = new PasswordActions(this.context);
@@ -319,7 +324,7 @@ export class DirectoryConsole {
     // The Overview reads it for its own section, and the transit branch's
     // page reads it as its card's members: no other first page has the
     // banner count it.
-    if (!this.readsTransitOnPage()) this.refreshTransit();
+    if (!this.transitService.readsOnPage()) this.transitService.refresh();
     await this.renderMain();
     // A form a reload took away, once its draft was kept, is offered back.
     await this.offerDraft();
@@ -357,9 +362,10 @@ export class DirectoryConsole {
       go: path => this.go(path),
       record: (path, replace) => this.record(path, replace),
       route: () => this.route,
-      readTransit: () => this.readTransit(),
-      inTransit: (entity, entry) => this.inTransit(entity, entry),
-      refreshTransit: () => this.refreshTransit(),
+      readTransit: () => this.transitService.read(),
+      inTransit: (entity, entry) =>
+        this.transitService.inTransit(entity, entry),
+      refreshTransit: () => this.transitService.refresh(),
       watchDraft: (ask): void => {
         this.draftOf = ask;
       },
@@ -396,7 +402,7 @@ export class DirectoryConsole {
       readMembers: dn => this.readMembers(dn),
       relationHref: (dn, primaryOnly) =>
         relationHref(this.entities, dn, primaryOnly),
-      claimAction: () => this.claimAction(),
+      claimAction: () => this.transitService.claimAction(),
       openList: (entity, view) => this.listsView.open(entity, view),
       openForm: (entity, entry, here) => this.openForm(entity, entry, here),
       openOrganizationForm: (entity, entry, parentDn) =>
@@ -526,7 +532,7 @@ export class DirectoryConsole {
           language: this.translator.language,
           contrast: highContrast(),
         }),
-        scope: scopeMarkup(t, this.rights.summary, this.transitLabel()),
+        scope: scopeMarkup(t, this.rights.summary, this.transitService.label()),
         logout: logoutMarkup(t, this.api.logoutUrl),
         overlay: overlayMarkup(t('app.close')),
       })
@@ -575,119 +581,6 @@ export class DirectoryConsole {
     container
       .querySelector('[data-panel-close]')
       ?.addEventListener('click', () => this.panel.close());
-  }
-
-  /**
-   * The banner's Transit link: the branch's name, and how many entries wait
-   * there when some do — "Transit (2)" — so that an administrator is told
-   * of a hand-over without thinking of looking.
-   */
-  private transitLabel(): string {
-    const transit = this.rights.transit;
-    if (!transit) return '';
-    const name = rdnValue(transit);
-    const waiting = this.transitWaiting;
-    if (!waiting?.entries.length) return name;
-    return `${name} (${waiting.entries.length}${waiting.truncated ? '+' : ''})`;
-  }
-
-  /**
-   * Read what waits in transit, and count it on the banner.
-   *
-   * Only for an administrator whose scope names a transit branch: the
-   * console speaks of transit only then (see {@link transitState}). A read
-   * that fails counts nothing rather than an error: the branch is still a
-   * link away.
-   *
-   * @returns what waits there, or null when there is nothing to read
-   */
-  private async readTransit(): Promise<AttachedEntries | null> {
-    const rights = this.rights;
-    const transit = rights.transit;
-    if (!transit || rights.administersNothing()) return null;
-    try {
-      // The read counts on the banner itself (see `readMembers`).
-      return await this.readMembers(transit);
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Count what waits in transit on the banner, as the last answer to a read
-   * of the branch said, and leave the link's name alone meanwhile.
-   *
-   * @param waiting what the branch holds, or null when it could not be read
-   */
-  private countTransit(waiting: AttachedEntries | null): void {
-    this.transitWaiting = waiting;
-    const link = this.container?.querySelector<HTMLElement>(
-      '[data-transit-link]'
-    );
-    if (link) link.textContent = this.transitLabel();
-  }
-
-  /**
-   * Whether the console counts the entry in transit, as the server judges it
-   * (see {@link transitState}): what a save or a deletion changes.
-   *
-   * @param entity entity the entry belongs to
-   * @param entry the entry as read, or as a change would leave it
-   */
-  private inTransit(entity: EntityDescriptor, entry: Entry): boolean {
-    return this.rights.transitOf(entity, entry).inTransit;
-  }
-
-  /**
-   * Whether the first page reads the transit branch itself: the Overview
-   * lists it, and its own card lists its members, which counts it on the
-   * banner as well. Read once the shell is drawn, before the page is.
-   */
-  private readsTransitOnPage(): boolean {
-    if (this.route.view === 'dashboard') return true;
-    const transit = this.rights.transit;
-    return (
-      this.route.view === 'organizations' &&
-      !!transit &&
-      !!this.route.id &&
-      comparableDn(this.route.id) === comparableDn(transit)
-    );
-  }
-
-  /**
-   * Count what waits in transit again, on the banner, after a change that may
-   * have moved an entry into or out of the branch: a save, a deletion. The
-   * Overview reads the branch itself when it is drawn, and a caller with no
-   * transit branch reads nothing.
-   */
-  private refreshTransit(): void {
-    if (this.route.view === 'dashboard') return;
-    background(() => this.readTransit(), 'readTransit', this.report);
-  }
-
-  /** Claim…, at the end of each row listing what waits in transit. */
-  private claimAction(): {
-    label: string;
-    named(name: string): string;
-    offered(entry: AttachedEntry, entity: EntityDescriptor): boolean;
-    run(entry: AttachedEntry, entity: EntityDescriptor): void;
-  } {
-    return {
-      label: this.translator.t('transit.claim'),
-      named: name => this.translator.t('transit.claimTitle', { name }),
-      offered: (entry, entity) => this.rights.claimable(entry, entity),
-      run: (entry, entity) =>
-        background(
-          () =>
-            this.claim(
-              entity,
-              entry.label,
-              entry.values?.displayName || entry.label
-            ),
-          'claim',
-          this.report
-        ),
-    };
   }
 
   /* ------------------------------------------------------------------ views */
@@ -900,18 +793,14 @@ export class DirectoryConsole {
    * @returns what the server listed
    */
   private async readMembers(dn: string): Promise<AttachedEntries> {
-    const transit = this.rights.transit;
-    const counting = !!transit && comparableDn(dn) === comparableDn(transit);
-    // Read again after every hand-over and claim, and by each page: an
-    // answer arriving after a later one's is older, and must not count over
-    // it.
-    const read = counting ? ++this.transitReads : 0;
+    // A read of the transit branch counts on the banner; a later read wins.
+    const ticket = this.transitService.ticket(dn);
     try {
       const answer = await this.requestMembers(dn);
-      if (counting && read === this.transitReads) this.countTransit(answer);
+      this.transitService.settle(ticket, answer);
       return answer;
     } catch (err) {
-      if (counting && read === this.transitReads) this.countTransit(null);
+      this.transitService.settle(ticket, null);
       throw err;
     }
   }
