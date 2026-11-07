@@ -922,29 +922,6 @@ describe('EntityForm', () => {
     expect(container.innerHTML).to.include('>alice</span>');
   });
 
-  /** A select just real enough for `fillPointers`, which only rewrites markup. */
-  const stubSelect = (
-    branch: string,
-    value: string,
-    required = false
-  ): HTMLSelectElement & { dataset: { pointer: string } } => {
-    const select = {
-      dataset: required
-        ? { pointer: branch, required: 'true' }
-        : { pointer: branch },
-      value,
-      innerHTML: '',
-      disabled: true,
-      removeAttribute: (_name: string): void => undefined,
-      insertAdjacentHTML: (_position: string, html: string): void => {
-        select.innerHTML += html;
-      },
-    };
-    return select as unknown as HTMLSelectElement & {
-      dataset: { pointer: string };
-    };
-  };
-
   const held = 'ou=Demo,dc=example,dc=com';
 
   /** A form with a pointer select, drawn in the page. */
@@ -1049,39 +1026,6 @@ describe('EntityForm', () => {
     expect(select.innerHTML).to.include(`${held}" selected`);
     expect(select.value).to.equal(held);
   });
-
-  /** An element recording its listeners, for wiring a stub cannot run. */
-  const recorder = (
-    children: Record<string, unknown> = {},
-    dataset: Record<string, string> = {}
-  ): {
-    innerHTML: string;
-    value: string;
-    hidden: boolean;
-    dataset: Record<string, string>;
-    addEventListener(type: string, handler: (event: unknown) => void): void;
-    setAttribute(): void;
-    removeAttribute(): void;
-    querySelector(selector: string): unknown;
-    fire(type: string, event?: unknown): void;
-  } => {
-    const handlers: Record<string, ((event: unknown) => void)[]> = {};
-    return {
-      innerHTML: '',
-      value: '',
-      hidden: true,
-      dataset,
-      addEventListener: (type, handler) => {
-        (handlers[type] ||= []).push(handler);
-      },
-      setAttribute: () => undefined,
-      removeAttribute: () => undefined,
-      querySelector: selector => children[selector] ?? null,
-      fire: (type, event = {}) => {
-        for (const handler of handlers[type] || []) handler(event);
-      },
-    };
-  };
 
   /** The picker of a field drawn in the page. */
   const picker = (
@@ -1926,57 +1870,33 @@ describe('EntityForm', () => {
       endpoint: '/api/v1/ldap/organizations',
       kind: 'organization',
     };
-    const enter = { key: 'Enter', preventDefault: () => undefined };
-    const down = { key: 'ArrowDown', preventDefault: () => undefined };
     const tick = (): Promise<void> =>
       new Promise(resolve => setTimeout(resolve, 0));
+    /** Press a key on a control, as the reader does. */
+    const key = (control: HTMLElement, name: string): KeyboardEvent => {
+      const event = new KeyboardEvent('keydown', {
+        key: name,
+        bubbles: true,
+        cancelable: true,
+      });
+      control.dispatchEvent(event);
+      return event;
+    };
 
     describe('chosen by typing', () => {
-      /**
-       * An organization form whose domain field is a select inside its
-       * field, the field holding what the picker it turns into looks up.
-       */
+      /** An organization form, its domain field the picker it draws. */
       const domainForm = async (
         pointerOptions: () => Promise<{ dn: string; label: string }[]>,
         linkableDomains?: () => Promise<string[] | undefined>
       ): Promise<{
+        container: HTMLElement;
         form: EntityForm;
-        field: ReturnType<typeof recorder>;
-        input: ReturnType<typeof recorder>;
-        results: ReturnType<typeof recorder>;
-        select: HTMLSelectElement;
-        note: { textContent: string; hidden: boolean; id: string };
+        input: HTMLInputElement;
+        results: HTMLElement;
         asked: () => number;
       }> => {
-        const input = recorder();
-        const results = recorder();
-        const note = {
-          textContent: '',
-          hidden: true,
-          id: 'dc-note-twakeDomainLink',
-        };
-        const field = recorder(
-          {
-            '[data-picker-input]': input,
-            '.dc-picker-results': results,
-            '.dc-token-list': recorder(),
-            '[data-pointer-note]': note,
-          },
-          { field: 'twakeDomainLink' }
-        );
-        const select = stubSelect(domainsBase, '') as unknown as Record<
-          string,
-          unknown
-        >;
-        select.dataset = { pointer: domainsBase, tokenInput: '' };
-        select.closest = (): unknown => field;
-        const container = stubContainer() as unknown as {
-          querySelector(selector: string): unknown;
-          querySelectorAll(): unknown[];
-        };
-        container.querySelector = selector =>
-          selector === '[data-field="twakeDomainLink"]' ? field : null;
-        container.querySelectorAll = (): unknown[] => [select];
+        const container = document.createElement('div');
+        document.body.append(container);
         let calls = 0;
         const form = new EntityForm({
           entity: organizations,
@@ -1995,46 +1915,54 @@ describe('EntityForm', () => {
           onSubmit: () => Promise.resolve(),
           onCancel: () => undefined,
         });
-        await form.render(container as unknown as HTMLElement);
-        return {
-          form,
-          field,
-          input,
-          results,
-          select: select as unknown as HTMLSelectElement,
-          note,
-          asked: () => calls,
-        };
+        await form.render(container);
+        const input = container.querySelector<HTMLInputElement>(
+          '[data-field="twakeDomainLink"] [data-picker-input]'
+        );
+        const results = container.querySelector<HTMLElement>(
+          '[data-field="twakeDomainLink"] .dc-picker-results'
+        );
+        if (!input || !results) throw new Error('no domain picker');
+        return { container, form, input, results, asked: () => calls };
       };
-      const links = (form: EntityForm): string[] =>
-        (form as unknown as { values: Record<string, string[]> }).values
-          .twakeDomainLink;
+      const type = async (
+        input: HTMLInputElement,
+        text: string
+      ): Promise<void> => {
+        typeInto(input, text);
+        await tick();
+      };
+      const links = (container: HTMLElement): (string | null)[] =>
+        shownValues(container, 'twakeDomainLink');
 
       it('should filter the domains listed once by their name, from the first letter', async () => {
-        const { form, field, input, results, asked } = await domainForm(() =>
+        const { container, input, results, asked } = await domainForm(() =>
           Promise.resolve(listed)
         );
         // A picker, named by the domain, not by its RDN.
-        expect(field.innerHTML).to.include('data-picker="twakeDomainLink"');
-        expect(field.innerHTML).to.include(
+        expect(container.innerHTML).to.include('data-picker="twakeDomainLink"');
+        expect(container.innerHTML).to.include(
           'Type part of a name, or press ↓ to list them all'
         );
-        expect(field.innerHTML).to.include(`title="${example}">example.com<`);
+        expect(container.innerHTML).to.include(
+          `title="${example}">example.com<`
+        );
 
-        input.value = 'L';
-        input.fire('input');
-        await tick();
+        await type(input, 'L');
         expect(results.hidden).to.equal(false);
         expect(results.innerHTML).to.include('lists.example.com');
         expect(results.innerHTML).not.to.include('other.org');
-        input.fire('keydown', enter);
-        expect(links(form)).to.deep.equal([example, lists]);
+        key(input, 'Enter');
+        expect(links(container)).to.deep.equal([
+          'example.com',
+          'lists.example.com',
+        ]);
 
         // What is linked already is not offered again; the arrow lists
         // the rest of them, the box empty.
-        input.fire('keydown', { key: 'Escape', preventDefault: () => {} });
+        key(input, 'Escape');
         input.value = '';
-        input.fire('keydown', down);
+        key(input, 'ArrowDown');
         await tick();
         expect(results.innerHTML).to.include('other.org');
         expect(results.innerHTML).not.to.include('>example.com<');
@@ -2043,24 +1971,20 @@ describe('EntityForm', () => {
       });
 
       it('should offer only what an organization above links, to a caller below the top', async () => {
-        const { form, input, results } = await domainForm(
+        const { container, input, results } = await domainForm(
           () => Promise.resolve(listed),
           () => Promise.resolve([lists])
         );
-        input.value = 'o';
-        input.fire('input');
-        await tick();
+        await type(input, 'o');
         expect(results.innerHTML).to.include('lists.example.com');
         expect(results.innerHTML).not.to.include('other.org');
 
-        input.value = 'other';
-        input.fire('input');
-        await tick();
+        await type(input, 'other');
         expect(results.innerHTML).to.include(
           'Only a domain an organization above this one links can be linked here'
         );
-        input.fire('keydown', enter);
-        expect(links(form)).to.deep.equal([example]);
+        key(input, 'Enter');
+        expect(links(container)).to.deep.equal(['example.com']);
       });
 
       it('should offer every domain when what is linked above cannot be read', async () => {
@@ -2068,57 +1992,58 @@ describe('EntityForm', () => {
           () => Promise.resolve(listed),
           () => Promise.reject(new Error('Forbidden'))
         );
-        input.value = 'o';
-        input.fire('input');
-        await tick();
+        await type(input, 'o');
         expect(results.innerHTML).to.include('other.org');
       });
 
       it('should keep the select, quietly, when the domains cannot be read', async () => {
-        const { field, select, note } = await domainForm(() =>
-          Promise.reject(Object.assign(new Error('Forbidden'), { status: 403 }))
+        const container = document.createElement('div');
+        document.body.append(container);
+        await new EntityForm({
+          entity: organizations,
+          entry: {
+            dn: `ou=Sales,${organizations.base}`,
+            ou: 'Sales',
+            twakeDomainLink: [example],
+          },
+          translator: new Translator('en'),
+          typeAhead: branch => branch === domainsBase,
+          pointerOptions: () =>
+            Promise.reject(
+              Object.assign(new Error('Forbidden'), { status: 403 })
+            ),
+          onSubmit: () => Promise.resolve(),
+          onCancel: () => undefined,
+        }).render(container);
+        const select = container.querySelector<HTMLSelectElement>(
+          'select#dc-field-twakeDomainLink'
         );
-        expect(field.innerHTML).to.equal('');
+        if (!select) throw new Error('no select');
         expect(select.disabled).to.equal(false);
+        const note = container.querySelector<HTMLElement>(
+          '#dc-note-twakeDomainLink'
+        );
         await new Promise(resolve => setTimeout(resolve, 150));
-        expect(note.hidden).to.equal(true);
-        expect(note.textContent).to.equal('');
+        expect(note?.hidden).to.equal(true);
+        expect(note?.textContent).to.equal('');
       });
     });
 
     describe('completing an address', () => {
-      /** An account form whose address fields are wired to recorders. */
+      /** An account form drawn in the page, its address boxes described. */
       const addressForm = async (
         mailDomains?: (organization?: string) => Promise<string[]>,
         rule: Partial<SchemaAttribute> = { mailDomainScope: 'organization' }
       ): Promise<{
         form: EntityForm;
-        container: HTMLElement & { innerHTML: string };
-        mail: ReturnType<typeof recorder>;
-        mailList: ReturnType<typeof recorder>;
-        alias: ReturnType<typeof recorder>;
-        aliasList: ReturnType<typeof recorder>;
-        values: Record<string, string[]>;
+        container: HTMLElement;
+        mail: HTMLInputElement;
+        mailList: HTMLElement;
+        alias: HTMLInputElement;
+        aliasList: HTMLElement;
       }> => {
-        const mail = recorder();
-        const mailList = recorder();
-        const alias = recorder();
-        const aliasList = recorder();
-        const fields: Record<string, unknown> = {
-          '[data-field="mail"]': recorder({
-            '.dc-input': mail,
-            '[data-completions]': mailList,
-          }),
-          '[data-field="mailAlternateAddress"]': recorder({
-            '[data-token-input]': alias,
-            '[data-completions]': aliasList,
-            '.dc-token-list': recorder(),
-          }),
-        };
-        const container = stubContainer();
-        (
-          container as unknown as { querySelector(s: string): unknown }
-        ).querySelector = selector => fields[selector] ?? null;
+        const container = document.createElement('div');
+        document.body.append(container);
         // The rule ldap-rest's `ldap/enterpriseRules` checks addresses by.
         const { mail: address, mailAlternateAddress: aliases } =
           users.schema.attributes;
@@ -2145,29 +2070,31 @@ describe('EntityForm', () => {
           onCancel: () => undefined,
         });
         await form.render(container);
+        const find = <T extends Element>(selector: string): T => {
+          const found = container.querySelector<T>(selector);
+          if (!found) throw new Error(`no ${selector}`);
+          return found;
+        };
         return {
           form,
           container,
-          mail,
-          mailList,
-          alias,
-          aliasList,
-          values: (form as unknown as { values: Record<string, string[]> })
-            .values,
+          mail: find<HTMLInputElement>('#dc-field-mail'),
+          mailList: find<HTMLElement>('#dc-complete-mail'),
+          alias: find<HTMLInputElement>('#dc-field-mailAlternateAddress'),
+          aliasList: find<HTMLElement>('#dc-complete-mailAlternateAddress'),
         };
       };
       const type = async (
-        box: ReturnType<typeof recorder>,
+        box: HTMLInputElement,
         text: string
       ): Promise<void> => {
-        box.value = text;
-        box.fire('input');
+        typeInto(box, text);
         await tick();
       };
 
       it('should offer the domains of the entry’s organization after an "@"', async () => {
         const asked: (string | undefined)[] = [];
-        const { container, mail, mailList, values } = await addressForm(
+        const { form, container, mail, mailList } = await addressForm(
           organization => {
             asked.push(organization);
             return Promise.resolve(['example.com', 'lists.example.com']);
@@ -2195,9 +2122,9 @@ describe('EntityForm', () => {
         expect(mailList.innerHTML).to.match(
           /aria-selected="true"\s+data-suggestion="0">jane@example\.com</
         );
-        mail.fire('keydown', enter);
+        key(mail, 'Enter');
         expect(mail.value).to.equal('jane@example.com');
-        expect(values.mail).to.deep.equal(['jane@example.com']);
+        expect(form.draft().values.mail).to.deep.equal(['jane@example.com']);
         expect(mailList.hidden).to.equal(true);
         // A domain typed whole is offered no more.
         await type(mail, 'jane@example.com');
@@ -2233,36 +2160,36 @@ describe('EntityForm', () => {
       });
 
       it('should complete an alias on Enter, and add it on the next', async () => {
-        const { alias, aliasList, values } = await addressForm(() =>
+        const { container, alias, aliasList } = await addressForm(() =>
           Promise.resolve(['example.com', 'lists.example.com'])
         );
         // "name@" and Enter left "name@" before: nothing was chosen.
         await type(alias, 'j.doe@exa');
         expect(aliasList.hidden).to.equal(false);
         let prevented = false;
-        alias.fire('keydown', {
-          key: 'Enter',
-          preventDefault: () => {
-            prevented = true;
-          },
+        alias.addEventListener('keydown', event => {
+          if (event.defaultPrevented) prevented = true;
         });
+        key(alias, 'Enter');
         expect(prevented).to.equal(true);
         expect(alias.value).to.equal('j.doe@example.com');
-        expect(values.mailAlternateAddress).to.deep.equal([]);
+        expect(shownValues(container, 'mailAlternateAddress')).to.deep.equal(
+          []
+        );
         expect(aliasList.hidden).to.equal(true);
-        alias.fire('keydown', enter);
-        expect(values.mailAlternateAddress).to.deep.equal([
+        key(alias, 'Enter');
+        expect(shownValues(container, 'mailAlternateAddress')).to.deep.equal([
           'j.doe@example.com',
         ]);
 
         // Another line, chosen with the arrows
         await type(alias, 'doe@');
-        alias.fire('keydown', down);
-        alias.fire('keydown', enter);
+        key(alias, 'ArrowDown');
+        key(alias, 'Enter');
         expect(alias.value).to.equal('doe@lists.example.com');
         // Escape keeps the text as typed, for Enter to add
         await type(alias, 'x@exa');
-        alias.fire('keydown', { key: 'Escape', preventDefault: () => {} });
+        key(alias, 'Escape');
         expect(aliasList.hidden).to.equal(true);
         expect(alias.value).to.equal('x@exa');
       });
@@ -2270,19 +2197,6 @@ describe('EntityForm', () => {
       it('should show the identifier a new account will get', async () => {
         // The server takes it from the address; the operator met it on the
         // card only, once it could no longer be changed.
-        const mail = recorder();
-        const line = recorder();
-        const fields: Record<string, unknown> = {
-          '[data-field="mail"]': recorder({
-            '.dc-input': mail,
-            '[data-completions]': recorder(),
-            '[data-identifier]': line,
-          }),
-        };
-        const container = stubContainer();
-        (
-          container as unknown as { querySelector(s: string): unknown }
-        ).querySelector = selector => fields[selector] ?? null;
         const entity = (entry?: Entry): EntityForm =>
           new EntityForm({
             entity: {
@@ -2311,39 +2225,42 @@ describe('EntityForm', () => {
             onSubmit: () => Promise.resolve(),
             onCancel: () => undefined,
           });
+        const container = document.createElement('div');
+        document.body.append(container);
         await entity().render(container);
-        expect(container.innerHTML).to.include(
-          '<p class="dc-hint" id="dc-identifier-mail" data-identifier hidden></p>'
+        const mail =
+          container.querySelector<HTMLInputElement>('#dc-field-mail');
+        const line = container.querySelector<HTMLElement>(
+          '#dc-identifier-mail'
         );
+        if (!mail || !line) throw new Error('no identifier line');
+        expect(line.hidden).to.equal(true);
 
         // Not before the address is one
         await type(mail, 'Ux-Audit+1@');
         expect(line.hidden).to.equal(true);
         await type(mail, 'Ux-Audit+1@example.com');
         expect(line.hidden).to.equal(false);
-        expect(
-          (line as unknown as { textContent: string }).textContent
-        ).to.equal(
+        expect(line.textContent).to.equal(
           'Identifier: ux-audit1 (sign-in name, cannot be changed later). A number is added to it if it is already taken.'
         );
         // Completed from the list, as typed
         await type(mail, 'jane@');
-        mail.fire('keydown', enter);
-        expect(
-          (line as unknown as { textContent: string }).textContent
-        ).to.match(/^Identifier: jane /);
+        key(mail, 'Enter');
+        expect(line.textContent).to.match(/^Identifier: jane /);
         await type(mail, '');
         expect(line.hidden).to.equal(true);
 
         // Editing, the identifier exists: no line
-        const edit = stubContainer();
+        const edit = document.createElement('div');
+        document.body.append(edit);
         await entity({ uid: 'jane', mail: 'jane@example.com' }).render(edit);
-        expect(edit.innerHTML).not.to.include('data-identifier');
+        expect(edit.querySelector('[data-identifier]')).to.equal(null);
       });
 
       it('should stay a plain box, quietly, when the domains cannot be read', async () => {
         let asked = 0;
-        const { mail, mailList, values } = await addressForm(() => {
+        const { form, mail, mailList } = await addressForm(() => {
           asked++;
           return Promise.reject(
             Object.assign(new Error('Forbidden'), { status: 403 })
@@ -2356,12 +2273,14 @@ describe('EntityForm', () => {
         // Not asked again on every keystroke.
         expect(asked).to.equal(1);
         mail.value = 'jane@example.com';
-        mail.fire('change');
-        expect(values.mail).to.deep.equal(['jane@example.com']);
+        mail.dispatchEvent(new Event('change', { bubbles: true }));
+        expect(form.draft().values.mail).to.deep.equal(['jane@example.com']);
       });
 
       it('should be no combobox when the console offers no domains', async () => {
-        const { container } = await addressForm();
+        const container = document.createElement('div');
+        document.body.append(container);
+        await build().render(container);
         expect(container.innerHTML).not.to.include('role="combobox"');
         expect(container.innerHTML).not.to.include('data-completions');
       });
