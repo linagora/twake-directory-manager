@@ -1,6 +1,7 @@
 import { expect } from 'chai';
 
-import { DirectoryConsole } from '../src/DirectoryConsole';
+import { consoleReporter } from '../src/console/report';
+import { Translator } from '../src/i18n';
 import { background, fromConsole, logReporter } from '../src/shared/background';
 
 describe('background', () => {
@@ -146,25 +147,36 @@ describe('background', () => {
   });
 });
 
-describe('DirectoryConsole.report', () => {
+describe('consoleReporter', () => {
+  /** A toast standing in for the frame's, and what the reporter said. */
+  const setup = (
+    language = 'en',
+    onError?: (error: unknown, context: string) => void
+  ): {
+    toast: { textContent: string; hidden: boolean };
+    report: (error: unknown, context: string) => void;
+  } => {
+    const translator = new Translator(language);
+    const toast = { textContent: '', hidden: true };
+    return {
+      toast,
+      report: consoleReporter(
+        (key, values) => translator.t(key, values),
+        (message, isError) => {
+          toast.textContent = message;
+          toast.hidden = false;
+          void isError;
+        },
+        onError
+      ),
+    };
+  };
+
   it('should tell the administrator, log, and hand the failure to the page', () => {
-    const toast = {
-      textContent: '',
-      hidden: true,
-      classList: { toggle: (_name: string, _on: boolean) => undefined },
-    };
     const given: [unknown, string][] = [];
-    const app = new DirectoryConsole({
-      containerId: 'console',
-      apiBaseUrl: 'http://localhost',
-      language: 'fr',
-      onError: (error, context) => given.push([error, context]),
-    });
-    (app as unknown as { container: unknown }).container = {
-      querySelector: (selector: string) =>
-        selector === '[data-toast]' ? toast : null,
-      querySelectorAll: () => [],
-    };
+    const { toast, report } = setup('fr', (error, context) =>
+      given.push([error, context])
+    );
     const logged: unknown[][] = [];
     const original = console.error;
     console.error = (...args: unknown[]): void => {
@@ -172,9 +184,7 @@ describe('DirectoryConsole.report', () => {
     };
     try {
       const failure = new Error('Directory unreachable');
-      (
-        app as unknown as { report(error: unknown, context: string): void }
-      ).report(failure, 'renderMain');
+      report(failure, 'renderMain');
       expect(toast.hidden).to.equal(false);
       expect(toast.textContent).to.equal(
         'Une erreur est survenue : Directory unreachable'
@@ -189,33 +199,15 @@ describe('DirectoryConsole.report', () => {
   });
 
   it('should say the failure in its own words, report what is no Error, and survive a hook that throws', () => {
-    const toast = {
-      textContent: '',
-      hidden: true,
-      classList: { toggle: (_name: string, _on: boolean) => undefined },
-    };
-    const app = new DirectoryConsole({
-      containerId: 'console',
-      apiBaseUrl: 'http://localhost',
-      language: 'en',
-      onError: () => {
-        throw new Error('the hook is broken');
-      },
+    const { toast, report } = setup('en', () => {
+      throw new Error('the hook is broken');
     });
-    (app as unknown as { container: unknown }).container = {
-      querySelector: (selector: string) =>
-        selector === '[data-toast]' ? toast : null,
-      querySelectorAll: () => [],
-    };
     const logged: unknown[][] = [];
     const original = console.error;
     console.error = (...args: unknown[]): void => {
       logged.push(args);
     };
     try {
-      const report = (
-        app as unknown as { report(error: unknown, context: string): void }
-      ).report;
       // A refusal is said in the server's words, not in a read's wording.
       report(Object.assign(new Error('Forbidden'), { status: 403 }), 'x');
       expect(toast.textContent).to.equal('Something went wrong: Forbidden');

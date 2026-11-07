@@ -5,8 +5,6 @@
  * was written and answer the few DOM calls the code makes. New tests mount
  * into `document.body` instead (#221).
  */
-import { DirectoryConsole } from '../../src/DirectoryConsole';
-
 export const baseUrl = 'http://localhost:8099';
 
 /**
@@ -92,34 +90,4 @@ export function treeContainer(): HTMLElement & TreeContainer {
     },
   };
   return container as unknown as HTMLElement & TreeContainer;
-}
-
-/**
- * A console drawn into a container that answers each selector with the
- * element given for it: enough for an action that writes into the shell.
- */
-export function consoleIn(
-  elements: Record<string, unknown>,
-  language = 'en'
-): DirectoryConsole {
-  const app = new DirectoryConsole({
-    containerId: 'console',
-    apiBaseUrl: baseUrl,
-    language,
-  });
-  (app as unknown as { container: unknown }).container = {
-    querySelector: (selector: string) => elements[selector] ?? null,
-    querySelectorAll: () => [],
-  };
-  return app;
-}
-
-/** A toast element, which records the last message it was given. */
-export function toastElement(): { textContent: string } {
-  return {
-    textContent: '',
-    hidden: true,
-    onclick: null,
-    classList: { toggle: () => undefined },
-  } as unknown as { textContent: string };
 }

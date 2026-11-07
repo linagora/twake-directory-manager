@@ -31,18 +31,6 @@ import {
 import { Translator } from './i18n';
 import { Rights, splitEntities } from './rights';
 import { signInAgain } from './session';
-// Kept where embedders and the tests found them.
-export { readFailure } from './format';
-export {
-  claimRoots,
-  isPrimaryEntity,
-  organizationParents,
-  scopeRestricts,
-  splitEntities,
-  transitState,
-  writesEntry,
-  type TransitState,
-} from './rights';
 import type {
   Confirmation,
   AttachedEntries,
@@ -55,6 +43,8 @@ import type {
 import { background, fromConsole, type Reporter } from './shared/background';
 import { html, render, type SafeHtml } from './shared/html';
 import type { ConsoleContext } from './console/context';
+import { createLabel } from './console/labels';
+import { consoleReporter } from './console/report';
 import type { ConsoleDeps } from './console/deps';
 import { DialogService } from './console/dialog';
 import { groupEntity, readRelations, relationHref } from './console/relations';
@@ -373,7 +363,7 @@ export class DirectoryConsole {
         this.states.changeMany(entity, selected),
       addSelectionToGroups: (entity, selected) =>
         this.groups.addMany(entity, selected),
-      createLabel: entity => this.createLabel(entity),
+      createLabel: entity => createLabel(this.translator, entity),
       givePassword: (entity, values, id, next, own) =>
         this.passwords.give(entity, values, id, next, own),
       plural: entity => this.plural(entity),
@@ -794,38 +784,6 @@ export class DirectoryConsole {
   }
 
   /**
-   * What to call one entry of a collection.
-   *
-   * @param entity entity to name
-   * @returns the singular name to show
-   */
-  private singular(entity: EntityDescriptor): string {
-    return (
-      resolveText(entity.singularLabel, this.translator.language) ||
-      entity.singularName
-    );
-  }
-
-  /**
-   * What the button and the panel creating an entry of an entity read. The
-   * catalogue may name it for an entity it knows: French puts an article that
-   * agrees with the noun, _Créer une organisation_, which a template around
-   * the schema's name cannot.
-   *
-   * @param entity entity an entry is created in
-   * @returns the label
-   */
-  private createLabel(entity: EntityDescriptor): string {
-    const own = `dashboard.create.${entity.key}`;
-    const label = this.translator.t(own);
-    return label !== own
-      ? label
-      : this.translator.t('dashboard.create', {
-          entity: this.singular(entity),
-        });
-  }
-
-  /**
    * Whether the caller manages the password policies. Who holds them is the
    * server's rule (`--authz-global-branches`), outside the tree the scope's
    * branches name, so the scope says it in `passwordPolicies`. Only a server
@@ -1185,30 +1143,9 @@ export class DirectoryConsole {
    * nothing in it may throw: a rejection with no error at all, a toast
    * element gone, a hook that throws, each is logged and the rest goes on.
    */
-  private readonly report: Reporter = (error, context): void => {
-    try {
-      console.error('[twake-directory-manager]', context, error);
-      const cause =
-        error instanceof Error
-          ? error.message
-          : typeof error === 'string'
-            ? error
-            : '';
-      this.toast(
-        cause
-          ? this.translator.t('app.failed', { cause })
-          : this.translator.t('app.error'),
-        true
-      );
-    } catch (shown) {
-      // A `message` getter that throws, a toast element gone: logged.
-      console.error('[twake-directory-manager] toast', shown);
-    }
-    try {
-      this.options.onError?.(error, context);
-    } catch (hook) {
-      // The hook's own failure is not reported through itself.
-      console.error('[twake-directory-manager] onError', hook);
-    }
-  };
+  private readonly report: Reporter = consoleReporter(
+    (key, values) => this.translator.t(key, values),
+    (message, isError) => this.toast(message, isError),
+    (error, context) => this.options.onError?.(error, context)
+  );
 }
