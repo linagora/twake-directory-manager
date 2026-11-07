@@ -293,7 +293,7 @@ export class DirectoryConsole {
       event.preventDefault();
       this.report(event.error, 'unhandled');
     });
-    document.addEventListener('keydown', event => this.panelKey(event), {
+    document.addEventListener('keydown', event => this.panel.key(event), {
       signal,
     });
     // The system's wish for contrast, followed as it changes, until the
@@ -548,7 +548,7 @@ export class DirectoryConsole {
 
     container
       .querySelector('[data-panel-close]')
-      ?.addEventListener('click', () => this.closePanel());
+      ?.addEventListener('click', () => this.panel.close());
   }
 
   /** The sign-out control, when the server offers a way to sign out. */
@@ -1051,33 +1051,6 @@ export class DirectoryConsole {
         ])
       ),
     };
-  }
-
-  /* ------------------------------------------------------------ side panel */
-
-  /** Open the side panel with a title and a body builder (`PanelService.open`). */
-  private openPanel(
-    title: string,
-    build: (body: HTMLElement) => void,
-    modal = false,
-    wide = false
-  ): void {
-    this.panel.open(title, build, modal, wide);
-  }
-
-  /** Close the side panel, unless what it holds asks to stay (`PanelService.close`). */
-  private closePanel(force = false): void {
-    this.panel.close(force);
-  }
-
-  /** The keyboard in the side panel: Tab kept in, Escape closes (`PanelService.key`). */
-  private panelKey(event: KeyboardEvent): void {
-    this.panel.key(event);
-  }
-
-  /** Ask before what cannot be taken back (`DialogService.confirm`). */
-  private confirmAction(question: Confirmation): Promise<boolean> {
-    return this.dialog.confirm(question);
   }
 
   /**
