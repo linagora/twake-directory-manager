@@ -55,6 +55,13 @@ nock.disableNetConnect();
  */
 export const beforeReset: (() => void)[] = [];
 
+/** A real element to render into, at the top of the page, cleared after each test. */
+export function page(): HTMLElement {
+  const container = document.createElement('div');
+  document.body.append(container);
+  return container;
+}
+
 /**
  * Root hooks, which mocha reads from a required file: a test leaves the DOM
  * as it found it. The storages, the document and the hash are shared by the

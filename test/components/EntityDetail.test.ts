@@ -3,12 +3,13 @@ import { EntityDetail } from '../../src/components/EntityDetail';
 import { displayValue, rdnValue } from '../../src/format';
 import { Translator } from '../../src/i18n';
 import type { EntityDescriptor, Entry } from '../../src/types';
-import { pretendHoverless, stubContainer } from '../support/stubs';
+import { pretendHoverless } from '../support/stubs';
+import { page } from '../support/dom';
 import { usersSchema, users, groups, mailboxTypes } from '../fixtures/entities';
 
 describe('EntityDetail', () => {
   const render = (entry: Record<string, string | string[]>): string => {
-    const container = stubContainer();
+    const container = page();
     new EntityDetail({
       entity: users,
       entry,
@@ -24,7 +25,7 @@ describe('EntityDetail', () => {
   };
 
   it('should name a nomenclature entry the way its schema does', () => {
-    const container = stubContainer();
+    const container = page();
     new EntityDetail({
       entity: mailboxTypes,
       entry: { cn: 'teamMailbox' },
@@ -59,7 +60,7 @@ describe('EntityDetail', () => {
         },
       },
     };
-    const container = stubContainer();
+    const container = page();
     new EntityDetail({
       entity: teamMailboxes,
       entry: {
@@ -80,7 +81,7 @@ describe('EntityDetail', () => {
   });
 
   it('should name attributes in the reader’s language', () => {
-    const container = stubContainer();
+    const container = page();
     new EntityDetail({
       entity: users,
       entry: { uid: 'jsmith' },
@@ -106,7 +107,7 @@ describe('EntityDetail', () => {
       },
     };
     const card = (language: string): string => {
-      const container = stubContainer();
+      const container = page();
       new EntityDetail({
         entity: dated,
         entry: { uid: 'imp.two2', twakeDeletionDate: '20310115000000Z' },
@@ -139,7 +140,7 @@ describe('EntityDetail', () => {
     // The defect this replaces: a card showing two fields, the rest only
     // reachable by opening the edit dialog. They are still on the card, but
     // the empty ones no longer make up most of it.
-    const [shown, folded] = html.split('data-empty>');
+    const [shown, folded] = html.split(/data-empty(?:="")?>/);
     expect(shown).to.include('jsmith@example.com');
     expect(shown).not.to.include('Telephone Number');
     expect(folded).to.include('Show empty fields (7)');
@@ -156,7 +157,7 @@ describe('EntityDetail', () => {
     });
     expect(html).to.include('<h2>John Smith</h2>');
     expect(html).to.include(
-      '<p class="dc-detail-subtitle" data-subtitle>jsmith · jsmith@example.com</p>'
+      '<p class="dc-detail-subtitle" data-subtitle="">jsmith · jsmith@example.com</p>'
     );
     // Said in the heading, not again in Details.
     expect(html).not.to.include('<dt>Name</dt>');
@@ -168,7 +169,7 @@ describe('EntityDetail', () => {
 
   it('should group the details under headings', () => {
     const card = (entity: EntityDescriptor, entry: Entry): string => {
-      const container = stubContainer();
+      const container = page();
       new EntityDetail({
         entity,
         entry,
@@ -202,7 +203,7 @@ describe('EntityDetail', () => {
     ]);
     // The path names the department and leads there: its link would say
     // "France" a second time.
-    expect(html).to.include('Sales &#x2F; France');
+    expect(html).to.include('Sales / France');
     expect(html).not.to.include('Twake Department Link');
 
     // A group the schema gives the form is the card's too, after Contact.
@@ -271,7 +272,7 @@ describe('EntityDetail', () => {
       },
     };
     const card = (cn: string): string => {
-      const container = stubContainer();
+      const container = page();
       new EntityDetail({
         entity: named,
         entry: { uid: 'jsmith', cn, displayName: 'John Smith' },
@@ -294,7 +295,7 @@ describe('EntityDetail', () => {
       dn: 'uid=jsmith,ou=users,dc=example,dc=com',
       uid: 'jsmith',
     });
-    const [, technical] = html.split('data-technical>');
+    const [, technical] = html.split(/data-technical(?:="")?>/);
     expect(technical).to.include('<summary>Technical details</summary>');
     expect(technical).to.include('Distinguished name (DN)');
     expect(technical).to.include(
@@ -304,7 +305,7 @@ describe('EntityDetail', () => {
   });
 
   it('should put Edit first, and Hand over and Delete in a More menu', () => {
-    const container = stubContainer();
+    const container = page();
     new EntityDetail({
       entity: users,
       entry: { uid: 'jsmith' },
@@ -324,9 +325,9 @@ describe('EntityDetail', () => {
     );
     expect(html).to.include('aria-haspopup="menu"');
     expect(html).to.include('aria-expanded="false"');
-    const [, menu] = html.split('data-more-menu hidden>');
+    const [, menu] = html.split('data-more-menu="" hidden="">');
     expect(menu).to.match(
-      /role="menuitem"[^>]*data-hand-over>Hand over<\/button><button type="button" role="menuitem" class="dc-menu-item dc-menu-item-danger" data-delete>Delete<\/button>/
+      /role="menuitem"[^>]*data-hand-over="">Hand over<\/button><button type="button" role="menuitem" class="dc-menu-item dc-menu-item-danger" data-delete="">Delete<\/button>/
     );
   });
 
@@ -348,17 +349,8 @@ describe('EntityDetail', () => {
     // A select wrote the state on its first change: an arrow key on it
     // locked an account out. The card now holds a button that opens the
     // panel, and nothing on the card names a state to write.
-    let listener: (() => void) | undefined;
     const opened: unknown[][] = [];
-    const button = {
-      addEventListener: (_type: string, callback: () => void) => {
-        listener = callback;
-      },
-    };
-    const container = Object.assign(stubContainer(), {
-      querySelector: (selector: string) =>
-        selector === '[data-status]' ? button : null,
-    });
+    const container = page();
     new EntityDetail({
       entity: users,
       entry: { uid: 'jsmith' },
@@ -375,14 +367,14 @@ describe('EntityDetail', () => {
     expect(container.innerHTML).to.not.include('<select');
     expect(container.innerHTML).to.not.include('value="disabled"');
     expect(container.innerHTML).to.include(
-      '<button type="button" class="dc-button" data-status>Change state…</button>'
+      '<button type="button" class="dc-button" data-status="">Change state…</button>'
     );
-    listener?.();
+    container.querySelector<HTMLButtonElement>('[data-status]')?.click();
     expect(opened).to.deep.equal([[]]);
   });
 
   it('should hide every action from a reader', () => {
-    const container = stubContainer();
+    const container = page();
     new EntityDetail({
       entity: users,
       entry: { uid: 'jsmith' },
@@ -436,7 +428,7 @@ describe('EntityDetail', () => {
         },
       },
     };
-    const container = stubContainer();
+    const container = page();
     new EntityDetail({
       entity: branch,
       entry: {
@@ -456,7 +448,7 @@ describe('EntityDetail', () => {
     }).render(container);
     expect(
       container.innerHTML.match(
-        /<a href="#&#x2F;users&#x2F;sophie.martin" class="dc-link" data-relation="[^"]+" title="[^"]+">sophie.martin<\/a>/g
+        /<a href="#\/users\/sophie.martin" class="dc-link" data-relation="[^"]+" title="[^"]+">sophie.martin<\/a>/g
       )
     ).to.have.length(2);
   });
@@ -465,7 +457,7 @@ describe('EntityDetail', () => {
     // Members were chips with no count and no action: the whole form was
     // the only way to add or remove one (#168).
     const card = (manage: boolean) => {
-      const container = stubContainer();
+      const container = page();
       new EntityDetail({
         entity: groups,
         entry: {
@@ -497,7 +489,7 @@ describe('EntityDetail', () => {
     };
     const managed = card(true);
     expect(managed).to.include('<h3>Members (1)</h3>');
-    expect(managed).to.include('data-add-members>Add members…</button>');
+    expect(managed).to.include('data-add-members="">Add members…</button>');
     expect(managed).to.include('aria-label="Remove bob from sales-team"');
     const read = card(false);
     expect(read).to.include('<h3>Members (1)</h3>');
@@ -526,7 +518,7 @@ describe('EntityDetail', () => {
     const card = (
       relationHref?: (dn: string, primaryOnly?: boolean) => string | undefined
     ) => {
-      const container = stubContainer();
+      const container = page();
       new EntityDetail({
         entity: owned,
         entry: { cn: 'sales-team', owner: [owner, 'not a dn'] },
@@ -550,7 +542,7 @@ describe('EntityDetail', () => {
       )
     )
       .to.include(
-        `<a href="#&#x2F;users&#x2F;sophie.martin" class="dc-link" data-relation="${owner}" title="${owner}">sophie.martin</a>`
+        `<a href="#/users/sophie.martin" class="dc-link" data-relation="${owner}" title="${owner}">sophie.martin</a>`
       )
       .and.not.include(`>${owner}<`);
     // An entry no page shows is named all the same.
@@ -587,7 +579,7 @@ describe('EntityDetail', () => {
     const card = (
       relationHref?: (dn: string, primaryOnly?: boolean) => string | undefined
     ): string => {
-      const container = stubContainer();
+      const container = page();
       new EntityDetail({
         entity: delegated,
         entry: {
@@ -608,7 +600,7 @@ describe('EntityDetail', () => {
     };
     // A link to the delegate's card, as Owners and Managers are.
     expect(card(dn => `#/users/${rdnValue(dn)}`)).to.include(
-      `<a href="#&#x2F;users&#x2F;alice" class="dc-link" data-relation="${delegate}" title="${delegate}">alice</a>`
+      `<a href="#/users/alice" class="dc-link" data-relation="${delegate}" title="${delegate}">alice</a>`
     );
     // An entry no page shows is named all the same, with no link to nowhere.
     expect(card(() => undefined)).to.include(
@@ -640,7 +632,7 @@ describe('EntityDetail', () => {
         },
       },
     };
-    const container = stubContainer();
+    const container = page();
     new EntityDetail({
       entity: stated,
       entry: { uid: 'bob', twakeAccountStatus: disabled },
@@ -658,7 +650,7 @@ describe('EntityDetail', () => {
     expect(container.innerHTML).to.include(
       '<span class="dc-state dc-state-disabled">Disabled</span>'
     );
-    expect(container.innerHTML).to.not.include('#&#x2F;accountStatuses');
+    expect(container.innerHTML).to.not.include('#/accountStatuses');
   });
 
   it('should say how many related entries the list leaves out', () => {
@@ -666,7 +658,7 @@ describe('EntityDetail', () => {
       language: string,
       relations: { truncated?: boolean; more?: number }
     ): string => {
-      const container = stubContainer();
+      const container = page();
       new EntityDetail({
         entity: groups,
         entry: { cn: 'Human Resources' },
@@ -701,8 +693,21 @@ describe('EntityDetail', () => {
   });
 
   it('should escape what the directory holds', () => {
-    const html = render({ uid: '<script>alert(1)</script>' });
-    expect(html).to.not.include('<script>alert(1)</script>');
-    expect(html).to.include('&lt;script&gt;');
+    const container = page();
+    new EntityDetail({
+      entity: users,
+      entry: { uid: '<script>alert(1)</script>' },
+      translator: new Translator('en'),
+      canWrite: true,
+      canDelete: true,
+      onEdit: () => undefined,
+      onDelete: () => undefined,
+      onStatus: () => undefined,
+      onResetPassword: () => undefined,
+    }).render(container);
+    // The value made no element: it reads as text, escaped in the markup.
+    expect(container.querySelector('script')).to.equal(null);
+    expect(container.textContent).to.include('<script>alert(1)</script>');
+    expect(container.innerHTML).to.include('&lt;script&gt;');
   });
 });
