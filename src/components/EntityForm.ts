@@ -39,7 +39,13 @@ import type {
 import { background, type Reporter } from '../shared/background';
 import { selectorValue } from '../shared/dom';
 import { append, html, render, type SafeHtml } from '../shared/html';
-import { bindHelp, helpMarkup } from '../ui/field';
+import {
+  bindHelp,
+  describeControl,
+  describeField,
+  helpMarkup,
+  hintMarkup,
+} from '../ui/field';
 
 /** An entry a pointer field may land on. */
 interface PointerCandidate {
@@ -668,7 +674,7 @@ export class EntityForm {
     return html`
         ${heading}
         ${control}
-        ${hint ? html`<p class="dc-hint" data-hint>${hint}</p>` : ''}
+        ${hint ? hintMarkup(`dc-hint-${name}`, hint) : ''}
         ${
           this.identifierSource()?.field === name
             ? html`<p class="dc-hint" id="dc-identifier-${name}" data-identifier hidden></p>`
@@ -878,12 +884,8 @@ export class EntityForm {
         `[data-field="${selectorValue(name)}"]`
       );
       if (!wrapper) continue;
-      if (attr.help) {
-        wrapper
-          .querySelector(`[id="dc-field-${selectorValue(name)}"]`)
-          ?.setAttribute('aria-describedby', `dc-help-${name}`);
-        bindHelp(wrapper);
-      }
+      const control = describeField(wrapper, name, !!attr.help);
+      if (attr.help) bindHelp(wrapper);
 
       if (this.searches.has(name)) {
         this.bindPicker(name, wrapper);
@@ -893,9 +895,6 @@ export class EntityForm {
         this.bindTokens(name, wrapper);
         continue;
       }
-      const control = wrapper.querySelector<
-        HTMLInputElement | HTMLSelectElement
-      >('.dc-input');
       const store = (raw: string): void => {
         this.values[name] =
           raw === ''
@@ -1718,9 +1717,10 @@ export class EntityForm {
       setTimeout(() => {
         note.textContent = message;
       }, ANNOUNCE_DELAY);
-      field
-        .querySelector('[data-pointer], [data-picker-input]')
-        ?.setAttribute('aria-describedby', note.id);
+      const control = field.querySelector<HTMLElement>(
+        '[data-pointer], [data-picker-input]'
+      );
+      if (control) describeControl(control, note.id);
     }
     return replaced;
   }
