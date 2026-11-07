@@ -1030,8 +1030,12 @@ export class EntityList {
             typeof value === 'string'
               ? accountState(entity, name, value)
               : undefined;
+          // A touch screen has no hover: the shortened path keeps the whole
+          // one beside it, which the stylesheet shows there instead (#272).
           const content = isPath
-            ? EntityList.shortenPath(shown)
+            ? html`<span class="dc-path-short">${EntityList.shortenPath(
+                shown
+              )}</span><span class="dc-path-full">${shown}</span>`
             : stateMarkup(state, shown);
           // The first column opens the entry: a link Tab reaches and Enter
           // follows, which the browser also opens in a new tab. The rest of
