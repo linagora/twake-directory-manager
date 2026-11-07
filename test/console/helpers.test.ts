@@ -14,7 +14,8 @@ import {
   writesEntry,
 } from '../../src/rights';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
-import { baseUrl, stubContainer } from '../support/stubs';
+import { baseUrl } from '../support/stubs';
+import { page } from '../support/dom';
 import { users, groups, mailboxTypes } from '../fixtures/entities';
 
 describe('DirectoryConsole helpers', () => {
@@ -388,7 +389,7 @@ describe('DirectoryConsole helpers', () => {
 
     it('should offer a new organization under one only when it may be created', () => {
       const render = (onCreateChild?: () => void): string => {
-        const container = stubContainer();
+        const container = page();
         new EntityDetail({
           entity: linkedGroups,
           entry: account(sales),
@@ -404,7 +405,7 @@ describe('DirectoryConsole helpers', () => {
         return container.innerHTML;
       };
       expect(render(() => undefined)).to.match(
-        /data-edit>Edit<\/button>\s*<button type="button" class="dc-button" data-create-child>New organization here</
+        /data-edit="">Edit<\/button>\s*<button type="button" class="dc-button" data-create-child="">New organization here</
       );
       expect(render()).not.to.include('data-create-child');
     });
@@ -415,7 +416,7 @@ describe('DirectoryConsole helpers', () => {
         onClaim?: () => void;
         onHandOver?: () => void;
       }): string => {
-        const container = stubContainer();
+        const container = page();
         new EntityDetail({
           entity: users,
           entry: account(transit),
