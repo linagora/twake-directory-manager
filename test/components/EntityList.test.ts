@@ -550,20 +550,8 @@ describe('EntityList', () => {
   it('should open a row clicked outside its link and checkbox, and only there', async () => {
     // The link follows itself, Ctrl+click into a new tab: the row opening
     // the card too would take the current tab with it.
-    let click: ((event: { target: unknown }) => void) | undefined;
-    const row = {
-      dataset: { id: 'alice' },
-      addEventListener: (type: string, listener: typeof click) => {
-        if (type === 'click') click = listener;
-      },
-    };
-    const container = {
-      ...stubContainer(),
-      querySelectorAll: (selector: string) =>
-        (selector === 'tbody tr'
-          ? [row]
-          : []) as unknown as NodeListOf<Element>,
-    } as unknown as HTMLElement & { innerHTML: string };
+    const container = document.createElement('div');
+    document.body.append(container);
     const opened: string[] = [];
     await new EntityList({
       entity: users,
@@ -574,16 +562,21 @@ describe('EntityList', () => {
       onDelete: () => Promise.resolve(false),
       canDelete: false,
     }).render(container);
-    const inside = (selectors: string[]) => ({
-      closest: (selector: string) =>
-        selector.split(',').some(part => selectors.includes(part.trim()))
-          ? {}
-          : null,
-    });
-    click?.({ target: inside([]) });
-    click?.({ target: inside(['.dc-row-link']) });
-    click?.({ target: inside(['.dc-checkbox-cell']) });
+    const row = container.querySelector<HTMLElement>('tbody tr');
+    if (!row) throw new Error('no row');
+    // A cell that is neither the checkbox's nor the link's.
+    const cell = Array.from(row.querySelectorAll<HTMLElement>('td')).find(
+      item =>
+        !item.classList.contains('dc-checkbox-cell') &&
+        !item.querySelector('.dc-row-link')
+    );
+    cell?.click();
     expect(opened).to.deep.equal(['alice']);
+    // The link and the checkbox are their own: the row opens nothing.
+    opened.length = 0;
+    row.querySelector<HTMLElement>('.dc-row-link')?.click();
+    row.querySelector<HTMLElement>('.dc-checkbox-cell')?.click();
+    expect(opened).to.deep.equal([]);
   });
 
   it('should search every field the schema marks, not just the identifier', async () => {
@@ -723,35 +716,30 @@ describe('EntityList', () => {
       onDelete: () => Promise.resolve(false),
       canDelete: false,
     });
-    await list.render(stubContainer());
-    (list as unknown as { selected: Set<string> }).selected = new Set([
-      'jsmith',
-    ]);
+    const container = document.createElement('div');
+    document.body.append(container);
+    await list.render(container);
+    // Tick John Smith's row: the selection offers Export.
+    const box = container.querySelector<HTMLInputElement>(
+      '[data-select="jsmith"]'
+    );
+    if (!box) throw new Error('no checkbox');
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
 
-    // `exportSelection` reaches for `document` and `URL` the way a browser
-    // provides them; only `document` is missing under Node, so it alone is
-    // stubbed here, and the real `Blob`/`URL.createObjectURL` are left in
-    // place to carry the CSV text out for inspection.
-    const originalDocument = (globalThis as Record<string, unknown>).document;
+    // Only the blob the export hands the browser is taken out: the page,
+    // the anchor and the URL are the browser's.
     const originalCreateObjectURL = URL.createObjectURL;
     const originalRevokeObjectURL = URL.revokeObjectURL;
     let captured: Blob | undefined;
-    (globalThis as Record<string, unknown>).document = {
-      createElement: () => ({
-        click: () => undefined,
-        href: '',
-        download: '',
-      }),
-    };
     URL.createObjectURL = (blob: Blob): string => {
       captured = blob;
       return 'blob:stub';
     };
     URL.revokeObjectURL = () => undefined;
     try {
-      (list as unknown as { exportSelection(): void }).exportSelection();
+      container.querySelector<HTMLElement>('[data-export]')?.click();
     } finally {
-      (globalThis as Record<string, unknown>).document = originalDocument;
       URL.createObjectURL = originalCreateObjectURL;
       URL.revokeObjectURL = originalRevokeObjectURL;
     }
@@ -939,39 +927,10 @@ describe('EntityList', () => {
   });
 
   it('should show and clear the selection of a whole page from its header', async () => {
-    // Each repaint is a new set of boxes, as in a browser: only the
-    // listeners of the last one are live.
-    type Box = {
-      checked: boolean;
-      indeterminate: boolean;
-      dataset: Record<string, string>;
-      fire(): void;
-      addEventListener(type: string, handler: (event: unknown) => void): void;
-    };
-    const box = (id?: string): Box => {
-      let handler: ((event: unknown) => void) | undefined;
-      const made: Box = {
-        checked: false,
-        indeterminate: false,
-        dataset: id ? { select: id } : {},
-        fire: () => handler?.({ target: made }),
-        addEventListener: (_type, callback) => {
-          handler = callback;
-        },
-      };
-      return made;
-    };
-    let header = box();
-    let rows: Box[] = [];
-    const container = stubContainer();
-    Object.assign(container, {
-      querySelector: (selector: string) =>
-        selector === '[data-select-all]' ? header : null,
-      querySelectorAll: (selector: string) =>
-        selector === '[data-select]' ? rows : [],
-    });
+    const container = document.createElement('div');
+    document.body.append(container);
     const announced: string[] = [];
-    const list = new EntityList({
+    await new EntityList({
       entity: users,
       translator: new Translator('en'),
       load: () =>
@@ -984,44 +943,40 @@ describe('EntityList', () => {
       onOpen: () => undefined,
       onDelete: () => Promise.resolve(false),
       canDelete: false,
-    });
-    const repaint = (): void => {
-      header = box();
-      rows = [box('alice'), box('bob')];
+    }).render(container);
+    // Each change of selection draws the list again: the boxes below are
+    // the ones drawn anew, as in a browser.
+    const boxOf = (id: string): HTMLInputElement =>
+      container.querySelector<HTMLInputElement>(
+        `[data-select="${id}"]`
+      ) as HTMLInputElement;
+    const header = (): HTMLInputElement =>
+      container.querySelector<HTMLInputElement>(
+        '[data-select-all]'
+      ) as HTMLInputElement;
+    const tick = (box: HTMLInputElement, checked: boolean): void => {
+      box.checked = checked;
+      box.dispatchEvent(new Event('change', { bubbles: true }));
     };
-    repaint();
-    await list.render(container);
-    const selected = (list as unknown as { selected: Set<string> }).selected;
-    const headerTag = (): string =>
-      /<input type="checkbox" data-select-all[^>]*>/.exec(
-        container.innerHTML
-      )?.[0] ?? '';
 
     // One row of two: neither checked nor clear.
-    const [alice] = rows;
-    alice.checked = true;
-    repaint();
-    alice.fire();
-    expect(headerTag()).to.not.contain('checked');
-    expect(header.indeterminate).to.be.true;
+    tick(boxOf('alice'), true);
+    expect(header().checked).to.be.false;
+    expect(header().indeterminate).to.be.true;
 
     // The whole page, from the header: shown checked.
-    const before = header;
-    before.checked = true;
-    repaint();
-    before.fire();
-    expect([...selected]).to.have.members(['alice', 'bob']);
-    expect(headerTag()).to.contain('checked');
-    expect(header.indeterminate).to.be.false;
+    tick(header(), true);
+    expect(boxOf('alice').checked).to.be.true;
+    expect(boxOf('bob').checked).to.be.true;
+    expect(header().checked).to.be.true;
+    expect(header().indeterminate).to.be.false;
 
     // Clicked again, it clears the page.
-    const again = header;
-    again.checked = false;
-    repaint();
-    again.fire();
-    expect(selected.size).to.equal(0);
-    expect(headerTag()).to.not.contain('checked');
-    expect(header.indeterminate).to.be.false;
+    tick(header(), false);
+    expect(boxOf('alice').checked).to.be.false;
+    expect(boxOf('bob').checked).to.be.false;
+    expect(header().checked).to.be.false;
+    expect(header().indeterminate).to.be.false;
     // Each change of selection is said to a screen reader (#212)
     expect(announced).to.deep.equal([
       '1–2 of 2',
@@ -1111,10 +1066,11 @@ describe('EntityList', () => {
     // Back to search: the search left typed is run again, on its page.
     answer = id => Promise.resolve(stored[id]);
     const list = new EntityList(options);
-    await list.render(stubContainer());
-    await (
-      list as unknown as { leaveImported(): Promise<void> }
-    ).leaveImported();
+    const back = document.createElement('div');
+    document.body.append(back);
+    await list.render(back);
+    back.querySelector<HTMLElement>('[data-leave-imported]')?.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
     expect(view.imported).to.equal(undefined);
     expect(searched).to.deep.equal(['ali']);
   });
@@ -1144,7 +1100,8 @@ describe('EntityList', () => {
       canDelete: false,
       view,
     });
-    const container = stubContainer();
+    const container = document.createElement('div');
+    document.body.append(container);
     await list.render(container);
     // The first page, by identifier, refilled past the one found gone
     expect(read).to.have.length(26);
@@ -1159,9 +1116,7 @@ describe('EntityList', () => {
 
     // The next page reads its own entries, and only those
     read.length = 0;
-    const state = list as unknown as { page: number; turnPage(): void };
-    state.page = 1;
-    state.turnPage();
+    container.querySelector<HTMLElement>('[data-page="1"]')?.click();
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(read).to.have.length(26);
     expect(read).to.include.members(['u26', 'u30', 'u51']);
