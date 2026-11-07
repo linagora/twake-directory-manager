@@ -17,10 +17,17 @@ describe('EntityImport', () => {
       onClose: () => undefined,
     });
     importer.render(root);
-    const read = (content: string, name = 'x.csv'): Promise<void> =>
-      (importer as unknown as { readFile(file: File): Promise<void> }).readFile(
-        new File([content], name, { type: 'text/csv' })
-      );
+    /** Choose a file in the input, as the reader does, and let it be read. */
+    const read = async (content: string, name = 'x.csv'): Promise<void> => {
+      const input = root.querySelector<HTMLInputElement>('[data-import-file]');
+      if (!input) throw new Error('no file input');
+      Object.defineProperty(input, 'files', {
+        configurable: true,
+        value: [new File([content], name, { type: 'text/csv' })],
+      });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, 0));
+    };
     return { root, importer, read };
   };
 
