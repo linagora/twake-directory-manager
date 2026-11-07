@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { relationHref } from '../../src/console/relations';
 import type { EntityDescriptor } from '../../src/types';
-import { mailboxTypes, users } from '../fixtures/entities';
+import { groups, mailboxTypes, users } from '../fixtures/entities';
 
 describe('relationHref', () => {
   const accountStatuses: EntityDescriptor = {
@@ -21,7 +21,9 @@ describe('relationHref', () => {
     endpoint: '/api/v1/ldap/organizations',
     kind: 'organization',
   };
-  const entities = [users, accountStatuses, organizations];
+  // `groups` has no organizationLink: it is reference data beside the tree,
+  // yet a group's members and owners must keep leading to it.
+  const entities = [users, groups, accountStatuses, organizations];
 
   it('should lead to an account’s card', () => {
     expect(
@@ -29,13 +31,23 @@ describe('relationHref', () => {
     ).to.equal('#/users/alice');
   });
 
-  it('should leave a nomenclature value to the entry it describes', () => {
-    // A card's state is a pointer into the account states, not a way there.
+  it('should keep a role-based row linked without organizationLink', () => {
     expect(
-      relationHref(
-        entities,
-        'cn=disabled,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com'
-      )
+      relationHref(entities, 'cn=staff,ou=groups,dc=example,dc=com')
+    ).to.equal('#/groups/staff');
+  });
+
+  it('should leave a nomenclature value out of a role-less pointer', () => {
+    // A card's state is a pointer into the account states, not a way there.
+    const dn =
+      'cn=disabled,ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com';
+    expect(relationHref(entities, dn)).to.equal('#/accountStatuses/disabled');
+    expect(relationHref(entities, dn, true)).to.equal(undefined);
+  });
+
+  it('should leave a group without organizationLink out of a role-less pointer', () => {
+    expect(
+      relationHref(entities, 'cn=staff,ou=groups,dc=example,dc=com', true)
     ).to.equal(undefined);
   });
 
@@ -43,6 +55,10 @@ describe('relationHref', () => {
     // The organizations page reveals a DN, not the first RDN alone.
     const dn = 'ou=Sales,ou=organization,dc=example,dc=com';
     expect(relationHref(entities, dn)).to.equal(
+      `#/organizations/${encodeURIComponent(dn)}`
+    );
+    // The tree is what an administrator works in every day.
+    expect(relationHref(entities, dn, true)).to.equal(
       `#/organizations/${encodeURIComponent(dn)}`
     );
   });

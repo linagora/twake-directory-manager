@@ -156,7 +156,8 @@ export class EntryView {
           ctx.report
         );
       },
-      relationHref: (dn: string): string | undefined => ctx.relationHref(dn),
+      relationHref: (dn: string, primaryOnly?: boolean): string | undefined =>
+        ctx.relationHref(dn, primaryOnly),
       onAddToGroups:
         groups && joins
           ? (): void =>

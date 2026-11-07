@@ -180,25 +180,29 @@ export function groupType(
 /**
  * The card of a related entry, in whichever entity owns its DN.
  *
- * Reference data — positions, titles, account states, mail domains — is
- * left out: those values are named by the entry they describe, and a card
- * that linked every nomenclature pointer would turn its own state into a
- * link to the state's page. What an administrator works in every day, the
- * tree and the entries attached to it, has a card to lead to.
+ * A role-less pointer gets the same answer only when it names an entry the
+ * administrator works in every day, through `primaryOnly`: reference data —
+ * positions, titles, account states, mail domains — is named by the entry it
+ * describes, not followed from it. Role-based rows keep their links even
+ * when their schema has no `organizationLink`.
  *
  * @param entities the entities the directory serves
  * @param dn the related entry
- * @returns its address, none when no entity holds it or it is reference data
+ * @param primaryOnly leave out reference data, whose entries name the value
+ *   rather than lead from it
+ * @returns its address, none when no entity holds it or it is left out
  */
 export function relationHref(
   entities: EntityDescriptor[],
-  dn: string
+  dn: string,
+  primaryOnly = false
 ): string | undefined {
   const owner = entities.find(
     entity =>
       entity.base && dn.toLowerCase().endsWith(`,${entity.base.toLowerCase()}`)
   );
-  if (!owner || splitEntities(entities).reference.includes(owner))
+  if (!owner) return undefined;
+  if (primaryOnly && splitEntities(entities).reference.includes(owner))
     return undefined;
   // An organization's page takes its whole DN: the tree reveals the entry,
   // where an id alone would open on a department named after its first RDN.

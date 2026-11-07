@@ -512,7 +512,9 @@ describe('EntityDetail', () => {
       },
     };
     const owner = 'uid=sophie.martin,ou=users,dc=example,dc=com';
-    const card = (relationHref?: (dn: string) => string | undefined) => {
+    const card = (
+      relationHref?: (dn: string, primaryOnly?: boolean) => string | undefined
+    ) => {
       const container = stubContainer();
       new EntityDetail({
         entity: owned,
@@ -529,8 +531,13 @@ describe('EntityDetail', () => {
       }).render(container);
       return container.innerHTML;
     };
-    // A link, which a middle click opens in a new tab (#174).
-    expect(card(dn => `#/users/${rdnValue(dn)}`))
+    // A link, which a middle click opens in a new tab (#174). A role-based
+    // row keeps it even when the role-less filter would leave the target out.
+    expect(
+      card((dn, primaryOnly) =>
+        primaryOnly ? undefined : `#/users/${rdnValue(dn)}`
+      )
+    )
       .to.include(
         `<a href="#&#x2F;users&#x2F;sophie.martin" class="dc-link" data-relation="${owner}" title="${owner}">sophie.martin</a>`
       )
@@ -567,7 +574,7 @@ describe('EntityDetail', () => {
     };
     const delegate = 'uid=alice,ou=users,dc=example,dc=com';
     const card = (
-      relationHref?: (dn: string) => string | undefined
+      relationHref?: (dn: string, primaryOnly?: boolean) => string | undefined
     ): string => {
       const container = stubContainer();
       new EntityDetail({
@@ -596,6 +603,13 @@ describe('EntityDetail', () => {
     expect(card(() => undefined)).to.include(
       `<span class="dc-value" title="${delegate}">alice</span>`
     );
+    // A role-less pointer asks for a primary target: reference data, which
+    // the unfiltered address would reach, stays a name.
+    expect(
+      card((dn, primaryOnly) =>
+        primaryOnly ? undefined : `#/users/${rdnValue(dn)}`
+      )
+    ).to.include(`<span class="dc-value" title="${delegate}">alice</span>`);
   });
 
   it('should keep an account’s state a badge, not a link to its value', () => {
