@@ -51,6 +51,37 @@ describe('relationHref', () => {
     ).to.equal(undefined);
   });
 
+  it('should link every collection when none is reference data', () => {
+    // A directory with no tree has nothing to tell apart: splitEntities puts
+    // every collection forward, so a role-less pointer may lead to any of
+    // them.
+    const positions: EntityDescriptor = {
+      key: 'positions',
+      pluralName: 'positions',
+      singularName: 'position',
+      mainAttribute: 'cn',
+      base: 'ou=positions,dc=example,dc=com',
+      schema: { attributes: { cn: { type: 'string', role: 'identifier' } } },
+      endpoint: '/api/v1/ldap/positions',
+      kind: 'flat',
+    };
+    const titles: EntityDescriptor = {
+      ...positions,
+      key: 'titles',
+      pluralName: 'titles',
+      singularName: 'title',
+      base: 'ou=twakeTitle,ou=nomenclature,dc=example,dc=com',
+      endpoint: '/api/v1/ldap/titles',
+    };
+    expect(
+      relationHref(
+        [positions, titles],
+        'cn=Sales Representative,ou=positions,dc=example,dc=com',
+        true
+      )
+    ).to.equal('#/positions/Sales%20Representative');
+  });
+
   it('should name an organization by its whole DN', () => {
     // The organizations page reveals a DN, not the first RDN alone.
     const dn = 'ou=Sales,ou=organization,dc=example,dc=com';
