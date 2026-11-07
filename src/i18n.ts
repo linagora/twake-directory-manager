@@ -382,6 +382,8 @@ const en: Catalogue = {
   'transit.waiting': 'Waiting in transit ({count})',
   'transit.waitingHelp':
     'Handed over between administrators: claim those that belong to you.',
+  'transit.waitingHelpReadOnly':
+    'Handed over between administrators: no branch you write can take them.',
 
   'save.done': 'Saved',
   'create.done': 'Created',
@@ -877,6 +879,8 @@ const fr: Catalogue = {
   'transit.waiting': 'En attente en transit ({count})',
   'transit.waitingHelp':
     'Confiés entre administrateurs : rattachez ceux qui vous reviennent.',
+  'transit.waitingHelpReadOnly':
+    'Confiés entre administrateurs : aucune branche que vous écrivez ne peut les prendre.',
 
   'save.done': 'Enregistré',
   'create.done': 'Créé',
@@ -1321,6 +1325,8 @@ const mn: Catalogue = {
   'transit.waiting': 'Дамжуулалтад хүлээгдэж буй ({count})',
   'transit.waitingHelp':
     'Администраторуудын хооронд шилжүүлсэн: өөрт хамаарахыг нь авна уу.',
+  'transit.waitingHelpReadOnly':
+    'Администраторуудын хооронд шилжүүлсэн: таны бичих эрхтэй салбар тэднийг авч чадахгүй.',
 
   'save.done': 'Хадгалагдлаа',
   'create.done': 'Үүсгэгдлээ',

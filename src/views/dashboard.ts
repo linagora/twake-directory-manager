@@ -98,11 +98,20 @@ export class DashboardView {
     const holder = main.querySelector<HTMLElement>('[data-transit-waiting]');
     if (!ctx.current(generation) || !holder) return;
     const t = ctx.t;
+    const entities = ctx.entities();
+    const rights = ctx.rights();
+    // Only invite a caller who can claim at least one of the entries: a
+    // read-only administrator sees the list but no Claim… button, and the
+    // help text must not ask for an action the page does not offer.
+    const claimable = waiting.entries.some(entry => {
+      const entity = entities.find(item => item.key === entry.entity);
+      return !!entity && rights.claimable(entry, entity);
+    });
     const tables = new AttachedTables({
-      entities: ctx.entities(),
+      entities,
       members: waiting,
       translator: ctx.translator(),
-      name: rdnValue(ctx.rights().transit || ''),
+      name: rdnValue(rights.transit || ''),
       pointerLabel: names,
       hideEmpty: true,
       rowAction: ctx.claimAction(),
@@ -117,7 +126,9 @@ export class DashboardView {
         <h2>${t('transit.waiting', {
           count: `${waiting.entries.length}${waiting.truncated ? '+' : ''}`,
         })}</h2>
-        <p class="dc-muted">${t('transit.waitingHelp')}</p>
+        <p class="dc-muted">${t(
+          claimable ? 'transit.waitingHelp' : 'transit.waitingHelpReadOnly'
+        )}</p>
         ${tables.markup()}
       </section>`
     );
