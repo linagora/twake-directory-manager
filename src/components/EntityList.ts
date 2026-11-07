@@ -34,7 +34,7 @@ import type {
 } from '../types';
 import { background, type Reporter } from '../shared/background';
 import { rememberPageSize, storedPageSize } from '../console/settings';
-import { selectorValue } from '../shared/dom';
+import { hoverless, selectorValue } from '../shared/dom';
 import { html, render, type SafeHtml } from '../shared/html';
 import type { Announce } from '../ui/announce';
 import { searchBox } from '../ui/search';
@@ -1030,12 +1030,14 @@ export class EntityList {
             typeof value === 'string'
               ? accountState(entity, name, value)
               : undefined;
-          // A touch screen has no hover: the shortened path keeps the whole
-          // one beside it, which the stylesheet shows there instead (#272).
+          // A touch screen has no hover: it reads the whole path rather than
+          // the shortened one whose title holds it (#272).
           const content = isPath
-            ? html`<span class="dc-path-short">${EntityList.shortenPath(
-                shown
-              )}</span><span class="dc-path-full">${shown}</span>`
+            ? hoverless()
+              ? html`<span class="dc-path-full">${shown}</span>`
+              : html`<span class="dc-path-short">${EntityList.shortenPath(
+                  shown
+                )}</span>`
             : stateMarkup(state, shown);
           // The first column opens the entry: a link Tab reaches and Enter
           // follows, which the browser also opens in a new tab. The rest of

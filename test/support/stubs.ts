@@ -9,6 +9,20 @@ import { DirectoryConsole } from '../../src/DirectoryConsole';
 
 export const baseUrl = 'http://localhost:8099';
 
+/**
+ * Make the screen hoverless, as a touch screen is, until the returned
+ * function puts the browser's own back.
+ */
+export function pretendHoverless(): () => void {
+  const media = window.matchMedia;
+  window.matchMedia = ((query: string) => ({
+    matches: query === '(hover: none)',
+  })) as unknown as typeof window.matchMedia;
+  return () => {
+    window.matchMedia = media;
+  };
+}
+
 /** Minimal stand-in for the element a component renders into. */
 export function stubContainer(): HTMLElement & { innerHTML: string } {
   return {
