@@ -8,6 +8,7 @@ import type {
   ExternalMembers,
   SchemaAttribute,
 } from '../../src/types';
+import { type as typeInto } from '../support/act';
 import { stubContainer } from '../support/stubs';
 import {
   usersSchema,
@@ -94,6 +95,26 @@ describe('EntityForm', () => {
     expect(help.getAttribute('aria-expanded')).to.equal('false');
     // A second Escape, with nothing left to hide, closes the form
     expect(escape().defaultPrevented).to.equal(false);
+  });
+
+  it('should tell a changed form from one only opened', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const form = new EntityForm({
+      entity: users,
+      entry: { uid: 'alice', cn: 'Alice' },
+      translator: new Translator('en'),
+      pointerOptions: () => Promise.resolve([]),
+      onSubmit: () => Promise.resolve(),
+      onCancel: () => undefined,
+    });
+    await form.render(container);
+    expect(form.isDirty()).to.be.false;
+    typeInto(
+      container.querySelector<HTMLInputElement>('#dc-field-cn'),
+      'Alice Moreau'
+    );
+    expect(form.isDirty()).to.be.true;
   });
 
   it('should group named fields in a fieldset, and the rest in a plain block', async () => {
