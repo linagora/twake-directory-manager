@@ -19,13 +19,14 @@ import {
   attributeLabel,
   beforeToday,
   comparableDn,
+  editableByteSize,
   entryValue,
   escapeDnValue,
-  formatByteSize,
   isDnShaped,
   parseByteSize,
   rdnValue,
   resolveText,
+  serverValues,
 } from '../format';
 import { hasRole, tooBroad } from '../api/ConsoleApiClient';
 import { SEARCH_MINIMUM, listFailure } from './EntityList';
@@ -39,13 +40,7 @@ import type {
 import { background, type Reporter } from '../shared/background';
 import { selectorValue } from '../shared/dom';
 import { append, html, render, type SafeHtml } from '../shared/html';
-import {
-  bindHelp,
-  describeControl,
-  describeField,
-  helpMarkup,
-  hintMarkup,
-} from '../ui/field';
+import { bindHelp, describeField, helpMarkup, hintMarkup } from '../ui/field';
 
 /** An entry a pointer field may land on. */
 interface PointerCandidate {
@@ -696,14 +691,14 @@ export class EntityForm {
     const type =
       attr.type === 'date' ? 'date' : attr.neverReturn ? 'password' : 'text';
     // A normalised size is stored as a bare byte count and edited as one, so
-    // the operator counted zeros to change a quota. The field is text, and
-    // the server reads `4 GB` with the same `parseByteSize` that produced the
-    // number — the value shown is a value it accepts back.
+    // the operator counted zeros to change a quota. The field shows the
+    // reader's units — `4 Go` in French — which the console reads back and
+    // sends as the byte count the server takes.
     const shown =
       attr.type === 'date'
         ? EntityForm.toDateInput(value)
         : attr.normalize === 'byteSize'
-          ? formatByteSize(value)
+          ? editableByteSize(value, this.options.translator.language)
           : value;
     const input = html`<input id="dc-field-${name}" name="${name}"
       type="${type}" class="dc-input" value="${shown}"
@@ -1717,10 +1712,7 @@ export class EntityForm {
       setTimeout(() => {
         note.textContent = message;
       }, ANNOUNCE_DELAY);
-      const control = field.querySelector<HTMLElement>(
-        '[data-pointer], [data-picker-input]'
-      );
-      if (control) describeControl(control, note.id);
+      describeField(field, name, false, note.id);
     }
     return replaced;
   }
@@ -1753,7 +1745,7 @@ export class EntityForm {
         list.every((value, index) => value === before[index])
       )
         continue;
-      values[name] = attr.type === 'array' ? list : list[0];
+      values[name] = serverValues(attr, list);
     }
     this.submitting = true;
     try {

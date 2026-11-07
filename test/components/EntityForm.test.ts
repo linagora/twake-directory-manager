@@ -196,7 +196,7 @@ describe('EntityForm', () => {
       )
       .and.not.include('xGB');
     expect(await render(sized, 'fr')).to.include(
-      'Une taille telle que 4 GB, 500 MB ou 100 KB'
+      'Une taille telle que 4 Go, 500 Mo ou 100 Ko'
     );
     const hinted: EntityDescriptor = {
       ...groups,
@@ -213,6 +213,51 @@ describe('EntityForm', () => {
     const searched = await render(hinted, 'en', () => Promise.resolve([]));
     expect(searched).to.include('data-picker="member"');
     expect(searched).to.not.include('Expected the DN');
+  });
+
+  it('should show and send a size in the interface units', async () => {
+    // French shows 4,5 Go on the card; the form showed and refused GB, so
+    // the administrator could not type back what they read (#269).
+    const quota: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          uid: usersSchema.attributes.uid,
+          mailQuotaSize: {
+            type: 'number',
+            normalize: 'byteSize',
+            label: { en: 'Mailbox size', fr: 'Taille de boîte' },
+          },
+        },
+      },
+    };
+    let sent: Record<string, string | string[]> | undefined;
+    const container = document.createElement('div');
+    document.body.append(container);
+    const form = new EntityForm({
+      entity: quota,
+      entry: { uid: 'bob', mailQuotaSize: '4500000000' },
+      translator: new Translator('fr'),
+      pointerOptions: () => Promise.resolve([]),
+      onSubmit: values => {
+        sent = values;
+        return Promise.resolve();
+      },
+      onCancel: () => undefined,
+    }) as unknown as {
+      values: Record<string, string[]>;
+      submit(): Promise<void>;
+      render(container: HTMLElement): Promise<void>;
+    };
+    await form.render(container);
+    expect(
+      container.querySelector<HTMLInputElement>('#dc-field-mailQuotaSize')
+        ?.value
+    ).to.equal('4,5 Go');
+    form.values.mailQuotaSize = ['4,5 Go'];
+    await form.submit();
+    // The server reads bytes, not Go: the console sends the count.
+    expect(sent?.mailQuotaSize).to.equal('4500000000');
   });
 
   it('should describe a field by its hint, so a screen reader hears the format', async () => {

@@ -1137,6 +1137,27 @@ test.describe('USER user accounts', () => {
     ).toHaveValue('2031-01-15');
   });
 
+  test('USER-14 a size typed in French is read back in Go', async ({
+    page,
+    directory,
+  }) => {
+    const user = await directory.createUser();
+    const app = await new LoginPage(page).loginAs(ADMIN, `users/${user.uid}`);
+    await app.setLanguage('fr');
+    const card = app.entry();
+
+    await card.action('Modifier').click();
+    const form = app.form();
+    await form.fill('Taille de boîte', '4,5 Go');
+    await form.submit();
+    await app.expectToast('Enregistré');
+    await expect(card.detail('Taille de boîte')).toHaveText('4,5 Go');
+    // The server reads bytes, whatever unit the administrator typed.
+    expect(await directory.values(user.dn, 'mailQuotaSize')).toEqual([
+      '4500000000',
+    ]);
+  });
+
   test('USER-16 add an account to groups and take it out of one, from its card', async ({
     page,
     directory,

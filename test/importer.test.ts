@@ -468,6 +468,7 @@ describe('CSV import', () => {
           rows: [
             ['a', 'lots', '2020-01-01'],
             ['b', '4 GB', '2999-01-01'],
+            ['c', '4,5 Go', '2999-01-01'],
           ],
           delimiter: ';',
         },
@@ -481,9 +482,17 @@ describe('CSV import', () => {
         'Deletion date: “2020-01-01” is earlier than today',
       ]);
       expect(rows[1].errors).to.deep.equal([]);
+      // The server reads bytes: the console sends the count, in either
+      // language.
       expect(rows[1].values).to.deep.equal({
         uid: 'b',
-        mailQuotaSize: '4 GB',
+        mailQuotaSize: '4000000000',
+        twakeDeletionDate: '29990101000000Z',
+      });
+      expect(rows[2].errors).to.deep.equal([]);
+      expect(rows[2].values).to.deep.equal({
+        uid: 'c',
+        mailQuotaSize: '4500000000',
         twakeDeletionDate: '29990101000000Z',
       });
     });

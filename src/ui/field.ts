@@ -29,9 +29,14 @@ export function hintMarkup(id: string, hint: string): SafeHtml {
  * @param control the box, select or picker input
  * @param id the element describing it
  */
-export function describeControl(control: HTMLElement, id: string): void {
-  const described = control.getAttribute?.('aria-describedby') || '';
-  control.setAttribute('aria-describedby', `${described} ${id}`.trim());
+function describeControl(control: HTMLElement, id: string): void {
+  const described = (control.getAttribute?.('aria-describedby') || '')
+    .split(/\s+/)
+    .filter(describedId => describedId && describedId !== id);
+  control.setAttribute(
+    'aria-describedby',
+    [...described, id].filter(Boolean).join(' ')
+  );
 }
 
 /**
@@ -41,20 +46,25 @@ export function describeControl(control: HTMLElement, id: string): void {
  * @param wrapper the field's element
  * @param name the attribute name, for the help's id
  * @param help whether the form drew a help for the field
+ * @param extra another description to add, when a pointer note is shown
  * @returns its control, if it has one
  */
 export function describeField(
   wrapper: HTMLElement,
   name: string,
-  help: boolean
+  help: boolean,
+  extra?: string
 ): HTMLInputElement | HTMLSelectElement | null {
-  const control = wrapper.querySelector<HTMLInputElement | HTMLSelectElement>(
-    '.dc-input'
-  );
+  const control =
+    wrapper.querySelector<HTMLInputElement | HTMLSelectElement>('.dc-input') ??
+    wrapper.querySelector<HTMLInputElement | HTMLSelectElement>(
+      '[data-pointer], [data-picker-input]'
+    );
   if (!control) return null;
   const hint = wrapper.querySelector<HTMLElement>('[data-hint]');
   if (hint) describeControl(control, hint.id);
   if (help) describeControl(control, `dc-help-${name}`);
+  if (extra) describeControl(control, extra);
   return control;
 }
 
