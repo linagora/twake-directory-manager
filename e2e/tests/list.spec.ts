@@ -709,7 +709,9 @@ test.describe('LIST lists, search and bulk actions', () => {
     await expect(said).toHaveText('1 selected');
     await list.rowCheckbox('bob').uncheck();
     await expect(said).toHaveText('Selection cleared');
-    await list.search('zzz');
+    // A term no entry of the parallel suite can hold: `zzz` matched one of
+    // another test's random names in a run.
+    await list.search(uniquePart(20));
     await expect(said).toHaveText('No entry matches this search');
     // Emptied, the search lists everything again, and says so
     await list.search('');
