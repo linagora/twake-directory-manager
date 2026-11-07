@@ -19,6 +19,7 @@ import {
   isDnShaped,
   parseByteSize,
   rdnValue,
+  serverByteSizes,
 } from './format';
 import type { Translator } from './i18n';
 import type { EntityDescriptor, LocalizedText, SchemaAttribute } from './types';
@@ -536,6 +537,9 @@ export function prepareRows(
         }
       }
 
+      // A size typed in the reader's units is created as the byte count the
+      // server reads, as the form sends one.
+      if (attr.normalize === 'byteSize') list = serverByteSizes(list);
       if (list.length > 0) values[name] = multi ? list : list[0];
     }
 

@@ -1633,7 +1633,7 @@ describe('ConsoleApiClient', () => {
 });
 
 describe('server rules', () => {
-  it('should read a size as the server does', () => {
+  it('should read a size as the server does, and as the interface writes it', () => {
     expect(parseByteSize('4GB')).to.equal(4e9);
     expect(parseByteSize('500 mb')).to.equal(5e8);
     expect(parseByteSize('1.5 MB')).to.equal(1500000);
@@ -1641,6 +1641,13 @@ describe('server rules', () => {
     expect(parseByteSize('2048B')).to.equal(2048);
     expect(parseByteSize('lots')).to.equal(undefined);
     expect(parseByteSize('4 GiB')).to.equal(undefined);
+    // French writes 4,5 Go; the console reads it and sends the byte count.
+    expect(parseByteSize('4 Go')).to.equal(4e9);
+    expect(parseByteSize('4,5 Go')).to.equal(4.5e9);
+    expect(parseByteSize('500 Mo')).to.equal(5e8);
+    expect(parseByteSize('100 Ko')).to.equal(1e5);
+    expect(parseByteSize('1 To')).to.equal(1e12);
+    expect(parseByteSize('2048 o')).to.equal(2048);
     // What the form shows a stored size as is a size the server reads back.
     expect(parseByteSize(formatByteSize('2000000000'))).to.equal(2e9);
   });

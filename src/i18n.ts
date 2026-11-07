@@ -669,7 +669,7 @@ const fr: Catalogue = {
   'form.notLinkedAbove':
     'Seul un domaine lié par une organisation au-dessus de celle-ci peut être lié ici',
   'form.notSize':
-    'Attendu : une taille telle que 4 GB, 500 MB ou 100 KB, ou un nombre d’octets',
+    'Attendu : une taille telle que 4 Go, 500 Mo ou 100 Ko, ou un nombre d’octets',
   'form.passwordGenerated':
     'Laissez vide pour en générer un : il s’affichera une fois le compte créé',
   'create.noPassword':
@@ -678,7 +678,7 @@ const fr: Catalogue = {
     '{count} compte a été créé sans mot de passe : donnez-lui-en un depuis sa fiche (Réinitialiser le mot de passe)',
   'import.noPassword.other':
     '{count} comptes ont été créés sans mot de passe : donnez-en un à chacun depuis sa fiche (Réinitialiser le mot de passe)',
-  'form.sizeHint': 'Une taille telle que 4 GB, 500 MB ou 100 KB',
+  'form.sizeHint': 'Une taille telle que 4 Go, 500 Mo ou 100 Ko',
   'form.pastDate': 'Attendu : aujourd’hui ou une date ultérieure',
   'form.true': 'Oui',
   'form.false': 'Non',
@@ -757,7 +757,7 @@ const fr: Catalogue = {
   'import.badFormat': '{field} : {hint}',
   'import.pastDate': '{field} : « {value} » est antérieure à aujourd’hui',
   'import.notSize':
-    '{field} : « {value} » n’est pas une taille, telle que 4 GB',
+    '{field} : « {value} » n’est pas une taille, telle que 4 Go',
   'import.missing': '{field} est obligatoire',
   'import.duplicate': '{field} : « {value} » figure déjà ligne {line}',
 

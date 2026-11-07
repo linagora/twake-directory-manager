@@ -291,6 +291,20 @@ const SIZE_SYMBOLS: Record<string, Record<string, string>> = {
   fr: { TB: 'To', GB: 'Go', MB: 'Mo', KB: 'Ko', B: 'o' },
 };
 
+/** The unit a size word names, in the server's spelling: `Go` is `GB`. */
+const SIZE_ALIASES: Record<string, string> = {
+  b: 'B',
+  ...Object.fromEntries(SIZE_UNITS.map(([unit]) => [unit.toLowerCase(), unit])),
+  ...Object.fromEntries(
+    Object.values(SIZE_SYMBOLS).flatMap(symbols =>
+      Object.entries(symbols).map(([unit, symbol]) => [
+        symbol.toLowerCase(),
+        unit,
+      ])
+    )
+  ),
+};
+
 /** A size as the interface language writes it: 4,5 Go in French. */
 function sizeText(quantity: number, unit: string, language: string): string {
   const short = language.split('-')[0].toLowerCase();
@@ -309,18 +323,54 @@ function localSize(text: string, language: string): string {
 
 /**
  * Read a size the way the server's `parseByteSize` does — `4GB`, `500 MB`,
- * `2048` or `2048B`, in any case — so that the form refuses before sending
- * what the server would refuse after.
+ * `2048` or `2048B`, in any case — and the way the console writes it, in a
+ * language with units of its own: `4 Go`, `4,5 Go`. The form sends back the
+ * byte count, which the server reads; the comma is the decimal separator a
+ * French reader types.
  *
  * @param value value as typed
  * @returns the size in bytes, or undefined when it is no size
  */
 export function parseByteSize(value: string): number | undefined {
-  const match = /^(\d+(?:\.\d+)?)\s*(B|KB|MB|GB|TB)?$/i.exec(value.trim());
+  const match = /^(\d+(?:[.,]\d+)?)\s*([a-z]+)?$/i.exec(value.trim());
   if (!match) return undefined;
-  const unit = (match[2] || 'B').toUpperCase();
+  const unit = SIZE_ALIASES[(match[2] || 'B').toLowerCase()];
+  if (!unit) return undefined;
   const size = SIZE_UNITS.find(([name]) => name === unit)?.[1] ?? 1;
-  return Math.round(parseFloat(match[1]) * size);
+  return Math.round(parseFloat(match[1].replace(',', '.')) * size);
+}
+
+/**
+ * A stored size as the form shows it: in the reader's units, `4 Go` in
+ * French, and in a form the console reads back.
+ *
+ * @param value value as stored
+ * @param language interface language
+ * @returns the size to edit
+ */
+export function editableByteSize(value: string, language = 'en'): string {
+  return localSize(formatByteSize(value), language);
+}
+
+/** Sizes as the server reads them, whatever units the reader typed. */
+export function serverByteSizes(list: string[]): string[] {
+  return list.map(value => String(parseByteSize(value)));
+}
+
+/**
+ * The value a form sends for an attribute: a size becomes the byte count
+ * the server reads, and a multi-valued attribute stays a list.
+ *
+ * @param attr schema definition of the attribute
+ * @param list values as typed
+ * @returns what the server takes
+ */
+export function serverValues(
+  attr: SchemaAttribute,
+  list: string[]
+): string | string[] {
+  const sent = attr.normalize === 'byteSize' ? serverByteSizes(list) : list;
+  return attr.type === 'array' ? sent : sent[0];
 }
 
 /**
