@@ -292,6 +292,8 @@ const en: Catalogue = {
     'No organization matches “{filter}” among the opened branches',
   'tree.firstMatches.one': 'First match only — type more to narrow',
   'tree.firstMatches.other': 'First {count} matches — type more to narrow',
+  'tree.unread':
+    'Could not read what {name} holds ({reason}). Open it again to retry.',
   'tree.parent': 'Parent organization',
 
   'status.title': 'Account state',
@@ -788,6 +790,8 @@ const fr: Catalogue = {
     'Première correspondance seulement — précisez le texte pour affiner',
   'tree.firstMatches.other':
     'Les {count} premières correspondances — précisez le texte pour affiner',
+  'tree.unread':
+    'Impossible de lire le contenu de {name} ({reason}). Rouvrez-la pour réessayer.',
   'tree.parent': 'Organisation parente',
 
   'status.title': 'État du compte',
@@ -1237,6 +1241,8 @@ const mn: Catalogue = {
     'Нээсэн салбаруудад «{filter}»-д тохирох байгууллага алга',
   'tree.firstMatches':
     'Эхний {count} тохирол — нарийсгахын тулд үргэлжлүүлэн бичнэ үү',
+  'tree.unread':
+    '{name}-ийн агуулгыг уншиж чадсангүй ({reason}). Дахин нээж үзнэ үү.',
   'tree.parent': 'Дээд байгууллага',
 
   'status.title': 'Бүртгэлийн төлөв',

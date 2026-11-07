@@ -266,10 +266,16 @@ describe('OrganizationTree', () => {
       expect(container.list.innerHTML.replace(/\s+/g, ' ')).to.include(
         'aria-expanded="false" aria-label="Expand Sales"'
       );
+      // And said, under the tree, so the arrow does not seem to do nothing.
+      expect(container.list.innerHTML).to.include(
+        'Could not read what Sales holds (Service Unavailable). Open it again to retry.'
+      );
       refuse = false;
       await (tree as unknown as Hidden).pick(sales);
       expect(asked).to.deep.equal([top, sales, sales]);
       expect(container.list.innerHTML).to.include('>France</button>');
+      // Read, the note goes.
+      expect(container.list.innerHTML).to.not.include('dc-tree-note');
     });
 
     it('should merge the opened branches into a walk cut short, and hedge its "no match"', async () => {
