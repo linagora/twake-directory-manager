@@ -46,8 +46,9 @@ COPY docker/consoleRoot.mjs docker/consoleSettings.mjs /app/plugins/
 
 # Authentication defaults to OpenID Connect, which a browser console can use
 # with any provider — LemonLDAP::NG included — and which refuses to start
-# until DM_OIDC_SERVER, DM_OIDC_CLIENT_ID, DM_OIDC_CLIENT_SECRET and
-# DM_BASE_URL are set.
+# until DM_OIDC_SERVER, DM_OIDC_CLIENT_ID, DM_OIDC_CLIENT_SECRET,
+# DM_OIDC_SESSION_SECRET and DM_BASE_URL are set. The session key is its own,
+# at least 32 characters and different from the client secret (ldap-rest 2.1.0).
 #
 # The nomenclatures are flat entities like the users: a pointer field is filled
 # by listing the entity whose base it names, so a nomenclature that is not
