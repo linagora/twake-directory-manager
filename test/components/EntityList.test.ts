@@ -3,7 +3,6 @@ import nock from 'nock';
 import { listLoader } from '../../src/views/list';
 import { ConsoleApiClient } from '../../src/api/ConsoleApiClient';
 import { EntityDetail } from '../../src/components/EntityDetail';
-import { EntityImport } from '../../src/components/EntityImport';
 import {
   EntityList,
   csvCell,
@@ -17,7 +16,9 @@ import {
 } from '../../src/format';
 import { Translator } from '../../src/i18n';
 import type { EntityDescriptor, Entry, EntryList } from '../../src/types';
+import { writeCsv } from '../../src/csv';
 import { baseUrl, pretendHoverless, stubContainer } from '../support/stubs';
+import { drivenImport } from '../support/importer';
 import { users, groups, mailboxTypes } from '../fixtures/entities';
 
 afterEach(() => nock.cleanAll());
@@ -1146,42 +1147,51 @@ describe('importing pointers into a large branch', () => {
   const account = (uid: string): Entry => ({ dn: dn(uid), uid });
 
   /**
-   * Run the import's check on a file, the way the button does, and hand
-   * back the rows it prepared and the error it showed.
+   * Drive an import of the file through its steps; hand back what it refused
+   * row by row, the error it showed, and the values it created when run.
    */
   async function check(
-    rows: string[][]
-  ): Promise<{ errors: string[][]; values: unknown[]; error: string }> {
+    rows: string[][],
+    run = false
+  ): Promise<{
+    errors: string[][];
+    values: Record<string, string | string[]>[];
+    error: string;
+  }> {
     const client = new ConsoleApiClient(baseUrl);
-    const importer = new EntityImport({
+    const values: Record<string, string | string[]>[] = [];
+    const driven = drivenImport({
       entity: accounts,
       translator: new Translator('en'),
       pointerOptions: branch => client.pointerOptions(branch, [accounts]),
       pointerLookup: branch => client.pointerLookup(branch, [accounts]),
-      create: () => Promise.resolve(),
+      create: created => {
+        values.push(created);
+        return Promise.resolve();
+      },
       onDone: () => undefined,
       onClose: () => undefined,
     });
-    importer.render(stubContainer());
-    const state = importer as unknown as {
-      table: unknown;
-      mapping: string[];
-      rows: { errors: string[]; values: unknown }[];
-      error: string;
-      check(): Promise<void>;
-    };
-    state.table = {
-      headers: ['uid', 'manager', 'delegates'],
-      rows,
-      delimiter: ',',
-    };
-    state.mapping = ['uid', 'manager', 'delegates'];
-    await state.check();
-    return {
-      errors: state.rows.map(row => row.errors),
-      values: state.rows.map(row => row.values),
-      error: state.error,
-    };
+    await driven.choose(writeCsv([['uid', 'manager', 'delegates'], ...rows]));
+    await driven.map(['uid', 'manager', 'delegates']);
+    await driven.check();
+    const error =
+      driven.root.querySelector<HTMLElement>(
+        '.dc-import .dc-error[data-step-lead]'
+      )?.textContent ?? '';
+    const refused = new Map<number, string>();
+    for (const line of Array.from(
+      driven.root.querySelectorAll<HTMLElement>('.dc-import-problems tbody tr')
+    )) {
+      const cells = line.querySelectorAll('td');
+      refused.set(Number(cells[0]?.textContent), cells[1]?.textContent ?? '');
+    }
+    const errors = rows.map((_, index) => {
+      const message = refused.get(index + 2);
+      return message ? message.split(' — ') : [];
+    });
+    if (run) await driven.run();
+    return { errors, values, error };
   }
 
   it('should resolve from the whole branch when it can be listed', async () => {
@@ -1189,12 +1199,18 @@ describe('importing pointers into a large branch', () => {
     nock(baseUrl)
       .get('/api/v1/ldap/users')
       .reply(200, { alice: account('alice'), bob: account('bob') });
-    const { errors, values } = await check([['new1', 'alice', 'bob|Alice']]);
+    const { errors, values } = await check(
+      [['new1', 'alice', 'bob|Alice']],
+      true
+    );
     expect(errors).to.deep.equal([[]]);
-    expect(values[0]).to.deep.include({
-      manager: dn('alice'),
-      delegates: [dn('bob'), dn('alice')],
-    });
+    expect(values).to.deep.include.members([
+      {
+        uid: 'new1',
+        manager: dn('alice'),
+        delegates: [dn('bob'), dn('alice')],
+      },
+    ]);
     expect(nock.isDone()).to.equal(true);
   });
 
@@ -1254,25 +1270,30 @@ describe('importing pointers into a large branch', () => {
       for (let i = 0; i < 50; i++) many[`ka${i}`] = account(`ka${i}`);
       search('ka').reply(200, many);
 
-      const { errors, values, error } = await check([
-        ['new1', dn('alice'), 'bob|zoé'],
-        ['new2', 'bob', 'ann|uid=carol, ou=users, dc=example, dc=com|ka'],
-        ['new3', 'dup', 'jo|x'],
-        ['new4', 'uid=eve,ou=other,dc=example,dc=com', ''],
-      ]);
+      const { errors, values, error } = await check(
+        [
+          ['new1', dn('alice'), 'bob|zoé'],
+          ['new2', 'bob', 'uid=carol, ou=users, dc=example, dc=com'],
+          ['new3', 'dup', 'jo|x'],
+          ['new4', 'uid=eve,ou=other,dc=example,dc=com', ''],
+          ['new5', 'ann', 'ka'],
+        ],
+        true
+      );
       expect(error).to.equal('');
-      expect(values[0]).to.deep.include({
-        manager: dn('alice'),
-        delegates: [dn('bob'), dn('zoe')],
-      });
-      expect(values[1]).to.deep.include({ delegates: [dn('carol')] });
+      // The rows taken were created with the entries their columns name.
+      expect(values).to.deep.include.members([
+        {
+          uid: 'new1',
+          manager: dn('alice'),
+          delegates: [dn('bob'), dn('zoe')],
+        },
+        { uid: 'new2', manager: dn('bob'), delegates: [dn('carol')] },
+      ]);
       const undecided = (value: string): string =>
         `Delegates: “${value}” is no identifier, and too many entries contain it to rule out another spelling: check it, or use a DN`;
       expect(errors[0]).to.deep.equal([]);
-      expect(errors[1]).to.deep.equal([
-        'Delegates: “ann” not found',
-        undecided('ka'),
-      ]);
+      expect(errors[1]).to.deep.equal([]);
       expect(errors[2]).to.deep.equal([
         'Manager: “dup” matches several entries',
         undecided('jo'),
@@ -1281,6 +1302,10 @@ describe('importing pointers into a large branch', () => {
       // A DN outside the branch is no entry of it, and costs no request.
       expect(errors[3]).to.deep.equal([
         'Manager: “uid=eve,ou=other,dc=example,dc=com” not found',
+      ]);
+      expect(errors[4]).to.deep.equal([
+        'Manager: “ann” not found',
+        undecided('ka'),
       ]);
       expect(nock.isDone()).to.equal(true);
     });
