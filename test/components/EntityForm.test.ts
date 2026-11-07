@@ -192,7 +192,7 @@ describe('EntityForm', () => {
     };
     expect(await render(sized, 'en'))
       .to.include(
-        '<p class="dc-hint" data-hint>A size such as 4 GB, 500 MB or 100 KB</p>'
+        '<p class="dc-hint" id="dc-hint-mailQuotaSize" data-hint>A size such as 4 GB, 500 MB or 100 KB</p>'
       )
       .and.not.include('xGB');
     expect(await render(sized, 'fr')).to.include(
@@ -213,6 +213,73 @@ describe('EntityForm', () => {
     const searched = await render(hinted, 'en', () => Promise.resolve([]));
     expect(searched).to.include('data-picker="member"');
     expect(searched).to.not.include('Expected the DN');
+  });
+
+  it('should describe a field by its hint, so a screen reader hears the format', async () => {
+    // Hints were only visual: the format a field expects was heard once the
+    // field had been refused, not when it got the focus (#268).
+    const described: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          ...usersSchema.attributes,
+          mail: {
+            ...usersSchema.attributes.mail,
+            hint: { en: 'Expected an email address' },
+          },
+          mailQuotaSize: {
+            type: 'number',
+            normalize: 'byteSize',
+            hint: { en: 'Expected pattern xGB, xMB, xKB or a number of bytes' },
+          },
+          twakeDeletionDate: {
+            type: 'date',
+            hint: { en: 'Expected a date not earlier than today' },
+          },
+          employeeNumber: {
+            type: 'string',
+            label: { en: 'Employee ID' },
+            help: { en: 'The number HR knows the person by' },
+            hint: { en: 'A number HR assigned' },
+          },
+        },
+      },
+    };
+    const container = document.createElement('div');
+    document.body.append(container);
+    await new EntityForm({
+      entity: described,
+      translator: new Translator('en'),
+      pointerOptions: () => Promise.resolve([]),
+      onSubmit: () => Promise.resolve(),
+      onCancel: () => undefined,
+    }).render(container);
+    const describedBy = (name: string): string =>
+      container
+        .querySelector(`#dc-field-${name}`)
+        ?.getAttribute('aria-describedby') ?? '';
+    for (const name of [
+      'mail',
+      'userPassword',
+      'mailQuotaSize',
+      'twakeDeletionDate',
+    ])
+      expect(describedBy(name)).to.include(`dc-hint-${name}`);
+    // A field with help is described by both, in the order it reads.
+    expect(describedBy('employeeNumber')).to.equal(
+      'dc-hint-employeeNumber dc-help-employeeNumber'
+    );
+    expect(
+      container.querySelector('#dc-hint-userPassword')?.textContent
+    ).to.equal(
+      'Leave empty to generate one: it is shown once the account is created'
+    );
+    expect(
+      container.querySelector('#dc-hint-mailQuotaSize')?.textContent
+    ).to.equal('A size such as 4 GB, 500 MB or 100 KB');
+    expect(
+      container.querySelector('#dc-hint-twakeDeletionDate')?.textContent
+    ).to.equal('Expected a date not earlier than today');
   });
 
   it('should refuse a size and a past expiry before sending, both at once', async () => {
