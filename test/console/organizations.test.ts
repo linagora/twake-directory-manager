@@ -570,6 +570,24 @@ describe('Directory console: organizations', () => {
         unmount();
       });
 
+      it('should not invite a read-only administrator to claim', async () => {
+        const readOnly = (): Scope => ({
+          ...localAdmin(`ou=Engineering,${top}`),
+          branches: [{ dn: `ou=Engineering,${top}`, read: true }],
+        });
+        const { root, unmount } = await mounted(readOnly(), [bob, grace]);
+        await until(() => !!root.querySelector('[data-transit-section]'));
+        const section = root.querySelector<HTMLElement>(
+          '[data-transit-section]'
+        ) as HTMLElement;
+        expect(section.textContent).to.include('Waiting in transit (2)');
+        expect(section.textContent).to.include(
+          'Handed over between administrators: no branch you write can take them.'
+        );
+        expect(section.innerHTML).to.not.include('Claim…');
+        unmount();
+      });
+
       it('should not let an older answer count over a newer one', async () => {
         // Read again when the page is drawn again: the answers may come
         // back in any order.
