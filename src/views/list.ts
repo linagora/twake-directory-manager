@@ -180,8 +180,8 @@ export class ListsView {
       read: (id: string): Promise<Entry> => ctx.api.get(entity, id),
       onOpen: (id: string): void =>
         ctx.go(`${entity.key}/${encodeURIComponent(id)}`),
-      onDelete: (ids: string[]): Promise<boolean> =>
-        ctx.deleteSelection(entity, ids),
+      onDelete: (selected: [string, Entry][]): Promise<boolean> =>
+        ctx.deleteSelection(entity, selected),
     });
     await list.render(holder);
   }

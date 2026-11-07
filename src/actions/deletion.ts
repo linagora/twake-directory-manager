@@ -6,6 +6,7 @@
  */
 
 import { roleAttribute } from '../api/ConsoleApiClient';
+import { bulkDeletable } from '../console/bulk';
 import type { ConsoleContext } from '../console/context';
 import {
   attributeLabel,
@@ -220,23 +221,38 @@ export class DeletionActions {
   /**
    * Delete a selection, reporting each refusal on its own: a bulk action that
    * stops at the first error leaves the operator guessing which entries went.
+   * The entries the caller does not administer are left out as the other bulk
+   * actions leave them out: asked to delete nothing, it asks nothing.
    *
    * @param entity the entity listed
-   * @param ids the selection, by identifier
+   * @param selected the selection, its entries with their identifiers
    * @returns whether any entry was deleted: none on Cancel, and the list
    *   then stays as it was, selection and focus with it
    */
-  async many(entity: EntityDescriptor, ids: string[]): Promise<boolean> {
+  async many(
+    entity: EntityDescriptor,
+    selected: [string, Entry][]
+  ): Promise<boolean> {
     const { ctx } = this;
     const t = ctx.t;
-    if (ids.length === 0) return false;
+    const { kept, leftOut } = bulkDeletable(
+      ctx.rights(),
+      ctx.translator(),
+      entity,
+      selected
+    );
+    if (!kept.length) {
+      if (leftOut) ctx.toast(leftOut, true);
+      return false;
+    }
+    const ids = kept.map(([id]) => id);
     // The first few by name, enough to see the selection is the right one.
     const named = ids.slice(0, 5).map(id => ctx.entryName(entity, id));
     const more = ids.length - named.length;
     if (
       !(await ctx.dialog.confirm({
         title: t('delete.manyTitle', { count: ids.length }),
-        lines: [t('delete.irreversible')],
+        lines: [t('delete.irreversible'), ...(leftOut ? [leftOut] : [])],
         items: more ? [...named, t('delete.andMore', { count: more })] : named,
         action: t('delete.manyButton', { count: ids.length }),
       }))

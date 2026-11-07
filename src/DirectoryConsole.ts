@@ -369,7 +369,8 @@ export class DirectoryConsole {
         this.groups.addMembers(entity, entry, id, name, held),
       removeMember: (entity, id, name, dn) =>
         this.groups.removeMember(entity, id, name, dn),
-      deleteSelection: (entity, ids) => this.deletions.many(entity, ids),
+      deleteSelection: (entity, selected) =>
+        this.deletions.many(entity, selected),
       changeSelectionState: (entity, selected) =>
         this.states.changeMany(entity, selected),
       addSelectionToGroups: (entity, selected) =>

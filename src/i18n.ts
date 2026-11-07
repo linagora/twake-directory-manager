@@ -137,6 +137,9 @@ const en: Catalogue = {
   'bulk.progress.other': '{done} of {count} accounts',
   'bulk.leftOut.one': '{count} account you do not administer is left out.',
   'bulk.leftOut.other': '{count} accounts you do not administer are left out.',
+  'bulk.leftOutEntries.one': '{count} entry you do not administer is left out.',
+  'bulk.leftOutEntries.other':
+    '{count} entries you do not administer are left out.',
   'bulk.stateDone.one': '{count} account is now {state}',
   'bulk.stateDone.other': '{count} accounts are now {state}',
   'bulk.refused.one': '{count} account was refused:',
@@ -613,6 +616,10 @@ const fr: Catalogue = {
     '{count} compte que vous n’administrez pas est laissé de côté.',
   'bulk.leftOut.other':
     '{count} comptes que vous n’administrez pas sont laissés de côté.',
+  'bulk.leftOutEntries.one':
+    '{count} entrée que vous n’administrez pas est laissée de côté.',
+  'bulk.leftOutEntries.other':
+    '{count} entrées que vous n’administrez pas sont laissées de côté.',
   'bulk.stateDone.one': '{count} compte est maintenant {state}',
   'bulk.stateDone.other': '{count} comptes sont maintenant {state}',
   'bulk.refused.one': '{count} compte a été refusé :',
@@ -1078,6 +1085,7 @@ const mn: Catalogue = {
   'bulk.stateTitle': 'Төлөв өөрчлөх — {count} бүртгэл',
   'bulk.progress': '{count}-с {done} бүртгэл',
   'bulk.leftOut': 'Таны удирдахгүй {count} бүртгэлийг орхилоо.',
+  'bulk.leftOutEntries': 'Таны удирдахгүй {count} бүртгэлийг орхилоо.',
   'bulk.stateDone': '{count} бүртгэл одоо {state} төлөвтэй боллоо',
   'bulk.refused': '{count} бүртгэлийг татгалзсан:',
   'groups.add': 'Бүлэгт нэмэх…',

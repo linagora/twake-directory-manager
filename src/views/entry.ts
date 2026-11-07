@@ -111,7 +111,7 @@ export class EntryView {
       entry,
       translator: ctx.translator(),
       canWrite,
-      canDelete: !readOnly && (transit.rights?.delete ?? rights.canDelete()),
+      canDelete: !readOnly && rights.deletes(entity, entry),
       notice: readOnly && reference ? ctx.t('reference.readOnly') : undefined,
       inTransit: transit.inTransit,
       onClaim: transit.claim

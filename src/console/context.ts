@@ -265,11 +265,16 @@ export interface ConsoleContext {
     dn: string
   ): Promise<void>;
   /**
-   * Delete a list's selection once asked (see `DeletionActions.many`)
+   * Delete a list's selection once asked (see `DeletionActions.many`), the
+   * entries themselves so that the ones the caller does not administer are
+   * left out as the other bulk actions leave them out
    *
    * @returns whether any entry went
    */
-  deleteSelection(entity: EntityDescriptor, ids: string[]): Promise<boolean>;
+  deleteSelection(
+    entity: EntityDescriptor,
+    selected: [string, Entry][]
+  ): Promise<boolean>;
   /**
    * Change the state of the accounts a list's selection holds (see
    * `StateActions.changeMany`)
