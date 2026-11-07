@@ -313,11 +313,17 @@ describe('Directory console: organizations', () => {
 
     it('should say who is not there, and what the server left out', () => {
       const empty = tables([]);
-      expect(empty).to.include('People (0)');
-      expect(empty).to.include('No one is attached to Sales.');
-      expect(tables([], {}, undefined, 'fr')).to.include(
-        'Personne n’est rattaché à Sales.'
-      );
+      const people = empty.slice(0, empty.indexOf('data-attached="groups"'));
+      const groups = empty.slice(empty.indexOf('data-attached="groups"'));
+      expect(people).to.include('People (0)');
+      expect(people).to.include('No one is attached to Sales.');
+      expect(groups).to.include('Groups (0)');
+      // An empty table of groups says no group, not no one (#271).
+      expect(groups).to.include('No group is attached to Sales.');
+      expect(groups).to.not.include('No one is attached');
+      const french = tables([], {}, undefined, 'fr');
+      expect(french).to.include('Personne n’est rattaché à Sales.');
+      expect(french).to.include('Aucun groupe n’est rattaché à Sales.');
 
       // Under the table it concerns, and the count says it is not all.
       const cut = tables([sophie, salesTeam], { truncated: true, more: 48 });
