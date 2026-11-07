@@ -87,6 +87,12 @@ const question = (root: HTMLElement): Promise<void> =>
 const callsOf = (calls: string[], method: string): string[] =>
   calls.filter(call => call.startsWith(`${method}(`));
 
+/** How many times what waits in transit was read. */
+const transitReads = (calls: string[]): number =>
+  callsOf(calls, 'organizationMembers').filter(call =>
+    call.startsWith(`organizationMembers(${transit}`)
+  ).length;
+
 /**
  * The groups' search an account without `memberOf` is looked for with,
  * answered: none found, or a refusal.
@@ -229,6 +235,39 @@ describe('actions/deletion', () => {
       click(panelOf(root).body, '[data-confirm]');
       await until(() => toast(root) === 'Deleted');
       expect(callsOf(calls, 'remove')).to.deep.equal(['remove(users, alice)']);
+    });
+
+    it('should count the transit branch again when an entry in transit is deleted', async () => {
+      // The banner's "Transit (N)" waited for the next Overview otherwise.
+      const waiting: Entry = {
+        ...alice,
+        twakeDepartmentLink: transit,
+        twakeDepartmentPath: 'Transit',
+        memberOf: [],
+      };
+      const { root, calls, server } = await deleting({
+        account: waiting,
+        answers: groupsSearch(200),
+      });
+      server.delete('/api/v1/ldap/users/alice').reply(200, {});
+      const counted = transitReads(calls);
+      click(panelOf(root).body, '[data-confirm]');
+      await until(() => toast(root) === 'Deleted');
+      await until(() => transitReads(calls) > counted);
+    });
+
+    it('should leave the transit count alone when an entry out of it is deleted', async () => {
+      const { root, calls, server, idle } = await deleting({
+        account: { ...alice, memberOf: [] },
+        answers: groupsSearch(200),
+      });
+      server.delete('/api/v1/ldap/users/alice').reply(200, {});
+      const counted = transitReads(calls);
+      click(panelOf(root).body, '[data-confirm]');
+      await until(() => toast(root) === 'Deleted');
+      await idle();
+      await settled(root);
+      expect(transitReads(calls)).to.equal(counted);
     });
 
     it('should keep the card and say why when the server refuses', async () => {

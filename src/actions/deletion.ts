@@ -153,6 +153,8 @@ export class DeletionActions {
       return;
     try {
       await ctx.api.remove(entity, id);
+      // An entry in transit leaves the branch: the banner's count follows.
+      if (entry && ctx.inTransit(entity, entry)) ctx.refreshTransit();
       ctx.toast(ctx.t('delete.done'));
       ctx.go(entity.key);
     } catch (err) {
@@ -260,11 +262,11 @@ export class DeletionActions {
       return false;
 
     const failures: string[] = [];
-    let deleted = 0;
+    const gone = new Set<string>();
     for (const id of ids) {
       try {
         await ctx.api.remove(entity, id);
-        deleted++;
+        gone.add(id);
       } catch (err) {
         const name = ctx.entryName(entity, id);
         const { refusal } = err as { refusal?: { code?: string } };
@@ -288,7 +290,13 @@ export class DeletionActions {
       failures.length === 0 ? t('delete.done') : failures.join(' · '),
       failures.length > 0
     );
-    return deleted > 0;
+    // Entries in transit leave the branch with the others: the banner's
+    // count follows, once however many waited there.
+    if (
+      kept.some(([id, entry]) => gone.has(id) && ctx.inTransit(entity, entry))
+    )
+      ctx.refreshTransit();
+    return gone.size > 0;
   }
 
   /**
