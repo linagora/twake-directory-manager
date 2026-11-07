@@ -76,12 +76,15 @@ bcl:
     url: ""
 
 secrets:
-  # A Secret holding DM_LDAP_PWD and DM_OIDC_CLIENT_SECRET, and DM_LDAP_DN when
-  # ldap.bindDn is left empty. When set, the two values below are ignored and
-  # no Secret is created.
+  # A Secret holding DM_LDAP_PWD, DM_OIDC_CLIENT_SECRET and
+  # DM_OIDC_SESSION_SECRET, and DM_LDAP_DN when ldap.bindDn is left empty.
+  # When set, the values below are ignored and no Secret is created.
   existingSecret: ""
   ldapPassword: ""
   oidcClientSecret: ""
+  # A session key of its own, at least 32 characters and different from the
+  # client secret: ldap-rest 2.1.0 refuses to start without one.
+  oidcSessionSecret: ""
   # The credentials among the other ldap-rest settings, as environment
   # variables: they go into the Secret, where extraEnv lands in a ConfigMap.
   # For instance the WebAdmin tokens of the core/twake/james and

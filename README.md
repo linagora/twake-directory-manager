@@ -27,6 +27,7 @@ docker run -p 8081:8081 \
   -e DM_OIDC_SERVER=https://auth.example.org \
   -e DM_OIDC_CLIENT_ID=twake-directory-manager \
   -e DM_OIDC_CLIENT_SECRET=secret \
+  -e DM_OIDC_SESSION_SECRET=a-key-of-its-own-at-least-32-characters \
   -e DM_BASE_URL=https://directory.example.org \
   ghcr.io/linagora/twake-directory-manager
 ```
@@ -221,7 +222,7 @@ Japan.
 
 The console supports the ldap-rest version `package.json` declares: the
 floor (`ldapRest.min`) and the version the `Dockerfile` builds on and CI
-tests against (`ldapRest.tested`) are both 2.0.5 today. A fallback for an
+tests against (`ldapRest.tested`) are both 2.1.0 today. A fallback for an
 older server is tagged `compat(ldap-rest<X.Y.Z)` where it stands, and
 `npm run lint` refuses it once the floor passes it, until it is removed. The
 base image is a build argument:
@@ -232,7 +233,7 @@ docker build --build-arg LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:<version> \
 ```
 
 An older ldap-rest serves the console as far as its API matches, but is
-neither tested nor supported: below 2.0.5 it is out of the supported range
+neither tested nor supported: below 2.1.0 it is out of the supported range
 (0.25.0 lacked parts of the scope answer, and 1.1.0 was the first to serve
 the page's `Content-Security-Policy`).
 
@@ -251,13 +252,17 @@ helm install directory-manager \
   --set ingress.enabled=true \
   --set ingress.hostname=directory.example.org \
   --set secrets.ldapPassword=secret \
-  --set secrets.oidcClientSecret=secret
+  --set secrets.oidcClientSecret=secret \
+  --set secrets.oidcSessionSecret=a-key-of-its-own-at-least-32-characters
 ```
 
-`secrets.existingSecret` names a Secret holding `DM_LDAP_PWD` and
-`DM_OIDC_CLIENT_SECRET` instead — and `DM_LDAP_DN`, when `ldap.bindDn` is left
-empty — and `extraEnv` passes any other ldap-rest setting. Those that are
-credentials go under `secrets.extraEnv` instead, which lands in the Secret
+`secrets.existingSecret` names a Secret holding `DM_LDAP_PWD`,
+`DM_OIDC_CLIENT_SECRET` and `DM_OIDC_SESSION_SECRET` instead — and
+`DM_LDAP_DN`, when `ldap.bindDn` is left empty — and `extraEnv` passes any
+other ldap-rest setting. `DM_OIDC_SESSION_SECRET` must be a key of its own,
+at least 32 characters, separate from the client secret: ldap-rest 2.1.0
+refuses to start without it. Those that are credentials go under
+`secrets.extraEnv` instead, which lands in the Secret
 rather than a ConfigMap: the WebAdmin tokens of the `core/twake/james` and
 `core/twake/calendar` plugins, for instance,
 

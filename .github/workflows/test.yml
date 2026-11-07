@@ -209,6 +209,7 @@ jobs:
             --set oidc.server=https://auth.example.org \
             --set secrets.ldapPassword=secret \
             --set secrets.oidcClientSecret=secret \
+            --set secrets.oidcSessionSecret=a-session-key-of-its-own-at-least-32-chars \
             --set ingress.enabled=true \
             --set ingress.hostname=directory.example.org
           helm lint helm/twake-directory-manager "$@"
