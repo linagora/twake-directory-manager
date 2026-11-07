@@ -1544,6 +1544,16 @@
   margin: 0 0 20px;
 }
 
+/* Above the fields, when a form was put back after a sign-in again. */
+.dc-form-notice {
+  margin: 0 0 20px;
+  padding: 10px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  background: var(--dc-ground);
+  border: 1px solid var(--dc-line);
+}
+
 /* A fieldset for a named group, a plain block for the fields of none: the
    rule between groups does not depend on which. */
 .dc-form-group {
