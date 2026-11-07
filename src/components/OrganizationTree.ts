@@ -9,7 +9,7 @@
  * @module twake-directory-manager/components/OrganizationTree
  */
 
-import { comparableDn, withinDn } from '../format';
+import { comparableDn, readFailure, withinDn } from '../format';
 import type { Translator } from '../i18n';
 import type { OrganizationNode } from '../types';
 import { background, type Reporter } from '../shared/background';
@@ -120,6 +120,13 @@ export class OrganizationTree {
   private searchTimer: ReturnType<typeof setTimeout> | undefined;
   /** Bumped by each search dropped, for its answer to be ignored */
   private searchTicket = 0;
+  /**
+   * The branch whose children could not be read, and why: said under the
+   * tree, so that the ▸ left closed is not taken for a branch that does
+   * nothing, and opening it again is the retry it is. Cleared once that
+   * branch is read.
+   */
+  private unread: { dn: string; name: string; reason: string } | null = null;
 
   /**
    * @param options what the tree reads, and whom it tells
@@ -374,13 +381,14 @@ export class OrganizationTree {
     const everywhere = this.searchesEverywhere();
     if (!everywhere) this.cancelSearch();
     const whole = everywhere && this.tree ? this.wholeTree() : null;
+    let content: SafeHtml;
     if (this.error)
-      render(list, html`<p class="dc-empty dc-error-block">${this.error}</p>`);
-    else if (!this.tree) render(list, loading);
+      content = html`<p class="dc-empty dc-error-block">${this.error}</p>`;
+    else if (!this.tree) content = loading;
     else if (whole === undefined) {
       // The whole tree, being searched: until it is, saying "no match" would
       // be saying it of the branches opened only.
-      render(list, loading);
+      content = loading;
     } else if (whole) {
       const { found, truncated } = whole;
       // The matches kept are the first the server found, not the first in
@@ -390,11 +398,9 @@ export class OrganizationTree {
             count: found.length,
           })}</p>`
         : '';
-      render(
-        list,
-        found.length
-          ? html`<ul class="dc-tree-list dc-tree-found">${found.map(
-              option => html`
+      content = found.length
+        ? html`<ul class="dc-tree-list dc-tree-found">${found.map(
+            option => html`
             <li class="dc-tree-result">
               <div class="dc-tree-row">
                 <button type="button" class="dc-tree-label" data-found="${
@@ -402,22 +408,29 @@ export class OrganizationTree {
                 }" title="${option.label}">${option.label}</button>
               </div>
             </li>`
-            )}</ul>${cut}`
-          : // Organizations left unread may hold one: absence is not proven.
-            none(whole.partial ? 'tree.noMatchOpened' : 'tree.noMatch')
-      );
+          )}</ul>${cut}`
+        : // Organizations left unread may hold one: absence is not proven.
+          none(whole.partial ? 'tree.noMatchOpened' : 'tree.noMatch');
     } else {
       // A short filter, or a tree that could not be searched whole, matches
       // the branches opened; matching none of them, it says so rather than
       // leave a blank where the tree was, and says of which.
       const nodes = this.nodeMarkup(this.tree, 0);
-      render(
-        list,
-        nodes.markup
-          ? html`<ul class="dc-tree-list">${nodes}</ul>`
-          : none('tree.noMatchOpened')
-      );
+      content = nodes.markup
+        ? html`<ul class="dc-tree-list">${nodes}</ul>`
+        : none('tree.noMatchOpened');
     }
+    // Said below the tree drawn, not in place of it: the branch stays where
+    // it is, closed, and the note says why and how to ask again.
+    const unread = this.unread;
+    const note =
+      unread && this.tree && !this.error
+        ? html`<p class="dc-tree-note" role="status">${translator.t(
+            'tree.unread',
+            { name: unread.name, reason: unread.reason }
+          )}</p>`
+        : '';
+    render(list, html`${content}${note}`);
     this.bind(list);
   }
 
@@ -795,10 +808,19 @@ export class OrganizationTree {
       try {
         node.children = await this.options.children(dn);
         node.loaded = true;
-      } catch {
+        // What was said of this branch no longer holds; what was said of
+        // another still does.
+        if (this.unread && comparableDn(this.unread.dn) === comparableDn(dn))
+          this.unread = null;
+      } catch (err) {
         // Left unread and closed, not taken for a leaf: opening it again
-        // asks again.
+        // asks again. Said under the tree, so the reader knows to.
         this.expanded.delete(dn);
+        this.unread = {
+          dn,
+          name: node.path || node.name,
+          reason: readFailure(err, this.options.translator).message,
+        };
       }
     }
     refocus();

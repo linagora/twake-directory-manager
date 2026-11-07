@@ -1347,6 +1347,14 @@
   color: var(--dc-muted);
 }
 
+/* Below the tree, when a branch left closed could not be read. */
+.dc-tree-note {
+  margin: 0;
+  padding: 8px 16px 16px;
+  font-size: 12px;
+  color: var(--dc-muted);
+}
+
 .dc-tree-row {
   display: flex;
   align-items: center;
