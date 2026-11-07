@@ -14,6 +14,8 @@ export interface StackAddresses {
   directory: string;
   sso: string;
   ldap: string;
+  /** The port OpenLDAP listens on: 1389 on OpenLDAP 2.6, 389 on 2.4 */
+  ldapPort: number;
 }
 
 /** Every knob of the suite, read once */
@@ -40,7 +42,8 @@ function isStack(value: unknown): value is StackAddresses {
       key => typeof record[key] === 'string' && record[key] !== ''
     ) &&
     typeof record.appPort === 'number' &&
-    typeof record.ssoPort === 'number'
+    typeof record.ssoPort === 'number' &&
+    typeof record.ldapPort === 'number'
   );
 }
 

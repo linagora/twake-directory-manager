@@ -51,8 +51,10 @@ export default async function globalSetup(): Promise<void> {
             )
           ).ok
       ),
-      probe(`OpenLDAP ldap://${stack.ldap}:389`, async () => {
-        const client = new Client({ url: `ldap://${stack.ldap}:389` });
+      probe(`OpenLDAP ldap://${stack.ldap}:${stack.ldapPort}`, async () => {
+        const client = new Client({
+          url: `ldap://${stack.ldap}:${stack.ldapPort}`,
+        });
         try {
           await client.bind('cn=admin,dc=example,dc=com', 'admin');
           return true;

@@ -1,0 +1,10 @@
+# The one attribute the Twake schema takes from postfix-book, which the osixia
+# image loads at bootstrap and a 2.6 image may not ship: start.sh loads it when
+# the directory has no such attribute, before twake-schema.ldif (#230).
+dn: cn=postfix-book,cn=schema,cn=config
+objectClass: olcSchemaConfig
+cn: postfix-book
+olcAttributeTypes: ( 1.3.6.1.4.1.29426.1.10.10 NAME 'mailForwardingAddress'
+  DESC 'Address(es) to forward all incoming messages to.'
+  EQUALITY caseIgnoreIA5Match
+  SYNTAX 1.3.6.1.4.1.1466.115.121.1.26{320} )

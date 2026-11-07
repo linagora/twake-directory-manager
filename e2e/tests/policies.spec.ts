@@ -65,9 +65,11 @@ test.describe('POLICY password policies', () => {
     const policies = app.policies();
 
     const panel = await policies.openNew();
-    // The QA directory is OpenLDAP 2.4, which has no pwdMaxLength: the form
-    // offers only what the directory defines (#118)
-    await expect(panel.control('pwdMaxLength')).toHaveCount(0);
+    // The form offers only what the directory defines: OpenLDAP 2.4 has no
+    // pwdMaxLength, 2.6 has (#118)
+    await expect(panel.control('pwdMaxLength')).toHaveCount(
+      (await directory.defines('pwdMaxLength')) ? 1 : 0
+    );
     await expect(panel.control('pwdMinLength')).toHaveCount(1);
     await panel.nameInput.fill(cn);
     await expect(panel.unit('pwdMaxAge')).toHaveValue('days');

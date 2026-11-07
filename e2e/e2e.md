@@ -137,7 +137,7 @@ policies and `DM_AUTHZ_GLOBAL_WRITE_BRANCHES` on the mail domains: admin manages
 administrators do not.
 
 - [x] POLICY-01 (P2) Only the global administrators see the password policies; the default one cannot be deleted — `policies.spec.ts` (the policies API answers 403 to a local administrator, whose page load no longer asks for them: the scope says it, #138)
-- [x] POLICY-02 (P1) Create, edit and delete a policy: durations sent in seconds, an emptied field removes its attribute, and only the settings the directory defines are offered (no Maximum length on OpenLDAP 2.4, #118); Cancel on the deletion's confirmation gives the form back — `policies.spec.ts`
+- [x] POLICY-02 (P1) Create, edit and delete a policy: durations sent in seconds, an emptied field removes its attribute, and only the settings the directory defines are offered (no Maximum length on OpenLDAP 2.4, offered on 2.6, #118); Cancel on the deletion's confirmation gives the form back — `policies.spec.ts`
 - [x] POLICY-03 (P2) A policy accounts use is not deleted — `policies.spec.ts` (that it holds their passwords cannot be checked: ldap-rest binds as the rootdn, which ppolicy exempts)
 - [x] POLICY-04 (P2) A name already taken is said under Name, not in a toast — `policies.spec.ts` (#176)
 - [x] POLICY-05 (P1) A keyboard user opens a policy: its name is a button, Enter and Space open the panel, which stays open, Escape and Cancel give the focus back to it; the mouse opens from anywhere on the row — `policies.spec.ts` (#207)
