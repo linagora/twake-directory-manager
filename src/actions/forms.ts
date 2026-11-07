@@ -20,7 +20,7 @@ import {
   readFailure,
   rdnValue,
 } from '../format';
-import { forgetDraft, type Draft } from '../session';
+import { forgetDraft, takeDraft, type Draft } from '../session';
 import { background } from '../shared/background';
 import { html, render } from '../shared/html';
 import type { EntityDescriptor, Entry } from '../types';
@@ -246,6 +246,23 @@ export class FormActions {
       ...(dn ? { dn } : {}),
       ...form.draft(),
     };
+  }
+
+  /**
+   * Offer back the draft a form held when the session ended: its page, then
+   * its form, prefilled and said to be restored. Taken once, and only for the
+   * account that kept it.
+   */
+  async offerDraft(): Promise<void> {
+    const { ctx } = this;
+    const draft = takeDraft(ctx.rights().user);
+    if (!draft) return;
+    const entity = ctx.entities().find(item => item.key === draft.entity);
+    if (!entity) return;
+    // The page the address names, after `#/`, as a draft records it.
+    if (draft.page && draft.page !== window.location.hash.replace(/^#\//, ''))
+      ctx.go(draft.page);
+    await this.restore(entity, draft);
   }
 
   /**

@@ -22,13 +22,12 @@ import {
 } from './format';
 import { Translator } from './i18n';
 import { Rights } from './rights';
-import { saveDraft, signInAgain, takeDraft, type Draft } from './session';
+import { saveDraft, signInAgain, type Draft } from './session';
 import type {
   Confirmation,
   AttachedEntries,
   ConsoleOptions,
   EntityDescriptor,
-  Entry,
   Scope,
 } from './types';
 import { background, fromConsole, type Reporter } from './shared/background';
@@ -220,7 +219,8 @@ export class DirectoryConsole {
         this.container?.querySelector<HTMLElement>('[data-transit-link]') ??
         null,
       readMembers: (dn): Promise<AttachedEntries> => this.readMembers(dn),
-      claim: (entity, id, name): Promise<void> => this.claim(entity, id, name),
+      claim: (entity, id, name): Promise<void> =>
+        this.transits.claim(entity, id, name),
       report: this.report,
     });
     this.shell = new ShellView({
@@ -336,7 +336,7 @@ export class DirectoryConsole {
     if (!this.transitService.readsOnPage()) this.transitService.refresh();
     await this.renderMain();
     // A form a reload took away, once its draft was kept, is offered back.
-    await this.offerDraft();
+    await this.forms.offerDraft();
   }
 
   /**
@@ -385,7 +385,7 @@ export class DirectoryConsole {
       changeState: (entity, id, entry, preselect) =>
         this.states.change(entity, id, entry, preselect),
       resetPassword: (entity, id) => this.passwords.reset(entity, id),
-      claim: (entity, id, name) => this.claim(entity, id, name),
+      claim: (entity, id, name) => this.transits.claim(entity, id, name),
       handOver: (entity, id, entry) =>
         this.transits.handOver(entity, id, entry),
       deleteEntry: (entity, id, entry, canChangeState) =>
@@ -413,7 +413,7 @@ export class DirectoryConsole {
         relationHref(this.entities, dn, primaryOnly),
       claimAction: () => this.transitService.claimAction(),
       openList: (entity, view) => this.listsView.open(entity, view),
-      openForm: (entity, entry, here) => this.openForm(entity, entry, here),
+      openForm: (entity, entry, here) => this.forms.open(entity, entry, here),
       openOrganizationForm: (entity, entry, parentDn) =>
         this.forms.openOrganization(entity, entry, parentDn),
       deleteOrganization: (entity, entry, dn) =>
@@ -422,25 +422,6 @@ export class DirectoryConsole {
   }
 
   /* ---------------------------------------------------------------- routing */
-
-  /**
-   * Offer back the draft a form held when the session ended: its page, then
-   * its form, prefilled and said to be restored (see `FormActions.restore`).
-   * Taken once, and only for the account that kept it.
-   */
-  private async offerDraft(): Promise<void> {
-    const draft = takeDraft(this.rights.user);
-    if (!draft) return;
-    const entity = this.entities.find(item => item.key === draft.entity);
-    if (!entity) return;
-    if (draft.page && draft.page !== this.pageName()) this.go(draft.page);
-    await this.forms.restore(entity, draft);
-  }
-
-  /** The page the address names, after `#/`, as a draft records it. */
-  private pageName(): string {
-    return window.location.hash.replace(/^#\//, '');
-  }
 
   /**
    * Draw the page a new hash names. A side panel belongs to the page it was
@@ -709,35 +690,7 @@ export class DirectoryConsole {
     };
   }
 
-  /**
-   * The password policies' page (`PoliciesView`). A view is made for each
-   * drawing: it holds nothing from one to the next, and a view made anew
-   * cannot draw with what an earlier page left in it. A view that keeps
-   * something between drawings, as the lists keep where the reader was, is
-   * kept by the console instead (#220).
-   */
-  /** Create or edit an entry of a flat or group entity (see `FormActions`). */
-  private openForm(
-    entity: EntityDescriptor,
-    entry?: Entry,
-    here?: { preset: Entry; created(): void }
-  ): void {
-    this.forms.open(entity, entry, here);
-  }
-
   /* --------------------------------------------------------------- actions */
-
-  /**
-   * Claim an entry in transit into one of the caller's organizations (see
-   * `TransitActions`).
-   */
-  private claim(
-    entity: EntityDescriptor,
-    id: string,
-    name = id
-  ): Promise<void> {
-    return this.transits.claim(entity, id, name);
-  }
 
   /** Show a short message. */
   private toast(message: string, isError = false): void {

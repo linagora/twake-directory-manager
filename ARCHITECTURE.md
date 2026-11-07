@@ -108,8 +108,9 @@ scripts/qa-environment/     OpenLDAP + Dex + the image, for e2e and by hand
 ```
 
 `DirectoryConsole.ts` is the console's shell: the boot, the routing, the
-overview and the page of an address naming none, the reads the pages share,
-and the one-line methods a move leaves behind — under 800 lines since #220.
+overview and the page of an address naming none, and the reads the pages
+share — under 800 lines since #220, and holding no method that opens a panel
+or a dialog or writes an entry.
 The frame (sidebar, scope banner, main area) is `src/console/shell.ts`; what
 the console calls things is `src/console/names.ts`; the transit branch is
 `src/console/transit.ts`. A view is a class of `src/views/` given a
