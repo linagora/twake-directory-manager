@@ -56,6 +56,8 @@ services:
       - DM_OIDC_SERVER=http://sso:${QA_SSO_PORT:?}
       - DM_OIDC_CLIENT_ID=twake-directory-manager
       - DM_OIDC_CLIENT_SECRET=qa-client-secret-qa-client-secret
+      # ldap-rest 2.1.0 wants a session key of its own, at least 32 characters
+      - DM_OIDC_SESSION_SECRET=qa-session-secret-qa-session-secret-qa
       # Dex's `sub` is opaque: authzLinid1 looks the administrator up by uid, which Dex
       # publishes as preferred_username
       - DM_OIDC_USERNAME_CLAIM=preferred_username

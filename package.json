@@ -54,7 +54,7 @@
     "eslint-plugin-prettier": "^5.5.5",
     "globals": "^14.0.0",
     "happy-dom": "^21.0.4",
-    "ldap-rest": "^2.0.5",
+    "ldap-rest": "^2.1.0",
     "lightningcss": "^1.33.0",
     "mocha": "^12.0.0",
     "nock": "^14.0.10",
@@ -74,8 +74,8 @@
     "safari >= 16.2"
   ],
   "ldapRest": {
-    "min": "2.0.5",
-    "tested": "2.0.5"
+    "min": "2.1.0",
+    "tested": "2.1.0"
   },
   "allowScripts": {
     "esbuild@0.28.2": true,

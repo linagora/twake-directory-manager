@@ -13,4 +13,5 @@ page or less. The template is [0000-template.md](0000-template.md).
 | 0004 | [ldap-rest compatibility: a declared range, tested at both ends](0004-ldap-rest-compatibility.md)    | floor superseded by 0007 |
 | 0005 | [The end-to-end suite gates every release](0005-e2e-suite-as-release-gate.md)                        | accepted                 |
 | 0006 | [No CODEOWNERS nor required review yet](0006-no-codeowners-yet.md)                                   | accepted                 |
-| 0007 | [The ldap-rest floor is 2.0.5](0007-ldap-rest-floor-2.0.5.md)                                        | accepted                 |
+| 0007 | [The ldap-rest floor is 2.0.5](0007-ldap-rest-floor-2.0.5.md)                                        | superseded by 0008       |
+| 0008 | [The ldap-rest floor is 2.1.0](0008-ldap-rest-floor-2.1.0.md)                                        | accepted                 |

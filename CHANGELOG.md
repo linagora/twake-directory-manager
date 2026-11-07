@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+Built on ldap-rest 2.1.0. A deployment loading `core/auth/openidconnect` now
+needs `DM_OIDC_SESSION_SECRET`, a session key of its own, at least 32
+characters; sessions opened before the upgrade are refused.
+
 ## v0.13.2 (2026-11-06)
 
 Built on ldap-rest 2.0.5.
