@@ -91,6 +91,12 @@ const rows = (root: HTMLElement): string[] =>
     box => (box as HTMLElement).dataset.select ?? ''
   );
 
+/** The rows ticked, by their identifier. */
+const ticked = (root: HTMLElement): string[] =>
+  Array.from(
+    root.querySelectorAll<HTMLInputElement>('[data-main] [data-select]:checked')
+  ).map(box => box.dataset.select ?? '');
+
 /** What the bar of a selection offers, by label. */
 const offered = (root: HTMLElement): string[] =>
   Array.from(root.querySelectorAll('[data-main] [data-bulk-action]')).map(
@@ -494,6 +500,20 @@ describe('views/list', () => {
         },
       });
       expect(offered(plain.root)).to.deep.equal(['Add to a group…']);
+    });
+
+    it('should keep the rows ticked when the interface language changes', async () => {
+      // The list was drawn again for the language, and its new instance
+      // started with no selection (#270).
+      const { root } = await selected(two);
+      expect(ticked(root)).to.deep.equal(['alice', 'bob']);
+      const language = root.querySelector<HTMLSelectElement>('[data-language]');
+      if (!language) throw new Error('no language select');
+      language.value = 'fr';
+      language.dispatchEvent(new Event('change', { bubbles: true }));
+      await settled(root);
+      expect(selecting(root)).to.equal(true);
+      expect(ticked(root)).to.deep.equal(['alice', 'bob']);
     });
 
     it('should offer no Delete selection on reference data the caller only reads, deleting elsewhere', async () => {
