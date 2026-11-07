@@ -30,6 +30,8 @@ export interface Draft {
   page: string;
   /** The entity's key */
   entity: string;
+  /** Whether the form edited an entry, rather than creating one */
+  edit?: boolean;
   /** The organization a new entry goes under, or the DN of the entry edited */
   dn?: string;
   /** What the form held that its entry did not: values by attribute */
@@ -93,6 +95,7 @@ export function takeDraft(
       ...(draft.user ? { user: draft.user } : {}),
       page: draft.page,
       entity: draft.entity,
+      ...(draft.edit ? { edit: true } : {}),
       ...(typeof draft.dn === 'string' ? { dn: draft.dn } : {}),
       values,
       cleared: Array.isArray(draft.cleared) ? draft.cleared.map(String) : [],

@@ -66,6 +66,12 @@ export interface Mounted {
    * done by then
    */
   idle(): Promise<void>;
+  /**
+   * End the session as a `401` on the API's own origin would: the console's
+   * own handler, which a test cannot reach through `nock` — the mounted
+   * API is on another origin, where a `401` does not sign anyone in
+   */
+  endSession(): void;
   /** Take the console off the page, its container with it: mount another rather than `init()` again */
   unmount(): void;
 }
@@ -219,8 +225,10 @@ export async function mountConsole(
     { containerId: root.id, apiBaseUrl: url, language },
     { api }
   );
-  // A 401 in a test is a test's business, not a reload of the page.
-  client.onSessionEnded = (): void => undefined;
+  // A 401 in a test is a test's business, not a reload of the page: the
+  // console keeps what a form holds as it would, and the page stays where it
+  // is for the test to look at.
+  window.location.reload = (): void => undefined;
   const signals: AbortSignal[] = [];
   const result: Mounted = {
     root,
@@ -230,9 +238,11 @@ export async function mountConsole(
     url,
     signals,
     idle,
+    endSession: (): void => client.onSessionEnded?.(),
     unmount: (): void => {
       app.unmount();
       root.remove();
+      delete (window.location as { reload?: unknown }).reload;
     },
   };
   mounted.push(result);

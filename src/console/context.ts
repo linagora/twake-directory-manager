@@ -18,6 +18,7 @@ import type { ListView } from '../components/EntityList';
 import type { OrganizationTree } from '../components/OrganizationTree';
 import type { Translator } from '../i18n';
 import type { Rights } from '../rights';
+import type { Draft } from '../session';
 import type { Reporter } from '../shared/background';
 import type { AttachedEntries, EntityDescriptor, Entry } from '../types';
 import type { Announce } from '../ui/announce';
@@ -155,6 +156,13 @@ export interface ConsoleContext {
    * The Overview reads the branch itself when it is drawn
    */
   refreshTransit(): void;
+  /**
+   * Keep the draft of the form open, asked when the server ends the session:
+   * what it holds, or none once the form is closed. The console saves it
+   * before the page reloads, and offers it back once signed in again (see
+   * `Draft`)
+   */
+  watchDraft(ask: (() => Draft | null) | null): void;
   /** The organization tree drawn last, when the organizations page drew one */
   tree(): OrganizationTree | null;
   /** What to call a collection: the schema's label in the language now */

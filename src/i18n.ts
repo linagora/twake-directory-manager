@@ -161,6 +161,9 @@ const en: Catalogue = {
 
   'form.badFormat': '{value}: {pattern}',
   'form.required': 'Fields marked with * are required',
+  'form.draftRestored':
+    'Restored after signing in again — check it before saving.',
+  'form.draftLost': 'Your draft could not be opened again ({reason})',
   'form.fieldRequired': 'Required',
   'form.optional': 'Optional fields ({count})',
   'form.addValue': 'Press Enter to add a value',
@@ -646,6 +649,9 @@ const fr: Catalogue = {
 
   'form.badFormat': '{value} : {pattern}',
   'form.required': 'Les champs marqués d’une * sont obligatoires',
+  'form.draftRestored':
+    'Restauré après une nouvelle connexion — vérifiez-le avant d’enregistrer.',
+  'form.draftLost': 'Votre brouillon n’a pas pu être rouvert ({reason})',
   'form.fieldRequired': 'Obligatoire',
   'form.optional': 'Champs facultatifs ({count})',
   'form.addValue': 'Appuyez sur Entrée pour ajouter une valeur',
@@ -1114,6 +1120,9 @@ const mn: Catalogue = {
 
   'form.badFormat': '{value}: {pattern}',
   'form.required': '* тэмдэгтэй талбарыг заавал бөглөнө',
+  'form.draftRestored':
+    'Дахин нэвтэрсний дараа сэргээгдлээ — хадгалахаасаа өмнө шалгана уу.',
+  'form.draftLost': 'Таны ноорог дахин нээгдсэнгүй ({reason})',
   'form.fieldRequired': 'Заавал бөглөнө',
   'form.optional': 'Заавал бус талбарууд ({count})',
   'form.addValue': 'Утга нэмэхийн тулд Enter дарна уу',
