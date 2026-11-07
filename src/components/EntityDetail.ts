@@ -524,12 +524,19 @@ export class EntityDetail {
       );
     const { language } = this.options.translator;
     // 1073741824 is 1 GiB, which no decimal unit says exactly: the card
-    // rounds it, and leaves the exact count in the tooltip.
-    if (attr?.normalize === 'byteSize' && /^\d+$/.test(value.trim()))
-      return html`<span class="dc-value" title="${this.options.translator.t(
-        'detail.bytes',
-        { count: value.trim() }
-      )}">${readableByteSize(value, language).text}</span>`;
+    // rounds it, and leaves the exact count in the tooltip. A touch screen
+    // has no tooltip, so the count is beside it, shown there by the
+    // stylesheet (#272).
+    if (attr?.normalize === 'byteSize' && /^\d+$/.test(value.trim())) {
+      const exact = this.options.translator.t('detail.bytes', {
+        count: value.trim(),
+      });
+      const rounded = readableByteSize(value, language).text;
+      return html`<span class="dc-value dc-size" title="${exact}">
+        <span class="dc-size-short">${rounded}</span>
+        <span class="dc-size-exact">${exact}</span>
+      </span>`;
+    }
     const shown =
       ownValueLabel(entity, name, value, language) ||
       displayValue(attr, value, this.options.pointerLabel, language);

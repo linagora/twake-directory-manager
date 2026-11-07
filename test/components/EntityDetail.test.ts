@@ -238,9 +238,13 @@ describe('EntityDetail', () => {
       'Organization',
       'Contact',
     ]);
-    // Rounded, the exact count in the tooltip.
+    // Rounded, the exact count in the tooltip, and beside it for a touch
+    // screen, which has no tooltip (#272).
+    expect(sized).to.include('class="dc-value dc-size"');
+    expect(sized).to.include('title="1073741824 bytes"');
+    expect(sized).to.include('<span class="dc-size-short">1.07 GB</span>');
     expect(sized).to.include(
-      '<span class="dc-value" title="1073741824 bytes">1.07 GB</span>'
+      '<span class="dc-size-exact">1073741824 bytes</span>'
     );
   });
 

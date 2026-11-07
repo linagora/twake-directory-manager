@@ -58,6 +58,33 @@ describe('EntityList', () => {
     expect(EntityList.shortenPath('A').markup).to.equal('A');
   });
 
+  it('should keep the whole path beside the shortened one for a touch reader', async () => {
+    // A touch screen shows no title: the row carries both, and the
+    // stylesheet picks the whole path there (#272).
+    const container = stubContainer();
+    await new EntityList({
+      entity: users,
+      translator: new Translator('en'),
+      load: () =>
+        Promise.resolve({
+          ann: {
+            uid: 'ann',
+            twakeDepartmentPath: 'Sales / France / Lyon / Center',
+          },
+        }),
+      listable: true,
+      onOpen: () => undefined,
+      onDelete: () => Promise.resolve(false),
+      canDelete: false,
+    }).render(container);
+    expect(container.innerHTML).to.include(
+      '<span class="dc-path-short">Sales / … / Center</span>'
+    );
+    expect(container.innerHTML).to.include(
+      '<span class="dc-path-full">Sales &#x2F; France &#x2F; Lyon &#x2F; Center</span>'
+    );
+  });
+
   it('should not cut a path up with a scanner that squares its length', () => {
     // `path.split(/\s*\/\s*/)` walks back over the run of blanks before
     // every position it tries, so a path holding one long run costs the
