@@ -1,25 +1,20 @@
 import { expect } from 'chai';
 import nock from 'nock';
+import { ConsoleApiClient } from '../../src/api/ConsoleApiClient';
+import { EntityDetail } from '../../src/components/EntityDetail';
+import { OrganizationTree } from '../../src/components/OrganizationTree';
+import { createdEntryId, readFailure, rdnValue } from '../../src/format';
+import { Translator } from '../../src/i18n';
 import {
+  Rights,
   claimRoots,
-  readFailure,
   scopeRestricts,
   splitEntities,
   transitState,
   writesEntry,
-} from '../../src/DirectoryConsole';
-import { ConsoleApiClient } from '../../src/api/ConsoleApiClient';
-import { EntityDetail } from '../../src/components/EntityDetail';
-import { OrganizationTree } from '../../src/components/OrganizationTree';
-import { createdEntryId, rdnValue } from '../../src/format';
-import { Translator } from '../../src/i18n';
+} from '../../src/rights';
 import type { EntityDescriptor, Entry, Scope } from '../../src/types';
-import {
-  baseUrl,
-  stubContainer,
-  treeContainer,
-  consoleIn,
-} from '../support/stubs';
+import { baseUrl, stubContainer, treeContainer } from '../support/stubs';
 import { users, groups, mailboxTypes } from '../fixtures/entities';
 
 describe('DirectoryConsole helpers', () => {
@@ -564,15 +559,8 @@ describe('DirectoryConsole helpers', () => {
       branches: [{ dn, read: true, write: true }],
       entities: [],
     });
-    const narrowed = (scope: Scope | null): boolean => {
-      const app = consoleIn({});
-      Object.assign(app as unknown as object, { scope });
-      return (
-        app as unknown as {
-          rights: { inheritsDomains(entity: EntityDescriptor): boolean };
-        }
-      ).rights.inheritsDomains(organizations);
-    };
+    const narrowed = (scope: Scope | null): boolean =>
+      new Rights(scope, null, false).inheritsDomains(organizations);
 
     it('should be those linked above, unless the caller writes the top', () => {
       // ldap-rest refuses any other link to an administrator below the top.

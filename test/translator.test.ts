@@ -2,10 +2,10 @@ import { expect } from 'chai';
 import { createdEntryId } from '../src/format';
 import { EntityImport } from '../src/components/EntityImport';
 import { attributeLabel, resolveText } from '../src/format';
+import { createLabel } from '../src/console/labels';
 import { Translator, availableLanguages } from '../src/i18n';
 import type { SafeHtml } from '../src/shared/html';
-import type { EntityDescriptor, Entry } from '../src/types';
-import { consoleIn } from './support/stubs';
+import type { Entry } from '../src/types';
 import { usersSchema, users, groups } from './fixtures/entities';
 
 describe('Translator', () => {
@@ -299,25 +299,23 @@ describe('Translator', () => {
   });
 
   it('should create and import in natural French, the article agreeing', () => {
-    const app = consoleIn({}, 'fr') as unknown as {
-      createLabel(entity: EntityDescriptor): string;
-    };
+    const fr = new Translator('fr');
     const organizations = {
       ...groups,
       key: 'organizations',
       singularLabel: { en: 'organization', fr: 'organisation' },
     };
-    expect(app.createLabel(users)).to.equal('Créer un utilisateur');
-    expect(app.createLabel(organizations)).to.equal('Créer une organisation');
+    expect(createLabel(fr, users)).to.equal('Créer un utilisateur');
+    expect(createLabel(fr, organizations)).to.equal('Créer une organisation');
     // An entity the catalogue does not know keeps the schema's name.
     expect(
-      app.createLabel({ ...groups, key: 'rooms', singularName: 'salle' })
+      createLabel(fr, { ...groups, key: 'rooms', singularName: 'salle' })
     ).to.equal('Créer : salle');
+    expect(createLabel(new Translator('en'), organizations)).to.equal(
+      'New organization'
+    );
     expect(
-      (consoleIn({}) as unknown as typeof app).createLabel(organizations)
-    ).to.equal('New organization');
-    expect(
-      new Translator('fr').t('import.title', {
+      fr.t('import.title', {
         entities: 'Utilisateurs',
         lowerEntities: 'utilisateurs',
       })
