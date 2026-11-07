@@ -229,7 +229,7 @@ export class OrganizationTree {
    * @returns its children as now read; none when the tree does not hold it
    */
   async refresh(dn?: string): Promise<OrganizationNode[]> {
-    const node = dn === undefined ? this.tree : this.find(dn);
+    let node = dn === undefined ? this.tree : this.find(dn);
     // An organization created, renamed or deleted is one the filter finds,
     // under its new name, or no longer: it is searched afresh next time.
     this.index = undefined;
@@ -237,6 +237,22 @@ export class OrganizationTree {
     this.searched = undefined;
     this.cancelSearch();
     if (!node) return [];
+    // The top of the tree hangs from nothing: refreshing its children would
+    // keep the name and path it itself was read with, and the filter would go
+    // on finding the old one. Read it again, keeping the branches below.
+    if (node === this.tree) {
+      try {
+        const fresh = await this.options.root();
+        if (fresh) {
+          fresh.children = node.children;
+          fresh.loaded = node.loaded;
+          this.tree = fresh;
+          node = fresh;
+        }
+      } catch {
+        // A root that cannot be read is no reason to lose the tree drawn.
+      }
+    }
     await this.load(node);
     this.draw();
     return node.children || [];

@@ -139,6 +139,32 @@ describe('OrganizationTree', () => {
       );
     });
 
+    it('should read the top again when it is refreshed, for its new name', async () => {
+      // The top hangs from nothing: refreshing its children kept the name it
+      // was first read with, and the filter went on finding the old one.
+      let topName = 'Old organization';
+      const container = treeContainer();
+      const tree = new OrganizationTree({
+        translator: new Translator('en'),
+        root: async () => ({ dn: top, name: topName }),
+        children: async () => [{ dn: sales, name: 'Sales' }],
+        onSelect: () => undefined,
+      });
+      await tree.render(container);
+      container.filter.value = 'Old';
+      container.filter.fire();
+      expect(container.list.innerHTML).to.include('>Old organization</button>');
+
+      topName = 'New organization';
+      await tree.refresh();
+      container.filter.value = 'New';
+      container.filter.fire();
+      expect(container.list.innerHTML).to.include('>New organization</button>');
+      container.filter.value = 'Old';
+      container.filter.fire();
+      expect(container.list.innerHTML).to.not.include('>Old organization<');
+    });
+
     it('should say when no organization of the whole tree matches', async () => {
       const container = treeContainer();
       await new OrganizationTree(options([])).render(container);

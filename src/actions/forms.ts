@@ -321,7 +321,9 @@ export class FormActions {
         // the tree open down to it.
         const tree = ctx.tree();
         const parent = tree?.parentOf(dn);
-        if (parent) await tree?.refresh(parent).catch(() => []);
+        // The top hangs from nothing: it is read again itself, for its name
+        // and path, which the filter finds.
+        if (tree) await tree.refresh(parent ?? undefined).catch(() => []);
       } else {
         await ctx.api.createOrganization(values, parentDn);
         ctx.toast(
