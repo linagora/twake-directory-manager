@@ -10,14 +10,6 @@ refused.
 ### Security
 
 - ldap-rest 2.1.0 closes five authentication and authorization advisories
-  the console loads plugins for: the session key above, the case of an
-  authentication path, James and Calendar WebAdmin URL encoding, and two
-  `authzLinid1` rights checks
-  ([GHSA-qmmv-5748-px9r](https://github.com/linagora/ldap-rest/security/advisories/GHSA-qmmv-5748-px9r),
-  [GHSA-rgc7-fv78-p73h](https://github.com/linagora/ldap-rest/security/advisories/GHSA-rgc7-fv78-p73h),
-  [GHSA-jrmm-4w24-qqc5](https://github.com/linagora/ldap-rest/security/advisories/GHSA-jrmm-4w24-qqc5),
-  [GHSA-2g53-22cj-hwfm](https://github.com/linagora/ldap-rest/security/advisories/GHSA-2g53-22cj-hwfm),
-  [GHSA-vg7q-jffp-g33c](https://github.com/linagora/ldap-rest/security/advisories/GHSA-vg7q-jffp-g33c))
 
 ### Features
 
