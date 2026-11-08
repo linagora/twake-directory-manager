@@ -100,9 +100,13 @@ describe('actions/transit', () => {
       account: Entry = alice,
       answers?: (server: nock.Scope) => void
     ): Promise<Mounted> => {
+      // The scenario is a group Sophie does not write: keep the delegation
+      // out of it, as a server before it answered none.
+      const scope = read<Scope>('scopes/sophie.martin.json');
+      delete scope.delegatedGroups;
       const mounted = await mountConsole({
         hash: 'users/alice',
-        scope: 'sophie.martin',
+        scope,
         account,
         answers: server => {
           answers?.(server);

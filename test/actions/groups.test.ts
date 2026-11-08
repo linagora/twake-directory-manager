@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { expect } from 'chai';
 import type nock from 'nock';
 
-import type { Entry } from '../../src/types';
+import type { Entry, Scope } from '../../src/types';
 import { click, panelOf, press, type, until } from '../support/act';
 import {
   mountConsole,
@@ -180,7 +180,11 @@ describe('actions/groups', () => {
     });
 
     it('should offer a × only on the groups a local administrator writes', async () => {
-      const { root } = await aliceCard({ scope: sophie });
+      // A server that answers no delegatedGroups: all-staff is readable but
+      // not the caller's to manage.
+      const scope = read<Scope>('scopes/sophie.martin.json');
+      delete scope.delegatedGroups;
+      const { root } = await aliceCard({ scope });
       expect(card(root))
         .to.include('data-add-groups')
         .and.include('aria-label="Remove from sales-team"');
@@ -189,6 +193,17 @@ describe('actions/groups', () => {
       expect(card(root)).to.include(
         `data-relation="${String(allStaff.dn)}">all-staff</a><span class="dc-relation-note">· Distribution list</span></li>`
       );
+    });
+
+    it('should offer a delegated group its × and Add to a group…', async () => {
+      const scope = {
+        ...read<Scope>('scopes/sophie.martin.json'),
+        delegatedGroups: [{ dn: String(allStaff.dn), manageMembers: true }],
+      };
+      const { root } = await aliceCard({ scope });
+      expect(card(root))
+        .to.include('data-add-groups')
+        .and.include('aria-label="Remove from all-staff"');
     });
 
     it('should not offer Add to a group… on an account the caller does not write', async () => {

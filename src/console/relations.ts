@@ -123,7 +123,7 @@ function groupItems(
       return {
         ...item,
         ...(note ? { note } : {}),
-        removable: ctx.rights().writes(owner, group),
+        removable: ctx.rights().managesMembers(owner, group),
       };
     })
   );

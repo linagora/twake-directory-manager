@@ -373,6 +373,23 @@ describe('views/entry', () => {
         },
       });
 
+    it('should offer a delegated group its members, but not Edit', async () => {
+      const delegated: Scope = {
+        ...groupsScope(false),
+        delegatedGroups: [{ dn: staff, manageMembers: true }],
+      };
+      const mounted = await shown(delegated);
+      const html = card(mounted.root);
+      expect(html).to.include('data-add-members');
+      expect(html).to.include('aria-label="Remove bob from staff"');
+      expect(html).to.include(
+        'You manage the members from your organizations; the other members are hidden'
+      );
+      expect(html).to.not.include('data-edit');
+      expect(html).to.not.include('data-delete');
+      mounted.unmount();
+    });
+
     it('should offer the ×s and Add members… to whoever writes the group only', async () => {
       // Read-only, as the server judges it: neither is offered (#168). The
       // removal the × sends: in test/actions/groups.test.ts.

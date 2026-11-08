@@ -186,6 +186,23 @@
             },
             "referentialIntegrity": "remove"
           },
+          "twakeGroupAdminOrgLink": {
+            "type": "array",
+            "items": {
+              "type": "pointer",
+              "branch": [
+                "dc=example,dc=com"
+              ]
+            },
+            "referentialIntegrity": "remove",
+            "required": false,
+            "role": "groupAdminOrganizations",
+            "label": {
+              "en": "Delegated organizations",
+              "fr": "Organisations déléguées",
+              "mn": "Томилогдсон байгууллагууд"
+            }
+          },
           "twakeDepartmentLink": {
             "type": "pointer",
             "branch": [
@@ -1680,5 +1697,5 @@
       ]
     }
   },
-  "version": "2.1.0"
+  "version": "2.2.0"
 }

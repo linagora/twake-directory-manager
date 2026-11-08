@@ -203,6 +203,12 @@ export interface Scope {
    */
   transit?: string | null;
   /**
+   * Groups whose members the caller manages through a delegation, as
+   * ldap-rest reports them. Absent on an older server: no delegation is
+   * offered
+   */
+  delegatedGroups?: { dn: string; manageMembers: boolean }[];
+  /**
    * Whether the caller links an organization to any mail domain, not only to
    * those an organization above it links: the writer of the top organization
    * and of the global one do. Absent before the ldap-rest that added it,
