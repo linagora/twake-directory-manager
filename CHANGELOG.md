@@ -1,18 +1,28 @@
 # Changelog
 
-## Unreleased
+## v0.14.0 (2026-11-08)
 
-Built on ldap-rest 2.1.0, the only supported server. A deployment loading
-`core/auth/openidconnect` now needs `DM_OIDC_SESSION_SECRET`, a session key
-of its own, at least 32 characters; sessions opened before the upgrade are
-refused.
+Built on ldap-rest 2.2.0, taking the security fixes of 2.1.0 and 2.2.0.
+A deployment loading `core/auth/openidconnect` needs `DM_OIDC_SESSION_SECRET`,
+a session key of its own, at least 32 characters; sessions opened before the
+upgrade are refused. A deployment loading `core/auth/totp` needs its clients
+to send `Authorization: Bearer <name>:<code>`, a code accepted once
+([upgrading](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md)).
 
 ### Security
 
-- ldap-rest 2.1.0 closes five authentication and authorization advisories
+- ldap-rest 2.1.0 and 2.2.0 close nine authentication and authorization
+  advisories affecting the plugins the console can load: the session key
+  above, the case of an authentication path, James and Calendar WebAdmin URL
+  encoding, `authzLinid1` and `authzPerBranch` rights, a disabled
+  administrator's rights, TOTP reuse and the rate limiter's client address
+  ([advisories](https://github.com/linagora/ldap-rest/security/advisories))
 
 ### Features
 
+- A delegated group shows its members to the administrators of the
+  organizations it names, who add and remove their own; Edit and Delete stay
+  hidden (#326)
 - A form interrupted by an expired session offers back what was typed once
   signed in again, a password excepted; the request is not replayed and the
   draft goes on save or when the form is left (#68)
