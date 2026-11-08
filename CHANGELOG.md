@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Built on ldap-rest 2.2.0, the tested server; the floor remains 2.1.0. A deployment loading
+Built on ldap-rest 2.1.0, the only supported server. A deployment loading
 `core/auth/openidconnect` now needs `DM_OIDC_SESSION_SECRET`, a session key
 of its own, at least 32 characters; sessions opened before the upgrade are
 refused.
@@ -13,8 +13,6 @@ refused.
 
 ### Features
 
-- A group delegated to other organizations offers its members to their
-  administrators, without Edit or Delete (#326)
 - A form interrupted by an expired session offers back what was typed once
   signed in again, a password excepted; the request is not replayed and the
   draft goes on save or when the form is left (#68)
