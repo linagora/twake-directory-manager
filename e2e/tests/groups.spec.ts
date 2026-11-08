@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test';
+
 import { AddToGroupsDialog, ConfirmDialog, LoginPage } from '../pages';
 import {
   ADMIN,
@@ -388,18 +390,28 @@ test.describe('GROUP groups', () => {
 
 test.describe('delegated group members', () => {
   const salesOrg = { dn: ORG.sales, name: 'Sales', path: 'Sales' };
-  const engineeringOrg = {
-    dn: ORG.engineering,
-    name: 'Engineering',
-    path: 'Engineering',
+
+  /**
+   * Whether the server serving this page delegates group membership: ldap-rest
+   * lists the delegated groups in the scope from 2.2.0. The suite also runs
+   * against the floor, 2.1.0, where the group card shows nothing new.
+   */
+  const delegated = async (page: Page): Promise<boolean> => {
+    const answer = await callApi(page, 'GET', '/api/v1/authz/scope');
+    const scope = answer.body as { delegatedGroups?: unknown[] };
+    return (scope.delegatedGroups?.length ?? 0) > 0;
   };
 
   test('GROUP-11 sophie manages the Sales members of all-staff', async ({
     page,
     directory,
   }) => {
-    const joining = await directory.createUser({ org: salesOrg });
     const app = await new LoginPage(page).loginAs(SOPHIE, 'groups/all-staff');
+    test.skip(
+      !(await delegated(page)),
+      'the server delegates no group membership (ldap-rest before 2.2.0)'
+    );
+    const joining = await directory.createUser({ org: salesOrg });
     const card = app.entry();
     await card.expectName('all-staff');
     const members = card.related('Members');
@@ -433,6 +445,10 @@ test.describe('delegated group members', () => {
 
   test('GROUP-12 eric sees the Engineering members only', async ({ page }) => {
     const app = await new LoginPage(page).loginAs(ERIC, 'groups/all-staff');
+    test.skip(
+      !(await delegated(page)),
+      'the server delegates no group membership (ldap-rest before 2.2.0)'
+    );
     const card = app.entry();
     await card.expectName('all-staff');
     await expect(card.relatedLinks('Members')).toHaveText([
