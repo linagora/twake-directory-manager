@@ -130,6 +130,22 @@ test.describe('AUTH sign-in and session', () => {
     const refused = page.getByText(/invalid username and password/i);
     await expect(refused.or(app.banner)).toBeVisible();
     if (await refused.isVisible()) return;
+    // ldap-rest 2.2.0 refuses to describe the rights of an account that is
+    // not enabled; before it, the server described an empty scope.
+    if ((await app.banner.textContent())?.includes('could not be read')) {
+      await expect(app.banner).toContainText(
+        'Your permissions could not be read'
+      );
+      await app.open('users');
+      await expect(app.main.getByRole('table')).toHaveCount(0);
+      await expect(app.main.getByRole('button', { name: 'Edit' })).toHaveCount(
+        0
+      );
+      await expect(
+        app.main.getByRole('button', { name: 'Import CSV' })
+      ).toHaveCount(0);
+      return;
+    }
     await expect(app.banner).toContainText('You administer no branch');
     await app.expectNoRights(FRANK.uid);
     await app.open('users');
