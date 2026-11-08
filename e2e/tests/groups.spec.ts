@@ -7,8 +7,10 @@ import {
   ERIN,
   FRANK,
   ALICE,
+  SOPHIE,
+  ORG,
 } from '../support/accounts';
-import { callApi } from '../support/api';
+import { callApi, serverDelegatesGroups } from '../support/api';
 import { uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
@@ -381,5 +383,76 @@ test.describe('GROUP groups', () => {
     await expect(
       app.entry().relatedLinks('Groups').filter({ hasText: group.cn })
     ).toBeVisible();
+  });
+});
+
+test.describe('delegated group members', () => {
+  const salesOrg = { dn: ORG.sales, name: 'Sales', path: 'Sales' };
+
+  test('GROUP-11 sophie manages the Sales members of all-staff', async ({
+    page,
+    directory,
+  }) => {
+    const app = await new LoginPage(page).loginAs(SOPHIE, 'groups/all-staff');
+    test.skip(
+      !(await serverDelegatesGroups(page)),
+      'the server delegates no group membership (ldap-rest before 2.2.0)'
+    );
+    const joining = await directory.createUser({ org: salesOrg });
+    const card = app.entry();
+    await card.expectName('all-staff');
+    const members = card.related('Members');
+    await expect(members.getByRole('heading')).toHaveText('Members (3)');
+    await expect(card.relatedLinks('Members')).toHaveText([
+      'sophie.martin',
+      'alice',
+      'bob',
+    ]);
+    await expect(card.action('Edit')).toHaveCount(0);
+    await expect(card.action('Delete')).toHaveCount(0);
+    await expect(page.locator('[data-notice]')).toContainText(
+      'You manage the members from your organizations; the other members are hidden'
+    );
+
+    await members.getByRole('button', { name: 'Add members…' }).click();
+    const dialog = new AddToGroupsDialog(page);
+    await dialog.expectOpen('Add members to all-staff');
+    await dialog.search.fill(joining.displayName.split(' ')[1]);
+    await dialog.options.filter({ hasText: joining.displayName }).click();
+    await dialog.addButton.click();
+    await app.expectToast(`${joining.uid} added to all-staff`);
+    await expect(card.relatedLinks('Members')).toContainText([joining.uid]);
+
+    await members
+      .getByRole('button', { name: `Remove ${joining.uid} from all-staff` })
+      .click();
+    await app.expectToast(`${joining.uid} removed from all-staff`);
+    await expect(card.relatedLinks('Members')).not.toContainText([joining.uid]);
+  });
+
+  test('GROUP-12 eric sees the Engineering members only', async ({ page }) => {
+    const app = await new LoginPage(page).loginAs(ERIC, 'groups/all-staff');
+    test.skip(
+      !(await serverDelegatesGroups(page)),
+      'the server delegates no group membership (ldap-rest before 2.2.0)'
+    );
+    const card = app.entry();
+    await card.expectName('all-staff');
+    await expect(card.relatedLinks('Members')).toHaveText([
+      'eric.dubois',
+      'carol',
+      'dave',
+    ]);
+    await expect(card.action('Edit')).toHaveCount(0);
+  });
+
+  test('GROUP-13 admin reads every member and edits the delegation', async ({
+    page,
+  }) => {
+    const app = await new LoginPage(page).loginAs(ADMIN, 'groups/all-staff');
+    const card = app.entry();
+    await card.expectName('all-staff');
+    await expect(card.relatedLinks('Members')).toHaveCount(8);
+    await expect(card.action('Edit')).toBeVisible();
   });
 });

@@ -33,6 +33,7 @@ describe('Rights, from the scopes the QA server describes', () => {
   const baseUrl = 'http://rights.test';
   let entities: EntityDescriptor[];
   let users: EntityDescriptor;
+  let groups: EntityDescriptor;
   let organizations: EntityDescriptor;
   let domains: EntityDescriptor;
   let positions: EntityDescriptor;
@@ -46,6 +47,7 @@ describe('Rights, from the scopes the QA server describes', () => {
       return found;
     };
     users = named('users');
+    groups = named('groups');
     organizations = named('organizations');
     domains = named('domains');
     positions = named('positions');
@@ -252,6 +254,36 @@ describe('Rights, from the scopes the QA server describes', () => {
     expect(of('alice').claimable(waiting, users)).to.equal(false);
     // Only for an entity attached to the tree.
     expect(of('sophie.martin').claimable(waiting, positions)).to.equal(false);
+  });
+
+  it('should offer member management on a group the scope delegates', () => {
+    const staffDn = `cn=all-staff,ou=groups,dc=example,dc=com`;
+    const staff: Entry = {
+      dn: staffDn,
+      cn: 'all-staff',
+      twakeDepartmentLink: [ROOT],
+    };
+    const scope = read<Scope>('scopes/sophie.martin.json');
+    scope.delegatedGroups = [{ dn: staffDn, manageMembers: true }];
+    const delegated = new Rights(scope, null, false);
+    expect(delegated.writes(groups, staff)).to.equal(false);
+    expect(delegated.managesMembers(groups, staff)).to.equal(true);
+
+    scope.delegatedGroups = [{ dn: staffDn, manageMembers: false }];
+    expect(delegated.managesMembers(groups, staff)).to.equal(false);
+
+    scope.delegatedGroups = [];
+    expect(delegated.managesMembers(groups, staff)).to.equal(false);
+
+    // A group the caller writes is managed as before, even when the server
+    // does not list it as delegated.
+    const own: Entry = {
+      dn: `cn=sales-team,ou=groups,dc=example,dc=com`,
+      cn: 'sales-team',
+      twakeDepartmentLink: [SALES],
+    };
+    expect(delegated.writes(groups, own)).to.equal(true);
+    expect(delegated.managesMembers(groups, own)).to.equal(true);
   });
 
   it('should restrict nothing when the server describes no scope, or cannot describe it', () => {

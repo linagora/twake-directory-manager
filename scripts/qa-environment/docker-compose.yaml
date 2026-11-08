@@ -53,6 +53,7 @@ services:
       - DM_LDAP_BASE=dc=example,dc=com
       - DM_LDAP_TOP_ORGANIZATION=ou=organization,dc=example,dc=com
       - DM_LDAP_GROUP_BASE=ou=groups,dc=example,dc=com
+      - DM_AUTHZ_GROUP_ADMIN_ATTRIBUTE=twakeGroupAdminOrgLink
       - DM_AUTHZ_TRANSIT_BRANCH=ou=Transit,ou=organization,dc=example,dc=com
       # As a deployment should: the administrators of the top organization alone read and change
       # the password policies, and add and delete mail domains (README, Password policies and

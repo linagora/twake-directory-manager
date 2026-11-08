@@ -563,6 +563,27 @@ export class Rights {
   }
 
   /**
+   * Whether the caller may add or remove a group's members.
+   *
+   * A group the caller writes is managed as before. A group the scope lists
+   * in `delegatedGroups` is one whose members ldap-rest filters to the
+   * caller's own organizations; the server refuses an add or a remove
+   * outside them.
+   *
+   * @param entity entity the entry belongs to
+   * @param entry the group, as read
+   * @returns whether Members, Add members… and the removal × are offered
+   */
+  managesMembers(entity: EntityDescriptor, entry: Entry): boolean {
+    if (entity.kind !== 'group' || this.scopeError) return false;
+    if (this.writes(entity, entry)) return true;
+    const dn = comparableDn(String(entry.dn ?? ''));
+    return (this.scope?.delegatedGroups ?? []).some(
+      group => group.manageMembers && comparableDn(group.dn) === dn
+    );
+  }
+
+  /**
    * What the caller may do to an organization itself, judged as the server
    * judges it: by its parent, on the most specific branch holding it, a
    * branch naming the organization itself granting the right as well, and

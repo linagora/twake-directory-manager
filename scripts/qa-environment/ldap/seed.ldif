@@ -482,6 +482,8 @@ twakeMailboxType: cn=mailingList,ou=twakeMailboxType,ou=nomenclature,dc=example,
 businessCategory: cn=memberRestrictedList,ou=twakeListType,ou=nomenclature,dc=example,dc=com
 twakeDepartmentLink: ou=organization,dc=example,dc=com
 twakeDepartmentPath: organization
+twakeGroupAdminOrgLink: ou=Sales,ou=organization,dc=example,dc=com
+twakeGroupAdminOrgLink: ou=Engineering,ou=organization,dc=example,dc=com
 owner: uid=admin,ou=users,dc=example,dc=com
 member: uid=admin,ou=users,dc=example,dc=com
 member: uid=sophie.martin,ou=users,dc=example,dc=com

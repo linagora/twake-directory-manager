@@ -6,6 +6,18 @@ export interface ApiAnswer {
 }
 
 /**
+ * Whether the server serving this page delegates group membership: ldap-rest
+ * lists the delegated groups in the scope from 2.2.0. The suite also runs
+ * against the floor, 2.1.0, where the console and the group lists know no
+ * delegation.
+ */
+export async function serverDelegatesGroups(page: Page): Promise<boolean> {
+  const answer = await callApi(page, 'GET', '/api/v1/authz/scope');
+  const scope = answer.body as { delegatedGroups?: unknown[] };
+  return (scope.delegatedGroups?.length ?? 0) > 0;
+}
+
+/**
  * Calls the console's server from the page, with the page's session cookie, as a person
  * replaying a request from the browser would. Every call gives up after 8 s: an answer that
  * never comes fails the test instead of hanging it.

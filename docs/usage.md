@@ -170,6 +170,12 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
   way, hedged. A failure of the server's own (`500`) says the list could not
   be loaded, with the cause the server names, if any.
 - **The page size is remembered**, along with the chosen language.
+- **A group may open its members to other organizations.** When
+  `/v1/authz/scope` lists a group in `delegatedGroups`, the console offers its
+  Members, **Add members…** and the removal × to that administrator, with a
+  notice; Edit and Delete stay hidden. The server filters the member list to
+  the caller's own organizations and refuses a member of another one. A server
+  that does not answer `delegatedGroups` offers nothing new.
 - **A group's members are found by email address.** With ldap-rest's
   `core/ldap/externalUsersInGroups` (ldap-rest 0.19.0 or later), an address no entry holds is offered as an
   _external member_: the console sends `mail=<address>,<branch>`, and the

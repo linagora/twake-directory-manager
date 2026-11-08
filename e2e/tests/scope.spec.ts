@@ -1,6 +1,6 @@
 import { LoginPage } from '../pages';
 import { ADMIN, ALICE, CAROL, ERIC, ORG, SOPHIE } from '../support/accounts';
-import { callApi } from '../support/api';
+import { callApi, serverDelegatesGroups } from '../support/api';
 import { HUMAN_RESOURCES, uniquePart } from '../support/directory';
 import { expect, test } from '../support/fixtures';
 
@@ -35,7 +35,13 @@ test.describe('SCOPE scope banner and authorization', () => {
 
     await app.navItem('Groups').click();
     await app.list().listEverything();
-    expect(await app.list().idsOutsideTransit()).toEqual(['sales-team']);
+    // The seed delegates all-staff, attached above Sales, to Sales (#326):
+    // a server that knows the delegation lists it, readable without Edit.
+    expect((await app.list().idsOutsideTransit()).sort()).toEqual(
+      (await serverDelegatesGroups(page))
+        ? ['all-staff', 'sales-team']
+        : ['sales-team']
+    );
 
     const organizations = await app.openOrganizations();
     await expect(organizations.names().first()).toHaveText('Sales');
@@ -67,10 +73,12 @@ test.describe('SCOPE scope banner and authorization', () => {
     ]);
     await app.navItem('Groups').click();
     await app.list().listEverything();
-    expect((await app.list().idsOutsideTransit()).sort()).toEqual([
-      'backend-guild',
-      'engineering',
-    ]);
+    // all-staff, attached above Engineering, is delegated to it (#326).
+    expect((await app.list().idsOutsideTransit()).sort()).toEqual(
+      (await serverDelegatesGroups(page))
+        ? ['all-staff', 'backend-guild', 'engineering']
+        : ['backend-guild', 'engineering']
+    );
     const organizations = await app.openOrganizations();
     await expect(organizations.names().first()).toHaveText('Engineering');
     await organizations.expand('Engineering');

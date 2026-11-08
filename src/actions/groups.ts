@@ -43,7 +43,7 @@ export class GroupActions {
       ctx.entities(),
       found =>
         !holds.has(comparableDn(found.dn)) &&
-        ctx.rights().writes(found.entity, found.entry)
+        ctx.rights().managesMembers(found.entity, found.entry)
     );
     if (!search || !entry.dn) return;
     const member = String(entry.dn);
@@ -124,7 +124,7 @@ export class GroupActions {
     );
     const members = kept.map(([, entry]) => String(entry.dn));
     const search = ctx.api.groupSearch(ctx.entities(), found =>
-      ctx.rights().writes(found.entity, found.entry)
+      ctx.rights().managesMembers(found.entity, found.entry)
     );
     if (!search) return Promise.resolve(false);
     if (!members.length) {

@@ -84,7 +84,15 @@ export class EntryView {
     const rights = ctx.rights();
     const transit = rights.transitOf(entity, entry);
     const readOnly = rights.readsReferenceOnly(entity);
-    const canWrite = !readOnly && (transit.rights?.write ?? rights.canWrite());
+    // A group is judged by the organization it is attached to: a delegated
+    // group's administrator manages its members, not the group itself.
+    // Other entities keep the scope-wide answer.
+    const canWrite =
+      !readOnly &&
+      (transit.rights?.write ??
+        (entity.kind === 'group'
+          ? rights.writes(entity, entry)
+          : rights.canWrite()));
     const groups = relations?.groups && entry.dn ? relations.items : undefined;
     // A group's members, managed from its card as an account's groups are
     // from the account's: the whole form was the only way to change one.
@@ -94,7 +102,7 @@ export class EntryView {
       relations &&
       !relations.groups &&
       entity.kind === 'group' &&
-      rights.writes(entity, entry)
+      rights.managesMembers(entity, entry)
         ? relations
         : undefined;
     if (members) for (const item of members.items) item.removable = true;
@@ -105,6 +113,12 @@ export class EntryView {
     // Said on reference data only: a directory with no tree puts every
     // collection forward, and its accounts are no reference data.
     const reference = splitEntities(ctx.entities()).reference.includes(entity);
+    const notice =
+      readOnly && reference
+        ? ctx.t('reference.readOnly')
+        : members && !rights.writes(entity, entry)
+          ? ctx.t('group.delegatedMembers')
+          : undefined;
     const detail: EntityDetail = new EntityDetail({
       report: ctx.report,
       entity,
@@ -112,7 +126,7 @@ export class EntryView {
       translator: ctx.translator(),
       canWrite,
       canDelete: !readOnly && rights.deletes(entity, entry),
-      notice: readOnly && reference ? ctx.t('reference.readOnly') : undefined,
+      notice,
       inTransit: transit.inTransit,
       onClaim: transit.claim
         ? (): void =>

@@ -17,6 +17,12 @@
     }
   ],
   "transit": "ou=Transit,ou=organization,dc=example,dc=com",
+  "delegatedGroups": [
+    {
+      "dn": "cn=all-staff,ou=groups,dc=example,dc=com",
+      "manageMembers": true
+    }
+  ],
   "linksAnyDomain": false,
   "passwordPolicies": false,
   "entities": [

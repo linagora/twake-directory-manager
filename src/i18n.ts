@@ -366,6 +366,8 @@ const en: Catalogue = {
     '{name} is changed by the administrator above you; you manage what it contains',
   'reference.readOnly':
     'Reference data is kept outside the console: you can read it and use it in forms',
+  'group.delegatedMembers':
+    'You manage the members from your organizations; the other members are hidden',
   'transit.branch': 'Transit',
   'transit.badge': 'In transit',
   'transit.claim': 'Claim…',
@@ -867,6 +869,8 @@ const fr: Catalogue = {
     '{name} est modifiée par l’administrateur au-dessus de vous ; vous gérez ce qu’elle contient',
   'reference.readOnly':
     'Les référentiels sont tenus hors de la console : vous pouvez les consulter et les utiliser dans les formulaires',
+  'group.delegatedMembers':
+    'Vous gérez les membres de vos organisations ; les autres membres sont masqués',
   'transit.branch': 'Transit',
   'transit.badge': 'En transit',
   'transit.claim': 'Rattacher…',
@@ -1318,6 +1322,8 @@ const mn: Catalogue = {
     '{name}-ийг таны дээд администратор өөрчилнө; та түүний доторхыг удирдана',
   'reference.readOnly':
     'Лавлах өгөгдлийг консолоос гадуур хөтөлдөг: та үзэж, маягтад ашиглаж болно',
+  'group.delegatedMembers':
+    'Та өөрийн байгууллагуудын гишүүдийг удирдана; бусад гишүүд далдлагдсан',
   'transit.branch': 'Дамжуулалт',
   'transit.badge': 'Дамжуулалтад',
   'transit.claim': 'Авах…',
