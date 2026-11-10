@@ -292,8 +292,8 @@ export class TransitActions {
           })}`
         : refusal;
       ctx.toast(message, true);
-      // The groups it could not put back are gone: draw the page again so
-      // the card does not keep showing them.
+      // The account may have left some groups: draw the page again so the
+      // card does not keep showing them.
       await ctx.refresh();
       return;
     }
