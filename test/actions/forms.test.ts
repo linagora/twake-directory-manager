@@ -859,6 +859,9 @@ describe('actions/forms', () => {
       );
       const { root, calls } = mounted;
       expect(root.querySelector('#dc-organization-parent')).to.equal(null);
+      expect(panelOf(root).title.textContent).to.equal(
+        'New organization under Government of Mongolia'
+      );
       await created(mounted);
       expect(callsOf(calls, 'createOrganization')).to.deep.equal([
         `createOrganization(${JSON.stringify({ ou: 'QA Lab' })}, ${government})`,
@@ -889,6 +892,8 @@ describe('actions/forms', () => {
       expect(
         root.querySelector('label[for="dc-organization-parent"]')?.textContent
       ).to.equal('Parent organization');
+      // The picker names the parent; the title stays plain.
+      expect(panelOf(root).title.textContent).to.equal('New organization');
       if (!picker) throw new Error('no picker');
       picker.value = ministry;
       picker.dispatchEvent(new Event('change', { bubbles: true }));

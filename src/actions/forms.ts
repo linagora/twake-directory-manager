@@ -397,9 +397,9 @@ export class FormActions {
     const title = entry
       ? `${t('app.edit')} — ${ctx.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
       : parentDn
-        ? `${ctx.createLabel(entity)} ${t('form.under', {
-            organization: this.organizationName(entity, parentDn),
-          })}`
+        ? t('tree.addUnder', {
+            name: this.organizationName(entity, parentDn),
+          })
         : ctx.createLabel(entity);
     ctx.panel.open(
       title,
