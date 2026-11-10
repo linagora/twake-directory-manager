@@ -157,12 +157,11 @@ export class GroupActions {
       onAdd: async (
         chosen: GroupChoice[]
       ): Promise<{ left: GroupChoice[]; error?: string }> => {
-        const already: string[] = [];
         const left: GroupChoice[] = [];
         const refused: string[] = [];
-        // How many each group joined took: one already in it is not said
-        // to be added.
-        const added = new Map<number, string[]>();
+        // What each group took, and how many of the selection it held
+        // already: a group that took one and held another must say both.
+        const joined: { name: string; added: number; already: number }[] = [];
         let sent = false;
         action.start();
         try {
@@ -172,18 +171,20 @@ export class GroupActions {
             if (!owner) continue;
             const held = holds.get(key) ?? new Set<string>();
             const absent = members.filter(dn => !held.has(comparableDn(dn)));
+            const already = members.length - absent.length;
             if (!absent.length) {
-              already.push(group.name);
+              joined.push({ name: group.name, added: 0, already });
               continue;
             }
             try {
               await ctx.api.addMembers(owner, group.name, absent);
               for (const dn of absent) held.add(comparableDn(dn));
               sent = true;
-              added.set(absent.length, [
-                ...(added.get(absent.length) ?? []),
-                group.name,
-              ]);
+              joined.push({
+                name: group.name,
+                added: absent.length,
+                already,
+              });
             } catch (err) {
               left.push(group);
               refused.push(this.refusal(err, owner, group.name));
@@ -192,21 +193,21 @@ export class GroupActions {
         } finally {
           // Everyone in the groups chosen already is done as well: the
           // selection goes.
-          action.finish(sent || already.length > 0);
+          action.finish(sent || joined.some(group => group.already > 0));
         }
-        const told = [
-          ...[...added].map(([count, groups]) =>
-            t('bulk.added', { count, groups: groups.join(', ') })
-          ),
-          ...(already.length
+        const told = joined.flatMap(group => [
+          ...(group.added
+            ? [t('bulk.added', { count: group.added, groups: group.name })]
+            : []),
+          ...(group.already
             ? [
                 t('bulk.alreadyIn', {
-                  count: members.length,
-                  groups: already.join(', '),
+                  count: group.already,
+                  groups: group.name,
                 }),
               ]
             : []),
-        ];
+        ]);
         if (told.length) ctx.toast(told.join('. '));
         if (left.length === 0 && action.own()) ctx.panel.close(true);
         return {
