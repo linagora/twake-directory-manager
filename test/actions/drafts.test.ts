@@ -124,6 +124,29 @@ describe('actions/drafts', () => {
     expect(kept()).to.equal(null);
   });
 
+  it('should offer the draft back when the sign-in came back without its page', async () => {
+    // The provider's round trip loses the hash: the console comes back on
+    // `#/` and must open the draft's page before restoring its form (#330).
+    saveDraft({
+      at: Date.now(),
+      user: 'uid=admin,ou=users,dc=example,dc=com',
+      page: 'users',
+      entity: 'users',
+      values: { displayName: ['Hélène Lefèvre'] },
+      cleared: [],
+    });
+    const mounted = await mountConsole({ hash: '' });
+    await drawn(mounted.root);
+    expect(window.location.hash).to.equal('#/users');
+    expect(panelOf(mounted.root).panel.hidden).to.be.false;
+    expect(
+      panelOf(mounted.root).body.querySelector<HTMLInputElement>(
+        '#dc-field-displayName'
+      )?.value
+    ).to.equal('Hélène Lefèvre');
+    expect(kept()).to.equal(null);
+  });
+
   it('should forget the draft when its form is cancelled', async () => {
     const mounted = await newUser();
     mounted.server

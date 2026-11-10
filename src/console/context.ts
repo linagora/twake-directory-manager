@@ -138,6 +138,11 @@ export interface ConsoleContext {
    * the place of the current address, for a page that no longer exists
    */
   record(path: string, replace?: boolean): void;
+  /**
+   * Go to the page a draft was opened on, waiting for its hash change: the
+   * navigation close it drives has run before the form is restored.
+   */
+  restorePage(path: string): Promise<void>;
   /** The page the address names now */
   route(): Route;
   /**
