@@ -382,6 +382,7 @@ const en: Catalogue = {
   'transit.alsoRemove': 'Also remove {name} from:',
   'transit.staysIn': '{name} stays in {groups}, which you do not manage.',
   'transit.stillIn': '; still in {groups}',
+  'transit.noLongerIn': '; no longer in {groups}',
   'transit.handOverConfirm':
     'Every administrator will see this entry and may claim it; you will no longer manage it.',
   'transit.handedOver': '{name} is in transit',
@@ -886,6 +887,7 @@ const fr: Catalogue = {
   'transit.alsoRemove': 'Retirer aussi {name} de :',
   'transit.staysIn': '{name} reste dans {groups}, que vous ne gérez pas.',
   'transit.stillIn': ' ; toujours dans {groups}',
+  'transit.noLongerIn': ' ; plus dans {groups}',
   'transit.handOverConfirm':
     'Tous les administrateurs verront cette entrée et pourront la rattacher ; vous ne la gérerez plus.',
   'transit.handedOver': '{name} est en transit',
@@ -1339,6 +1341,7 @@ const mn: Catalogue = {
   'transit.alsoRemove': '{name}-ийг мөн дараахаас хасах:',
   'transit.staysIn': '{name} нь таны удирддаггүй {groups}-д үлдэнэ.',
   'transit.stillIn': '; {groups}-д хэвээр',
+  'transit.noLongerIn': '; {groups}-д байхаа больсон',
   'transit.handOverConfirm':
     'Бүх администратор энэ бичлэгийг харж, авах боломжтой болно; та үүнийг цаашид удирдахгүй.',
   'transit.handedOver': '{name} дамжуулалтад байна',
