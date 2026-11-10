@@ -259,9 +259,11 @@ export class FormActions {
     if (!draft) return;
     const entity = ctx.entities().find(item => item.key === draft.entity);
     if (!entity) return;
-    // The page the address names, after `#/`, as a draft records it.
+    // The page the address names, after `#/`, as a draft records it. Its
+    // hash change is waited for, so that the navigation close it drives has
+    // run before the form opens (#330).
     if (draft.page && draft.page !== window.location.hash.replace(/^#\//, ''))
-      ctx.go(draft.page);
+      await ctx.restorePage(draft.page);
     await this.restore(entity, draft);
   }
 

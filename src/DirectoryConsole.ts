@@ -370,6 +370,7 @@ export class DirectoryConsole {
         this.names.roleValue(entity, entry, role),
       go: path => this.go(path),
       record: (path, replace) => this.record(path, replace),
+      restorePage: path => this.restorePage(path),
       route: () => this.route,
       readTransit: () => this.transitService.read(),
       inTransit: (entity, entry) =>
@@ -439,6 +440,19 @@ export class DirectoryConsole {
   /** Navigate, letting the hash change drive the render. */
   private go(path: string): void {
     window.location.hash = `#/${path}`;
+  }
+
+  /**
+   * Go to the page a draft was opened on, waiting for its hash change: the
+   * navigation close it drives has run before the form is restored.
+   *
+   * @param path what follows `#/`
+   */
+  private async restorePage(path: string): Promise<void> {
+    this.go(path);
+    await new Promise<void>(resolve =>
+      window.addEventListener('hashchange', () => resolve(), { once: true })
+    );
   }
 
   /**
