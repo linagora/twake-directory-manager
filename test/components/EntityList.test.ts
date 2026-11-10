@@ -441,9 +441,9 @@ describe('EntityList', () => {
     }).render(container);
     expect(container.innerHTML)
       .to.include(
-        'title="CN=Disabled"><span class="dc-state dc-state-disabled">Disabled</span></td>'
+        'title="Disabled"><span class="dc-state dc-state-disabled">Disabled</span></td>'
       )
-      .and.include('title="cn=active">Active</td>');
+      .and.include('title="Active">Active</td>');
   });
 
   it('should show an account’s state on its card as the list does', () => {
