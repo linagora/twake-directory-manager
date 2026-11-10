@@ -233,12 +233,14 @@ test.describe('USER user accounts', () => {
     await form.fill('Mailbox size', 'lots');
     await form.fill('Deletion date', isoDate(-1));
     await form.submit();
-    await expect(form.error('Email')).toContainText(
-      'Expected an email address, e.g. jane.doe@example.org'
+    // The hint was worded as a refusal before ldap-rest 2.2.1, and the floor
+    // (2.1.0) still serves that wording: both read here until it moves.
+    await expect(form.error('Email')).toHaveText(
+      /^(Expected an email address|An email address), e\.g\. jane\.doe@example\.org$/
     );
     await expect(form.error('Mailbox size')).toBeVisible();
     await expect(form.error('Deletion date')).toHaveText(
-      'Expected a date not earlier than today'
+      /^(Expected a date not earlier than today|A date from today onwards)$/
     );
     expect(creations).toEqual([]);
 
@@ -351,7 +353,8 @@ test.describe('USER user accounts', () => {
     expect(await form.isUnfolded()).toBe(false);
     await form.submit();
     await expect(form.error('Deletion date')).toHaveText(
-      'Expected a date not earlier than today'
+      // The wording moved in ldap-rest 2.2.1; the floor still serves the old one.
+      /^(Expected a date not earlier than today|A date from today onwards)$/
     );
     expect(await form.isUnfolded()).toBe(true);
 
