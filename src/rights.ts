@@ -306,24 +306,33 @@ export function organizationParents(
 /**
  * The rights of the signed-in administrator, as the console offers actions
  * by them. Built from what the scope read answered; a scope that could not
- * be read (`scopeError`) withholds every write, a scope the server does not
- * serve or cannot describe restricts nothing.
+ * be read (`scopeError`) withholds every write, a scope the server refuses
+ * (`scopeForbidden`) is no branch rather than a failure, a scope the server
+ * does not serve or cannot describe restricts nothing.
  */
 export class Rights {
   /**
    * @param scope what `GET /v1/authz/scope` answered, or null without one
    * @param scopeError why it could not be read, when it could not
    * @param policiesReadable whether the password policies can be read
+   * @param scopeForbidden whether the server refused the scope (`403`),
+   *   which is no branch rather than a failure to read it
    */
   constructor(
     readonly scope: Scope | null,
     readonly scopeError: string | null,
-    readonly policiesReadable: boolean
+    readonly policiesReadable: boolean,
+    readonly scopeForbidden = false
   ) {}
+
+  /** Whether the scope says nothing: refused or unreadable. */
+  private get scopeSilent(): boolean {
+    return this.scopeForbidden || this.scopeError !== null;
+  }
 
   /** Whether the scope decides what is offered (see {@link scopeRestricts}). */
   get restricted(): boolean {
-    return scopeRestricts(this.scope);
+    return this.scopeForbidden || scopeRestricts(this.scope);
   }
 
   /** The transit branch the server names, if any. */
@@ -371,6 +380,7 @@ export class Rights {
     | { kind: 'undescribed' }
     | { kind: 'nothing' }
     | { kind: 'branches'; branches: Scope['branches']; transit?: string } {
+    if (this.scopeForbidden) return { kind: 'nothing' };
     if (this.scopeError) return { kind: 'error', error: this.scopeError };
     if (!this.scope || this.scope.unrestricted) return { kind: 'unrestricted' };
     if (this.scope.described === false) return { kind: 'undescribed' };
@@ -390,7 +400,7 @@ export class Rights {
    */
   readsWhole(dn: string): boolean {
     const scope = this.scope;
-    if (this.scopeError) return false;
+    if (this.scopeSilent) return false;
     if (!scopeRestricts(scope)) return true;
     if (scope.transit && withinDn(dn, scope.transit)) return true;
     return scope.branches.some(branch => withinDn(dn, branch.dn));
@@ -403,7 +413,7 @@ export class Rights {
    * @param dn an entry or a branch
    */
   writesWithin(dn: string): boolean {
-    if (this.scopeError) return false;
+    if (this.scopeSilent) return false;
     if (!scopeRestricts(this.scope)) return true;
     return this.scope.branches.some(
       branch => branch.write && withinDn(dn, branch.dn)
@@ -432,18 +442,21 @@ export class Rights {
    * branch either, but restricts nothing.
    */
   administersNothing(): boolean {
-    return scopeRestricts(this.scope) && this.scope.branches.length === 0;
+    return (
+      this.scopeForbidden ||
+      (scopeRestricts(this.scope) && this.scope.branches.length === 0)
+    );
   }
 
   /** Whether the caller may write anywhere at all. */
   canWrite(): boolean {
-    if (this.scopeError) return false;
+    if (this.scopeSilent) return false;
     if (!scopeRestricts(this.scope)) return true;
     return this.scope.branches.some(branch => branch.write);
   }
   /** Whether the caller may delete anywhere at all. */
   canDelete(): boolean {
-    if (this.scopeError) return false;
+    if (this.scopeSilent) return false;
     if (!scopeRestricts(this.scope)) return true;
     return this.scope.branches.some(branch => branch.delete);
   }
@@ -457,7 +470,7 @@ export class Rights {
 
   /** Whether the caller may create an entry of this entity. */
   canCreate(entity: EntityDescriptor): boolean {
-    if (this.scopeError) return false;
+    if (this.scopeSilent) return false;
     if (!scopeRestricts(this.scope)) return true;
     const declared = this.scope.entities.find(
       item => item.name === entity.pluralName
@@ -514,7 +527,7 @@ export class Rights {
    * @returns true when the domains offered are to be narrowed
    */
   inheritsDomains(entity: EntityDescriptor): boolean {
-    if (this.scopeError || !scopeRestricts(this.scope) || !entity.base)
+    if (this.scopeSilent || !scopeRestricts(this.scope) || !entity.base)
       return false;
     const any = (this.scope as { linksAnyDomain?: unknown }).linksAnyDomain;
     if (typeof any === 'boolean') return !any;
@@ -575,7 +588,7 @@ export class Rights {
    * @returns whether Members, Add members… and the removal × are offered
    */
   managesMembers(entity: EntityDescriptor, entry: Entry): boolean {
-    if (entity.kind !== 'group' || this.scopeError) return false;
+    if (entity.kind !== 'group' || this.scopeSilent) return false;
     if (this.writes(entity, entry)) return true;
     const dn = comparableDn(String(entry.dn ?? ''));
     return (this.scope?.delegatedGroups ?? []).some(
@@ -607,7 +620,7 @@ export class Rights {
     const transit = scope.transit;
     if (transit && withinDn(dn, transit)) {
       const above = (right: 'write' | 'delete'): boolean =>
-        !this.scopeError &&
+        !this.scopeSilent &&
         scope.branches.some(
           branch =>
             branch[right] &&
@@ -625,7 +638,7 @@ export class Rights {
           .sort((a, b) => branchDepth(b.dn) - branchDepth(a.dn))[0]
       : undefined;
     const judged = (right: 'write' | 'delete'): boolean =>
-      !this.scopeError &&
+      !this.scopeSilent &&
       !!holding?.[right] &&
       !scope.branches.some(
         branch =>
@@ -646,7 +659,7 @@ export class Rights {
   readsReferenceOnly(entity: EntityDescriptor): boolean {
     // A scope the console could not read withholds every action already,
     // and the banner says why: this is no reason to give.
-    if (this.scopeError) return false;
+    if (this.scopeSilent) return false;
     return !isPrimaryEntity(entity) && !this.changesReference(entity);
   }
 
@@ -656,7 +669,7 @@ export class Rights {
    * delete there, and the same answer stands for Delete.
    */
   changesReference(entity: EntityDescriptor): boolean {
-    if (this.scopeError) return false;
+    if (this.scopeSilent) return false;
     if (!scopeRestricts(this.scope)) return true;
     return !!this.scope.entities.find(item => item.name === entity.pluralName)
       ?.create;

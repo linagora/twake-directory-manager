@@ -85,6 +85,11 @@ export class DirectoryConsole {
    * offers nothing rather than every button.
    */
   private scopeError: string | null = null;
+  /**
+   * Whether the server refused the scope (`403`) rather than failing to
+   * answer it: the account has no rights, which is not a temporary failure.
+   */
+  private scopeForbidden = false;
   /** Whether the server lets the caller read the password policies */
   private policiesReadable = false;
   /** The signed-in account, when it could be named rather than shown as a DN */
@@ -279,9 +284,11 @@ export class DirectoryConsole {
     try {
       this.scope = await this.api.scope();
       this.scopeError = null;
+      this.scopeForbidden = false;
     } catch (err) {
       this.scope = null;
       this.scopeError = (err as Error).message;
+      this.scopeForbidden = (err as { status?: number }).status === 403;
     }
     [this.policiesReadable, this.account] = await Promise.all([
       this.readsPolicies(),
@@ -718,7 +725,12 @@ export class DirectoryConsole {
    * scope after construction, and a view asks at the moment it draws.
    */
   private get rights(): Rights {
-    return new Rights(this.scope, this.scopeError, this.policiesReadable);
+    return new Rights(
+      this.scope,
+      this.scopeError,
+      this.policiesReadable,
+      this.scopeForbidden
+    );
   }
 
   /**

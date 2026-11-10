@@ -332,5 +332,31 @@ describe('Rights, from the scopes the QA server describes', () => {
       kind: 'error',
       error: 'Gateway Timeout',
     });
+
+    const forbidden = new Rights(
+      null,
+      'Token does not have permission on this branch',
+      false,
+      true
+    );
+    expect(forbidden.restricted).to.equal(true);
+    expect(forbidden.administersNothing()).to.equal(true);
+    expect(forbidden.canWrite()).to.equal(false);
+    expect(forbidden.canDelete()).to.equal(false);
+    expect(forbidden.readsWhole(SALES)).to.equal(false);
+    expect(forbidden.summary).to.deep.equal({ kind: 'nothing' });
+
+    // The flag alone says no: a Rights built without the message (it is
+    // exported) withholds every right too.
+    const silent = new Rights(null, null, false, true);
+    expect(silent.canWrite()).to.equal(false);
+    expect(silent.canDelete()).to.equal(false);
+    expect(silent.canCreate(users)).to.equal(false);
+    expect(silent.readsWhole(SALES)).to.equal(false);
+    expect(silent.writesWithin(SALES)).to.equal(false);
+    expect(silent.organizationRights(SALES)).to.deep.equal({
+      write: false,
+      delete: false,
+    });
   });
 });

@@ -147,7 +147,7 @@ export class ConsolePage {
    * The overview of an account administering nothing: one message naming it, a Sign out
    * button, a grey dot in the banner, and nothing to open in the sidebar but the overview
    */
-  async expectNoRights(name: string): Promise<void> {
+  async expectNoRights(name?: string): Promise<void> {
     const block = this.main.locator('[data-no-rights]');
     await expect(
       block.getByRole('heading', {
@@ -155,7 +155,9 @@ export class ConsolePage {
       })
     ).toBeVisible();
     await expect(block).toContainText(
-      `Your account (${name}) does not administer any part of the directory.`
+      name
+        ? `Your account (${name}) does not administer any part of the directory.`
+        : /Your account(?: \([^)]+\))? does not administer any part of the directory\./
     );
     await expect(block.getByRole('link', { name: 'Sign out' })).toBeVisible();
     await expect(this.main.getByRole('heading', { level: 3 })).toHaveCount(0);
