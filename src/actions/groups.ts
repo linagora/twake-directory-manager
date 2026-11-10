@@ -194,7 +194,7 @@ export class GroupActions {
           action.finish(joined.length > 0);
         }
         // Groups that took the same number, and held the same number, share
-        // a sentence, as they did before the "already" count was added.
+        // a sentence.
         const grouped = new Map<
           string,
           { added: number; already: number; names: string[] }
