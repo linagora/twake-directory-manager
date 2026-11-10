@@ -222,7 +222,7 @@ Japan.
 
 The console supports the ldap-rest version `package.json` declares: the
 floor (`ldapRest.min`) and the version the `Dockerfile` builds on and CI
-tests against (`ldapRest.tested`) are 2.1.0 and 2.2.0 today. A fallback for an
+tests against (`ldapRest.tested`) are 2.1.0 and 2.2.1 today. A fallback for an
 older server is tagged `compat(ldap-rest<X.Y.Z)` where it stands, and
 `npm run lint` refuses it once the floor passes it, until it is removed. The
 base image is a build argument:
