@@ -240,34 +240,59 @@ export class TransitActions {
       }))
     )
       return;
-    try {
-      await ctx.api.move(entity, id, transit);
-    } catch (err) {
-      // Handing over is judged on the organization the entry leaves. Moved
-      // first, a refusal leaves the account in its groups as well.
-      ctx.toast(
-        explainRefusal(
-          err,
-          entity.schema,
-          ctx.translator(),
-          organization ?? name
-        ).message,
-        true
-      );
-      return;
-    }
-    // Out of the checked groups once moved: a removal is judged on the group
-    // the caller writes, wherever the account now is.
+    // Out of the checked groups before the move: a delegated group's
+    // administrator may only remove a member attached to their own
+    // organizations, and the move would take the account out of theirs.
+    // A removal refused leaves the account in that group; the move goes on.
     const still: string[] = [];
+    const left: {
+      entity: EntityDescriptor;
+      id: string;
+      member: string;
+      label: string;
+    }[] = [];
     for (const [index, group] of offered.entries()) {
       if (!choices[index].checked) continue;
       const owner = ctx.groupEntity(group.id);
       try {
         if (!owner || !entry.dn) throw new Error();
         await ctx.api.removeMember(owner, rdnValue(group.id), String(entry.dn));
+        left.push({
+          entity: owner,
+          id: rdnValue(group.id),
+          member: String(entry.dn),
+          label: group.label,
+        });
       } catch {
         still.push(group.label);
       }
+    }
+    try {
+      await ctx.api.move(entity, id, transit);
+    } catch (err) {
+      // Handing over is judged on the organization the entry leaves. Refused,
+      // the entry stays there: put back the groups it left before the move.
+      const lost: string[] = [];
+      for (const group of left) {
+        try {
+          await ctx.api.addMembers(group.entity, group.id, [group.member]);
+        } catch {
+          lost.push(group.label);
+        }
+      }
+      const refusal = explainRefusal(
+        err,
+        entity.schema,
+        ctx.translator(),
+        organization ?? name
+      ).message;
+      const message = lost.length
+        ? `${refusal.replace(/\.$/, '')}${t('transit.notRestored', {
+            groups: lost.join(', '),
+          })}`
+        : refusal;
+      ctx.toast(message, true);
+      return;
     }
     // Where it comes from is said once more, and only here: the entry, now
     // in transit, no longer names it. A group it stays in is a refusal.

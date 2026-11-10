@@ -98,12 +98,13 @@ describe('actions/transit', () => {
      */
     const handingOver = async (
       account: Entry = alice,
-      answers?: (server: nock.Scope) => void
+      answers?: (server: nock.Scope) => void,
+      delegated = false
     ): Promise<Mounted> => {
       // The scenario is a group Sophie does not write: keep the delegation
       // out of it, as a server before it answered none.
       const scope = read<Scope>('scopes/sophie.martin.json');
-      delete scope.delegatedGroups;
+      if (!delegated) delete scope.delegatedGroups;
       const mounted = await mountConsole({
         hash: 'users/alice',
         scope,
@@ -147,6 +148,8 @@ describe('actions/transit', () => {
 
     const moved = `move(users, alice, ${transit})`;
     const removed = `removeMember(groups, sales-team, ${String(alice.dn)})`;
+    const removedDelegated = `removeMember(groups, all-staff, ${String(alice.dn)})`;
+    const restored = `addMembers(groups, sales-team, [${String(alice.dn)}])`;
 
     it('should name the person and the organization they leave, and move nothing when declined', async () => {
       // In no group: the question is the hand-over's alone.
@@ -181,9 +184,10 @@ describe('actions/transit', () => {
       expect(callsOf(calls, 'move')).to.deep.equal([]);
     });
 
-    it('should offer to take the account out of the groups the caller writes, once moved', async () => {
-      // Moved out of Sales, the account still read its shared mailbox, and
-      // nobody could take it out once handed over (#165).
+    it('should offer to take the account out of the groups the caller writes, before moving it', async () => {
+      // Out of the groups while the account is still in Sales: a delegated
+      // group's administrator may only remove a member attached to their own
+      // organizations, and the move would take it out of theirs (#329).
       const { root, calls, server } = await handingOver();
       const { body, panel } = panelOf(root);
       expect(
@@ -206,10 +210,10 @@ describe('actions/transit', () => {
       const counted = transitReads(calls);
       click(body, '[data-confirm]');
       await until(() => toast(root) !== '');
-      // Moved first: a removal is judged on the group, wherever the account
-      // is, and a move refused leaves it in its groups as well.
+      // Removed first, then moved: the server judges a delegated removal on
+      // the organization the member is still attached to.
       const order = calls.filter(call => call === moved || call === removed);
-      expect(order).to.deep.equal([moved, removed]);
+      expect(order).to.deep.equal([removed, moved]);
       expect(toast(root)).to.equal('alice (Sales / France) is in transit');
       expect(refused(root)).to.be.false;
       expect(panel.hidden).to.be.true;
@@ -218,6 +222,34 @@ describe('actions/transit', () => {
       expect(
         callsOf(calls, 'get').filter(call => call === 'get(users, alice)')
       ).to.have.length(cards + 1);
+    });
+
+    it('should remove a delegated group before moving the account', async () => {
+      const { root, calls, server } = await handingOver(alice, undefined, true);
+      const { body } = panelOf(root);
+      expect(
+        Array.from(
+          body.querySelectorAll<HTMLInputElement>('[data-confirm-choice]')
+        ).map(box => box.closest('label')?.textContent?.trim())
+      ).to.deep.equal([
+        'all-staff · Distribution list',
+        'sales-team · Shared mailbox',
+      ]);
+      moves(server);
+      server
+        .delete(
+          uri =>
+            decodeURIComponent(uri) ===
+            `/api/v1/ldap/groups/all-staff/members/${String(alice.dn)}`
+        )
+        .reply(200, {});
+      click(body, '[data-confirm]');
+      await until(() => toast(root) !== '');
+      const order = calls.filter(
+        call => call === moved || call === removed || call === removedDelegated
+      );
+      expect(order).to.deep.equal([removedDelegated, removed, moved]);
+      expect(toast(root)).to.equal('alice (Sales / France) is in transit');
     });
 
     it('should leave the account in a group unchecked', async () => {
@@ -246,18 +278,41 @@ describe('actions/transit', () => {
       expect(refused(root)).to.be.true;
     });
 
-    it('should take the account out of no group when the move is refused', async () => {
+    it('should put back the groups the account left when the move is refused', async () => {
       const { root, calls, server } = await handingOver();
       moves(server, [503, { error: 'Service Unavailable' }]);
+      server
+        .post('/api/v1/ldap/groups/sales-team/members', {
+          member: [String(alice.dn)],
+        })
+        .reply(200, {});
       click(panelOf(root).body, '[data-confirm]');
       await until(() => toast(root) !== '');
-      expect(calls).to.include(moved);
-      expect(calls).to.not.include(removed);
+      const order = calls.filter(
+        call => call === removed || call === moved || call === restored
+      );
+      expect(order).to.deep.equal([removed, moved, restored]);
       expect(toast(root)).to.equal(
         'Something went wrong (Service Unavailable)'
       );
       expect(refused(root)).to.be.true;
       expect(window.location.hash).to.equal('#/users/alice');
+    });
+
+    it('should say the groups it could not put back when the move is refused', async () => {
+      const { root, server } = await handingOver();
+      moves(server, [503, { error: 'Service Unavailable' }]);
+      server
+        .post('/api/v1/ldap/groups/sales-team/members', {
+          member: [String(alice.dn)],
+        })
+        .reply(403, forbidden);
+      click(panelOf(root).body, '[data-confirm]');
+      await until(() => toast(root) !== '');
+      expect(toast(root)).to.equal(
+        'Something went wrong (Service Unavailable); sales-team could not be restored'
+      );
+      expect(refused(root)).to.be.true;
     });
 
     it('should say when the account’s groups could not be listed', async () => {
