@@ -306,8 +306,9 @@ export function organizationParents(
 /**
  * The rights of the signed-in administrator, as the console offers actions
  * by them. Built from what the scope read answered; a scope that could not
- * be read (`scopeError`) withholds every write, a scope the server does not
- * serve or cannot describe restricts nothing.
+ * be read (`scopeError`) withholds every write, a scope the server refuses
+ * (`scopeForbidden`) is no branch rather than a failure, a scope the server
+ * does not serve or cannot describe restricts nothing.
  */
 export class Rights {
   /**
@@ -318,12 +319,13 @@ export class Rights {
   constructor(
     readonly scope: Scope | null,
     readonly scopeError: string | null,
-    readonly policiesReadable: boolean
+    readonly policiesReadable: boolean,
+    readonly scopeForbidden = false
   ) {}
 
   /** Whether the scope decides what is offered (see {@link scopeRestricts}). */
   get restricted(): boolean {
-    return scopeRestricts(this.scope);
+    return this.scopeForbidden || scopeRestricts(this.scope);
   }
 
   /** The transit branch the server names, if any. */
@@ -371,6 +373,7 @@ export class Rights {
     | { kind: 'undescribed' }
     | { kind: 'nothing' }
     | { kind: 'branches'; branches: Scope['branches']; transit?: string } {
+    if (this.scopeForbidden) return { kind: 'nothing' };
     if (this.scopeError) return { kind: 'error', error: this.scopeError };
     if (!this.scope || this.scope.unrestricted) return { kind: 'unrestricted' };
     if (this.scope.described === false) return { kind: 'undescribed' };
@@ -432,7 +435,10 @@ export class Rights {
    * branch either, but restricts nothing.
    */
   administersNothing(): boolean {
-    return scopeRestricts(this.scope) && this.scope.branches.length === 0;
+    return (
+      this.scopeForbidden ||
+      (scopeRestricts(this.scope) && this.scope.branches.length === 0)
+    );
   }
 
   /** Whether the caller may write anywhere at all. */

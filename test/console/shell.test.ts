@@ -614,6 +614,25 @@ describe('Directory console: the shell and the overview', () => {
         .and.not.include('There is nothing for you to manage here');
     });
 
+    it('should treat a forbidden scope as no branch, not as a failure', async () => {
+      const mounted = await mountConsole({
+        hash: '',
+        answers: server =>
+          server.get('/api/v1/authz/scope').reply(403, {
+            error: 'Token does not have permission on this branch',
+            code: 'forbidden',
+          }),
+      });
+      expect(mounted.root.querySelector('.dc-scope-none')).to.not.equal(null);
+      expect(mounted.root.querySelector('.dc-scope-error')).to.equal(null);
+      expect(mounted.root.textContent).to.include('You administer no branch');
+      expect(mounted.root.innerHTML).to.not.include('data-nav="users"');
+      expect(main(mounted)).to.include(
+        'There is nothing for you to manage here'
+      );
+      mounted.unmount();
+    });
+
     it('should name each language in itself', async () => {
       const mounted = await overview(global, undefined, 'fr');
       const options = [

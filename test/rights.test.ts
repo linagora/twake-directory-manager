@@ -332,5 +332,18 @@ describe('Rights, from the scopes the QA server describes', () => {
       kind: 'error',
       error: 'Gateway Timeout',
     });
+
+    const forbidden = new Rights(
+      null,
+      'Token does not have permission on this branch',
+      false,
+      true
+    );
+    expect(forbidden.restricted).to.equal(true);
+    expect(forbidden.administersNothing()).to.equal(true);
+    expect(forbidden.canWrite()).to.equal(false);
+    expect(forbidden.canDelete()).to.equal(false);
+    expect(forbidden.readsWhole(SALES)).to.equal(false);
+    expect(forbidden.summary).to.deep.equal({ kind: 'nothing' });
   });
 });
