@@ -85,6 +85,11 @@ export class DirectoryConsole {
    * offers nothing rather than every button.
    */
   private scopeError: string | null = null;
+  /**
+   * Whether the console is reloading to sign in again: the browser must not
+   * ask about the form it is leaving, whose draft was just kept.
+   */
+  private leavingForSignIn = false;
   /** Whether the server lets the caller read the password policies */
   private policiesReadable = false;
   /** The signed-in account, when it could be named rather than shown as a DN */
@@ -173,7 +178,8 @@ export class DirectoryConsole {
       // would take it with the page (see `Draft`).
       const draft = this.draftOf?.();
       if (draft) saveDraft(draft);
-      signInAgain();
+      this.leavingForSignIn = true;
+      if (!signInAgain()) this.leavingForSignIn = false;
     };
     this.translator = new Translator(options.language || storedLanguage());
   }
@@ -324,7 +330,7 @@ export class DirectoryConsole {
     // A reload or a closed tab loses a form as surely as Escape: the
     // browser's own question then.
     on('beforeunload', event => {
-      if (!this.panel.isDirty()) return;
+      if (this.leavingForSignIn || !this.panel.isDirty()) return;
       event.preventDefault();
       event.returnValue = '';
     });

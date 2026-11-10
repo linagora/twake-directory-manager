@@ -147,6 +147,18 @@ describe('actions/drafts', () => {
     expect(kept()).to.equal(null);
   });
 
+  it('should not ask before leaving when the session ended and the page reloads', async () => {
+    const mounted = await newUser();
+    const asked = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(asked);
+    expect(asked.defaultPrevented).to.equal(true);
+
+    mounted.endSession();
+    const reloading = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(reloading);
+    expect(reloading.defaultPrevented).to.equal(false);
+  });
+
   it('should forget the draft when its form is cancelled', async () => {
     const mounted = await newUser();
     mounted.server
