@@ -287,11 +287,14 @@ export class TransitActions {
         organization ?? name
       ).message;
       const message = lost.length
-        ? `${refusal.replace(/\.$/, '')}${t('transit.notRestored', {
+        ? `${refusal.replace(/\.$/, '')}${t('transit.noLongerIn', {
             groups: lost.join(', '),
           })}`
         : refusal;
       ctx.toast(message, true);
+      // The groups it could not put back are gone: draw the page again so
+      // the card does not keep showing them.
+      await ctx.refresh();
       return;
     }
     // Where it comes from is said once more, and only here: the entry, now

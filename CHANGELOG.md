@@ -1,13 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Bug Fixes
-
-- Handing an account over takes it out of the groups offered before moving it
-  to Transit, so a delegated group's administrator can remove it; a refused
-  move puts the groups back (#329)
-
 ## v0.14.0 (2026-11-08)
 
 Built on ldap-rest 2.2.0, taking the security fixes of 2.1.0 and 2.2.0.

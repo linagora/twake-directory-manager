@@ -300,7 +300,10 @@ describe('actions/transit', () => {
     });
 
     it('should say the groups it could not put back when the move is refused', async () => {
-      const { root, server } = await handingOver();
+      const { root, calls, server } = await handingOver();
+      const cards = callsOf(calls, 'get').filter(
+        call => call === 'get(users, alice)'
+      ).length;
       moves(server, [503, { error: 'Service Unavailable' }]);
       server
         .post('/api/v1/ldap/groups/sales-team/members', {
@@ -310,9 +313,14 @@ describe('actions/transit', () => {
       click(panelOf(root).body, '[data-confirm]');
       await until(() => toast(root) !== '');
       expect(toast(root)).to.equal(
-        'Something went wrong (Service Unavailable); sales-team could not be restored'
+        'Something went wrong (Service Unavailable); no longer in sales-team'
       );
       expect(refused(root)).to.be.true;
+      // The card is drawn again: it would still show the group it left.
+      await settled(root);
+      expect(
+        callsOf(calls, 'get').filter(call => call === 'get(users, alice)')
+      ).to.have.length(cards + 1);
     });
 
     it('should say when the account’s groups could not be listed', async () => {
