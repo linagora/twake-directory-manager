@@ -178,7 +178,9 @@ export class DirectoryConsole {
       // would take it with the page (see `Draft`).
       const draft = this.draftOf?.();
       if (draft) saveDraft(draft);
-      this.leavingForSignIn = true;
+      // Only a draft that was kept makes the reload safe to leave without
+      // asking: a form that keeps none would lose what it holds.
+      this.leavingForSignIn = !!draft;
       if (!signInAgain()) this.leavingForSignIn = false;
     };
     this.translator = new Translator(options.language || storedLanguage());
