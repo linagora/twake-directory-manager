@@ -108,6 +108,18 @@ describe('views/policies', () => {
     expect(listed(root)).to.deep.equal(['default', 'software', 'contractors']);
   });
 
+  it('should still ask before leaving a form that keeps no draft when the session ends', async () => {
+    const { root, endSession } = await page();
+    const { panel, body } = panelOf(root);
+    click(root, '[data-main] [data-new]');
+    expect(panel.hidden).to.be.false;
+    type(body.querySelector<HTMLInputElement>('#dc-policy-cn'), 'contractors');
+    endSession();
+    const leaving = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(leaving);
+    expect(leaving.defaultPrevented).to.equal(true);
+  });
+
   it('should say under Name that a policy already has the name', async () => {
     // A toast quoted the server's English and the other policy's DN.
     const { root, server } = await page({ language: 'fr' });
