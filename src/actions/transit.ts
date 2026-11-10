@@ -271,9 +271,10 @@ export class TransitActions {
       await ctx.api.move(entity, id, transit);
     } catch (err) {
       // A refusal (4xx) means the entry stayed where it was: put back the
-      // groups it left before the move. A timeout, a server failure or an
-      // authentication failure may have moved it: the groups stay as they
-      // are, and the toast says the account is no longer in them.
+      // groups it left before the move. A timeout, a server failure, or a
+      // status that says nothing of the move (401, 408, 429) leaves its
+      // outcome unknown: the groups stay as they are, and the toast says the
+      // account is no longer in them.
       const status = (err as { status?: number }).status;
       const refused =
         typeof status === 'number' &&
