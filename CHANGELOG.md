@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.14.1 (2026-11-10)
+
+Built on ldap-rest 2.2.0.
+
+### Bug Fixes
+
+- Handing an account over takes it out of the groups offered before moving
+  it to Transit, so a delegated group's administrator can remove it; a
+  refused move puts the groups back (#329)
+- A form interrupted by an expired session is offered back when the sign-in
+  returns without its page (#330)
+- A card no longer links an organization the caller cannot read (#331)
+- A scope the server refuses with `403` is shown as no branch, not as a
+  temporary failure; a disabled account no longer sees the navigation (#332)
+- The reload that signs in again no longer asks the browser's "Leave site?"
+  question; a form that keeps no draft still asks (#333)
+- The first Tab reaches the skip link again: the current navigation entry is
+  scrolled only when it is out of view (#334)
+- The New organization form names the parent it creates under (#335)
+- Bulk Add says what each group took and what it held already (#336)
+- The Status tooltip shows the state's name, not its DN (#337)
+
 ## v0.14.0 (2026-11-08)
 
 Built on ldap-rest 2.2.0, taking the security fixes of 2.1.0 and 2.2.0.
