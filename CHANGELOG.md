@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.14.2 (2026-11-10)
+
+Built on ldap-rest 2.2.1. Nothing the console calls changed shape; the image
+takes a security fix, and the Twake hints now read as help rather than as a
+refusal.
+
+### Security
+
+- A long uid or SCIM `userName` no longer blocks the server: the instance
+  slug is trimmed in linear time
+  ([GHSA-qvxx-xx29-6qrf](https://github.com/linagora/ldap-rest/security/advisories/GHSA-qvxx-xx29-6qrf))
+
+### Bug Fixes
+
+- A form's hint says what to type instead of reading as a refusal: "An email
+  address, e.g. …", "A date from today onwards", "A size such as …", "The DN
+  of an entry of this directory" (ldap-rest #704, #705)
+
 ## v0.14.1 (2026-11-10)
 
 Built on ldap-rest 2.2.0.

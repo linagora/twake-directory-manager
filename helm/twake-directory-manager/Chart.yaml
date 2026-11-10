@@ -8,8 +8,8 @@ type: application
 # version and appVersion follow package.json: bumped with it in the release
 # commit, and checked against the tag by the release workflow, which packages
 # the chart as it is here.
-version: 0.14.1
-appVersion: "0.14.1"
+version: 0.14.2
+appVersion: "0.14.2"
 home: https://github.com/linagora/twake-directory-manager
 keywords:
   - ldap
