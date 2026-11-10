@@ -343,6 +343,7 @@ describe('Rights, from the scopes the QA server describes', () => {
     expect(forbidden.administersNothing()).to.equal(true);
     expect(forbidden.canWrite()).to.equal(false);
     expect(forbidden.canDelete()).to.equal(false);
+    expect(new Rights(null, null, false, true).canWrite()).to.equal(false);
     expect(forbidden.readsWhole(SALES)).to.equal(false);
     expect(forbidden.summary).to.deep.equal({ kind: 'nothing' });
   });

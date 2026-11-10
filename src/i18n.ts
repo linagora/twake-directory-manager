@@ -57,6 +57,8 @@ const en: Catalogue = {
   'dashboard.noRightsTitle': 'There is nothing for you to manage here',
   'dashboard.noRightsBody':
     'Your account ({name}) does not administer any part of the directory. If you need to manage users or groups, ask your directory administrator to make you a local administrator of your department.',
+  'dashboard.noRightsBodyUnknown':
+    'Your account does not administer any part of the directory. If you need to manage users or groups, ask your directory administrator to make you a local administrator of your department.',
   'dashboard.entities': 'What you can manage',
   'dashboard.create': 'New {entity}',
   'dashboard.noCreate': 'Creation not allowed here',
@@ -532,6 +534,8 @@ const fr: Catalogue = {
   'dashboard.noRightsTitle': 'Il n’y a rien à gérer ici pour vous',
   'dashboard.noRightsBody':
     'Votre compte ({name}) n’administre aucune partie de l’annuaire. Pour gérer des utilisateurs ou des groupes, demandez à l’administrateur de l’annuaire de vous nommer administrateur local de votre organisation.',
+  'dashboard.noRightsBodyUnknown':
+    'Votre compte n’administre aucune partie de l’annuaire. Pour gérer des utilisateurs ou des groupes, demandez à l’administrateur de l’annuaire de vous nommer administrateur local de votre organisation.',
   'dashboard.entities': 'Ce que vous pouvez gérer',
   'dashboard.create': 'Créer : {entity}',
   'dashboard.create.users': 'Créer un utilisateur',
@@ -1037,6 +1041,8 @@ const mn: Catalogue = {
   'dashboard.noRightsTitle': 'Энд таны удирдах зүйл алга',
   'dashboard.noRightsBody':
     'Таны бүртгэл ({name}) лавлахын аль ч хэсгийг удирддаггүй. Хэрэглэгч эсвэл бүлэг удирдах шаардлагатай бол лавлахын администратортаа хандаж өөрийн байгууллагын орон нутгийн администратор болгохыг хүснэ үү.',
+  'dashboard.noRightsBodyUnknown':
+    'Таны бүртгэл лавлахын аль ч хэсгийг удирддаггүй. Хэрэглэгч эсвэл бүлэг удирдах шаардлагатай бол лавлахын администратортаа хандаж өөрийн байгууллагын орон нутгийн администратор болгохыг хүснэ үү.',
   'dashboard.entities': 'Таны удирдах боломжтой зүйлс',
   'dashboard.create': 'Шинэ {entity}',
   'dashboard.noCreate': 'Энд үүсгэх эрхгүй',

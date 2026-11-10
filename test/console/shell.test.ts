@@ -630,6 +630,11 @@ describe('Directory console: the shell and the overview', () => {
       expect(main(mounted)).to.include(
         'There is nothing for you to manage here'
       );
+      expect(main(mounted))
+        .to.include(
+          'Your account does not administer any part of the directory.'
+        )
+        .and.not.include('Your account ()');
       mounted.unmount();
     });
 

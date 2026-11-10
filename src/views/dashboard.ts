@@ -219,14 +219,16 @@ export class DashboardView {
   private noRightsMarkup(): SafeHtml {
     const { ctx } = this;
     const t = ctx.t;
-    const user = ctx.rights().user || '';
+    const name = ctx.account()?.name || ctx.rights().user;
     const logout = ctx.api.logoutUrl;
     return html`
       <div class="dc-no-rights" data-no-rights>
         <h2>${t('dashboard.noRightsTitle')}</h2>
-        <p>${t('dashboard.noRightsBody', {
-          name: ctx.account()?.name || user,
-        })}</p>
+        <p>${
+          name
+            ? t('dashboard.noRightsBody', { name })
+            : t('dashboard.noRightsBodyUnknown')
+        }</p>
         ${
           logout
             ? html`<a class="dc-button dc-button-primary" href="${

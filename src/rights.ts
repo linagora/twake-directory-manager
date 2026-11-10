@@ -316,6 +316,13 @@ export class Rights {
    * @param scopeError why it could not be read, when it could not
    * @param policiesReadable whether the password policies can be read
    */
+  /**
+   * @param scope what `GET /v1/authz/scope` answered, or null without one
+   * @param scopeError why it could not be read, when it could not
+   * @param policiesReadable whether the password policies can be read
+   * @param scopeForbidden whether the server refused the scope (`403`),
+   *   which is no branch rather than a failure to read it
+   */
   constructor(
     readonly scope: Scope | null,
     readonly scopeError: string | null,
@@ -443,13 +450,13 @@ export class Rights {
 
   /** Whether the caller may write anywhere at all. */
   canWrite(): boolean {
-    if (this.scopeError) return false;
+    if (this.scopeForbidden || this.scopeError) return false;
     if (!scopeRestricts(this.scope)) return true;
     return this.scope.branches.some(branch => branch.write);
   }
   /** Whether the caller may delete anywhere at all. */
   canDelete(): boolean {
-    if (this.scopeError) return false;
+    if (this.scopeForbidden || this.scopeError) return false;
     if (!scopeRestricts(this.scope)) return true;
     return this.scope.branches.some(branch => branch.delete);
   }
