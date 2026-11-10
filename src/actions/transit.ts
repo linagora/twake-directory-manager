@@ -270,15 +270,29 @@ export class TransitActions {
     try {
       await ctx.api.move(entity, id, transit);
     } catch (err) {
-      // Handing over is judged on the organization the entry leaves. Refused,
-      // the entry stays there: put back the groups it left before the move.
+      // A refusal (4xx) means the entry stayed where it was: put back the
+      // groups it left before the move. A timeout, a server failure or an
+      // authentication failure may have moved it: the groups stay as they
+      // are, and the toast says the account is no longer in them.
+      const status = (err as { status?: number }).status;
+      const refused =
+        typeof status === 'number' &&
+        status >= 400 &&
+        status < 500 &&
+        status !== 401 &&
+        status !== 408 &&
+        status !== 429;
       const lost: string[] = [];
-      for (const group of left) {
-        try {
-          await ctx.api.addMembers(group.entity, group.id, [group.member]);
-        } catch {
-          lost.push(group.label);
+      if (refused) {
+        for (const group of left) {
+          try {
+            await ctx.api.addMembers(group.entity, group.id, [group.member]);
+          } catch {
+            lost.push(group.label);
+          }
         }
+      } else {
+        for (const group of left) lost.push(group.label);
       }
       const refusal = explainRefusal(
         err,
@@ -292,9 +306,9 @@ export class TransitActions {
           })}`
         : refusal;
       ctx.toast(message, true);
-      // The account may have left some groups: draw the page again so the
-      // card does not keep showing them.
-      await ctx.refresh();
+      // A group the account left and did not get back: draw the page again
+      // so the card does not keep showing it.
+      if (lost.length) await ctx.refresh();
       return;
     }
     // Where it comes from is said once more, and only here: the entry, now

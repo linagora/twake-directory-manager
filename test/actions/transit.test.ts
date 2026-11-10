@@ -280,7 +280,7 @@ describe('actions/transit', () => {
 
     it('should put back the groups the account left when the move is refused', async () => {
       const { root, calls, server } = await handingOver();
-      moves(server, [503, { error: 'Service Unavailable' }]);
+      moves(server, [403, forbidden]);
       server
         .post('/api/v1/ldap/groups/sales-team/members', {
           member: [String(alice.dn)],
@@ -293,7 +293,7 @@ describe('actions/transit', () => {
       );
       expect(order).to.deep.equal([removed, moved, restored]);
       expect(toast(root)).to.equal(
-        'Something went wrong (Service Unavailable)'
+        'You do not administer Sales / France: this change is not yours to make.'
       );
       expect(refused(root)).to.be.true;
       expect(window.location.hash).to.equal('#/users/alice');
@@ -304,7 +304,7 @@ describe('actions/transit', () => {
       const cards = callsOf(calls, 'get').filter(
         call => call === 'get(users, alice)'
       ).length;
-      moves(server, [503, { error: 'Service Unavailable' }]);
+      moves(server, [403, forbidden]);
       server
         .post('/api/v1/ldap/groups/sales-team/members', {
           member: [String(alice.dn)],
@@ -313,10 +313,32 @@ describe('actions/transit', () => {
       click(panelOf(root).body, '[data-confirm]');
       await until(() => toast(root) !== '');
       expect(toast(root)).to.equal(
-        'Something went wrong (Service Unavailable); no longer in sales-team'
+        'You do not administer Sales / France: this change is not yours to make; no longer in sales-team'
       );
       expect(refused(root)).to.be.true;
       // The card is drawn again: it would still show the group it left.
+      await settled(root);
+      expect(
+        callsOf(calls, 'get').filter(call => call === 'get(users, alice)')
+      ).to.have.length(cards + 1);
+    });
+
+    it('should leave the groups left when the move may have gone through', async () => {
+      const { root, calls, server } = await handingOver();
+      const cards = callsOf(calls, 'get').filter(
+        call => call === 'get(users, alice)'
+      ).length;
+      moves(server, [503, { error: 'Service Unavailable' }]);
+      click(panelOf(root).body, '[data-confirm]');
+      await until(() => toast(root) !== '');
+      // A server failure may have moved the entry: putting the groups back
+      // would re-add it after it reached Transit.
+      expect(calls).to.include(removed);
+      expect(calls).to.not.include(restored);
+      expect(toast(root)).to.equal(
+        'Something went wrong (Service Unavailable); no longer in sales-team'
+      );
+      expect(refused(root)).to.be.true;
       await settled(root);
       expect(
         callsOf(calls, 'get').filter(call => call === 'get(users, alice)')
