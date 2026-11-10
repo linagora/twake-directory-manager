@@ -511,9 +511,22 @@ export class DirectoryConsole {
       // shown opens its section, or the reader would not see where they are.
       if (active && button.classList.contains('dc-nav-item-reference'))
         this.shell.reference(true);
-      // On a phone the navigation is a row that scrolls sideways: bring the
-      // current entry into it, or it may sit past the edge of the screen.
-      if (active)
+      // On a phone the navigation is a row that scrolls sideways, and on a
+      // long sidebar the current entry may sit past the edge: bring it in
+      // only when it is not already visible. Scrolling it on every render
+      // moves Chromium's sequential focus starting point, so the first Tab
+      // skipped the skip link (#334).
+      const nav = button.closest('.dc-nav');
+      const navBox = nav?.getBoundingClientRect();
+      const box = button.getBoundingClientRect();
+      if (
+        active &&
+        navBox &&
+        (box.top < navBox.top ||
+          box.bottom > navBox.bottom ||
+          box.left < navBox.left ||
+          box.right > navBox.right)
+      )
         button.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }
 
