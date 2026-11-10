@@ -140,7 +140,7 @@ test.describe('NAV layout, navigation and language', () => {
       .getByRole('button', { name: 'New organization' })
       .click();
     const form = local.form();
-    await form.expectOpen('New organization');
+    await form.expectOpen(/^New organization under /);
     const name = `Card ${uniquePart()}`;
     const dn = `ou=${name},${tenant.org.dn}`;
     directory.track(dn);

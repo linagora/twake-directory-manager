@@ -161,6 +161,7 @@ const en: Catalogue = {
 
   'form.badFormat': '{value}: {pattern}',
   'form.required': 'Fields marked with * are required',
+  'form.under': 'under {organization}',
   'form.draftRestored':
     'Restored after signing in again — check it before saving.',
   'form.draftLost': 'Your draft could not be opened again ({reason})',
@@ -652,6 +653,7 @@ const fr: Catalogue = {
 
   'form.badFormat': '{value} : {pattern}',
   'form.required': 'Les champs marqués d’une * sont obligatoires',
+  'form.under': 'sous {organization}',
   'form.draftRestored':
     'Restauré après une nouvelle connexion — vérifiez-le avant d’enregistrer.',
   'form.draftLost': 'Votre brouillon n’a pas pu être rouvert ({reason})',
@@ -1126,6 +1128,7 @@ const mn: Catalogue = {
 
   'form.badFormat': '{value}: {pattern}',
   'form.required': '* тэмдэгтэй талбарыг заавал бөглөнө',
+  'form.under': '{organization}-ийн доор',
   'form.draftRestored':
     'Дахин нэвтэрсний дараа сэргээгдлээ — хадгалахаасаа өмнө шалгана уу.',
   'form.draftLost': 'Таны ноорог дахин нээгдсэнгүй ({reason})',

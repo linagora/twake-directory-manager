@@ -394,10 +394,15 @@ export class FormActions {
     // A 401 keeps what the form holds, the parent picked included.
     ctx.watchDraft(() => this.held(entity, form, entry, parent()));
 
+    const title = entry
+      ? `${t('app.edit')} — ${ctx.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
+      : parentDn
+        ? `${ctx.createLabel(entity)} ${t('form.under', {
+            organization: this.organizationName(entity, parentDn),
+          })}`
+        : ctx.createLabel(entity);
     ctx.panel.open(
-      entry
-        ? `${t('app.edit')} — ${ctx.entryName(entity, String(entryValue(entry, entity.mainAttribute) ?? ''))}`
-        : ctx.createLabel(entity),
+      title,
       (body: HTMLElement): void => {
         // The parent picked is outside the form, and as much typed in it.
         let moved = false;

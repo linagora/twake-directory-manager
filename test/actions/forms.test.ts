@@ -719,7 +719,9 @@ describe('actions/forms', () => {
       });
       click(root, `[data-tree] [data-add="${engineering}"]`);
       await drawn(root);
-      expect(panelOf(root).title.textContent).to.equal('New organization');
+      expect(panelOf(root).title.textContent).to.equal(
+        'New organization under Engineering'
+      );
       const steps = window.history.length;
       const reads = callsOf(calls, 'organization').length;
       type(field(root, 'ou'), 'Lyon');

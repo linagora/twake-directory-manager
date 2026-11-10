@@ -146,7 +146,7 @@ test.describe('ORG organizations', () => {
     );
     await organizations.addButton(tenant.org.name).click();
     const form = app.form();
-    await form.expectOpen('New organization');
+    await form.expectOpen(`New organization under ${tenant.org.name}`);
 
     await form.fill('Name', '-Lab');
     await form.submit();
@@ -289,7 +289,7 @@ test.describe('ORG organizations', () => {
 
     await organizations.addButton(tenant.org.name).click();
     const form = app.form();
-    await form.expectOpen('New organization');
+    await form.expectOpen(`New organization under ${tenant.org.name}`);
     await form.fill('Name', spain);
     await form.submit();
     await app.expectToast(`${spain} created`);
@@ -469,7 +469,7 @@ test.describe('ORG organizations', () => {
     await expect(organizations.card.heading).toHaveText(tenant.org.name);
     await organizations.card.action('New organization here').click();
     const form = app.form();
-    await form.expectOpen('New organization');
+    await form.expectOpen(`New organization under ${tenant.org.name}`);
     await form.fill('Name', name);
     await form.submit();
     await app.expectToast(`${name} created`);
