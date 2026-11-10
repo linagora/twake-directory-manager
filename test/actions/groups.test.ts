@@ -614,6 +614,20 @@ describe('actions/groups', () => {
         .be.true;
     });
 
+    it('should say the groups that took the same number in one sentence', async () => {
+      const { root, body, panel, server } = await selection({
+        alpha: held('alpha', []),
+        beta: held('beta', []),
+      });
+      server.post('/api/v1/ldap/groups/alpha/members').reply(200, {});
+      server.post('/api/v1/ldap/groups/beta/members').reply(200, {});
+      await pickerOf(body).choose('alpha');
+      await pickerOf(body).choose('beta');
+      click(body, '[data-add]');
+      await until(() => panel.hidden);
+      expect(toast(root)).to.equal('2 accounts added to alpha, beta');
+    });
+
     it('should be done with accounts already in every group chosen', async () => {
       const { root, body, panel, calls } = await selection({
         everyone: held('everyone', [aliceIn, bob]),

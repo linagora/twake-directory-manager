@@ -162,7 +162,6 @@ export class GroupActions {
         // What each group took, and how many of the selection it held
         // already: a group that took one and held another must say both.
         const joined: { name: string; added: number; already: number }[] = [];
-        let sent = false;
         action.start();
         try {
           for (const group of chosen) {
@@ -179,7 +178,6 @@ export class GroupActions {
             try {
               await ctx.api.addMembers(owner, group.name, absent);
               for (const dn of absent) held.add(comparableDn(dn));
-              sent = true;
               joined.push({
                 name: group.name,
                 added: absent.length,
@@ -193,17 +191,38 @@ export class GroupActions {
         } finally {
           // Everyone in the groups chosen already is done as well: the
           // selection goes.
-          action.finish(sent || joined.some(group => group.already > 0));
+          action.finish(joined.length > 0);
         }
-        const told = joined.flatMap(group => [
+        // Groups that took the same number, and held the same number, share
+        // a sentence, as they did before the "already" count was added.
+        const grouped = new Map<
+          string,
+          { added: number; already: number; names: string[] }
+        >();
+        for (const group of joined) {
+          const key = `${group.added}:${group.already}`;
+          const entry = grouped.get(key) ?? {
+            added: group.added,
+            already: group.already,
+            names: [],
+          };
+          entry.names.push(group.name);
+          grouped.set(key, entry);
+        }
+        const told = [...grouped.values()].flatMap(group => [
           ...(group.added
-            ? [t('bulk.added', { count: group.added, groups: group.name })]
+            ? [
+                t('bulk.added', {
+                  count: group.added,
+                  groups: group.names.join(', '),
+                }),
+              ]
             : []),
           ...(group.already
             ? [
                 t('bulk.alreadyIn', {
                   count: group.already,
-                  groups: group.name,
+                  groups: group.names.join(', '),
                 }),
               ]
             : []),
