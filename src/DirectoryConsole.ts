@@ -411,7 +411,9 @@ export class DirectoryConsole {
       attachedNames: () => this.names.attachedNames(),
       readMembers: dn => this.readMembers(dn),
       relationHref: (dn, primaryOnly) =>
-        relationHref(this.entities, dn, primaryOnly),
+        relationHref(this.entities, dn, primaryOnly, branch =>
+          this.rights.readsWhole(branch)
+        ),
       claimAction: () => this.transitService.claimAction(),
       openList: (entity, view) => this.listsView.open(entity, view),
       openForm: (entity, entry, here) => this.forms.open(entity, entry, here),

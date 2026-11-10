@@ -390,6 +390,45 @@ describe('views/entry', () => {
       mounted.unmount();
     });
 
+    it('should not link an organization the caller cannot read', async () => {
+      // all-staff is attached to the top organization and delegates its
+      // members to Sales and Engineering. Sophie reads Sales only: the path
+      // and Engineering are names, Sales is a link (#331).
+      const allStaff = `cn=all-staff,${groupsBase}`;
+      const engineering = `ou=Engineering,${top}`;
+      const scope: Scope = {
+        user: 'uid=sophie.martin,ou=users,dc=example,dc=com',
+        unrestricted: false,
+        described: true,
+        branches: [{ dn: sales, read: true, write: true }],
+        delegatedGroups: [{ dn: allStaff, manageMembers: true }],
+        entities: [],
+      };
+      const mounted = await mountConsole({
+        hash: 'groups/all-staff',
+        scope,
+        answers: (server: nock.Scope) => {
+          server.get('/api/v1/ldap/groups/all-staff').reply(200, {
+            dn: allStaff,
+            cn: 'all-staff',
+            twakeDepartmentLink: top,
+            twakeDepartmentPath: 'organization',
+            twakeGroupAdminOrgLink: [sales, engineering],
+            member: [],
+          });
+        },
+      });
+      const html = card(mounted.root);
+      const href = (dn: string): string =>
+        `href="#/organizations/${encodeURIComponent(dn)}"`;
+      expect(html).to.include(href(sales));
+      expect(html).to.not.include(href(engineering));
+      expect(html).to.not.include(href(top));
+      expect(html).to.include('>Engineering<');
+      expect(html).to.include('>organization<');
+      mounted.unmount();
+    });
+
     it('should offer the ×s and Add members… to whoever writes the group only', async () => {
       // Read-only, as the server judges it: neither is offered (#168). The
       // removal the × sends: in test/actions/groups.test.ts.
