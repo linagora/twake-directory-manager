@@ -461,7 +461,7 @@ describe('EntityList', () => {
       pointerLabel: () => 'Disabled',
     }).render(container);
     expect(container.innerHTML).to.include(
-      '<span class="dc-value" title="cn=disabled"><span class="dc-state dc-state-disabled">Disabled</span></span>'
+      '<span class="dc-value" title="Disabled"><span class="dc-state dc-state-disabled">Disabled</span></span>'
     );
   });
 
