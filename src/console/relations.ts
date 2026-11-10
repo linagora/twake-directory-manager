@@ -190,12 +190,15 @@ export function groupType(
  * @param dn the related entry
  * @param primaryOnly leave out reference data, whose entries name the value
  *   rather than lead from it
+ * @param readable whether the caller reads an organization: one it does not
+ *   gets no address, or following it would answer "no longer exists"
  * @returns its address, none when no entity holds it or it is left out
  */
 export function relationHref(
   entities: EntityDescriptor[],
   dn: string,
-  primaryOnly = false
+  primaryOnly = false,
+  readable?: (dn: string) => boolean
 ): string | undefined {
   const owner = entities.find(
     entity =>
@@ -206,8 +209,10 @@ export function relationHref(
     return undefined;
   // An organization's page takes its whole DN: the tree reveals the entry,
   // where an id alone would open on a department named after its first RDN.
-  if (owner.kind === 'organization')
+  if (owner.kind === 'organization') {
+    if (readable && !readable(dn)) return undefined;
     return `#/${owner.key}/${encodeURIComponent(dn)}`;
+  }
   // `rdnValue`, not a split on the first comma: `cn=Smith\, John,…` holds
   // one, and the truncated id it produced answered "no longer exists".
   const id = rdnValue(dn);

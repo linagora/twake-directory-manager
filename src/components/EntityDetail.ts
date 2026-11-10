@@ -496,10 +496,11 @@ export class EntityDetail {
       name === entity.organizationPath && entity.organizationLink
         ? values(entryValue(entry, entity.organizationLink))[0]
         : undefined;
-    if (link)
-      return html`<a href="#/organizations/${encodeURIComponent(
-        link
-      )}" class="dc-path-link" title="${value}">${value}</a>`;
+    const href = link ? this.options.relationHref?.(link) : undefined;
+    if (href)
+      return html`<a href="${href}" class="dc-path-link" title="${value}"
+        >${value}</a
+      >`;
     // An account's state is a badge, not a link: it points into reference
     // data. Kept out of the branch below even when a deployment puts the
     // state somewhere linkable.

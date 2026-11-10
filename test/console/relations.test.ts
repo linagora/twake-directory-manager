@@ -94,6 +94,23 @@ describe('relationHref', () => {
     );
   });
 
+  it('should leave an organization the caller cannot read without an address', () => {
+    const dn = 'ou=Engineering,ou=organization,dc=example,dc=com';
+    expect(relationHref(entities, dn, false, () => false)).to.equal(undefined);
+    expect(relationHref(entities, dn, false, () => true)).to.equal(
+      `#/organizations/${encodeURIComponent(dn)}`
+    );
+    // Only organizations ask: an account keeps its card.
+    expect(
+      relationHref(
+        entities,
+        'uid=alice,ou=users,dc=example,dc=com',
+        false,
+        () => false
+      )
+    ).to.equal('#/users/alice');
+  });
+
   it('should answer nothing for a DN no entity holds', () => {
     expect(
       relationHref(entities, 'cn=Smith,ou=elsewhere,dc=example,dc=com')
