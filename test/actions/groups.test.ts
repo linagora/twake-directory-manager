@@ -594,9 +594,10 @@ describe('actions/groups', () => {
         `addMembers(groups, sales-team, [${aliceIn}, ${bob}])`,
         `addMembers(groups, locked, [${aliceIn}, ${bob}])`,
       ]);
-      // One already in a group is not said to be added to it.
+      // One already in a group is not said to be added to it; the group
+      // says both what it took and what it held.
       expect(toast(root)).to.equal(
-        '1 account added to all-staff. 2 accounts added to sales-team. 2 accounts were in everyone already.'
+        '1 account added to all-staff. 1 account was in all-staff already. 2 accounts added to sales-team. 2 accounts were in everyone already'
       );
       // The refused one stays, named with why, and the panel with it.
       expect(picker.chosen()).to.deep.equal(['locked']);
@@ -613,6 +614,20 @@ describe('actions/groups', () => {
         .be.true;
     });
 
+    it('should say the groups that took the same number in one sentence', async () => {
+      const { root, body, panel, server } = await selection({
+        alpha: held('alpha', []),
+        beta: held('beta', []),
+      });
+      server.post('/api/v1/ldap/groups/alpha/members').reply(200, {});
+      server.post('/api/v1/ldap/groups/beta/members').reply(200, {});
+      await pickerOf(body).choose('alpha');
+      await pickerOf(body).choose('beta');
+      click(body, '[data-add]');
+      await until(() => panel.hidden);
+      expect(toast(root)).to.equal('2 accounts added to alpha, beta');
+    });
+
     it('should be done with accounts already in every group chosen', async () => {
       const { root, body, panel, calls } = await selection({
         everyone: held('everyone', [aliceIn, bob]),
@@ -621,7 +636,7 @@ describe('actions/groups', () => {
       click(body, '[data-add]');
       await until(() => panel.hidden);
       expect(callsOf(calls, 'addMembers')).to.deep.equal([]);
-      expect(toast(root)).to.equal('2 accounts were in everyone already.');
+      expect(toast(root)).to.equal('2 accounts were in everyone already');
       // The selection goes, as after any action done.
       await until(() => reads(calls) === 2);
     });
