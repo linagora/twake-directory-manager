@@ -103,6 +103,31 @@ describe('Directory console: the shell and the overview', () => {
         ]);
       });
 
+      it('should not scroll a navigation entry that is already visible', async () => {
+        // Scrolling it into view on every render moved Chromium's focus
+        // starting point, so the first Tab landed after the current entry
+        // and skipped the skip link (#334).
+        let scrolled = 0;
+        const own = Object.prototype.hasOwnProperty.call(
+          HTMLElement.prototype,
+          'scrollIntoView'
+        );
+        const original = HTMLElement.prototype.scrollIntoView;
+        HTMLElement.prototype.scrollIntoView = function (): void {
+          scrolled++;
+        };
+        try {
+          const mounted = await mountConsole({ hash: 'users' });
+          expect(scrolled).to.equal(0);
+          mounted.unmount();
+        } finally {
+          if (own) HTMLElement.prototype.scrollIntoView = original;
+          else
+            delete (HTMLElement.prototype as { scrollIntoView?: unknown })
+              .scrollIntoView;
+        }
+      });
+
       it('should let the keyboard skip to the main area without changing the address', async () => {
         // The first thing Tab reaches; Enter focuses the main area, and the
         // hash, which the console routes on, is left alone (#215).
