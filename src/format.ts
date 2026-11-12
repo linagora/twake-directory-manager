@@ -612,6 +612,43 @@ export function displayValue(
   return value;
 }
 
+/**
+ * Text in the one spelling a search compares it in: no case and no accent.
+ * `Hélène`, `helene` and `HELENE` all fold to `helene`, so a name is found
+ * whichever way it is typed. What is typed and what is offered go through
+ * it alike.
+ *
+ * @param text what was typed, or what is offered
+ * @returns the text without case or diacritics
+ */
+export function foldedText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+/**
+ * The domains a typed text completes, in the order they are offered: those it
+ * begins first, then those it is part of. A domain typed whole completes
+ * nothing, nor do the longer ones it is part of. Case and accents tell
+ * nothing: `EXA` finds `example.com` as `Éxa` does.
+ *
+ * @param domains what may be offered, as the directory spells them
+ * @param typed what follows the "@"
+ * @returns the domains to offer, in order
+ */
+export function completingDomains(domains: string[], typed: string): string[] {
+  const needle = foldedText(typed);
+  const named = domains.map(domain => [domain, foldedText(domain)] as const);
+  if (named.some(([, name]) => name === needle)) return [];
+  const matching = named.filter(([, name]) => name.includes(needle));
+  const starts = matching.filter(([, name]) => name.startsWith(needle));
+  return [...starts, ...matching.filter(item => !starts.includes(item))].map(
+    ([domain]) => domain
+  );
+}
+
 /** A DN in the one spelling two DNs are compared in. */
 export function comparableDn(dn: string): string {
   return dn.replace(/\s*,\s*/g, ',').toLowerCase();

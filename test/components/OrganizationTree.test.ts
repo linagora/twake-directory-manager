@@ -91,6 +91,29 @@ describe('OrganizationTree', () => {
       );
     });
 
+    it('should filter without regard to case nor accent', async () => {
+      const container = treeOnPage();
+      await new OrganizationTree({
+        translator: new Translator('en'),
+        root: async () => ({ dn: top, name: 'organization' }),
+        children: async () => [
+          { dn: sales, name: 'Sales' },
+          { dn: `ou=Réseau,${top}`, name: 'Réseau' },
+        ],
+        onSelect: () => undefined,
+      }).render(container);
+      // Typed without its accent, the name is found all the same.
+      type(container, 'reseau');
+      expect(container.innerHTML)
+        .to.include('>Réseau</button>')
+        .and.not.include('>Sales</button>');
+      // And in capitals.
+      type(container, 'RÉSEAU');
+      expect(container.innerHTML)
+        .to.include('>Réseau</button>')
+        .and.not.include('>Sales</button>');
+    });
+
     it('should say when the filter hides every opened organization', async () => {
       const container = treeOnPage();
       await new OrganizationTree({
@@ -161,6 +184,30 @@ describe('OrganizationTree', () => {
       expect(listOf(container).innerHTML).to.match(
         /dc-selected[^]*?data-select="ou=France,ou=Sales,/
       );
+    });
+
+    it('should find an organization under a branch never opened, without regard to accent', async () => {
+      const container = treeOnPage();
+      const ile = `ou=Île-de-France,${sales}`;
+      await new OrganizationTree({
+        ...options([]),
+        everywhere: async () => ({
+          organizations: [
+            { dn: top, label: 'organization' },
+            { dn: sales, label: 'Sales' },
+            { dn: ile, label: 'Sales / Île-de-France' },
+          ],
+          partial: false,
+        }),
+      }).render(container);
+      type(container, 'ile-de-france');
+      await settle();
+      expect(listOf(container).innerHTML)
+        .to.include(`data-found="${ile}"`)
+        .and.include('>Sales / Île-de-France</button>');
+      type(container, 'ÎLE');
+      await settle();
+      expect(listOf(container).innerHTML).to.include(`data-found="${ile}"`);
     });
 
     it('should read the top again when it is refreshed, for its new name', async () => {

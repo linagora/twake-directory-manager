@@ -1924,6 +1924,25 @@ describe('EntityForm', () => {
         expect(asked()).to.equal(1);
       });
 
+      it('should filter the domains without regard to case nor accent', async () => {
+        const { input, results } = await domainForm(() =>
+          Promise.resolve([
+            { dn: lists, label: 'Éxample.com' },
+            { dn: other, label: 'other.org' },
+          ])
+        );
+        // Typed without the accent, or in capitals, it finds the same domain.
+        await type(input, 'exa');
+        expect(results.innerHTML).to.include('Éxample.com');
+        expect(results.innerHTML).not.to.include('other.org');
+        await type(input, 'Éx');
+        expect(results.innerHTML).to.include('Éxample.com');
+        expect(results.innerHTML).not.to.include('other.org');
+        await type(input, 'OTHER');
+        expect(results.innerHTML).to.include('other.org');
+        expect(results.innerHTML).not.to.include('Éxample.com');
+      });
+
       it('should offer only what an organization above links, to a caller below the top', async () => {
         const { container, input, results } = await domainForm(
           () => Promise.resolve(listed),
@@ -2085,6 +2104,23 @@ describe('EntityForm', () => {
         expect(mailList.hidden).to.equal(true);
         // Asked once, for the organization the form attaches the entry to.
         expect(asked).to.deep.equal(['ou=Sales,dc=example,dc=com']);
+      });
+
+      it('should complete a domain typed in capitals, or without its accent', async () => {
+        const { mail, mailList } = await addressForm(() =>
+          Promise.resolve(['example.com', 'études.example.com'])
+        );
+        // Typed in capitals, it finds the domain all the same.
+        await type(mail, 'jane@EXA');
+        expect(mailList.innerHTML).to.include('>jane@example.com<');
+        // `études` without its accent finds `études.example.com`.
+        await type(mail, 'jane@etud');
+        expect(mailList.innerHTML)
+          .to.include('>jane@études.example.com<')
+          .and.not.include('>jane@example.com<');
+        // A domain typed whole is offered no more, however it is spelt.
+        await type(mail, 'jane@ETUDES.EXAMPLE.COM');
+        expect(mailList.hidden).to.equal(true);
       });
 
       it('should offer the subdomains of those allowed where the rule takes them', async () => {
