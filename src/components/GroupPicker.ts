@@ -13,6 +13,7 @@ import { SEARCH_MINIMUM, listFailure } from './EntityList';
 import type { Translator } from '../i18n';
 import { background, type Reporter } from '../shared/background';
 import { html, render } from '../shared/html';
+import type { Announce } from '../ui/announce';
 
 /** Wait after a keystroke before searching, as the form's pickers do. */
 const SEARCH_DELAY = 250;
@@ -33,6 +34,11 @@ export interface GroupPickerOptions {
    * (see `background`); the console's own reporter, or the log when absent
    */
   report?: Reporter;
+  /**
+   * Says to a screen reader that a group was added to those chosen: the
+   * frame's announcer
+   */
+  announce?: Announce;
   /**
    * The groups matching what was typed that may be offered: those the
    * caller writes, the account is not in yet
@@ -205,10 +211,25 @@ export class GroupPicker {
     };
     const choose = (candidate: GroupChoice): void => {
       drop();
-      if (!held(candidate.dn)) this.chosen.push(candidate);
-      input.value = '';
-      close();
+      const already = held(candidate.dn);
+      if (!already) this.chosen.push(candidate);
       redraw();
+      // The panel holds several groups: the search it was picked from stays
+      // while it still has something to offer, so the next one is a click or
+      // Enter away, not another query. A search with nothing left gives the
+      // box back, ready for the next one.
+      if (!already)
+        this.options.announce?.(
+          translator.t('form.chosen', { value: candidate.name })
+        );
+      candidates = candidates.filter(other => other.dn !== candidate.dn);
+      if (candidates.length === 0) {
+        input.value = '';
+        close();
+        return;
+      }
+      active = 0;
+      paint();
     };
 
     const run = (query: string, ticket: number): void => {
@@ -304,8 +325,15 @@ export class GroupPicker {
       if (!button) return;
       this.chosen.splice(Number(button.dataset.remove), 1);
       redraw();
-      // The token and its button are gone: the focus goes back to the box.
+      // The token and its button are gone: the focus goes back to the box,
+      // and the group just removed is offered again by the search still in
+      // it, rather than after another keystroke.
       input.focus();
+      const query = input.value.trim();
+      if (query.length >= SEARCH_MINIMUM) {
+        drop();
+        run(query, generation);
+      }
     });
 
     container

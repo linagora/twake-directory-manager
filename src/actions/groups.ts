@@ -51,6 +51,7 @@ export class GroupActions {
     const owners = new Map<string, EntityDescriptor>();
     const picker = new GroupPicker({
       report: ctx.report,
+      announce: ctx.announce,
       translator: ctx.translator(),
       search: async (query: string): Promise<GroupChoice[]> =>
         (await search(query)).map(found => {
@@ -138,6 +139,7 @@ export class GroupActions {
     const holds = new Map<string, Set<string>>();
     const picker = new GroupPicker({
       report: ctx.report,
+      announce: ctx.announce,
       translator: ctx.translator(),
       search: async (query: string): Promise<GroupChoice[]> =>
         (await search(query)).map(found => {
@@ -293,6 +295,7 @@ export class GroupActions {
     const t = ctx.t;
     const picker = new GroupPicker({
       report: ctx.report,
+      announce: ctx.announce,
       translator: ctx.translator(),
       words: {
         field: t('members.field'),

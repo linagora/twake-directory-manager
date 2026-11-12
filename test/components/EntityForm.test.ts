@@ -1068,11 +1068,13 @@ describe('EntityForm', () => {
   describe('a group’s members', () => {
     const alice = 'uid=alice,ou=users,dc=example,dc=com';
     const jane = 'uid=jane,ou=users,dc=example,dc=com';
+    const bob = 'uid=bob,ou=users,dc=example,dc=com';
 
     /** A group form drawn in the page, its member field a real picker. */
     const memberForm = async (
       search: (query: string) => Promise<{ dn: string; label: string }[]>,
-      externalMembers?: ExternalMembers
+      externalMembers?: ExternalMembers,
+      announce?: (text: string) => void
     ): Promise<{ form: EntityForm; container: HTMLElement }> => {
       const container = document.createElement('div');
       document.body.append(container);
@@ -1083,6 +1085,7 @@ describe('EntityForm', () => {
         pointerOptions: () => Promise.resolve([]),
         memberSearch: role => (role === 'members' ? search : undefined),
         externalMembers,
+        announce,
         onSubmit: () => Promise.resolve(),
         onCancel: () => undefined,
       });
@@ -1157,6 +1160,79 @@ describe('EntityForm', () => {
       );
       await type(container, 'alice');
       enter(container);
+      expect(members(container)).to.deep.equal(['alice']);
+    });
+
+    it('should keep the search after a choice, and take the next member from it', async () => {
+      const announced: string[] = [];
+      const { container } = await memberForm(
+        () =>
+          Promise.resolve([
+            { dn: jane, label: 'Jane Doe <jane@example.com>' },
+            { dn: bob, label: 'Bob Schneider <bob@example.com>' },
+          ]),
+        undefined,
+        text => announced.push(text)
+      );
+      await type(container, 'example.com');
+      expect(results(container)).to.include('Jane Doe');
+      enter(container);
+      expect(members(container)).to.deep.equal([
+        'alice',
+        'Jane Doe <jane@example.com>',
+      ]);
+      // The search it was picked from stays: the box keeps its text, the
+      // list the other match, and nothing was typed again.
+      expect(picker(container, 'member').value).to.equal('example.com');
+      expect(results(container))
+        .to.include('Bob Schneider')
+        .and.not.include('Jane Doe');
+      enter(container);
+      expect(members(container)).to.deep.equal([
+        'alice',
+        'Jane Doe <jane@example.com>',
+        'Bob Schneider <bob@example.com>',
+      ]);
+      expect(announced).to.deep.equal([
+        'Jane Doe <jane@example.com> added to those chosen',
+        'Bob Schneider <bob@example.com> added to those chosen',
+      ]);
+      // That search had nothing left: the box is given back, ready for the
+      // next query.
+      expect(picker(container, 'member').value).to.equal('');
+      expect(
+        container.querySelector<HTMLElement>(
+          '[data-field="member"] .dc-picker-results'
+        )?.hidden
+      ).to.equal(true);
+    });
+
+    it('should offer a removed member again by the query still typed', async () => {
+      const { container } = await memberForm(() =>
+        Promise.resolve([
+          { dn: jane, label: 'Jane Doe <jane@example.com>' },
+          { dn: bob, label: 'Bob Schneider <bob@example.com>' },
+        ])
+      );
+      await type(container, 'example.com');
+      enter(container);
+      expect(members(container)).to.deep.equal([
+        'alice',
+        'Jane Doe <jane@example.com>',
+      ]);
+      // The search stays while it has more to offer.
+      expect(picker(container, 'member').value).to.equal('example.com');
+      expect(results(container)).to.include('Bob Schneider');
+
+      // Out goes Jane; the box still reads "example.com", so the search is
+      // asked again and offers her once more.
+      container
+        .querySelector<HTMLElement>('[data-field="member"] [data-remove="1"]')
+        ?.click();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(results(container))
+        .to.include('Jane Doe')
+        .and.include('Bob Schneider');
       expect(members(container)).to.deep.equal(['alice']);
     });
 

@@ -87,7 +87,7 @@ Conventions).
 
 - [x] GROUP-01 (P2) Group card and members — `groups.spec.ts`
 - [x] GROUP-02 (P2) Create a group — `groups.spec.ts`
-- [x] GROUP-03 (P2) Add and remove members — `groups.spec.ts`
+- [x] GROUP-03 (P2) Add and remove members — `groups.spec.ts` (one search takes several members, the list staying after a choice)
 - [x] GROUP-04 (P2) Edit and delete a group — `groups.spec.ts` (the confirmation says the members stay, #131)
 - [x] GROUP-05 (P3) Local administrator's groups — `groups.spec.ts`
 - [x] GROUP-06 (P2) Owners: chosen by search, saved, named on the card — `groups.spec.ts`

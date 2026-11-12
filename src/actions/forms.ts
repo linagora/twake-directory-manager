@@ -79,6 +79,7 @@ export class FormActions {
     const domains = ctx.api.mailDomains(ctx.entities());
     const form = new EntityForm({
       report: ctx.report,
+      announce: ctx.announce,
       entity,
       entry,
       preset: here?.preset,
@@ -349,6 +350,7 @@ export class FormActions {
       : undefined;
     const form = new EntityForm({
       report: ctx.report,
+      announce: ctx.announce,
       entity,
       entry,
       translator: ctx.translator(),
