@@ -465,6 +465,60 @@ describe('EntityList', () => {
     );
   });
 
+  it('should name any reference value on its tooltip, in the card and the list, and leave other values as stored (#373)', async () => {
+    const position = 'cn=Software Engineer,ou=positions,dc=example,dc=com';
+    const withPosition: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          ...users.schema.attributes,
+          // Any role puts the column in the list.
+          title: {
+            type: 'pointer',
+            role: 'employeeId',
+            branch: ['ou=positions,dc=example,dc=com'],
+          },
+        },
+      },
+    };
+    const entry = { uid: 'frank', cn: 'Frank', title: position };
+    const pointerLabel = (dn: string): string | undefined =>
+      dn === position ? 'Software Engineer' : undefined;
+    const card = page();
+    new EntityDetail({
+      entity: withPosition,
+      entry,
+      translator: new Translator('en'),
+      canWrite: false,
+      canDelete: false,
+      onEdit: () => undefined,
+      onDelete: () => undefined,
+      onStatus: () => undefined,
+      onResetPassword: () => undefined,
+      pointerLabel,
+    }).render(card);
+    expect(card.innerHTML)
+      .to.include('<span class="dc-value" title="Software Engineer"')
+      .and.not.include(`title="${position}"`);
+
+    const container = page();
+    await new EntityList({
+      entity: withPosition,
+      translator: new Translator('en'),
+      load: () => Promise.resolve({ frank: entry }),
+      listable: true,
+      pointerLabel,
+      onOpen: () => undefined,
+      onDelete: () => Promise.resolve(false),
+      canDelete: false,
+    }).render(container);
+    const titles = [...container.querySelectorAll('td[title]')].map(cell =>
+      cell.getAttribute('title')
+    );
+    expect(titles).to.include('Software Engineer').and.include('frank');
+    expect(titles).to.not.include(position);
+  });
+
   it('should name an account’s state by its key, and badge only the exceptions', () => {
     expect(accountState(users, 'twakeAccountStatus', 'CN=disabled')).to.equal(
       'disabled'

@@ -669,6 +669,21 @@ export function displayValue(
 }
 
 /**
+ * Whether an attribute holds pointers, shown by the name of what they land
+ * on rather than as the DN they are stored in. Their tooltip repeats that
+ * name; a date, a size, a nomenclature's own key or a plain string keeps the
+ * stored text there (#373).
+ *
+ * @param entity the entity the entry belongs to
+ * @param name attribute the value is held in
+ * @returns whether its values are shown by name
+ */
+export function isNamedValue(entity: EntityDescriptor, name: string): boolean {
+  const attr = entity.schema.attributes[name];
+  return attr?.type === 'pointer' || attr?.items?.type === 'pointer';
+}
+
+/**
  * Text in the one spelling a search compares it in: no case and no accent.
  * `Hélène`, `helene` and `HELENE` all fold to `helene`, so a name is found
  * whichever way it is typed. What is typed and what is offered go through
