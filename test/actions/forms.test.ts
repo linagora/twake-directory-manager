@@ -720,9 +720,13 @@ describe('actions/forms', () => {
        * as ldap-rest does above a delegated branch (#375). Sales links what
        * it is given.
        */
-      const sophie = async (salesLinks: string[]): Promise<Mounted> => {
+      const sophie = async (
+        salesLinks: string[],
+        scope: Scope | 'sophie.martin' = 'sophie.martin',
+        edit = true
+      ): Promise<Mounted> => {
         const mounted = await mountConsole({
-          scope: 'sophie.martin',
+          scope,
           hash: `organizations/${encodeURIComponent(france)}`,
           answers: server => {
             server
@@ -760,10 +764,16 @@ describe('actions/forms', () => {
         await until(
           () => !!mounted.root.querySelector('[data-org-detail] [data-edit]')
         );
+        if (!edit) return mounted;
         click(mounted.root, '[data-org-detail] [data-edit]');
         await drawn(mounted.root);
         return mounted;
       };
+      /** Sophie's recorded scope, changed. */
+      const recorded = (change: Partial<Scope>): Scope => ({
+        ...read<Scope>('scopes/sophie.martin.json'),
+        ...change,
+      });
       /** The domain picker's box, and the list it opens, once drawn. */
       const picker = async (
         root: HTMLElement
@@ -834,6 +844,78 @@ describe('actions/forms', () => {
         await until(() => toast(root) !== '');
         expect(toast(root)).to.equal(
           'You do not administer France: this change is not yours to make.'
+        );
+      });
+
+      it('should blame her rights when the server lets her link any domain', async () => {
+        // Only a caller held to the domains above has a refusal to be about
+        // them: the global administrator's is about the branch.
+        const { root, server } = await sophie(
+          [lists],
+          recorded({ linksAnyDomain: true })
+        );
+        server.put(at(france)).reply(403, forbidden);
+        const { input, results } = await picker(root);
+        type(input, 'lists');
+        await until(() => !!results.querySelector('[data-candidate="0"]'));
+        press('Enter');
+        save(root);
+        await until(() => toast(root) !== '');
+        expect(toast(root)).to.equal(
+          'You do not administer France: this change is not yours to make.'
+        );
+        expect(fieldError(root, 'twakeDomainLink')).to.equal('');
+      });
+
+      it('should blame her rights when a narrower rule refuses her France', async () => {
+        // A rule on France itself refusing write: the server judges the
+        // organization on it, and the refusal is about the branch. Edit was
+        // offered under the scope read; the rule is the one the server holds
+        // when she saves.
+        const { root, server, app } = await sophie([lists]);
+        const stored = read<Scope>('scopes/sophie.martin.json');
+        (app as unknown as { scope: Scope }).scope = {
+          ...stored,
+          branches: [
+            ...stored.branches,
+            {
+              dn: france,
+              read: true,
+              write: false,
+              delete: false,
+              name: 'France',
+              path: 'Sales / France',
+            },
+          ],
+        };
+        server.put(at(france)).reply(403, forbidden);
+        const { input, results } = await picker(root);
+        type(input, 'lists');
+        await until(() => !!results.querySelector('[data-candidate="0"]'));
+        press('Enter');
+        save(root);
+        await until(() => toast(root) !== '');
+        expect(toast(root)).to.equal(
+          'You do not administer France: this change is not yours to make.'
+        );
+        expect(fieldError(root, 'twakeDomainLink')).to.equal('');
+      });
+
+      it('should blame the domain when a new organization under France is refused', async () => {
+        const { root, server } = await sophie([lists], 'sophie.martin', false);
+        server.post('/api/v1/ldap/organizations').reply(403, forbidden);
+        click(root, `[data-tree] [data-add="${france}"]`);
+        await drawn(root);
+        type(field(root, 'ou'), 'Paris');
+        const { input, results } = await picker(root);
+        type(input, 'lists');
+        await until(() => !!results.querySelector('[data-candidate="0"]'));
+        press('Enter');
+        save(root);
+        await until(() => toast(root) !== '');
+        expect(toast(root)).to.equal('Not saved: see the highlighted field');
+        expect(fieldError(root, 'twakeDomainLink')).to.equal(
+          'Only a domain an organization above this one links can be linked here'
         );
       });
     });

@@ -563,8 +563,10 @@ export class FormActions {
    * links (#375). Creating or changing an organization asks for write on
    * its parent alone, a domain newly linked being held to more, and only
    * for a caller the server does not let link any domain. When the caller
-   * writes that parent and the change adds a domain, the domain is what was
-   * refused.
+   * has that right as the server judges it — an organization edited by its
+   * parent on the most specific branch, a narrower rule refusing it
+   * included, a new one by the organization it goes under — and the change
+   * adds a domain, the domain is what was refused.
    *
    * @param entity the organizations
    * @param err what the request threw
@@ -586,8 +588,10 @@ export class FormActions {
     const attribute = roleAttribute(entity.schema, 'domainLink');
     const rights = this.ctx.rights();
     if (!attribute || !rights.inheritsDomains(entity)) return undefined;
-    const judged = entry?.dn ? parentOf(String(entry.dn)) : parentDn;
-    if (!judged || !rights.writesWithin(judged)) return undefined;
+    const writes = entry?.dn
+      ? rights.organizationRights(String(entry.dn)).write
+      : !!parentDn && rights.createsUnder(parentDn);
+    if (!writes) return undefined;
     const held = new Set(
       [entryValue(entry, attribute) ?? []].flat().map(comparableDn)
     );
