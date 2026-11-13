@@ -19,9 +19,11 @@ import {
   attributeLabel,
   beforeToday,
   comparableDn,
+  completingDomains,
   editableByteSize,
   entryValue,
   escapeDnValue,
+  foldedText,
   isDnShaped,
   parseByteSize,
   rdnValue,
@@ -1543,9 +1545,10 @@ export class EntityForm {
     for (const option of options) this.picked.set(option.dn, option.label);
     this.filtered.add(name);
     this.searches.set(name, query => {
-      const text = query.trim().toLowerCase();
+      // Without case nor accent: `reseau` finds `Réseau`.
+      const text = foldedText(query.trim());
       return Promise.resolve(
-        options.filter(option => option.label.toLowerCase().includes(text))
+        options.filter(option => foldedText(option.label).includes(text))
       );
     });
     render(field, this.fieldContent(name, attr));
@@ -1625,22 +1628,15 @@ export class EntityForm {
       const ticket = ++generation;
       if (at < 0) return close();
       const local = value.slice(0, at);
-      const typed = value.slice(at + 1).toLowerCase();
       background(
         () =>
           this.domainsOf(name).then(domains => {
             if (ticket !== generation) return;
-            // A domain typed whole needs no offer, nor the longer ones it is
-            // part of; otherwise, those the typed text begins come first, then
-            // those it is part of.
-            const matching = domains.includes(typed)
-              ? []
-              : domains.filter(domain => domain.includes(typed));
-            const starts = matching.filter(domain => domain.startsWith(typed));
-            suggestions = [
-              ...starts,
-              ...matching.filter(domain => !starts.includes(domain)),
-            ].map(domain => `${local}@${domain}`);
+            // What is typed completes without case nor accent: `jane@EXA`
+            // offers `jane@example.com`, as `jane@Éxa` does.
+            suggestions = completingDomains(domains, value.slice(at + 1)).map(
+              domain => `${local}@${domain}`
+            );
             active = 0;
             if (suggestions.length === 0) close();
             else paint();

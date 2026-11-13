@@ -1,7 +1,63 @@
 import { expect } from 'chai';
-import { displayValue, formatByteSize, readableByteSize } from '../src/format';
+import {
+  completingDomains,
+  displayValue,
+  foldedText,
+  formatByteSize,
+  readableByteSize,
+} from '../src/format';
 
 describe('format', () => {
+  describe('foldedText', () => {
+    it('should read a name the same however it is spelt', () => {
+      // What a search compares: the typed text and the offered name alike.
+      expect(foldedText('Hélène')).to.equal('helene');
+      expect(foldedText('HELENE')).to.equal('helene');
+      expect(foldedText('helene')).to.equal('helene');
+      expect(foldedText('Réseau Département')).to.equal('reseau departement');
+      expect(foldedText('É')).to.equal('e');
+    });
+
+    it('should keep what is not a letter as it is', () => {
+      // Only the case and the accents go: a hyphen, a dot and a space still
+      // tell one name from another.
+      expect(foldedText('Sales / Île-de-France')).to.equal(
+        'sales / ile-de-france'
+      );
+    });
+  });
+
+  describe('completingDomains', () => {
+    const domains = ['example.com', 'études.example.com', 'other.org'];
+
+    it('should offer a domain whatever the case or the accent typed', () => {
+      expect(completingDomains(domains, 'EXA')).to.deep.equal([
+        'example.com',
+        'études.example.com',
+      ]);
+      expect(completingDomains(domains, 'etud')).to.deep.equal([
+        'études.example.com',
+      ]);
+      expect(completingDomains(domains, 'ÉTUD')).to.deep.equal([
+        'études.example.com',
+      ]);
+    });
+
+    it('should offer nothing for a domain typed whole', () => {
+      // There is nothing left to complete, nor a longer domain it is part of.
+      expect(completingDomains(domains, 'example.com')).to.deep.equal([]);
+      expect(completingDomains(domains, 'ÉTUDES.EXAMPLE.COM')).to.deep.equal(
+        []
+      );
+    });
+
+    it('should offer those the typed text begins before those it is part of', () => {
+      expect(
+        completingDomains(['a.example.com', 'example.com'], 'exa')
+      ).to.deep.equal(['example.com', 'a.example.com']);
+    });
+  });
+
   describe('formatByteSize', () => {
     it('should say a size the way it was set', () => {
       // `normalize: byteSize` stores what `parseByteSize` computed, so a quota

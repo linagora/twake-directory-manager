@@ -9,7 +9,7 @@
  * @module twake-directory-manager/components/OrganizationTree
  */
 
-import { comparableDn, readFailure, withinDn } from '../format';
+import { comparableDn, foldedText, readFailure, withinDn } from '../format';
 import type { Translator } from '../i18n';
 import type { OrganizationNode } from '../types';
 import { background, type Reporter } from '../shared/background';
@@ -574,11 +574,9 @@ export class OrganizationTree {
   private matching(
     organizations: { dn: string; label: string }[]
   ): { dn: string; label: string }[] {
-    const needle = this.filter.toLowerCase();
+    const needle = foldedText(this.filter);
     return this.sorted(
-      organizations.filter(option =>
-        option.label.toLowerCase().includes(needle)
-      )
+      organizations.filter(option => foldedText(option.label).includes(needle))
     );
   }
 
@@ -664,8 +662,9 @@ export class OrganizationTree {
    */
   private matches(node: OrganizationNode): boolean {
     if (!this.filter) return true;
-    const needle = this.filter.toLowerCase();
-    if (node.name.toLowerCase().includes(needle)) return true;
+    // Without case nor accent: `reseau` finds `Réseau`.
+    const needle = foldedText(this.filter);
+    if (foldedText(node.name).includes(needle)) return true;
     return (node.children || []).some(child => this.matches(child));
   }
 
