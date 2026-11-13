@@ -388,13 +388,13 @@ describe('views/organizations', () => {
       return mounted;
     };
     /**
-     * The names the card gives its pointers. Each is also the tooltip of
-     * its value, which no longer holds the DN it lands on (#373).
+     * The tooltips of the card's values: a pointer's repeats the name it is
+     * shown by, no longer the DN it lands on (#373).
      */
     const named = (root: HTMLElement): (string | null)[] =>
       Array.from(
         root.querySelectorAll<HTMLElement>('[data-org-detail] [title]')
-      ).map(element => element.textContent);
+      ).map(element => element.getAttribute('title'));
 
     it('should read the transit branch once for its card and the banner', async () => {
       // The banner counts the branch as the card lists it: one read serves

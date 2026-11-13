@@ -644,9 +644,9 @@ export function explainRefusal(
 /**
  * Text to show for one value.
  *
- * A DN reference is shown by its own name — `active`, `Systems Analyst` — and
- * the full DN belongs in the tooltip, where it is available without being in
- * the way.
+ * A DN reference is shown by its own name — `active`, `Systems Analyst` —
+ * which its tooltip repeats (#373); a link or a form's token keeps the full
+ * DN in its own tooltip.
  *
  * @param attr schema definition of the attribute
  * @param value value as stored
