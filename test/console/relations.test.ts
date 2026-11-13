@@ -111,6 +111,37 @@ describe('relationHref', () => {
     ).to.equal('#/users/alice');
   });
 
+  it('should lead to the root organization, whose DN is the base (#376)', () => {
+    const root = 'ou=organization,dc=example,dc=com';
+    expect(relationHref(entities, root)).to.equal(
+      `#/organizations/${encodeURIComponent(root)}`
+    );
+    // Case and spaces around commas do not matter, as elsewhere.
+    const spaced = 'OU=Organization, dc=example , dc=com';
+    expect(relationHref(entities, spaced)).to.equal(
+      `#/organizations/${encodeURIComponent(spaced)}`
+    );
+    // The readability check still decides.
+    expect(relationHref(entities, root, false, () => false)).to.equal(
+      undefined
+    );
+    expect(relationHref(entities, root, false, () => true)).to.equal(
+      `#/organizations/${encodeURIComponent(root)}`
+    );
+  });
+
+  it('should not lead to an entry for the base of a flat entity (#376)', () => {
+    expect(relationHref(entities, 'ou=users,dc=example,dc=com')).to.equal(
+      undefined
+    );
+    expect(
+      relationHref(
+        entities,
+        'ou=twakeAccountStatus,ou=nomenclature,dc=example,dc=com'
+      )
+    ).to.equal(undefined);
+  });
+
   it('should answer nothing for a DN no entity holds', () => {
     expect(
       relationHref(entities, 'cn=Smith,ou=elsewhere,dc=example,dc=com')
