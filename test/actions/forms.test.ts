@@ -708,6 +708,136 @@ describe('actions/forms', () => {
       expect(panelOf(root).panel.hidden).to.be.false;
     });
 
+    describe('its mail domains, to a local administrator', () => {
+      const domainsBase = 'ou=domains,ou=nomenclature,dc=example,dc=com';
+      const example = `dc=example,${domainsBase}`;
+      const lists = `dc=lists,${domainsBase}`;
+      const domain = ['top', 'domain', 'domainRelatedObject'];
+
+      /**
+       * France's card as sophie.martin, who administers Sales and links no
+       * domain the organizations above do not: the top answers her 404,
+       * as ldap-rest does above a delegated branch (#375). Sales links what
+       * it is given.
+       */
+      const sophie = async (salesLinks: string[]): Promise<Mounted> => {
+        const mounted = await mountConsole({
+          scope: 'sophie.martin',
+          hash: `organizations/${encodeURIComponent(france)}`,
+          answers: server => {
+            server
+              .get('/api/v1/ldap/organizations/top')
+              .reply(200, { dn: sales, ou: 'Sales' });
+            server
+              .get(subnodes(sales))
+              .reply(200, [{ dn: france, ou: 'France' }]);
+            server.get(subnodes(france)).reply(200, []);
+            server
+              .get(at(top))
+              .reply(404, { error: `Organization ${top} not found` });
+            server.get(at(sales)).reply(200, {
+              dn: sales,
+              ou: 'Sales',
+              twakeDomainLink: salesLinks,
+            });
+            server.get(at(france)).reply(200, { dn: france, ou: 'France' });
+            server.get(/^\/api\/v1\/ldap\/domains(\?.*)?$/).reply(200, {
+              example: {
+                dn: example,
+                objectClass: domain,
+                dc: 'example',
+                associatedDomain: 'example.com',
+              },
+              lists: {
+                dn: lists,
+                objectClass: domain,
+                dc: 'lists',
+                associatedDomain: 'lists.example.com',
+              },
+            });
+          },
+        });
+        await until(
+          () => !!mounted.root.querySelector('[data-org-detail] [data-edit]')
+        );
+        click(mounted.root, '[data-org-detail] [data-edit]');
+        await drawn(mounted.root);
+        return mounted;
+      };
+      /** The domain picker's box, and the list it opens, once drawn. */
+      const picker = async (
+        root: HTMLElement
+      ): Promise<{ input: HTMLInputElement; results: HTMLElement }> => {
+        const { body } = panelOf(root);
+        await until(
+          () =>
+            !!body.querySelector(
+              '[data-field="twakeDomainLink"] [data-picker-input]'
+            )
+        );
+        const input = body.querySelector<HTMLInputElement>(
+          '[data-field="twakeDomainLink"] [data-picker-input]'
+        );
+        const results = body.querySelector<HTMLElement>(
+          '[data-field="twakeDomainLink"] .dc-picker-results'
+        );
+        if (!input || !results) throw new Error('no domain picker');
+        return { input, results };
+      };
+
+      it('should offer no domain the organizations she reads above do not link', async () => {
+        // Every domain was offered, the top's 404 failing the lookup, and
+        // the server then refused lists.example.com.
+        const { root } = await sophie([]);
+        const { input, results } = await picker(root);
+        type(input, 'lists');
+        await until(() =>
+          (results.textContent ?? '').includes(
+            'Only a domain an organization above this one links can be linked here'
+          )
+        );
+        expect(results.innerHTML).not.to.include('data-candidate');
+      });
+
+      it('should offer what Sales links, above France', async () => {
+        const { root } = await sophie([lists]);
+        const { input, results } = await picker(root);
+        type(input, 'example');
+        await until(() => !!results.querySelector('[data-candidate="0"]'));
+        expect(results.textContent).to.include('lists.example.com');
+        expect(results.querySelectorAll('[data-candidate]').length).to.equal(1);
+      });
+
+      it('should blame the domain, not her rights, when a link is refused', async () => {
+        // ldap-rest words that refusal as any other: "You do not administer
+        // France" was said of an organization she administers.
+        const { root, server } = await sophie([lists]);
+        server.put(at(france)).reply(403, forbidden);
+        const { input, results } = await picker(root);
+        type(input, 'lists');
+        await until(() => !!results.querySelector('[data-candidate="0"]'));
+        press('Enter');
+        save(root);
+        await until(() => toast(root) !== '');
+        expect(toast(root)).to.equal('Not saved: see the highlighted field');
+        expect(fieldError(root, 'twakeDomainLink')).to.equal(
+          'Only a domain an organization above this one links can be linked here'
+        );
+        expect(panelOf(root).panel.hidden).to.be.false;
+      });
+
+      it('should still blame her rights when the change links no new domain', async () => {
+        const { root, server } = await sophie([lists]);
+        server.put(at(france)).reply(403, forbidden);
+        type(field(root, 'description'), 'Paris office');
+        save(root);
+        await until(() => toast(root) !== '');
+        expect(toast(root)).to.equal(
+          'You do not administer France: this change is not yours to make.'
+        );
+      });
+    });
+
     it('should show and select an organization just created where it was created', async () => {
       const mounted = await page(engineering);
       const { root, server, calls, idle } = mounted;
