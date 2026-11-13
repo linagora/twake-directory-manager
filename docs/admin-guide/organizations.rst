@@ -101,7 +101,9 @@ identifier, then pick from the list.
 press :kbd:`↓` in the empty box to see them all. Unless you administer the
 top organization, it offers only the domains already linked by an
 organization above the one you edit or create: the server refuses any
-other.
+other. The organizations above the ones you administer are hidden from
+you, so a domain only they link is not offered either; it already applies
+to every organization under them, and needs no link of its own.
 
 Creating an organization
 ------------------------

@@ -1661,6 +1661,62 @@ describe('ConsoleApiClient', () => {
       expect(await lookup.names(`ou=Lost,${top}`)).to.deep.equal(every);
     });
 
+    it('should link only what the organizations it reads above link, those hidden left out', async () => {
+      // A local administrator of Sales: ldap-rest answers 404 for the top
+      // organization above their branch, which the lookup gave up on, and
+      // the form then offered every domain to link (#375).
+      const lookup = (await client()).mailDomains([organizations, domains])!;
+      nock(baseUrl).get('/api/v1/ldap/domains').reply(200, tree);
+      organization(europe, []);
+      organization(sales, []);
+      nock(baseUrl)
+        .get(`/api/v1/ldap/organizations/${encodeURIComponent(top)}`)
+        .reply(404, { error: `Organization ${top} not found` });
+      // Nothing linked by what the caller reads: nothing to offer, rather
+      // than everything.
+      expect(await lookup.linked(europe)).to.deep.equal([]);
+      // What a department the caller reads links is offered below it.
+      const asia = `ou=Asia,${sales}`;
+      organization(asia, [dn('lists')]);
+      organization(`ou=Tokyo,${asia}`, []);
+      expect(await lookup.linked(`ou=Tokyo,${asia}`)).to.deep.equal([
+        dn('lists'),
+      ]);
+      // An address may use what the hidden top links: every domain is
+      // offered, the server judging, as before.
+      expect(await lookup.names(europe)).to.deep.equal([
+        'example.com',
+        'lists.example.com',
+        'other.org',
+      ]);
+      // The organization that answered 404 is not asked again.
+      expect(nock.isDone()).to.equal(true);
+    });
+
+    it('should skip a hidden organization between readable ones, and still fail on a broken one', async () => {
+      // The server collects the links of every organization above, so one
+      // the caller reads above a hidden one still counts.
+      const lookup = (await client()).mailDomains([organizations, domains])!;
+      nock(baseUrl)
+        .get(`/api/v1/ldap/organizations/${encodeURIComponent(europe)}`)
+        .reply(200, { dn: europe });
+      nock(baseUrl)
+        .get(`/api/v1/ldap/organizations/${encodeURIComponent(sales)}`)
+        .reply(403, { error: 'Forbidden', code: 'forbidden' });
+      organization(top, [dn('example')]);
+      expect(await lookup.linked(europe)).to.deep.equal([dn('example')]);
+      // A server failing says nothing of the tree: the lookup fails, and the
+      // form lets the server judge.
+      nock(baseUrl)
+        .get(`/api/v1/ldap/organizations/${encodeURIComponent(support)}`)
+        .reply(500, { error: 'Directory unavailable' });
+      let failed: unknown;
+      await lookup.linked(support).catch((err: unknown) => {
+        failed = err;
+      });
+      expect((failed as { status?: number }).status).to.equal(500);
+    });
+
     it('should refuse to name any when the domains cannot be read', async () => {
       const lookup = (await client()).mailDomains([organizations, domains])!;
       nock(baseUrl)

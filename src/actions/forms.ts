@@ -6,7 +6,7 @@
  * @module twake-directory-manager/actions/forms
  */
 
-import { isDomainBranch } from '../api/ConsoleApiClient';
+import { isDomainBranch, roleAttribute } from '../api/ConsoleApiClient';
 import { EntityForm } from '../components/EntityForm';
 import type { FormDraft } from '../components/formDraft';
 import type { ConsoleContext } from '../console/context';
@@ -526,6 +526,20 @@ export class FormActions {
         ? String(entryValue(entry, entity.mainAttribute) ?? '')
         : createdEntryId(entity, undefined, values);
       const parent = parentDn ?? ctx.api.organizationRoot;
+      const domainLink = this.domainLinkRefused(
+        entity,
+        err,
+        values,
+        entry,
+        parent
+      );
+      if (domainLink) {
+        const message = t('form.notLinkedAbove');
+        if (form?.refuse(domainLink, message))
+          ctx.toast(t('refusal.seeField'), true);
+        else ctx.toast(message, true);
+        return;
+      }
       this.refuseSave(
         err,
         entity,
@@ -537,6 +551,54 @@ export class FormActions {
             : ctx.submittedName(entity, values, id)
       );
     }
+  }
+
+  /**
+   * The domain-link attribute, when a refusal of an organization's change
+   * is about the domains it links rather than about the branch.
+   *
+   * ldap-rest words every refusal of rights alike (`forbidden`), so the
+   * console said "You do not administer France" of an organization the
+   * caller does administer, refused only a domain no organization above it
+   * links (#375). Creating or changing an organization asks for write on
+   * its parent alone, a domain newly linked being held to more, and only
+   * for a caller the server does not let link any domain. When the caller
+   * has that right as the server judges it — an organization edited by its
+   * parent on the most specific branch, a narrower rule refusing it
+   * included, a new one by the organization it goes under — and the change
+   * adds a domain, the domain is what was refused.
+   *
+   * @param entity the organizations
+   * @param err what the request threw
+   * @param values what the form sent
+   * @param entry the organization edited; none for a new one
+   * @param parentDn where a new one goes
+   * @returns the attribute, or undefined when the refusal is about rights
+   *   on the branch or about nothing the console can tell
+   */
+  private domainLinkRefused(
+    entity: EntityDescriptor,
+    err: unknown,
+    values: Record<string, string | string[]>,
+    entry?: Entry,
+    parentDn?: string
+  ): string | undefined {
+    const { refusal } = (err ?? {}) as { refusal?: { code?: string } };
+    if (refusal?.code !== 'forbidden') return undefined;
+    const attribute = roleAttribute(entity.schema, 'domainLink');
+    const rights = this.ctx.rights();
+    if (!attribute || !rights.inheritsDomains(entity)) return undefined;
+    const writes = entry?.dn
+      ? rights.organizationRights(String(entry.dn)).write
+      : !!parentDn && rights.createsUnder(parentDn);
+    if (!writes) return undefined;
+    const held = new Set(
+      [entryValue(entry, attribute) ?? []].flat().map(comparableDn)
+    );
+    const added = [values[attribute] ?? []]
+      .flat()
+      .some(dn => dn.trim() && !held.has(comparableDn(dn)));
+    return added ? attribute : undefined;
   }
 
   /**
