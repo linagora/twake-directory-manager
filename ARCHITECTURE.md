@@ -247,7 +247,7 @@ report)`; `DirectoryConsole.report` shows _Something went wrong: …_, logs
   for the same account, without a password — and offered back once signed in
   again, never replayed.
 - **The supported ldap-rest range is declared.** `package.json` says it
-  (`ldapRest.min` to `ldapRest.tested`, 2.1.0 and 2.2.1 today); `npm run lint`
+  (`ldapRest.min` to `ldapRest.tested`, 2.1.0 and 2.3.0 today); `npm run lint`
   runs `scripts/check-compat.mjs`, which holds the `Dockerfile` to the tested
   version and refuses a `compat(ldap-rest<X.Y.Z)` fallback once the floor
   passes it, until it is removed (a rule for fallbacks added from now on: none

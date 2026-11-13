@@ -1,5 +1,5 @@
 {
-  "ldapRest": "2.2.1",
-  "image": "ghcr.io/linagora/ldap-rest:2.2.1",
-  "date": "2026-11-10"
+  "ldapRest": "2.3.0",
+  "image": "ghcr.io/linagora/ldap-rest:2.3.0",
+  "date": "2026-11-13"
 }
