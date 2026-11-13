@@ -423,8 +423,9 @@ export class PanelService {
    */
   guardDiscard(body: HTMLElement, dirty: () => boolean): void {
     // The form opened in a language and keeps it when the console's language
-    // changes under it (NAV-11); its question is worded now, with the form, not when
-    // Cancel is pressed, or it would come out in the new language (#377).
+    // changes under it (NAV-11); its question is worded now, with the form,
+    // not when Cancel is pressed, or it would come out in the new language
+    // (#377).
     const question = this.t('form.discardQuestion');
     const keepEditing = this.t('form.keepEditing');
     const discard = this.t('form.discard');
