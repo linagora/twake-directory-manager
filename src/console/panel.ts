@@ -173,8 +173,9 @@ export class PanelService {
 
   /**
    * @param root finds the console's container, which holds the frame
-   * @param t the translator's `t` as it is when asked, for the discard
-   *   question's words
+   * @param t the translator's `t` as it is when asked: the discard
+   *   question's words are read through it once, when the guard is
+   *   installed with the form, not when the question is asked (#377)
    */
   constructor(
     private readonly root: () => HTMLElement | null | undefined,
@@ -421,7 +422,13 @@ export class PanelService {
    * @param dirty whether the form holds what closing it would lose
    */
   guardDiscard(body: HTMLElement, dirty: () => boolean): void {
-    const t = this.t;
+    // The form opened in a language and keeps it when the console's language
+    // changes under it (NAV-11); its question is worded now, with the form,
+    // not when Cancel is pressed, or it would come out in the new language
+    // (#377).
+    const question = this.t('form.discardQuestion');
+    const keepEditing = this.t('form.keepEditing');
+    const discard = this.t('form.discard');
     let asking: HTMLElement | null = null;
     let before: HTMLElement | null = null;
     const actions = (): HTMLElement | null =>
@@ -453,14 +460,10 @@ export class PanelService {
       render(
         asking,
         html`
-        <p id="dc-discard-question">${t('form.discardQuestion')}</p>
+        <p id="dc-discard-question">${question}</p>
         <button type="button" class="dc-button" data-discard-keep
-          aria-describedby="dc-discard-question">${t(
-            'form.keepEditing'
-          )}</button>
-        <button type="button" class="dc-button dc-button-danger" data-discard-confirm>${t(
-          'form.discard'
-        )}</button>`
+          aria-describedby="dc-discard-question">${keepEditing}</button>
+        <button type="button" class="dc-button dc-button-danger" data-discard-confirm>${discard}</button>`
       );
       row.after(asking);
       asking

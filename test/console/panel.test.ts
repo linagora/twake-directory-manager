@@ -167,4 +167,64 @@ describe('Directory console: the side panel', () => {
     expect(tab.defaultPrevented).to.be.false;
     expect(document.activeElement).to.equal(opener);
   });
+
+  describe("the discard question and the console's language (#377)", () => {
+    /** A panel whose words follow `lang`, which a test changes under it. */
+    const worded = (): {
+      lang: { value: string };
+      service: PanelService;
+      body: HTMLElement;
+    } => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      render(container, overlayMarkup('Close'));
+      const lang = { value: 'en' };
+      const service = new PanelService(
+        () => container,
+        key => `${key}@${lang.value}`
+      );
+      const body = service.parts().body;
+      if (!body) throw new Error('no panel');
+      return { lang, service, body };
+    };
+    const form = (body: HTMLElement): void => {
+      body.innerHTML =
+        '<div class="dc-form-actions"><button>Cancel</button></div>';
+    };
+    const asked = (body: HTMLElement): string =>
+      (body.querySelector('[data-discard]')?.textContent ?? '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    it('should ask in the language the form was opened in', () => {
+      const { lang, service, body } = worded();
+      service.open('Edit', b => {
+        form(b);
+        service.guardDiscard(b, () => true);
+      });
+      lang.value = 'fr';
+      service.close();
+      expect(asked(body)).to.equal(
+        'form.discardQuestion@en form.keepEditing@en form.discard@en'
+      );
+    });
+
+    it('should ask in the new language for a form opened after the change', () => {
+      const { lang, service, body } = worded();
+      service.open('Edit', b => {
+        form(b);
+        service.guardDiscard(b, () => true);
+      });
+      service.close(true);
+      lang.value = 'fr';
+      service.open('Edit', b => {
+        form(b);
+        service.guardDiscard(b, () => true);
+      });
+      service.close();
+      expect(asked(body)).to.equal(
+        'form.discardQuestion@fr form.keepEditing@fr form.discard@fr'
+      );
+    });
+  });
 });
