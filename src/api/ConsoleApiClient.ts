@@ -42,6 +42,7 @@ import {
   parentDn,
   rdnValue,
   searchableAttributes,
+  splitRdn,
   valueLabel,
   withinDn,
 } from '../format';
@@ -1418,18 +1419,16 @@ export class ConsoleApiClient {
         if (isDnShaped(value)) {
           // Spaces around a separator are no part of a DN, and a file
           // written by hand has them: `uid=bob, ou=users, dc=example`.
-          const dn = /^\s*([^=\s]+)\s*=((?:\\.|[^,\\])*?)\s*,\s*(.*)$/.exec(
-            value
-          );
+          const rdn = splitRdn(value, true);
           if (
-            !dn ||
-            dn[1].toLowerCase() !== main.toLowerCase() ||
-            comparableDn(dn[3]) !== comparableDn(base)
+            rdn?.parent === undefined ||
+            rdn.attribute.toLowerCase() !== main.toLowerCase() ||
+            comparableDn(rdn.parent) !== comparableDn(base)
           )
             return undefined;
           // The base as the server spells it: it compares the parent to its
           // own base as written, spaces included.
-          id = `${main}=${dn[2]},${base}`;
+          id = `${main}=${rdn.value},${base}`;
         }
         let entry: Entry;
         try {
