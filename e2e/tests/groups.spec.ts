@@ -405,6 +405,9 @@ test.describe('GROUP groups', () => {
 });
 
 test.describe('delegated group members', () => {
+  // GROUP-11 adds a member to the seeded all-staff and removes it again:
+  // in parallel, GROUP-13 could count it.
+  test.describe.configure({ mode: 'default' });
   const salesOrg = { dn: ORG.sales, name: 'Sales', path: 'Sales' };
 
   test('GROUP-11 sophie manages the Sales members of all-staff', async ({
