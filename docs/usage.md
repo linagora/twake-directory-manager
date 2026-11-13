@@ -106,22 +106,22 @@ capabilities as they are loaded.
 Everything the console shows about an attribute comes from its schema
 definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/master/docs/usage/plugins/ldap/flat-generic.md).
 
-| Schema                  | Effect in the interface                                                   |
-| ----------------------- | ------------------------------------------------------------------------- |
-| `label`                 | Column heading, field label, term in the detail card                      |
-| `hint`                  | Shown under the field, in the interface language, and repeated on refusal |
-| `help`                  | Shown on demand, in a tooltip next to the label                           |
-| `test`                  | Checked before the round trip, so the hint answers before the server does |
-| `required`              | Marked with `*`, with the legend that explains it                         |
-| `generated`, `readOnly` | Shown on the detail card, never offered for editing                       |
-| `neverReturn`           | Offered on the form, never shown back                                     |
-| `type: array`           | A list of removable tokens, with the instruction to press Enter           |
-| `type: pointer`         | A select filled from the branch the pointer names                         |
-| `type: boolean`, `date` | A yes/no select, a date picker                                            |
-| `group`                 | Groups the fields under a heading, in the interface language              |
-| `states`                | The states the account can be moved to                                    |
-| `role`                  | Which columns the table shows, and which actions appear                   |
-| `entity.large`          | Searched before listed, and searched from a pointer field                 |
+| Schema                  | Effect in the interface                                                                               |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| `label`                 | Column heading, field label, term in the detail card                                                  |
+| `hint`                  | Under the field, in the interface language, and after a refused value                                 |
+| `help`                  | Shown on demand, in a tooltip next to the label                                                       |
+| `test`                  | Checked before the round trip: a refused value is named, the hint after it, before the server answers |
+| `required`              | Marked with `*`, with the legend that explains it                                                     |
+| `generated`, `readOnly` | Shown on the detail card, never offered for editing                                                   |
+| `neverReturn`           | Offered on the form, never shown back                                                                 |
+| `type: array`           | A list of removable tokens, with the instruction to press Enter                                       |
+| `type: pointer`         | A select filled from the branch the pointer names                                                     |
+| `type: boolean`, `date` | A yes/no select, a date picker                                                                        |
+| `group`                 | Groups the fields under a heading, in the interface language                                          |
+| `states`                | The states the account can be moved to                                                                |
+| `role`                  | Which columns the table shows, and which actions appear                                               |
+| `entity.large`          | Searched before listed, and searched from a pointer field                                             |
 
 ## Behaviour worth knowing
 

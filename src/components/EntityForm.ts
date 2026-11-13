@@ -25,6 +25,7 @@ import {
   foldedText,
   isDnShaped,
   parseByteSize,
+  patternRefusal,
   rdnValue,
   resolveText,
   serverValues,
@@ -1708,15 +1709,13 @@ export class EntityForm {
         continue; // A pattern the browser cannot compile is the server's business
       }
       const bad = list.find(value => !regex.test(value));
+      // The value named, then the hint, which reads as help: alone, it
+      // repeated the text under the field without a word of refusal (#374).
       if (bad !== undefined)
         this.errors[name] =
-          (attr.normalize === 'byteSize'
+          attr.normalize === 'byteSize'
             ? this.options.translator.t('form.notSize')
-            : attributeHint(attr, this.options.translator.language)) ||
-          this.options.translator.t('form.badFormat', {
-            value: bad,
-            pattern: String(pattern),
-          });
+            : patternRefusal('form', attr, bad, this.options.translator);
     }
     this.showErrors();
     return Object.keys(this.errors).length === 0;
@@ -1776,8 +1775,10 @@ export class EntityForm {
         const message = this.errors[name];
         holder.textContent = message || '';
         holder.hidden = !message;
-        // The refusal repeats the hint, so showing both says the same thing
-        // twice, once in grey and once in red.
+        // A refusal of the value's format quotes the hint after naming the
+        // value (#374), and a size's or a date's says it in the console's
+        // words: showing the hint as well says the same thing twice, once in
+        // grey and once in red.
         const hint = field?.querySelector<HTMLElement>('[data-hint]');
         if (hint) hint.hidden = Boolean(message);
         this.markInvalid(field, name, holder.id, message);

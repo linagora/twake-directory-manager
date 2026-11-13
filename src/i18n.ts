@@ -161,7 +161,8 @@ const en: Catalogue = {
   'groups.removed': '{name} removed from {group}',
   'groups.remove': 'Remove from {group}',
 
-  'form.badFormat': '{value}: {pattern}',
+  'form.badFormat': '“{value}” is not valid. {hint}',
+  'form.badPattern': '“{value}” does not match the pattern {pattern}',
   'form.required': 'Fields marked with * are required',
   'form.draftRestored':
     'Restored after signing in again — check it before saving.',
@@ -270,7 +271,9 @@ const en: Catalogue = {
     '{field}: “{value}” is no identifier, and too many entries contain it to rule out another spelling: check it, or use a DN',
   'import.notBoolean': '{field}: “{value}” is neither yes nor no',
   'import.notDate': '{field}: “{value}” is not a date',
-  'import.badFormat': '{field}: {hint}',
+  'import.badFormat': '{field}: “{value}” is not valid. {hint}',
+  'import.badPattern':
+    '{field}: “{value}” does not match the pattern {pattern}',
   'import.pastDate': '{field}: “{value}” is earlier than today',
   'import.notSize': '{field}: “{value}” is not a size, such as 4 GB',
   'import.missing': '{field} is required',
@@ -655,7 +658,8 @@ const fr: Catalogue = {
   'groups.removed': '{name} retiré de {group}',
   'groups.remove': 'Retirer de {group}',
 
-  'form.badFormat': '{value} : {pattern}',
+  'form.badFormat': '« {value} » n’est pas valide. {hint}',
+  'form.badPattern': '« {value} » ne correspond pas au motif {pattern}',
   'form.required': 'Les champs marqués d’une * sont obligatoires',
   'form.draftRestored':
     'Restauré après une nouvelle connexion — vérifiez-le avant d’enregistrer.',
@@ -773,7 +777,9 @@ const fr: Catalogue = {
     '{field} : « {value} » n’est pas un identifiant, et trop d’entrées le contiennent pour exclure une autre écriture : vérifiez-le, ou utilisez un DN',
   'import.notBoolean': '{field} : « {value} » n’est ni oui ni non',
   'import.notDate': '{field} : « {value} » n’est pas une date',
-  'import.badFormat': '{field} : {hint}',
+  'import.badFormat': '{field} : « {value} » n’est pas valide. {hint}',
+  'import.badPattern':
+    '{field} : « {value} » ne correspond pas au motif {pattern}',
   'import.pastDate': '{field} : « {value} » est antérieure à aujourd’hui',
   'import.notSize':
     '{field} : « {value} » n’est pas une taille, telle que 4 Go',
@@ -1132,7 +1138,8 @@ const mn: Catalogue = {
   'groups.removed': '{name}-г {group}-ээс хаслаа',
   'groups.remove': '{group}-ээс хасах',
 
-  'form.badFormat': '{value}: {pattern}',
+  'form.badFormat': '«{value}» нь зөв утга биш. {hint}',
+  'form.badPattern': '«{value}» нь загварт тохирохгүй: {pattern}',
   'form.required': '* тэмдэгтэй талбарыг заавал бөглөнө',
   'form.draftRestored':
     'Дахин нэвтэрсний дараа сэргээгдлээ — хадгалахаасаа өмнө шалгана уу.',
@@ -1235,7 +1242,8 @@ const mn: Catalogue = {
     '{field}: «{value}» нь танигч биш бөгөөд үүнийг агуулсан бичлэг хэт олон тул өөр бичлэгийг үгүйсгэх боломжгүй: шалгана уу, эсвэл DN ашиглана уу',
   'import.notBoolean': '{field}: «{value}» нь тийм ч биш, үгүй ч биш',
   'import.notDate': '{field}: «{value}» нь огноо биш',
-  'import.badFormat': '{field}: {hint}',
+  'import.badFormat': '{field}: «{value}» нь зөв утга биш. {hint}',
+  'import.badPattern': '{field}: «{value}» нь загварт тохирохгүй: {pattern}',
   'import.pastDate': '{field}: «{value}» нь өнөөдрөөс өмнөх огноо',
   'import.notSize': '{field}: «{value}» нь 4 GB гэх мэт хэмжээ биш',
   'import.missing': '{field} заавал бөглөнө',

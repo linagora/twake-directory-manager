@@ -507,6 +507,83 @@ describe('EntityForm', () => {
     expect(sent).to.equal(2);
   });
 
+  it('should name the value a format refuses, the hint saying what to type (#374)', async () => {
+    // Since ldap-rest 2.2.1 a hint reads as help: a refusal made of it
+    // alone repeated the text under the field and never said the value was
+    // wrong.
+    const hinted: EntityDescriptor = {
+      ...users,
+      schema: {
+        attributes: {
+          ...usersSchema.attributes,
+          mail: {
+            ...usersSchema.attributes.mail,
+            hint: {
+              en: 'An email address, e.g. jane.doe@example.org',
+              fr: 'Une adresse électronique, par ex. jane.doe@example.org',
+              mn: 'Имэйл хаяг, жишээ нь jane.doe@example.org',
+            },
+          },
+          // Without a hint, the pattern says what was expected.
+          telephoneNumber: {
+            ...usersSchema.attributes.telephoneNumber,
+            hint: undefined,
+          },
+        },
+      },
+    };
+    /** The messages under both fields once a bad value of each is saved. */
+    const refusals = async (
+      language: string
+    ): Promise<{ mail?: string | null; telephone?: string | null }> => {
+      const container = page();
+      await new EntityForm({
+        entity: hinted,
+        translator: new Translator(language),
+        pointerOptions: () => Promise.resolve([]),
+        onSubmit: () => Promise.resolve(),
+        onCancel: () => undefined,
+      }).render(container);
+      for (const [name, value] of [
+        ['mail', 'bad'],
+        ['telephoneNumber', '12'],
+      ]) {
+        const input = container.querySelector<HTMLInputElement>(
+          `#dc-field-${name}`
+        );
+        if (!input) throw new Error(`no ${name}`);
+        input.value = value;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      container
+        .querySelector<HTMLElement>('form button[type="submit"]')
+        ?.click();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      // The hint is quoted by the refusal, and not shown a second time.
+      expect(
+        container.querySelector<HTMLElement>('#dc-hint-mail')?.hidden
+      ).to.equal(true);
+      return {
+        mail: container.querySelector('#dc-error-mail')?.textContent,
+        telephone: container.querySelector('#dc-error-telephoneNumber')
+          ?.textContent,
+      };
+    };
+    expect(await refusals('en')).to.deep.equal({
+      mail: '“bad” is not valid. An email address, e.g. jane.doe@example.org',
+      telephone: '“12” does not match the pattern ^\\d{3} \\d{4}$',
+    });
+    expect(await refusals('fr')).to.deep.equal({
+      mail: '« bad » n’est pas valide. Une adresse électronique, par ex. jane.doe@example.org',
+      telephone: '« 12 » ne correspond pas au motif ^\\d{3} \\d{4}$',
+    });
+    expect(await refusals('mn')).to.deep.equal({
+      mail: '«bad» нь зөв утга биш. Имэйл хаяг, жишээ нь jane.doe@example.org',
+      telephone: '«12» нь загварт тохирохгүй: ^\\d{3} \\d{4}$',
+    });
+  });
+
   describe('a person’s names', () => {
     const people: EntityDescriptor = {
       ...users,
@@ -796,7 +873,10 @@ describe('EntityForm', () => {
         'dc-hint-mail dc-identifier-mail dc-error-mail'
       );
       expect(error?.hidden).to.equal(false);
-      expect(error?.textContent).to.equal('Expected an email address');
+      // The hint as ldap-rest 2.1.0 words it reads after the refusal too.
+      expect(error?.textContent).to.equal(
+        '“not-an-email” is not valid. Expected an email address'
+      );
       // The refusal says what the hint said, once, in red.
       expect(hint?.hidden).to.equal(true);
       // The first refused field has the focus, not the Create button.

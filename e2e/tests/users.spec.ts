@@ -233,10 +233,11 @@ test.describe('USER user accounts', () => {
     await form.fill('Mailbox size', 'lots');
     await form.fill('Deletion date', isoDate(-1));
     await form.submit();
+    // The refusal names the value, the hint following it as help (#374).
     // The hint was worded as a refusal before ldap-rest 2.2.1, and the floor
     // (2.1.0) still serves that wording: both read here until it moves.
     await expect(form.error('Email')).toHaveText(
-      /^(Expected an email address|An email address), e\.g\. jane\.doe@example\.org$/
+      /^“not-an-email” is not valid\. (Expected an email address|An email address), e\.g\. jane\.doe@example\.org$/
     );
     await expect(form.error('Mailbox size')).toBeVisible();
     await expect(form.error('Deletion date')).toHaveText(

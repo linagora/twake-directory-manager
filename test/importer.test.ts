@@ -51,7 +51,7 @@ const fields: ImportField[] = [
       type: 'string',
       required: true,
       test: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$',
-      hint: 'Expected an email address',
+      hint: 'An email address, e.g. jane.doe@example.org',
       label: { en: 'Email' },
     },
   ],
@@ -380,7 +380,113 @@ describe('CSV import', () => {
         resolvers,
         french
       );
-      expect(row.errors).to.include('Email : Expected an email address');
+      expect(row.errors).to.include(
+        'Email : « not an address » n’est pas valide. An email address, e.g. jane.doe@example.org'
+      );
+    });
+
+    it('should name the value a format refuses, the hint saying what to type (#374)', () => {
+      // Since ldap-rest 2.2.1 a hint reads as help: alone, the refusal read
+      // as the help and never said the cell was wrong.
+      const hinted: ImportField[] = fields.map(([name, attr]) =>
+        name === 'mail'
+          ? [
+              name,
+              {
+                ...attr,
+                hint: {
+                  en: 'An email address, e.g. jane.doe@example.org',
+                  fr: 'Une adresse électronique, par ex. jane.doe@example.org',
+                  mn: 'Имэйл хаяг, жишээ нь jane.doe@example.org',
+                },
+                label: { en: 'Email', fr: 'Courriel', mn: 'Имэйл' },
+              },
+            ]
+          : [name, attr]
+      );
+      const errors = (language: string): string[] =>
+        prepareRows(
+          {
+            headers,
+            rows: [['E1', 'Doe', '', '', '', 'bad']],
+            delimiter: ';',
+          },
+          mapping,
+          hinted,
+          resolvers,
+          new Translator(language)
+        )[0].errors;
+      expect(errors('en')).to.include(
+        'Email: “bad” is not valid. An email address, e.g. jane.doe@example.org'
+      );
+      expect(errors('fr')).to.include(
+        'Courriel : « bad » n’est pas valide. Une adresse électronique, par ex. jane.doe@example.org'
+      );
+      expect(errors('mn')).to.include(
+        'Имэйл: «bad» нь зөв утга биш. Имэйл хаяг, жишээ нь jane.doe@example.org'
+      );
+    });
+
+    it('should name the value of a list a format refuses', () => {
+      const checked: ImportField[] = fields.map(([name, attr]) =>
+        name === 'mailAlternateAddress'
+          ? [
+              name,
+              {
+                ...attr,
+                items: {
+                  type: 'string',
+                  test: '^[^@\\s]+@[^@\\s]+$',
+                  hint: 'An email address',
+                },
+              },
+            ]
+          : [name, attr]
+      );
+      const [row] = prepareRows(
+        {
+          headers,
+          rows: [
+            [
+              'E1',
+              'Doe',
+              'Jane',
+              'Jane Doe',
+              '',
+              'jane@example.org',
+              'j.doe@example.org | nowhere',
+            ],
+          ],
+          delimiter: ';',
+        },
+        mapping,
+        checked,
+        resolvers,
+        translator
+      );
+      expect(row.errors).to.include(
+        'Email aliases: “nowhere” is not valid. An email address'
+      );
+    });
+
+    it('should name the pattern a value fails when the schema gives no hint', () => {
+      const bare: ImportField[] = fields.map(([name, attr]) =>
+        name === 'mail' ? [name, { ...attr, hint: undefined }] : [name, attr]
+      );
+      const [row] = prepareRows(
+        {
+          headers,
+          rows: [['E1', 'Doe', '', '', '', 'bad']],
+          delimiter: ';',
+        },
+        mapping,
+        bare,
+        resolvers,
+        translator
+      );
+      expect(row.errors).to.include(
+        'Email: “bad” does not match the pattern ^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$'
+      );
     });
 
     it('should build what the form would send', () => {
@@ -431,7 +537,7 @@ describe('CSV import', () => {
       ]);
       expect(row.errors).to.deep.equal([
         'Title: “Sir” not found',
-        'Email: Expected an email address',
+        'Email: “not an address” is not valid. An email address, e.g. jane.doe@example.org',
         'Department: “Health” not found',
         'Password reset required: “maybe” is neither yes nor no',
         'Deletion date: “soon” is not a date',
@@ -560,7 +666,9 @@ describe('CSV import', () => {
         ['Email: “JANE@example.org” is already on line 2'],
         ['Email aliases: “jane@example.org” is already on line 2'],
         [],
-        ['Email: Expected an email address'],
+        [
+          'Email: “bad” is not valid. An email address, e.g. jane.doe@example.org',
+        ],
         [],
       ]);
       expect(again[1].errors).to.deep.equal([
