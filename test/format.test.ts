@@ -4,8 +4,11 @@ import {
   displayValue,
   foldedText,
   formatByteSize,
+  pointerLabel,
   readableByteSize,
+  rdnValue,
 } from '../src/format';
+import { mailboxTypes } from './fixtures/entities';
 
 describe('format', () => {
   describe('foldedText', () => {
@@ -167,6 +170,34 @@ describe('format', () => {
       expect(displayValue(size, '1073741824', undefined, 'fr')).to.equal(
         '1073741824'
       );
+    });
+  });
+
+  describe('pointerLabel', () => {
+    const base = 'ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com';
+
+    it('should name the entry a pointer lands on by its schema', () => {
+      expect(
+        pointerLabel([mailboxTypes], `cn=teamMailbox,${base}`, 'fr')
+      ).to.equal('Boîte partagée');
+      // An escaped comma belongs to the value, not to the parent's DN.
+      expect(
+        pointerLabel([mailboxTypes], `cn=team\\,Mailbox,${base}`, 'en')
+      ).to.equal(undefined);
+      expect(pointerLabel([mailboxTypes], 'cn=teamMailbox', 'en')).to.equal(
+        undefined
+      );
+    });
+
+    it('should read a run of backslashes in linear time', () => {
+      // An escape and a plain character could both take a backslash, and a
+      // value of backslashes with no comma after them backtracked
+      // exponentially: 40 of them held the tab for seconds.
+      const value = 'cn=' + '\\'.repeat(36);
+      const started = Date.now();
+      expect(pointerLabel([mailboxTypes], value, 'en')).to.equal(undefined);
+      expect(rdnValue(value)).to.equal('\\'.repeat(18));
+      expect(Date.now() - started).to.be.below(100);
     });
   });
 });

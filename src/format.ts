@@ -113,7 +113,7 @@ export function escapeDnValue(value: string): string {
 
 /** Value of the first RDN of a DN, with its escapes removed. */
 export function rdnValue(dn: string): string {
-  const match = /^[^=]+=((?:\\.|[^,])*)/.exec(dn);
+  const match = /^[^=]+=((?:\\.|[^,\\])*)/.exec(dn);
   return match ? match[1].replace(/\\(.)/g, '$1') : dn;
 }
 
@@ -691,7 +691,7 @@ export function pointerLabel(
   dn: string,
   language: string
 ): string | undefined {
-  const match = /^[^=]+=((?:\\.|[^,])*),(.+)$/.exec(dn);
+  const match = /^[^=]+=((?:\\.|[^,\\])*),(.+)$/.exec(dn);
   if (!match) return undefined;
   const parent = comparableDn(match[2]);
   const owner = entities.find(

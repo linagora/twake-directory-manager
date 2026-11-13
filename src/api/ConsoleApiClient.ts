@@ -1418,7 +1418,7 @@ export class ConsoleApiClient {
         if (isDnShaped(value)) {
           // Spaces around a separator are no part of a DN, and a file
           // written by hand has them: `uid=bob, ou=users, dc=example`.
-          const dn = /^\s*([^=\s]+)\s*=((?:\\.|[^,])*?)\s*,\s*(.*)$/.exec(
+          const dn = /^\s*([^=\s]+)\s*=((?:\\.|[^,\\])*?)\s*,\s*(.*)$/.exec(
             value
           );
           if (

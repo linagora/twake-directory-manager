@@ -1183,6 +1183,16 @@ describe('ConsoleApiClient', () => {
     nock(baseUrl).get('/api/v1/ldap/domains/org').reply(200, tree.org);
     expect(await lookup.read('org')).to.equal(undefined);
 
+    // A cell holding a run of backslashes, a comma and a line break is no DN
+    // of this branch, and is turned down at once: an escape and a plain
+    // character could both take a backslash, and 40 of them held the tab
+    // for seconds.
+    const started = Date.now();
+    expect(await lookup.read(`dc=${'\\'.repeat(36)},ou=x\ny`)).to.equal(
+      undefined
+    );
+    expect(Date.now() - started).to.be.below(100);
+
     // A search refused as too broad says as little as an answer cut short;
     // a failure of the server's own is no answer at all, and is thrown.
     nock(baseUrl)
