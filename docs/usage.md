@@ -109,7 +109,7 @@ definition — see [flat-generic](https://github.com/linagora/ldap-rest/blob/mas
 | Schema                  | Effect in the interface                                                   |
 | ----------------------- | ------------------------------------------------------------------------- |
 | `label`                 | Column heading, field label, term in the detail card                      |
-| `hint`                  | Shown under the field, in the interface language, and repeated on refusal |
+| `hint`                  | Under the field, in the interface language, and after a refused value     |
 | `help`                  | Shown on demand, in a tooltip next to the label                           |
 | `test`                  | Checked before the round trip, so the hint answers before the server does |
 | `required`              | Marked with `*`, with the legend that explains it                         |

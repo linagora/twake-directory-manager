@@ -89,6 +89,44 @@ export function attributeHint(
 }
 
 /**
+ * What to say of a value an attribute's pattern refuses: the value, named as
+ * every other refusal names it, then the schema's hint as what to type
+ * instead (`form.badFormat`, `import.badFormat`), or the pattern itself when
+ * the schema gives no hint (`form.badPattern`, `import.badPattern`).
+ *
+ * The hint alone was the refusal while it read as one ("Expected an email
+ * address"). Since ldap-rest 2.2.1 it reads as help ("An email address,
+ * e.g. …"): alone, the refusal repeated what the field said before anything
+ * was typed, and never said the value was wrong. Both wordings read after
+ * the console's sentence, as ldap-rest 2.1.0 still serves the old one
+ * (#374).
+ *
+ * @param place where it is said: under a form's field, which already names
+ *   the field, or in a row of an import, which starts with its name
+ * @param attr the attribute's schema definition
+ * @param value the value refused
+ * @param translator interface translator
+ * @param field the field's label, for an import's row
+ * @returns the refusal, in the interface's language
+ */
+export function patternRefusal(
+  place: 'form' | 'import',
+  attr: SchemaAttribute,
+  value: string,
+  translator: Translator,
+  field = ''
+): string {
+  const hint = attributeHint(attr, translator.language);
+  return hint
+    ? translator.t(`${place}.badFormat`, { field, value, hint })
+    : translator.t(`${place}.badPattern`, {
+        field,
+        value,
+        pattern: attr.test || attr.items?.test || '',
+      });
+}
+
+/**
  * Whether a text is written as a DN — `attribute=value` pairs separated by
  * commas, two at least — rather than as a name. An identifier holding an
  * `=` is not one, being a single pair.

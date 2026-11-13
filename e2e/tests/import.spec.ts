@@ -324,7 +324,8 @@ test.describe('IMPORT CSV import', () => {
       '11',
     ]);
     await expect(problems.nth(0)).toContainText('Last name is required');
-    await expect(problems.nth(1)).toContainText('Email');
+    // The refused value is named, the hint following it as help (#374).
+    await expect(problems.nth(1)).toContainText('Email: “bad” is not valid.');
     await expect(problems.nth(2)).toContainText(
       'Department: “Nowhere” not found'
     );

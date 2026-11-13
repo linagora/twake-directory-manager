@@ -13,11 +13,11 @@
 import type { CsvTable } from './csv';
 import { hasRole } from './api/ConsoleApiClient';
 import {
-  attributeHint,
   attributeLabel,
   beforeToday,
   isDnShaped,
   parseByteSize,
+  patternRefusal,
   rdnValue,
   serverByteSizes,
 } from './format';
@@ -526,11 +526,11 @@ export function prepareRows(
             : undefined;
           if (bad !== undefined) {
             refused.add(name);
+            // The value named, as every other refusal of a cell names it,
+            // then the hint as help: alone, it said neither that the cell was
+            // wrong nor which value of a list was (#374).
             errors.push(
-              translator.t('import.badFormat', {
-                field: label(name),
-                hint: attributeHint(attr, translator.language) || bad,
-              })
+              patternRefusal('import', attr, bad, translator, label(name))
             );
             continue;
           }
