@@ -111,10 +111,66 @@ export function escapeDnValue(value: string): string {
     .replace(/ $/, '\\ ');
 }
 
+/**
+ * Where the RDN starting at `from` ends: the first comma it does not escape,
+ * or the end of the DN. A backslash always takes the character after it, so
+ * each character is read one way and the scan is linear; a regular
+ * expression that let a backslash be either an escape or a plain character
+ * backtracked exponentially on a run of them.
+ */
+function rdnEnd(dn: string, from: number): number {
+  let index = from;
+  while (index < dn.length && dn[index] !== ',')
+    index += dn[index] === '\\' ? 2 : 1;
+  return Math.min(index, dn.length);
+}
+
+/** Whether the character at `index` is escaped by the backslashes before it. */
+function escapedAt(text: string, index: number): boolean {
+  let backslashes = 0;
+  while (index - backslashes > 0 && text[index - backslashes - 1] === '\\')
+    backslashes++;
+  return backslashes % 2 === 1;
+}
+
+/**
+ * The first RDN of a DN, read in one pass: its attribute, its value as
+ * written (escapes kept) and the DN it hangs from, if any.
+ *
+ * @param dn the DN
+ * @param loose drop the spaces around `=` and `,` that a DN written by hand
+ * has, `uid=bob, ou=users`, but no escaped one
+ * @returns undefined when the text has no `attribute=` to start with
+ */
+export function splitRdn(
+  dn: string,
+  loose = false
+): { attribute: string; value: string; parent?: string } | undefined {
+  const equals = dn.indexOf('=');
+  if (equals < 1) return undefined;
+  const end = rdnEnd(dn, equals + 1);
+  let attribute = dn.slice(0, equals);
+  let value = dn.slice(equals + 1, end);
+  let parent = end < dn.length ? dn.slice(end + 1) : undefined;
+  if (loose) {
+    attribute = attribute.trim();
+    let stop = value.length;
+    while (
+      stop > 0 &&
+      /\s/.test(value[stop - 1]) &&
+      !escapedAt(value, stop - 1)
+    )
+      stop--;
+    value = value.slice(0, stop).trimStart();
+    parent = parent?.trimStart();
+  }
+  return { attribute, value, parent };
+}
+
 /** Value of the first RDN of a DN, with its escapes removed. */
 export function rdnValue(dn: string): string {
-  const match = /^[^=]+=((?:\\.|[^,])*)/.exec(dn);
-  return match ? match[1].replace(/\\(.)/g, '$1') : dn;
+  const rdn = splitRdn(dn);
+  return rdn ? rdn.value.replace(/\\(.)/g, '$1') : dn;
 }
 
 /**
@@ -649,9 +705,20 @@ export function completingDomains(domains: string[], typed: string): string[] {
   );
 }
 
-/** A DN in the one spelling two DNs are compared in. */
+/**
+ * A DN in the one spelling two DNs are compared in: lower-cased, without the
+ * spaces around its commas. Split rather than matched with `\s*,\s*`, which
+ * took quadratic time over a long run of spaces.
+ */
 export function comparableDn(dn: string): string {
-  return dn.replace(/\s*,\s*/g, ',').toLowerCase();
+  const parts = dn.split(',');
+  return parts
+    .map((part, index) => {
+      const start = index > 0 ? part.trimStart() : part;
+      return index < parts.length - 1 ? start.trimEnd() : start;
+    })
+    .join(',')
+    .toLowerCase();
 }
 
 /** Whether a DN is a branch itself or lies anywhere under it. */
@@ -669,8 +736,8 @@ export function withinDn(dn: string, branch: string): boolean {
  * @returns the parent's DN, or undefined for a DN of one RDN
  */
 export function parentDn(dn: string): string | undefined {
-  const match = /^(?:\\.|[^,\\])*,\s*(.+)$/.exec(dn);
-  return match ? match[1] : undefined;
+  const end = rdnEnd(dn, 0);
+  return dn.slice(end + 1).trimStart() || undefined;
 }
 
 /**
@@ -691,9 +758,9 @@ export function pointerLabel(
   dn: string,
   language: string
 ): string | undefined {
-  const match = /^[^=]+=((?:\\.|[^,])*),(.+)$/.exec(dn);
-  if (!match) return undefined;
-  const parent = comparableDn(match[2]);
+  const rdn = splitRdn(dn);
+  if (!rdn?.parent) return undefined;
+  const parent = comparableDn(rdn.parent);
   const owner = entities.find(
     entity => entity.base && comparableDn(entity.base) === parent
   );

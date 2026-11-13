@@ -1183,6 +1183,35 @@ describe('ConsoleApiClient', () => {
     nock(baseUrl).get('/api/v1/ldap/domains/org').reply(200, tree.org);
     expect(await lookup.read('org')).to.equal(undefined);
 
+    // A DN written by hand is read without the spaces around its
+    // separators, an escaped one kept.
+    const asked = nock(baseUrl)
+      .get(
+        `/api/v1/ldap/domains/${encodeURIComponent(`dc=org,${domains.base}`)}`
+      )
+      .reply(200, tree.org)
+      .get(
+        `/api/v1/ldap/domains/${encodeURIComponent(`dc=org\\ ,${domains.base}`)}`
+      )
+      .reply(200, tree.org);
+    expect(await lookup.read(` dc=org , ${domains.base}`)).to.equal(undefined);
+    expect(await lookup.read(`dc=org\\ , ${domains.base}`)).to.equal(undefined);
+    expect(asked.isDone()).to.equal(true);
+
+    // A cell holding a run of backslashes, or of spaces around a comma, then
+    // a line break, is no DN of this branch, and is turned down at once: an
+    // escape and a plain character could both take a backslash, and 40 of
+    // them held the tab for seconds; 2000 spaces on each side did too.
+    const started = Date.now();
+    expect(await lookup.read(`dc=${'\\'.repeat(42)},ou=x\ny`)).to.equal(
+      undefined
+    );
+    const spaces = ' '.repeat(2000);
+    expect(await lookup.read(`dc=${spaces},${spaces}ou=x\ny`)).to.equal(
+      undefined
+    );
+    expect(Date.now() - started).to.be.below(250);
+
     // A search refused as too broad says as little as an answer cut short;
     // a failure of the server's own is no answer at all, and is thrown.
     nock(baseUrl)

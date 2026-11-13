@@ -1,11 +1,17 @@
 import { expect } from 'chai';
 import {
+  comparableDn,
   completingDomains,
   displayValue,
   foldedText,
   formatByteSize,
+  parentDn,
+  pointerLabel,
   readableByteSize,
+  rdnValue,
+  splitRdn,
 } from '../src/format';
+import { mailboxTypes } from './fixtures/entities';
 
 describe('format', () => {
   describe('foldedText', () => {
@@ -167,6 +173,101 @@ describe('format', () => {
       expect(displayValue(size, '1073741824', undefined, 'fr')).to.equal(
         '1073741824'
       );
+    });
+  });
+
+  describe('pointerLabel', () => {
+    const base = 'ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com';
+
+    it('should name the entry a pointer lands on by its schema', () => {
+      expect(
+        pointerLabel([mailboxTypes], `cn=teamMailbox,${base}`, 'fr')
+      ).to.equal('Boîte partagée');
+      // An escaped comma belongs to the value, not to the parent's DN.
+      expect(
+        pointerLabel([mailboxTypes], `cn=team\\,Mailbox,${base}`, 'en')
+      ).to.equal(undefined);
+      expect(pointerLabel([mailboxTypes], 'cn=teamMailbox', 'en')).to.equal(
+        undefined
+      );
+    });
+
+    it('should read a run of backslashes in linear time', () => {
+      // An escape and a plain character could both take a backslash, and a
+      // value of backslashes with no comma after them backtracked
+      // exponentially: 40 of them held the tab for seconds.
+      const value = 'cn=' + '\\'.repeat(42);
+      const started = Date.now();
+      expect(pointerLabel([mailboxTypes], value, 'en')).to.equal(undefined);
+      expect(rdnValue(value)).to.equal('\\'.repeat(21));
+      expect(Date.now() - started).to.be.below(250);
+    });
+  });
+
+  describe('splitRdn', () => {
+    it('should split the first RDN from the DN it hangs from', () => {
+      expect(splitRdn('cn=Smith\\, John,ou=users,dc=example')).to.deep.equal({
+        attribute: 'cn',
+        value: 'Smith\\, John',
+        parent: 'ou=users,dc=example',
+      });
+      expect(splitRdn('cn=a\\\\,ou=users')).to.deep.equal({
+        attribute: 'cn',
+        value: 'a\\\\',
+        parent: 'ou=users',
+      });
+      expect(splitRdn('cn=alone')).to.deep.equal({
+        attribute: 'cn',
+        value: 'alone',
+        parent: undefined,
+      });
+      // A lone backslash at the end is kept, as the value was written.
+      expect(splitRdn('cn=a\\')?.value).to.equal('a\\');
+      expect(splitRdn('no rdn')).to.equal(undefined);
+      expect(splitRdn('=value')).to.equal(undefined);
+    });
+
+    it('should drop the spaces a DN written by hand has, but no escaped one', () => {
+      expect(splitRdn(' uid = bob , ou=users', true)).to.deep.equal({
+        attribute: 'uid',
+        value: 'bob',
+        parent: 'ou=users',
+      });
+      expect(splitRdn('cn=bob\\ , ou=users', true)?.value).to.equal('bob\\ ');
+      expect(splitRdn('cn= \\ bob, ou=users', true)?.value).to.equal('\\ bob');
+      expect(splitRdn('cn=bob\\\\ , ou=users', true)?.value).to.equal(
+        'bob\\\\'
+      );
+      expect(splitRdn('cn=bob , ou=users')?.value).to.equal('bob ');
+    });
+
+    it('should read long runs of spaces and backslashes in linear time', () => {
+      // `\s*` before and after a comma took quadratic time over a run of
+      // spaces, and the importer's lazy value before them cubic: 2000
+      // spaces on each side held the tab for seconds.
+      const spaces = ' '.repeat(40000);
+      const started = Date.now();
+      expect(splitRdn(`cn=${spaces},${spaces}ou=x\ny`, true)?.parent).to.equal(
+        'ou=x\ny'
+      );
+      expect(splitRdn('cn=' + '\\'.repeat(100000))?.parent).to.equal(undefined);
+      expect(parentDn(`cn=a,${spaces}\n`)).to.equal(undefined);
+      expect(parentDn(`cn=a,${spaces}ou=x`)).to.equal('ou=x');
+      expect(comparableDn(`cn=a${spaces}x`)).to.equal(`cn=a${spaces}x`);
+      expect(Date.now() - started).to.be.below(250);
+    });
+  });
+
+  describe('parentDn and comparableDn', () => {
+    it('should keep their reading of a DN', () => {
+      expect(parentDn('cn=Smith\\, John,ou=users')).to.equal('ou=users');
+      expect(parentDn('cn=a, ou=users')).to.equal('ou=users');
+      expect(parentDn('cn=a')).to.equal(undefined);
+      expect(parentDn('cn=a,')).to.equal(undefined);
+      expect(comparableDn('CN=a , OU=Users,dc=x')).to.equal(
+        'cn=a,ou=users,dc=x'
+      );
+      expect(comparableDn(' cn=a , , dc=x ')).to.equal(' cn=a,,dc=x ');
     });
   });
 });
