@@ -387,11 +387,14 @@ describe('views/organizations', () => {
       await shown(mounted.root, 'Acme');
       return mounted;
     };
-    /** The name the card gives a pointer, by the DN it lands on. */
-    const named = (root: HTMLElement, dn: string): string | undefined =>
+    /**
+     * The tooltips of the card's values: a pointer's repeats the name it is
+     * shown by, no longer the DN it lands on (#373).
+     */
+    const named = (root: HTMLElement): (string | null)[] =>
       Array.from(
         root.querySelectorAll<HTMLElement>('[data-org-detail] [title]')
-      ).find(element => element.title === dn)?.textContent ?? undefined;
+      ).map(element => element.getAttribute('title'));
 
     it('should read the transit branch once for its card and the banner', async () => {
       // The banner counts the branch as the card lists it: one read serves
@@ -437,12 +440,12 @@ describe('views/organizations', () => {
           },
         },
       ]);
-      expect(named(root, salesDomain)).to.equal('sales.example.org');
+      expect(named(root)).to.include('sales.example.org');
     });
 
     it('should fall back on the RDN when the branch cannot be read', async () => {
       const { root } = await acmeCard([403, { error: 'Forbidden' }]);
-      expect(named(root, salesDomain)).to.equal('sales');
+      expect(named(root)).to.include('sales');
     });
 
     it('should name the tab after the organization, then the page when a card fails to load', async () => {

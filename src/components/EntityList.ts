@@ -22,6 +22,7 @@ import {
   attributeLabel,
   displayValue,
   entryValue,
+  isNamedValue,
   ownValueLabel,
   searchableAttributes,
   stateMarkup,
@@ -1041,9 +1042,11 @@ export class EntityList {
             : stateMarkup(state, shown);
           // The first column opens the entry: a link Tab reaches and Enter
           // follows, which the browser also opens in a new tab. The rest of
-          // the row only stands in for it, for the mouse. A state's tooltip
-          // repeats its name, not the DN the entry stores (#337).
-          const title = state ? shown : raw;
+          // the row only stands in for it, for the mouse. The tooltip of a
+          // state or of another pointer into reference data repeats its name,
+          // not the DN the entry stores (#337, #373).
+          const named = !!state || isNamedValue(entity, name);
+          const title = named ? shown : raw;
           return html`<td${isPath ? html` class="dc-path"` : ''} title="${title}">${
             index === 0
               ? html`<a class="dc-row-link" href="${EntityList.entryHref(

@@ -21,6 +21,7 @@ import {
   displayValue,
   entryValue,
   isDnShaped,
+  isNamedValue,
   ownValueLabel,
   rdnValue,
   readableByteSize,
@@ -545,9 +546,11 @@ export class EntityDetail {
     const shown =
       ownValueLabel(entity, name, value, language) ||
       displayValue(attr, value, this.options.pointerLabel, language);
-    // A state's tooltip repeats its name, as the list's does, not the DN
-    // the entry stores (#337).
-    return html`<span class="dc-value" title="${state ? shown : value}"
+    // The tooltip of a state, or of any other pointer into reference data
+    // (a position, a list type), repeats its name, as the list's does, not
+    // the DN the entry stores (#337, #373). Other values keep theirs.
+    const named = !!state || isNamedValue(entity, name);
+    return html`<span class="dc-value" title="${named ? shown : value}"
       >${stateMarkup(state, shown)}</span
     >`;
   }

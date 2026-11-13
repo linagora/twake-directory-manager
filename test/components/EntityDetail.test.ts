@@ -602,9 +602,10 @@ describe('EntityDetail', () => {
     expect(card(dn => `#/users/${rdnValue(dn)}`)).to.include(
       `<a href="#/users/alice" class="dc-link" data-relation="${delegate}" title="${delegate}">alice</a>`
     );
-    // An entry no page shows is named all the same, with no link to nowhere.
+    // An entry no page shows is named all the same, with no link to nowhere,
+    // and its tooltip repeats the name as any pointer's does (#373).
     expect(card(() => undefined)).to.include(
-      `<span class="dc-value" title="${delegate}">alice</span>`
+      `<span class="dc-value" title="alice">alice</span>`
     );
     // A role-less pointer asks for a primary target: reference data, which
     // the unfiltered address would reach, stays a name.
@@ -612,7 +613,7 @@ describe('EntityDetail', () => {
       card((dn, primaryOnly) =>
         primaryOnly ? undefined : `#/users/${rdnValue(dn)}`
       )
-    ).to.include(`<span class="dc-value" title="${delegate}">alice</span>`);
+    ).to.include(`<span class="dc-value" title="alice">alice</span>`);
   });
 
   it('should keep an account’s state a badge, not a link to its value', () => {

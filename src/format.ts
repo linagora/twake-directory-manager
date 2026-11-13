@@ -644,9 +644,9 @@ export function explainRefusal(
 /**
  * Text to show for one value.
  *
- * A DN reference is shown by its own name — `active`, `Systems Analyst` — and
- * the full DN belongs in the tooltip, where it is available without being in
- * the way.
+ * A DN reference is shown by its own name — `active`, `Systems Analyst` —
+ * which its tooltip repeats (#373); a link or a form's token keeps the full
+ * DN in its own tooltip.
  *
  * @param attr schema definition of the attribute
  * @param value value as stored
@@ -666,6 +666,21 @@ export function displayValue(
     return localSize(formatByteSize(value), language);
   if (attr?.type === 'date') return formatDate(value, language);
   return value;
+}
+
+/**
+ * Whether an attribute holds pointers, shown by the name of what they land
+ * on rather than as the DN they are stored in. Their tooltip repeats that
+ * name; a date, a size, a nomenclature's own key or a plain string keeps the
+ * stored text there (#373).
+ *
+ * @param entity the entity the entry belongs to
+ * @param name attribute the value is held in
+ * @returns whether its values are shown by name
+ */
+export function isNamedValue(entity: EntityDescriptor, name: string): boolean {
+  const attr = entity.schema.attributes[name];
+  return attr?.type === 'pointer' || attr?.items?.type === 'pointer';
 }
 
 /**
