@@ -348,6 +348,14 @@ export class FormActions {
     const domains = rights.inheritsDomains(entity)
       ? ctx.api.mailDomains(ctx.entities())
       : undefined;
+    // The organization the new one goes under, or the one an edited one
+    // hangs from: the server walks up from there.
+    const linkable = domains
+      ? (): Promise<string[]> =>
+          domains.linked(
+            (entry?.dn ? parentOf(entry.dn) : parent()) ?? entity.base
+          )
+      : undefined;
     const form = new EntityForm({
       report: ctx.report,
       announce: ctx.announce,
@@ -358,14 +366,7 @@ export class FormActions {
       notice: kept?.notice,
       typeAhead: (branch: string): boolean =>
         isDomainBranch(ctx.entities(), branch),
-      // The organization the new one goes under, or the one an edited one
-      // hangs from: the server walks up from there.
-      linkableDomains: domains
-        ? (): Promise<string[]> =>
-            domains.linked(
-              (entry?.dn ? parentOf(entry.dn) : parent()) ?? entity.base
-            )
-        : undefined,
+      linkableDomains: linkable,
       pointerOptions: (
         branch: string
       ): Promise<{ dn: string; label: string }[]> =>
@@ -390,7 +391,15 @@ export class FormActions {
         values: Record<string, string | string[]>,
         cleared: string[]
       ): Promise<void> =>
-        this.submitOrganization(entity, values, cleared, entry, parent(), form),
+        this.submitOrganization(
+          entity,
+          values,
+          cleared,
+          entry,
+          parent(),
+          form,
+          linkable
+        ),
     });
 
     // A 401 keeps what the form holds, the parent picked included.
@@ -460,6 +469,8 @@ export class FormActions {
    * @param entry the organization edited; none for a new one
    * @param parentDn where a new one goes; the server's default when omitted
    * @param form the form submitted, to show a refusal under its field
+   * @param linkable the domains the form read as linked above, to tell a
+   *   refused link from refused rights
    */
   private async submitOrganization(
     entity: EntityDescriptor,
@@ -467,7 +478,8 @@ export class FormActions {
     cleared: string[],
     entry?: Entry,
     parentDn?: string,
-    form?: EntityForm
+    form?: EntityForm,
+    linkable?: () => Promise<string[]>
   ): Promise<void> {
     const { ctx } = this;
     const t = ctx.t;
@@ -526,12 +538,13 @@ export class FormActions {
         ? String(entryValue(entry, entity.mainAttribute) ?? '')
         : createdEntryId(entity, undefined, values);
       const parent = parentDn ?? ctx.api.organizationRoot;
-      const domainLink = this.domainLinkRefused(
+      const domainLink = await this.domainLinkRefused(
         entity,
         err,
         values,
         entry,
-        parent
+        parent,
+        linkable
       );
       if (domainLink) {
         const message = t('form.notLinkedAbove');
@@ -566,23 +579,29 @@ export class FormActions {
    * has that right as the server judges it — an organization edited by its
    * parent on the most specific branch, a narrower rule refusing it
    * included, a new one by the organization it goes under — and the change
-   * adds a domain, the domain is what was refused.
+   * adds a domain the form did not read as linked above, the domain is what
+   * was refused. One it did read there is one the server accepts, so such a
+   * refusal is about something else, a narrower rule or a view gone stale;
+   * when the form could not read what is linked above, and offered every
+   * domain, the domain is blamed.
    *
    * @param entity the organizations
    * @param err what the request threw
    * @param values what the form sent
    * @param entry the organization edited; none for a new one
    * @param parentDn where a new one goes
+   * @param linkable the domains the form read as linked above
    * @returns the attribute, or undefined when the refusal is about rights
    *   on the branch or about nothing the console can tell
    */
-  private domainLinkRefused(
+  private async domainLinkRefused(
     entity: EntityDescriptor,
     err: unknown,
     values: Record<string, string | string[]>,
     entry?: Entry,
-    parentDn?: string
-  ): string | undefined {
+    parentDn?: string,
+    linkable?: () => Promise<string[]>
+  ): Promise<string | undefined> {
     const { refusal } = (err ?? {}) as { refusal?: { code?: string } };
     if (refusal?.code !== 'forbidden') return undefined;
     const attribute = roleAttribute(entity.schema, 'domainLink');
@@ -597,8 +616,14 @@ export class FormActions {
     );
     const added = [values[attribute] ?? []]
       .flat()
-      .some(dn => dn.trim() && !held.has(comparableDn(dn)));
-    return added ? attribute : undefined;
+      .filter(dn => dn.trim() && !held.has(comparableDn(dn)));
+    if (added.length === 0) return undefined;
+    const above = await linkable?.().catch(() => undefined);
+    if (!above) return attribute;
+    const known = new Set(above.map(comparableDn));
+    return added.some(dn => !known.has(comparableDn(dn)))
+      ? attribute
+      : undefined;
   }
 
   /**

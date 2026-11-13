@@ -718,10 +718,10 @@ describe('actions/forms', () => {
        * France's card as sophie.martin, who administers Sales and links no
        * domain the organizations above do not: the top answers her 404,
        * as ldap-rest does above a delegated branch (#375). Sales links what
-       * it is given.
+       * it is given, or fails to answer.
        */
       const sophie = async (
-        salesLinks: string[],
+        salesLinks: string[] | 'unreadable',
         scope: Scope | 'sophie.martin' = 'sophie.martin',
         edit = true
       ): Promise<Mounted> => {
@@ -739,11 +739,16 @@ describe('actions/forms', () => {
             server
               .get(at(top))
               .reply(404, { error: `Organization ${top} not found` });
-            server.get(at(sales)).reply(200, {
-              dn: sales,
-              ou: 'Sales',
-              twakeDomainLink: salesLinks,
-            });
+            if (salesLinks === 'unreadable')
+              server
+                .get(at(sales))
+                .reply(500, { error: 'Internal Server Error' });
+            else
+              server.get(at(sales)).reply(200, {
+                dn: sales,
+                ou: 'Sales',
+                twakeDomainLink: salesLinks,
+              });
             server.get(at(france)).reply(200, { dn: france, ou: 'France' });
             server.get(/^\/api\/v1\/ldap\/domains(\?.*)?$/).reply(200, {
               example: {
@@ -798,15 +803,19 @@ describe('actions/forms', () => {
       it('should offer no domain the organizations she reads above do not link', async () => {
         // Every domain was offered, the top's 404 failing the lookup, and
         // the server then refused lists.example.com.
+        // example.com, which the hidden top links, is not offered either: it
+        // applies under the top already.
         const { root } = await sophie([]);
         const { input, results } = await picker(root);
-        type(input, 'lists');
-        await until(() =>
-          (results.textContent ?? '').includes(
-            'Only a domain an organization above this one links can be linked here'
-          )
-        );
-        expect(results.innerHTML).not.to.include('data-candidate');
+        for (const text of ['lists', 'example']) {
+          type(input, text);
+          await until(() =>
+            (results.textContent ?? '').includes(
+              'Only a domain an organization above this one links can be linked here'
+            )
+          );
+          expect(results.innerHTML).not.to.include('data-candidate');
+        }
       });
 
       it('should offer what Sales links, above France', async () => {
@@ -820,8 +829,9 @@ describe('actions/forms', () => {
 
       it('should blame the domain, not her rights, when a link is refused', async () => {
         // ldap-rest words that refusal as any other: "You do not administer
-        // France" was said of an organization she administers.
-        const { root, server } = await sophie([lists]);
+        // France" was said of an organization she administers. Sales could
+        // not be read, so every domain was offered.
+        const { root, server } = await sophie('unreadable');
         server.put(at(france)).reply(403, forbidden);
         const { input, results } = await picker(root);
         type(input, 'lists');
@@ -834,6 +844,23 @@ describe('actions/forms', () => {
           'Only a domain an organization above this one links can be linked here'
         );
         expect(panelOf(root).panel.hidden).to.be.false;
+      });
+
+      it('should blame her rights when the domain refused is one linked above', async () => {
+        // The server accepts a domain Sales links: the refusal is about
+        // something else, a narrower rule or a view gone stale.
+        const { root, server } = await sophie([lists]);
+        server.put(at(france)).reply(403, forbidden);
+        const { input, results } = await picker(root);
+        type(input, 'lists');
+        await until(() => !!results.querySelector('[data-candidate="0"]'));
+        press('Enter');
+        save(root);
+        await until(() => toast(root) !== '');
+        expect(toast(root)).to.equal(
+          'You do not administer France: this change is not yours to make.'
+        );
+        expect(fieldError(root, 'twakeDomainLink')).to.equal('');
       });
 
       it('should still blame her rights when the change links no new domain', async () => {
@@ -902,7 +929,11 @@ describe('actions/forms', () => {
       });
 
       it('should blame the domain when a new organization under France is refused', async () => {
-        const { root, server } = await sophie([lists], 'sophie.martin', false);
+        const { root, server } = await sophie(
+          'unreadable',
+          'sophie.martin',
+          false
+        );
         server.post('/api/v1/ldap/organizations').reply(403, forbidden);
         click(root, `[data-tree] [data-add="${france}"]`);
         await drawn(root);

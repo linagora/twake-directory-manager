@@ -69,6 +69,8 @@ src/index.ts                public exports: DirectoryConsole, four components
     │   └── PasswordPolicies.ts the policies table and form
     ├── api/ConsoleApiClient.ts fetch, discovery, every endpoint, the error
     │                           model, compatibility with older ldap-rest answers
+    ├── api/mailDomains.ts      the mail domains a form offers, to an address
+    │                           and to an organization's links
         ├── importer.ts, csv.ts     reading a CSV file and resolving its values
     ├── format.ts               labels, values, sizes, dates, refusals in words,
     │                           the id of an entry just created

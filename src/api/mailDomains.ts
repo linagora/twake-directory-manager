@@ -31,7 +31,7 @@ export interface MailDomains {
   /**
    * DNs of the domains an organization and every one above it link, up to
    * the top of the tree, leaving out those the caller cannot read (#375):
-   * each domain named is one the server lets the organization's children
+   * each domain named is one the server lets an organization under it
    * link. Rejects when one of them could not be read for another reason
    */
   linked(organization: string): Promise<string[]>;
@@ -59,7 +59,8 @@ export interface MailDomainSource {
  * The organizations are read one by one from the one asked about up to the
  * top of the tree, as the server walks them when it judges an address or a
  * link. A directory without a tree, or whose organizations link no domain,
- * restricts nothing, and nor does the form.
+ * restricts no address, and nor does the form; a new link still needs a
+ * domain linked above, so none is offered then.
  *
  * ldap-rest answers `404` to a delegated administrator reading an
  * organization above their branches, yet still counts what it links when it
