@@ -323,6 +323,11 @@ to `CHANGELOG.md`: the release workflow refuses a tag that disagrees with any
 of the three, and takes the release notes from that section. A prerelease
 (`vX.Y.Z-rc.1`) follows the same rule, under its own version.
 
+The image is tagged `X.Y.Z`, and the tags that follow a line, `X.Y`, `X` and
+`latest`, move to the newest stable release of that line only: a prerelease
+moves none of them, and a fix to an older line leaves `latest`, and the
+GitHub release marked _Latest_, where they are.
+
 To try a change against a directory, serve `dist/` from a local ldap-rest:
 
 ```sh

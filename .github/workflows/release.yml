@@ -41,6 +41,9 @@ jobs:
     name: Version, chart and changelog agree
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      floating: ${{ steps.floating.outputs.tags }}
+      latest: ${{ steps.floating.outputs.latest }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -75,6 +78,35 @@ jobs:
             echo "::error::CHANGELOG.md has no section '## v$VERSION', or nothing under it"; failed=1
           fi
           exit $failed
+
+      # The image tags that follow a line, `X.Y`, `X` and `latest`, go to the
+      # newest stable release of that line only: a prerelease moves none of
+      # them, and a fix to an older line moves `X.Y` (and `X`, when its major
+      # is still the newest one's) without taking `latest` back. The tag
+      # being released is already among the remote's.
+      - name: Decide which floating tags the release moves
+        id: floating
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          MAJOR_MINOR="${VERSION%.*}"
+          MAJOR="${VERSION%%.*}"
+          TAGS=""
+          LATEST=false
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            STABLE=$(git ls-remote --tags --refs origin 'v*' \
+              | sed 's#.*refs/tags/v##' \
+              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$')
+            newest() { grep -E "^$1" <<<"$STABLE" | sort -V | tail -n 1; }
+            [ "$(newest "${MAJOR_MINOR//./\\.}\\.")" = "$VERSION" ] && TAGS="$MAJOR_MINOR"
+            [ "$(newest "$MAJOR\\.")" = "$VERSION" ] && TAGS="$TAGS $MAJOR"
+            if [ "$(newest '')" = "$VERSION" ]; then
+              TAGS="$TAGS latest"
+              LATEST=true
+            fi
+          fi
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "v$VERSION moves: ${TAGS:-no floating tag}"
 
   # Build and push one image per architecture, in parallel, each on a native
   # runner: no QEMU emulation for arm64.
@@ -148,7 +180,7 @@ jobs:
   docker-manifest:
     name: Create Multi-arch Manifest
     runs-on: ubuntu-latest
-    needs: docker
+    needs: [preflight, docker]
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -168,18 +200,19 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # One manifest per registry carrying all its tags, both registries at
-      # once. Each push is awaited on its own: a bare `wait` would hide a
-      # failure.
+      # once: the version, and the floating tags preflight gave this release.
+      # Each push is awaited on its own: a bare `wait` would hide a failure.
       - name: Create and push multi-arch manifests
+        env:
+          FLOATING: ${{ needs.preflight.outputs.floating }}
         run: |
           VERSION=${GITHUB_REF#refs/tags/v}
-          MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
-          MAJOR=$(echo "$VERSION" | cut -d. -f1)
 
           PIDS=()
           for IMAGE in "$IMAGE_GHCR" "$IMAGE_DOCKER"; do
             TAGS=()
-            for TAG in "$VERSION" "$MAJOR_MINOR" "$MAJOR" "latest"; do
+            # shellcheck disable=SC2086 # a space-separated list of tags
+            for TAG in "$VERSION" $FLOATING; do
               TAGS+=(-t "${IMAGE}:${TAG}")
             done
             docker buildx imagetools create "${TAGS[@]}" \
@@ -220,7 +253,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [docker-manifest, helm]
+    needs: [preflight, docker-manifest, helm]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -251,3 +284,5 @@ jobs:
         with:
           body_path: release-notes.md
           prerelease: ${{ contains(github.ref_name, '-') }}
+          # The newest stable release only, like the image's `latest`.
+          make_latest: ${{ needs.preflight.outputs.latest }}
