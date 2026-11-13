@@ -85,6 +85,8 @@ test.describe('GROUP groups', () => {
 
   test('GROUP-03 add and remove members', async ({ page, directory }) => {
     const group = await directory.createGroup({ members: [CAROL, FRANK] });
+    // Two accounts of one surname: a search names them both, and nothing else.
+    const { lastName, users } = await directory.createUsers(2);
     const app = await new LoginPage(page).loginAs(ADMIN, `groups/${group.cn}`);
     const card = app.entry();
 
@@ -106,6 +108,21 @@ test.describe('GROUP groups', () => {
     ]);
     await (await form.field('Members')).press('Enter');
     await expect(form.tokens('Members')).toHaveCount(3);
+
+    // One search takes several members: after a choice the list stays, and
+    // the next one is an Enter away, the box keeping the text typed.
+    await form.type('Members', lastName);
+    await expect(form.options('Members')).toHaveCount(2);
+    const box = await form.field('Members');
+    await box.press('Enter');
+    await expect(form.tokens('Members')).toHaveCount(4);
+    await expect(form.suggestions('Members')).toBeVisible();
+    await expect(box).toHaveValue(lastName);
+    await box.press('Enter');
+    await expect(form.tokens('Members')).toHaveCount(5);
+    // That search had nothing left: the box is given back.
+    await expect(box).toHaveValue('');
+    await expect(form.suggestions('Members')).toBeHidden();
 
     await form.type('Members', 'sal');
     await expect(
@@ -131,13 +148,14 @@ test.describe('GROUP groups', () => {
     await form.removeToken('Members', 'frank');
     await form.submit();
     await app.expectToast('Saved');
-    await expect(card.relatedLinks('Members')).toHaveText([
-      'carol',
-      'dave',
-      'erin',
-    ]);
+    // The order the two accounts came in the search is the server's, so
+    // each is looked for on its own.
+    const members = card.relatedLinks('Members');
+    await expect(members).toHaveCount(5);
+    for (const name of ['carol', 'dave', 'erin', users[0].uid, users[1].uid])
+      await expect(members.filter({ hasText: name })).toHaveCount(1);
     expect((await directory.values(group.dn, 'member')).sort()).toEqual(
-      [CAROL.dn, DAVE.dn, ERIN.dn].sort()
+      [CAROL.dn, DAVE.dn, ERIN.dn, ...users.map(user => user.dn)].sort()
     );
 
     await card.relatedLinks('Members').filter({ hasText: 'dave' }).click();

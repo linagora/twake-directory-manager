@@ -114,7 +114,7 @@ const rules = {
 // when the file does; remove the file when it goes under the budget; never
 // add one.
 const oversized = {
-  'src/components/EntityForm.ts': 1406,
+  'src/components/EntityForm.ts': 1326,
 };
 
 // What the types tell on top: a promise nobody waits for or handles, a

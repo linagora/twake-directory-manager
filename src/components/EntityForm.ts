@@ -19,7 +19,6 @@ import {
   attributeLabel,
   beforeToday,
   comparableDn,
-  completingDomains,
   editableByteSize,
   entryValue,
   escapeDnValue,
@@ -43,6 +42,8 @@ import { background, type Reporter } from '../shared/background';
 import { selectorValue } from '../shared/dom';
 import { append, html, render, type SafeHtml } from '../shared/html';
 import { bindHelp, describeField, helpMarkup, hintMarkup } from '../ui/field';
+import type { Announce } from '../ui/announce';
+import { bindCompletion } from './addressCompletion';
 import * as drafts from './formDraft';
 
 /** An entry a pointer field may land on. */
@@ -72,6 +73,11 @@ export interface FormOptions {
    * (see `background`); the console's own reporter, or the log when absent
    */
   report?: Reporter;
+  /**
+   * Says to a screen reader that a value was added to those a picker holds:
+   * the frame's announcer, or nothing when the form is not in the frame
+   */
+  announce?: Announce;
   /** Existing entry when editing; absent when creating */
   entry?: Entry;
   /**
@@ -929,15 +935,17 @@ export class EntityForm {
       if (control && this.addresses.has(name)) {
         // A completion writes the box without the `change` a person's
         // typing ends in: the value is stored as it is written.
-        const completion = this.bindCompletion(
+        const completion = bindCompletion({
           name,
-          control as HTMLInputElement,
+          input: control as HTMLInputElement,
           wrapper,
-          value => {
+          domains: () => this.domainsOf(name),
+          report: this.options.report,
+          written: value => {
             store(value);
             preview?.(value);
-          }
-        );
+          },
+        });
         control.addEventListener('keydown', event => {
           completion?.key(event as KeyboardEvent);
         });
@@ -1233,16 +1241,41 @@ export class EntityForm {
     };
     const choose = (candidate: PointerCandidate): void => {
       this.picked.set(candidate.dn, candidate.token ?? candidate.label);
+      let added = false;
       if (multiple) {
         // DNs compare without regard to case, as a DN typed whole does.
         const held = this.values[name].some(
           value => value.toLowerCase() === candidate.dn.toLowerCase()
         );
-        if (!held) this.values[name].push(candidate.dn);
+        if (!held) {
+          this.values[name].push(candidate.dn);
+          added = true;
+        }
       } else this.values[name] = [candidate.dn];
-      input.value = '';
-      close();
       redraw();
+      if (!multiple) {
+        input.value = '';
+        close();
+        return;
+      }
+      // A picker that holds several values keeps the search it was picked
+      // from while that search still has something to offer: the next value
+      // is a click or Enter away, not another query. A search with nothing
+      // left gives the box back, ready for the next one.
+      if (added)
+        this.options.announce?.(
+          translator.t('form.chosen', {
+            value: candidate.token ?? candidate.label,
+          })
+        );
+      candidates = candidates.filter(other => other.dn !== candidate.dn);
+      if (candidates.length === 0) {
+        input.value = '';
+        close();
+        return;
+      }
+      active = 0;
+      paint();
     };
 
     const run = (query: string, ticket: number): void => {
@@ -1376,6 +1409,12 @@ export class EntityForm {
       if (!button) return;
       this.values[name].splice(Number(button.dataset.remove), 1);
       redraw();
+      // The value removed is offered again by the search still in the box,
+      // rather than after another keystroke.
+      if (!multiple) return;
+      if (timer) clearTimeout(timer);
+      const query = input.value.trim();
+      if (query.length >= minimum) run(query, ++generation);
     });
   }
 
@@ -1417,7 +1456,13 @@ export class EntityForm {
       input.addEventListener('change', () => add(input.value));
     } else {
       const completion = this.addresses.has(name)
-        ? this.bindCompletion(name, input as HTMLInputElement, wrapper)
+        ? bindCompletion({
+            name,
+            input: input as HTMLInputElement,
+            wrapper,
+            domains: () => this.domainsOf(name),
+            report: this.options.report,
+          })
         : undefined;
       input.addEventListener('keydown', event => {
         // A domain offered and chosen with the arrows takes the key first;
@@ -1554,145 +1599,6 @@ export class EntityForm {
     render(field, this.fieldContent(name, attr));
     this.bindPicker(name, field);
     return true;
-  }
-
-  /**
-   * Offer the domains an address may be at, once an "@" is typed into it:
-   * a list under the box, as a picker's, that completes the address with
-   * the domain chosen in it.
-   *
-   * The first line is chosen, as a picker's is: Enter takes it. Nothing
-   * else would have: "jane@" and Enter left "jane@", and the form refused
-   * it. An address typed whole, its domain among those offered, opens no
-   * list, and Enter goes on adding it or submitting the form. Up and Down
-   * move through the list, Escape closes it, and leaving the box closes it
-   * too.
-   *
-   * @param name the field
-   * @param input its text box
-   * @param wrapper the field, holding the list
-   * @param written told of an address the list completed
-   * @returns what the box's own keys are first handed to, and how to close
-   *   the list; undefined when the field has no list
-   */
-  private bindCompletion(
-    name: string,
-    input: HTMLInputElement,
-    wrapper: HTMLElement,
-    written?: (value: string) => void
-  ): { key(event: KeyboardEvent): boolean; close(): void } | undefined {
-    const results = wrapper.querySelector<HTMLElement>('[data-completions]');
-    if (!results) return undefined;
-    let suggestions: string[] = [];
-    let active = -1;
-    // Domains answered after a later keystroke are dropped.
-    let generation = 0;
-
-    const close = (): void => {
-      results.hidden = true;
-      input.setAttribute('aria-expanded', 'false');
-      input.removeAttribute('aria-activedescendant');
-      suggestions = [];
-      active = -1;
-    };
-    const paint = (): void => {
-      render(
-        results,
-        html`${suggestions.map(
-          (suggestion, index) => html`
-        <li id="dc-complete-${name}-${index}" role="option"
-          class="dc-picker-option${index === active ? ' dc-active' : ''}"
-          aria-selected="${index === active ? 'true' : 'false'}"
-          data-suggestion="${index}">${suggestion}</li>`
-        )}`
-      );
-      results.hidden = false;
-      input.setAttribute('aria-expanded', 'true');
-      results.scrollIntoView?.({ block: 'nearest' });
-      if (active >= 0)
-        input.setAttribute(
-          'aria-activedescendant',
-          `dc-complete-${name}-${active}`
-        );
-      else input.removeAttribute('aria-activedescendant');
-    };
-    const choose = (index: number): void => {
-      input.value = suggestions[index];
-      close();
-      written?.(input.value);
-    };
-
-    input.addEventListener('input', () => {
-      const value = input.value.trim();
-      const at = value.lastIndexOf('@');
-      const ticket = ++generation;
-      if (at < 0) return close();
-      const local = value.slice(0, at);
-      background(
-        () =>
-          this.domainsOf(name).then(domains => {
-            if (ticket !== generation) return;
-            // What is typed completes without case nor accent: `jane@EXA`
-            // offers `jane@example.com`, as `jane@Éxa` does.
-            suggestions = completingDomains(domains, value.slice(at + 1)).map(
-              domain => `${local}@${domain}`
-            );
-            active = 0;
-            if (suggestions.length === 0) close();
-            else paint();
-          }),
-        'domainsOf',
-        this.options.report
-      );
-    });
-
-    // `mousedown`, not `click`: the box's blur closes the list first.
-    results.addEventListener('mousedown', event => {
-      const item = (event.target as HTMLElement).closest<HTMLElement>(
-        '[data-suggestion]'
-      );
-      if (!item) return;
-      event.preventDefault();
-      choose(Number(item.dataset.suggestion));
-    });
-    input.addEventListener('blur', () => {
-      generation++;
-      close();
-    });
-
-    return {
-      close: (): void => {
-        generation++;
-        close();
-      },
-      key: (event: KeyboardEvent): boolean => {
-        if (results.hidden || suggestions.length === 0) return false;
-        const { key } = event;
-        if (key === 'Escape') {
-          event.preventDefault();
-          close();
-          return true;
-        }
-        if (key === 'ArrowDown' || key === 'ArrowUp') {
-          event.preventDefault();
-          const count = suggestions.length;
-          active =
-            active < 0
-              ? key === 'ArrowDown'
-                ? 0
-                : count - 1
-              : (active + (key === 'ArrowDown' ? 1 : -1) + count) % count;
-          paint();
-          return true;
-        }
-        if (key === 'Enter' && active >= 0) {
-          event.preventDefault();
-          choose(active);
-          return true;
-        }
-        return false;
-      },
-    };
   }
 
   /**

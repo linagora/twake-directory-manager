@@ -19,14 +19,17 @@ describe('GroupPicker', () => {
     input: HTMLInputElement;
     results: HTMLElement;
     chosen: HTMLElement;
+    announced: string[];
     type(text: string): void;
     press(key: string): boolean;
     answered(text: string): Promise<void>;
   } => {
     const container = document.createElement('div');
     document.body.append(container);
+    const announced: string[] = [];
     new GroupPicker({
       translator: new Translator('en'),
+      announce: text => announced.push(text),
       search: async query =>
         groups.filter(group => group.name.startsWith(query)),
       onAdd: async () => ({ left: [] }),
@@ -51,7 +54,7 @@ describe('GroupPicker', () => {
     };
     const answered = (text: string): Promise<void> =>
       until(() => results.textContent?.includes(text) ?? false);
-    return { input, results, chosen, type, press, answered };
+    return { input, results, chosen, announced, type, press, answered };
   };
 
   it('should offer no suggestion of the text typed before while searching the new one', async () => {
@@ -105,5 +108,49 @@ describe('GroupPicker', () => {
     } finally {
       Element.prototype.scrollIntoView = original;
     }
+  });
+
+  it('should keep the search after a choice, and take the next one from it', async () => {
+    const { input, results, chosen, announced, type, press, answered } = open();
+    type('sales');
+    await answered('sales-team');
+    expect(press('Enter')).to.equal(true);
+    expect(chosen.textContent).to.include('sales-team');
+    // The search it was picked from stays while it has more to offer: the
+    // box keeps its text, the list the other match, and nothing was typed
+    // again.
+    expect(input.value).to.equal('sales');
+    expect(results.textContent)
+      .to.include('sales-fr')
+      .and.not.include('sales-team');
+    expect(press('Enter')).to.equal(true);
+    expect(chosen.textContent).to.include('sales-team').and.include('sales-fr');
+    expect(announced).to.deep.equal([
+      'sales-team added to those chosen',
+      'sales-fr added to those chosen',
+    ]);
+    // That search had nothing left: the box is given back, ready for the
+    // next one, and Enter adds the groups chosen.
+    expect(input.value).to.equal('');
+    expect(results.hidden).to.equal(true);
+  });
+
+  it('should offer a removed group again by the query still typed', async () => {
+    const { chosen, results, type, press, answered } = open();
+    type('sales');
+    await answered('sales-team');
+    // One of the two matches is picked: the search stays, with the other.
+    press('Enter');
+    expect(chosen.textContent).to.include('sales-team');
+    expect(results.textContent).to.include('sales-fr');
+
+    // Out goes sales-team; the box still reads "sales", so the search is
+    // asked again and offers it once more.
+    chosen.querySelector<HTMLElement>('[data-remove="0"]')?.click();
+    await answered('sales-team');
+    expect(results.textContent)
+      .to.include('sales-team')
+      .and.include('sales-fr');
+    expect(chosen.textContent).to.equal('');
   });
 });
