@@ -18,6 +18,7 @@ import {
   parentDn as parentOf,
   pointerLabel,
   rdnValue,
+  withinDn,
 } from '../format';
 import { splitEntities } from '../rights';
 import type { EntityDescriptor, Entry } from '../types';
@@ -202,7 +203,13 @@ export function relationHref(
 ): string | undefined {
   const owner = entities.find(
     entity =>
-      entity.base && dn.toLowerCase().endsWith(`,${entity.base.toLowerCase()}`)
+      entity.base &&
+      // The organizations' base is itself the root organization's entry, so
+      // a DN equal to it is owned too (#376). A flat entity's base is only
+      // a container: naming it leads to no entry.
+      (entity.kind === 'organization'
+        ? withinDn(dn, entity.base)
+        : dn.toLowerCase().endsWith(`,${entity.base.toLowerCase()}`))
   );
   if (!owner) return undefined;
   if (primaryOnly && splitEntities(entities).reference.includes(owner))
