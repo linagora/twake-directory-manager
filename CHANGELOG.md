@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.15.0 (2026-11-13)
+
+Built on ldap-rest 2.3.0, which takes three security fixes of its bulk
+import and Twake plugins; a bulk import schema now names its base
+([upgrading](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md)).
+
+### Security
+
+- A DN made of a run of backslashes or spaces no longer freezes the tab that
+  shows or imports it
+  ([GHSA-3hrr-hc56-86g8](https://github.com/linagora/twake-directory-manager/security/advisories/GHSA-3hrr-hc56-86g8))
+- The release workflow runs its actions at fixed commits
+  ([GHSA-5hc3-w7w8-7mcq](https://github.com/linagora/twake-directory-manager/security/advisories/GHSA-5hc3-w7w8-7mcq))
+
+### Features
+
+- A multi-valued picker keeps its search after a pick, so several values come
+  from one search (#369)
+- Suggestions and the organization tree's filter ignore accents: `reseau`
+  finds `Réseau`
+
+### Bug Fixes
+
+- A value refused for its format is named, the field's hint following as
+  help (#374)
+- A local administrator is offered only the mail domains linked above the
+  organization, and a refused link is said under the field (#375)
+- A reference value's tooltip shows its name, not its DN (#373)
+- A Department path naming the root organization is a link (#376)
+- A form kept open across a language change asks before discarding in its
+  own language (#377)
+- A prerelease, or a fix to an older line, no longer moves the `latest`, `X`
+  and `X.Y` image tags
+
 ## v0.14.2 (2026-11-10)
 
 Built on ldap-rest 2.2.1. Nothing the console calls changed shape; the image

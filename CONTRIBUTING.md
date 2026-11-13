@@ -183,6 +183,7 @@ Releases go straight to `main`, tagged, no release branch:
 `release.yml` then runs every gate of `test.yml`, refuses a tag whose version
 differs from `package.json`, `Chart.yaml` or the changelog section, builds
 the amd64 and arm64 images for GHCR and Docker Hub, pushes the chart as an
-OCI artifact and creates the GitHub release. Do not tag a prerelease
-(`vX.Y.Z-rc.1`) yet: the manifest job would move the `latest`, `X` and `X.Y`
-image tags to it.
+OCI artifact and creates the GitHub release. The `X.Y`, `X` and `latest`
+image tags, and the release marked _Latest_, go to the newest stable release
+of their line only: a prerelease (`vX.Y.Z-rc.1`) or a fix to an older line
+leaves them where they are.
