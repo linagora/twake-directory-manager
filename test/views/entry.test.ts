@@ -579,6 +579,57 @@ describe('views/entry', () => {
         .and.include(`data-relation="${allStaff}"`);
     });
 
+    it('should read the group the list left out, one by one', async () => {
+      // A list may answer only part of the groups: a name no raw filter
+      // holds, a size limit, a refusal. The others are read alone (#388).
+      const allStaff = `cn=all-staff,${groupsBase}`;
+      const { root, idle, calls } = await mountConsole({
+        hash: 'users/alice',
+        answers: server => {
+          server
+            .get('/api/v1/ldap/users/alice')
+            .reply(200, { ...aliceUnlisted(), memberOf: [staff, allStaff] });
+          server
+            .get(groupsList)
+            .reply(200, { staff: { dn: staff, cn: 'staff' } });
+          server
+            .get('/api/v1/ldap/groups/all-staff')
+            .reply(200, { dn: allStaff, cn: 'all-staff' });
+        },
+      });
+      await idle();
+      expect(groupReads(calls)).to.deep.equal(['get(groups, all-staff)']);
+      expect(card(root))
+        .to.include(`data-relation="${staff}"`)
+        .and.include(`data-relation="${allStaff}"`);
+    });
+
+    it('should take the × from the organization the list names (#388)', async () => {
+      // The list asks for organizationLink for this: without it, the group's
+      // parent is all the scope can judge, and the × would be missing.
+      const scope: Scope = {
+        user: 'uid=alice,ou=users,dc=example,dc=com',
+        unrestricted: false,
+        described: true,
+        branches: [{ dn: sales, read: true, write: true }],
+        entities: [],
+      };
+      const { root, idle } = await mountConsole({
+        hash: 'users/alice',
+        scope,
+        answers: server => {
+          server
+            .get('/api/v1/ldap/users/alice')
+            .reply(200, { ...aliceUnlisted(), memberOf: [staff] });
+          server.get(groupsList).reply(200, {
+            staff: { dn: staff, cn: 'staff', twakeDepartmentLink: sales },
+          });
+        },
+      });
+      await idle();
+      expect(card(root)).to.include('dc-relation-remove');
+    });
+
     it('should show the card, with no group, when the search is refused', async () => {
       // ldap-rest before 0.20.1 refuses a dot in the filter.
       const { root } = await searched(undefined, search => {

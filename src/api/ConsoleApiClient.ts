@@ -39,13 +39,13 @@ import {
   comparableDn,
   entryValue,
   isDnShaped,
-  parentDn,
   rdnValue,
   searchableAttributes,
   splitRdn,
   valueLabel,
   withinDn,
 } from '../format';
+import { readGroupEntries } from './groupEntries';
 import { mailDomainLookup, type MailDomains } from './mailDomains';
 
 export type { MailDomains } from './mailDomains';
@@ -269,14 +269,6 @@ const POINTER_LOOKUP_LIMIT = 50;
  * the filter means.
  */
 const FILTER_SAFE_DN = /^[\w=, .@'-]+$/;
-
-/**
- * A group's name a raw OR filter can hold. ldap-rest's `match` takes
- * `[\w*=()&|, .@'-]`, but a parenthesis or an asterisk would change what
- * the filter asks for, so those stay out too. A name outside this set is
- * read one by one rather than put in a filter built here.
- */
-const FILTER_SAFE_NAME = /^[\w .@',-]+$/;
 
 /** Organizations walked before a pointer listing stops asking for more. */
 const ORGANIZATION_OPTION_LIMIT = 200;
@@ -964,13 +956,9 @@ export class ConsoleApiClient {
   }
 
   /**
-   * The groups a `memberOf` names, read in as few list calls as the server
-   * takes: one per group entity, matching them by name in a single OR
-   * filter and asking only what a card shows — never their members.
-   *
-   * A group whose name no raw filter can hold, or whose list fails, is left
-   * out: the caller reads it one by one, which is what the card did for
-   * every group before (#388).
+   * The groups a `memberOf` names, read in one list call per group entity
+   * and per batch of names (see {@link readGroupEntries}), asking only what
+   * a card shows — never their members (#388).
    *
    * @param dns the groups' DNs, as `memberOf` gives them
    * @param entities entities the console knows: the groups among them are read
@@ -980,41 +968,22 @@ export class ConsoleApiClient {
     dns: string[],
     entities: EntityDescriptor[]
   ): Promise<Entry[]> {
-    const byEntity = new Map<EntityDescriptor, string[]>();
-    for (const dn of dns) {
-      const parent = parentDn(dn);
-      const entity = entities.find(
-        item =>
-          item.kind === 'group' &&
-          !!item.base &&
-          !!parent &&
-          comparableDn(item.base) === comparableDn(parent)
-      );
-      const name = rdnValue(dn);
-      if (!entity || !FILTER_SAFE_NAME.test(name)) continue;
-      byEntity.set(entity, [
-        ...new Set([...(byEntity.get(entity) ?? []), name]),
-      ]);
-    }
-    const found = await Promise.all(
-      [...byEntity].map(async ([entity, names]) => {
-        const params = new URLSearchParams({
-          match: `(|${names
-            .map(name => `(${entity.mainAttribute}=${name})`)
-            .join('')})`,
-          attributes: this.cardAttributes(entity).join(','),
-        });
-        try {
-          const entries = await this.call<Record<string, Entry>>(
-            `${entity.endpoint}?${params.toString()}`
-          );
-          return Object.values(entries).filter(entry => entry.dn);
-        } catch {
-          return [];
-        }
-      })
-    );
-    return found.flat();
+    return readGroupEntries(dns, entities, async (entity, names) => {
+      const params = new URLSearchParams({
+        match: `(|${names
+          .map(name => `(${entity.mainAttribute}=${name})`)
+          .join('')})`,
+        attributes: this.cardAttributes(entity).join(','),
+      });
+      try {
+        const entries = await this.call<Record<string, Entry>>(
+          `${entity.endpoint}?${params.toString()}`
+        );
+        return Object.values(entries).filter(entry => entry.dn);
+      } catch {
+        return [];
+      }
+    });
   }
 
   /**

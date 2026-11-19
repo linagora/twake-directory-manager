@@ -321,6 +321,26 @@ describe('ConsoleApiClient', () => {
       ]);
     });
 
+    it('should split a long memberOf into bounded list calls', async () => {
+      // A reverse proxy refuses a request line beyond a few kilobytes, and
+      // an OR filter may reach the server's size limit: names go in batches.
+      const dns = Array.from(
+        { length: 51 },
+        (_, index) => `cn=group${index},ou=groups,dc=example,dc=com`
+      );
+      let asked = 0;
+      nock(baseUrl)
+        .get('/api/v1/ldap/groups')
+        .query(query => String(query.match).startsWith('(|'))
+        .twice()
+        .reply(() => {
+          asked += 1;
+          return [200, {}];
+        });
+      await new ConsoleApiClient(baseUrl).groupEntries(dns, [twakeGroups]);
+      expect(asked).to.equal(2);
+    });
+
     it('should ask a group list for its type as well as its name', async () => {
       // The card shows each group's type: a list answering only the name
       // would make it read the whole group for that one attribute.
