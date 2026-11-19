@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.16.0 (Unreleased)
+
+Built on ldap-rest 2.4.0.
+
 ## v0.15.0 (2026-11-13)
 
 Built on ldap-rest 2.3.0, which takes three security fixes of its bulk
