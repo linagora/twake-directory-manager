@@ -1,8 +1,17 @@
 # Changelog
 
-## v0.16.0 (Unreleased)
+## v0.16.0 (2026-11-19)
 
-Built on ldap-rest 2.4.0.
+Built on ldap-rest 2.4.0, whose Twake instance plugin keeps or drops the dash
+of an instance slug as the provider takes it, and recognises an instance by
+the account's address.
+
+### Bug Fixes
+
+- A user's card reads the groups of the account in one request, instead of
+  reading every group whole to show its type (#388)
+- A DN value escaped as hexadecimal octets is read as the character it names:
+  a group named `Comptabilit\C3\A9` keeps its type and ×
 
 ## v0.15.0 (2026-11-13)
 
