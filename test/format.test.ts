@@ -3,6 +3,7 @@ import {
   comparableDn,
   completingDomains,
   displayValue,
+  escapeDnValue,
   foldedText,
   formatByteSize,
   parentDn,
@@ -255,6 +256,30 @@ describe('format', () => {
       expect(parentDn(`cn=a,${spaces}ou=x`)).to.equal('ou=x');
       expect(comparableDn(`cn=a${spaces}x`)).to.equal(`cn=a${spaces}x`);
       expect(Date.now() - started).to.be.below(250);
+    });
+  });
+
+  describe('rdnValue', () => {
+    it('should read the escapes a DN value holds', () => {
+      expect(rdnValue('cn=Smith\\, John,ou=users')).to.equal('Smith, John');
+      expect(rdnValue('cn=a\\\\b,ou=users')).to.equal('a\\b');
+      expect(rdnValue('cn=alone')).to.equal('alone');
+      // An escaped octet is the character it names, not its two digits.
+      expect(rdnValue('cn=Smith\\26Jones,ou=users')).to.equal('Smith&Jones');
+      expect(rdnValue('cn=Tom\\20Jones,ou=users')).to.equal('Tom Jones');
+      // A non-ASCII character is one pair per UTF-8 byte.
+      expect(rdnValue('cn=Comptabilit\\C3\\A9,ou=users')).to.equal(
+        'Comptabilité'
+      );
+      // Only a pair of hex digits is an octet; anything else is taken as
+      // written, and a backslash at the end is kept.
+      expect(rdnValue('cn=a\\2z,ou=users')).to.equal('a2z');
+      expect(rdnValue('cn=a\\')).to.equal('a\\');
+    });
+
+    it('should read back what escapeDnValue wrote', () => {
+      for (const value of ['a+b@example.com', 'Smith, John', ' lead', 'tail '])
+        expect(rdnValue(`cn=${escapeDnValue(value)},ou=users`)).to.equal(value);
     });
   });
 

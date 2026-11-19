@@ -205,10 +205,55 @@ export function splitRdn(
   return { attribute, value, parent };
 }
 
+/** Decodes the UTF-8 octets a DN writes as `\XX` escapes. */
+const utf8 = new TextDecoder();
+
+/**
+ * A DN value, its escapes removed: the character a backslash takes, and the
+ * octets RFC 4514 writes as `\XX` for what a backslash cannot escape. A
+ * non-ASCII character is one `\XX` per UTF-8 byte, so consecutive pairs are
+ * decoded together; a pair is not taken for two digits, which is what made
+ * `Smith\26Jones` read as `Smith26Jones` rather than `Smith&Jones`.
+ *
+ * @param value the value as written in the DN
+ * @returns the value it holds
+ */
+function unescapeDnValue(value: string): string {
+  const bytes: number[] = [];
+  let text = '';
+  const flush = (): void => {
+    if (!bytes.length) return;
+    text += utf8.decode(Uint8Array.from(bytes));
+    bytes.length = 0;
+  };
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    if (char !== '\\') {
+      flush();
+      text += char;
+      continue;
+    }
+    const pair = value.slice(index + 1, index + 3);
+    if (/^[0-9a-f]{2}$/i.test(pair)) {
+      bytes.push(parseInt(pair, 16));
+      index += 2;
+      continue;
+    }
+    flush();
+    // A backslash at the end is kept, as the value was written.
+    if (index + 1 < value.length) {
+      text += value[index + 1];
+      index++;
+    } else text += char;
+  }
+  flush();
+  return text;
+}
+
 /** Value of the first RDN of a DN, with its escapes removed. */
 export function rdnValue(dn: string): string {
   const rdn = splitRdn(dn);
-  return rdn ? rdn.value.replace(/\\(.)/g, '$1') : dn;
+  return rdn ? unescapeDnValue(rdn.value) : dn;
 }
 
 /**
