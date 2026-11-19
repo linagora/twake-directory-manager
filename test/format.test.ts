@@ -291,6 +291,8 @@ describe('format', () => {
         'a+b@example.com',
         'Smith, John',
         'Rémi',
+        ' ',
+        'a\\ ',
         ' lead',
         '#lead',
         'tail ',

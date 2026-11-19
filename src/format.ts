@@ -143,10 +143,17 @@ export function isDnShaped(text: string): boolean {
  * attribute to the RDN. The inverse of `rdnValue`.
  */
 export function escapeDnValue(value: string): string {
-  return value
-    .replace(/[\\,+"<>;=]/g, '\\$&')
-    .replace(/^([ #])/, '\\$1')
-    .replace(/ $/, '\\ ');
+  let escaped = '';
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    // A space or `#` needs escaping at the start, a space at the end; one
+    // value of one space is both ends, and is escaped once.
+    const edge =
+      (index === 0 && (char === ' ' || char === '#')) ||
+      (index === value.length - 1 && char === ' ');
+    escaped += /[\\,+"<>;=]/.test(char) || edge ? `\\${char}` : char;
+  }
+  return escaped;
 }
 
 /**
