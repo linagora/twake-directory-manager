@@ -210,7 +210,11 @@ describe('ConsoleApiClient', () => {
       expect(isLarge(twakeGroups)).to.equal(true);
       nock(baseUrl)
         .get('/api/v1/ldap/groups')
-        .query({ match: `(member=${john})`, attributes: 'cn' })
+        // What a card shows, not the member list a whole read returned.
+        .query({
+          match: `(member=${john})`,
+          attributes: 'cn,twakeDepartmentLink',
+        })
         .reply(200, {
           staff: { dn: staff.dn, cn: 'staff' },
         });
@@ -218,7 +222,7 @@ describe('ConsoleApiClient', () => {
         users,
         twakeGroups,
       ]);
-      expect(found).to.deep.equal([staff.dn]);
+      expect(found).to.deep.equal([{ dn: staff.dn, cn: 'staff' }]);
     });
 
     it('should find no group where ldap-rest refuses the filter', async () => {
@@ -282,12 +286,96 @@ describe('ConsoleApiClient', () => {
       const dn = "uid=o'brien,ou=users,dc=example,dc=com";
       nock(baseUrl)
         .get('/api/v1/ldap/groups')
-        .query({ match: `(member=${dn})`, attributes: 'cn' })
+        .query({
+          match: `(member=${dn})`,
+          attributes: 'cn,twakeDepartmentLink',
+        })
         .reply(200, { staff: { dn: staff.dn, cn: 'staff' } });
       const found = await new ConsoleApiClient(baseUrl).memberships(dn, [
         twakeGroups,
       ]);
-      expect(found).to.deep.equal([staff.dn]);
+      expect(found).to.deep.equal([{ dn: staff.dn, cn: 'staff' }]);
+    });
+
+    it('should read the groups a memberOf names in one list call', async () => {
+      // One OR filter, one list per group entity, and only what the card
+      // shows: the whole group, members included, was one GET each (#388).
+      const allStaff = 'cn=all-staff,ou=groups,dc=example,dc=com';
+      nock(baseUrl)
+        .get('/api/v1/ldap/groups')
+        .query({
+          match: '(|(cn=staff)(cn=all-staff))',
+          attributes: 'cn,twakeDepartmentLink',
+        })
+        .reply(200, {
+          staff: { dn: staff.dn, cn: 'staff' },
+          'all-staff': { dn: allStaff, cn: 'all-staff' },
+        });
+      const found = await new ConsoleApiClient(baseUrl).groupEntries(
+        [String(staff.dn), allStaff, String(staff.dn)],
+        [users, twakeGroups]
+      );
+      expect(found.map(entry => String(entry.dn))).to.have.members([
+        String(staff.dn),
+        allStaff,
+      ]);
+    });
+
+    it('should ask a group list for its type as well as its name', async () => {
+      // The card shows each group's type: a list answering only the name
+      // would make it read the whole group for that one attribute.
+      const mailboxes: EntityDescriptor = {
+        ...twakeGroups,
+        key: 'mailboxes',
+        pluralName: 'mailboxes',
+        singularName: 'mailbox',
+        base: 'ou=mailboxes,dc=example,dc=com',
+        endpoint: '/api/v1/ldap/mailboxes',
+        schema: {
+          attributes: {
+            ...twakeGroups.schema.attributes,
+            twakeMailboxType: { type: 'pointer', role: 'mailboxType' },
+          },
+        },
+      };
+      const mailbox = 'cn=staff,ou=mailboxes,dc=example,dc=com';
+      nock(baseUrl)
+        .get('/api/v1/ldap/mailboxes')
+        .query({
+          match: '(|(cn=staff))',
+          attributes: 'cn,twakeMailboxType,twakeDepartmentLink',
+        })
+        .reply(200, { staff: { dn: mailbox, cn: 'staff' } });
+      expect(
+        await new ConsoleApiClient(baseUrl).groupEntries([mailbox], [mailboxes])
+      ).to.deep.equal([{ dn: mailbox, cn: 'staff' }]);
+    });
+
+    it('should leave a group no raw filter can hold to its own read', async () => {
+      const groupList = nock(baseUrl)
+        .get('/api/v1/ldap/groups')
+        .query(true)
+        .reply(200, {});
+      const found = await new ConsoleApiClient(baseUrl).groupEntries(
+        // A parenthesis would change what the OR filter asks for.
+        ['cn=Smith (John),ou=groups,dc=example,dc=com'],
+        [twakeGroups]
+      );
+      expect(found).to.deep.equal([]);
+      expect(groupList.isDone()).to.equal(false);
+    });
+
+    it('should answer no group where the list fails', async () => {
+      nock(baseUrl)
+        .get('/api/v1/ldap/groups')
+        .query(true)
+        .reply(403, { error: 'No' });
+      expect(
+        await new ConsoleApiClient(baseUrl).groupEntries(
+          [String(staff.dn)],
+          [twakeGroups]
+        )
+      ).to.deep.equal([]);
     });
   });
 

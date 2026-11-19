@@ -91,6 +91,10 @@ const membershipsOf =
       `/api/v1/ldap/groups?match=(member=${dn})`
     );
 
+/** The list a card asks for its groups, whether by member or by name. */
+const groupsList = (uri: string): boolean =>
+  decodeURIComponent(uri).startsWith('/api/v1/ldap/groups?match=');
+
 describe('views/entry', () => {
   describe('the card', () => {
     it('should draw the entry, title the tab after it, and lead Back to its list', async () => {
@@ -492,7 +496,7 @@ describe('views/entry', () => {
   });
 
   describe('an account’s groups', () => {
-    /** Alice's card, her groups searched for as the server answers. */
+    /** Alice's card, her groups read as the server answers. */
     const searched = (
       memberOf: string[] | undefined,
       answer: (search: nock.Interceptor) => void
@@ -506,15 +510,19 @@ describe('views/entry', () => {
               200,
               memberOf ? { ...aliceUnlisted(), memberOf } : aliceUnlisted()
             );
-          answer(server.get(membershipsOf(String(alice.dn))));
+          answer(server.get(groupsList));
         },
       });
+
+    /** The groups a card read one by one, which it no longer should. */
+    const groupReads = (calls: string[]): string[] =>
+      callsOf(calls, 'get').filter(call => call.startsWith('get(groups'));
 
     it('should search the groups when the directory keeps no memberOf', async () => {
       // Without the memberof overlay the section was always empty (#70).
       for (const memberOf of [undefined, []]) {
         let asked = 0;
-        const { root, unmount } = await searched(memberOf, search => {
+        const { root, unmount, calls } = await searched(memberOf, search => {
           search.reply(() => {
             asked += 1;
             return [200, { staff: { dn: staff, cn: 'staff' } }];
@@ -522,23 +530,53 @@ describe('views/entry', () => {
         });
         await until(() => !!heading(root));
         expect(asked).to.equal(1);
+        expect(groupReads(calls)).to.deep.equal([]);
         expect(card(root)).to.include('<h3>Groups</h3>');
         expect(card(root)).to.include(`data-relation="${staff}">staff<`);
         unmount();
       }
     });
 
-    it('should read memberOf when the directory keeps it, and search nothing', async () => {
+    it('should read memberOf and ask the groups’ list once, not each group', async () => {
       let asked = 0;
-      const { root, idle } = await searched([staff], search => {
+      const { root, idle, calls } = await searched([staff], search => {
         search.reply(() => {
           asked += 1;
-          return [200, {}];
+          return [200, { staff: { dn: staff, cn: 'staff' } }];
         });
       });
       await idle();
-      expect(asked).to.equal(0);
+      expect(asked).to.equal(1);
+      expect(groupReads(calls)).to.deep.equal([]);
       expect(card(root)).to.include(`data-relation="${staff}">staff<`);
+    });
+
+    it('should read every group of a card in one list call (#388)', async () => {
+      // Showing each group's type and × used to make one GET per group,
+      // each answering the whole group with its members.
+      const allStaff = `cn=all-staff,${groupsBase}`;
+      let asked = 0;
+      const { root, idle, calls } = await searched(
+        [staff, allStaff],
+        search => {
+          search.reply(() => {
+            asked += 1;
+            return [
+              200,
+              {
+                staff: { dn: staff, cn: 'staff' },
+                'all-staff': { dn: allStaff, cn: 'all-staff' },
+              },
+            ];
+          });
+        }
+      );
+      await idle();
+      expect(asked).to.equal(1);
+      expect(groupReads(calls)).to.deep.equal([]);
+      expect(card(root))
+        .to.include(`data-relation="${staff}"`)
+        .and.include(`data-relation="${allStaff}"`);
     });
 
     it('should show the card, with no group, when the search is refused', async () => {

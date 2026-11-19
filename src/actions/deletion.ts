@@ -361,11 +361,9 @@ export class DeletionActions {
       let list = [entryValue(entry, name) ?? []].flat();
       if (!list.length && entry.dn) {
         try {
-          list = await this.ctx.api.memberships(
-            entry.dn,
-            this.ctx.entities(),
-            true
-          );
+          list = (
+            await this.ctx.api.memberships(entry.dn, this.ctx.entities(), true)
+          ).map(group => String(group.dn));
         } catch {
           return undefined;
         }
