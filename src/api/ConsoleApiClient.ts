@@ -45,6 +45,7 @@ import {
   valueLabel,
   withinDn,
 } from '../format';
+import { readGroupEntries } from './groupEntries';
 import { mailDomainLookup, type MailDomains } from './mailDomains';
 
 export type { MailDomains } from './mailDomains';
@@ -913,17 +914,21 @@ export class ConsoleApiClient {
    * group: reading every group with its members to compare them here would
    * not hold on a large directory.
    *
+   * Each list asks only what a card shows of a group — its name, its type
+   * and the organization it hangs from — never its members, which made a
+   * card read every group whole (#388).
+   *
    * @param dn DN of the member
    * @param entities entities the console knows: the groups among them are read
    * @param strict fail instead, for a DN no filter can hold or a group list
    *   that fails: the caller then knows the groups are unknown, not none
-   * @returns DN of every group holding it
+   * @returns every group holding it, as its list answered it
    */
   async memberships(
     dn: string,
     entities: EntityDescriptor[],
     strict = false
-  ): Promise<string[]> {
+  ): Promise<Entry[]> {
     if (!FILTER_SAFE_DN.test(dn)) {
       if (strict) throw new Error(`No filter can hold ${dn}`);
       return [];
@@ -934,15 +939,13 @@ export class ConsoleApiClient {
         if (!members || entity.kind !== 'group') return [];
         const params = new URLSearchParams({
           match: `(${members}=${dn})`,
-          attributes: entity.mainAttribute,
+          attributes: this.cardAttributes(entity).join(','),
         });
         try {
           const entries = await this.call<Record<string, Entry>>(
             `${entity.endpoint}?${params.toString()}`
           );
-          return Object.values(entries)
-            .filter(entry => entry.dn)
-            .map(entry => String(entry.dn));
+          return Object.values(entries).filter(entry => entry.dn);
         } catch (err) {
           if (strict) throw err;
           return [];
@@ -950,6 +953,53 @@ export class ConsoleApiClient {
       })
     );
     return found.flat();
+  }
+
+  /**
+   * The groups a `memberOf` names, read in one list call per group entity
+   * and per batch of names (see {@link readGroupEntries}), asking only what
+   * a card shows — never their members (#388).
+   *
+   * @param dns the groups' DNs, as `memberOf` gives them
+   * @param entities entities the console knows: the groups among them are read
+   * @returns the groups the lists answered
+   */
+  async groupEntries(
+    dns: string[],
+    entities: EntityDescriptor[]
+  ): Promise<Entry[]> {
+    return readGroupEntries(dns, entities, async (entity, names) => {
+      const params = new URLSearchParams({
+        match: `(|${names
+          .map(name => `(${entity.mainAttribute}=${name})`)
+          .join('')})`,
+        attributes: this.cardAttributes(entity).join(','),
+      });
+      try {
+        const entries = await this.call<Record<string, Entry>>(
+          `${entity.endpoint}?${params.toString()}`
+        );
+        return Object.values(entries).filter(entry => entry.dn);
+      } catch {
+        return [];
+      }
+    });
+  }
+
+  /**
+   * What a card reads of a group beyond its name: its type and the
+   * organization it hangs from. Its members are not among them: returning
+   * a whole group only to show its type is what made a card read every
+   * group whole (#388).
+   *
+   * @param entity the groups' entity
+   * @returns the attributes to ask a group list for
+   */
+  private cardAttributes(entity: EntityDescriptor): string[] {
+    const type = roleAttribute(entity.schema, 'mailboxType');
+    return [entity.mainAttribute, type, entity.organizationLink].filter(
+      (name): name is string => !!name
+    );
   }
 
   /** Delete an entry. */

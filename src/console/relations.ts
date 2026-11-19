@@ -55,13 +55,27 @@ export async function readRelations(
       if (!roles.includes(role)) continue;
       const raw = entryValue(entry, name);
       let list = raw === undefined ? [] : Array.isArray(raw) ? raw : [raw];
-      if (role === 'groupMemberships' && !list.length && entry.dn)
-        list = await ctx.api
-          .memberships(entry.dn, ctx.entities(), strict)
-          .catch(() => {
-            unknown = strict;
-            return [];
-          });
+      // The groups themselves, when the server answered them with what a
+      // card shows: a group it did not answer is read alone below.
+      let read = new Map<string, Entry>();
+      if (role === 'groupMemberships' && entry.dn) {
+        if (!list.length) {
+          list = await ctx.api
+            .memberships(entry.dn, ctx.entities(), strict)
+            .then(groups => {
+              read = byDn(groups);
+              return groups.map(group => String(group.dn));
+            })
+            .catch(() => {
+              unknown = strict;
+              return [];
+            });
+        } else {
+          read = byDn(
+            await ctx.api.groupEntries(list.map(String), ctx.entities())
+          );
+        }
+      }
       // An empty value stands for no member in some directories: it is
       // neither counted nor offered a ×, as the deletion's count skips it.
       const items = list
@@ -81,7 +95,7 @@ export async function readRelations(
       return {
         title: ctx.t('groups.section'),
         attribute: name,
-        items: await groupItems(ctx, items),
+        items: await groupItems(ctx, items, read),
         groups: true,
         ...(unknown ? { unknown } : {}),
       };
@@ -90,18 +104,26 @@ export async function readRelations(
   return undefined;
 }
 
+/** Group entries keyed by comparable DN, for a card to read without a GET. */
+function byDn(entries: Entry[]): Map<string, Entry> {
+  return new Map(entries.map(entry => [comparableDn(String(entry.dn)), entry]));
+}
+
 /**
  * An account's groups, each with its type and whether the caller may take
- * the account out of it. Each group is read for that, all at once; one
- * that cannot be read is named alone, and offers no ×.
+ * the account out of it. The list the groups came from already carries
+ * what those two need; one it did not answer is read alone, and one that
+ * cannot be read is named without a ×.
  *
  * @param ctx the console
  * @param items the groups, by DN and name
+ * @param read the groups the server answered, by comparable DN
  * @returns the same groups, said in full
  */
 function groupItems(
   ctx: ConsoleContext,
-  items: { id: string; label: string }[]
+  items: { id: string; label: string }[],
+  read: Map<string, Entry>
 ): Promise<
   { id: string; label: string; note?: string; removable?: boolean }[]
 > {
@@ -109,11 +131,13 @@ function groupItems(
     items.map(async item => {
       const owner = groupEntity(ctx.entities(), item.id);
       if (!owner) return item;
-      let group: Entry;
-      try {
-        group = await ctx.api.get(owner, item.label);
-      } catch {
-        return item;
+      let group = read.get(comparableDn(item.id));
+      if (!group) {
+        try {
+          group = await ctx.api.get(owner, item.label);
+        } catch {
+          return item;
+        }
       }
       const note = groupType(
         ctx.entities(),
