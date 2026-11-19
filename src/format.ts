@@ -205,8 +205,12 @@ export function splitRdn(
   return { attribute, value, parent };
 }
 
-/** Decodes the UTF-8 octets a DN writes as `\XX` escapes. */
-const utf8 = new TextDecoder();
+/**
+ * Decodes the UTF-8 octets a DN writes as `\XX` escapes. `ignoreBOM` keeps
+ * a byte order mark as the character the value holds, rather than dropping
+ * it as a stream prefix.
+ */
+const utf8 = new TextDecoder('utf-8', { ignoreBOM: true });
 
 /**
  * A DN value, its escapes removed: the character a backslash takes, and the

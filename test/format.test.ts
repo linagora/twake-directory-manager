@@ -267,10 +267,19 @@ describe('format', () => {
       // An escaped octet is the character it names, not its two digits.
       expect(rdnValue('cn=Smith\\26Jones,ou=users')).to.equal('Smith&Jones');
       expect(rdnValue('cn=Tom\\20Jones,ou=users')).to.equal('Tom Jones');
-      // A non-ASCII character is one pair per UTF-8 byte.
+      // A non-ASCII character is one pair per UTF-8 byte, lower case too.
       expect(rdnValue('cn=Comptabilit\\C3\\A9,ou=users')).to.equal(
         'Comptabilité'
       );
+      expect(rdnValue('cn=Comptabilit\\c3\\a9,ou=users')).to.equal(
+        'Comptabilité'
+      );
+      // A pair and a multi-byte character in one run decode together.
+      expect(rdnValue('cn=\\26\\C3\\A9,ou=users')).to.equal('&é');
+      // A byte order mark is part of the value, not a stream prefix.
+      expect(rdnValue('cn=\\EF\\BB\\BFx,ou=users')).to.equal('\uFEFFx');
+      // An octet that is no UTF-8 character stands for the replacement one.
+      expect(rdnValue('cn=a\\E9b,ou=users')).to.equal('a\uFFFDb');
       // Only a pair of hex digits is an octet; anything else is taken as
       // written, and a backslash at the end is kept.
       expect(rdnValue('cn=a\\2z,ou=users')).to.equal('a2z');
@@ -278,7 +287,14 @@ describe('format', () => {
     });
 
     it('should read back what escapeDnValue wrote', () => {
-      for (const value of ['a+b@example.com', 'Smith, John', ' lead', 'tail '])
+      for (const value of [
+        'a+b@example.com',
+        'Smith, John',
+        'Rémi',
+        ' lead',
+        '#lead',
+        'tail ',
+      ])
         expect(rdnValue(`cn=${escapeDnValue(value)},ou=users`)).to.equal(value);
     });
   });
