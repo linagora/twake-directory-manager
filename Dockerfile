@@ -6,10 +6,10 @@
 #
 # The ldap-rest the console is tested against: `ldapRest.tested` in
 # package.json, which `npm run lint` checks this matches. The supported
-# range (`ldapRest.min` to `ldapRest.tested`, 2.1.0 to 2.4.0 today) is in
+# range (`ldapRest.min` to `ldapRest.tested`, 2.1.0 to 2.6.0 today) is in
 # the README; the console needs `--static-csp` (1.1.0) for the policy set
 # below, and the scope answer of 0.25.0.
-ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:2.4.0
+ARG LDAP_REST_IMAGE=ghcr.io/linagora/ldap-rest:2.6.0
 
 # The console builds to JavaScript and CSS, which are the same whatever the
 # target architecture, so this stage runs natively. Left to follow the target
@@ -68,7 +68,10 @@ COPY docker/consoleRoot.mjs docker/consoleSettings.mjs /app/plugins/
 # origin only, no inline script or style, images from the origin or inlined
 # (`data:`, the logos). A value written into the page cannot run under it, nor
 # can the page be framed by another origin. A deployment that serves the page
-# from one origin and the API from another widens `connect-src` here.
+# from one origin and the API from another widens `connect-src` here, and
+# names the page's origin in DM_AUTH_TRUSTED_ORIGINS: from ldap-rest 2.6.0,
+# the OpenID Connect and LemonLDAP::NG plugins refuse a change a browser sends
+# from an origin other than DM_BASE_URL's.
 #
 # Hidden by default, because nothing in the stack acts on them: the "other
 # mailboxes", which no plugin reads, and the delivery mode, which no plugin

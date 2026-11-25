@@ -47,6 +47,8 @@ oidc:
   server: ""
   clientId: twake-directory-manager
   # Public URL the provider redirects back to; defaults to the ingress host.
+  # The console's own origin: a change a browser sends from another one is
+  # refused (ldap-rest 2.6.0), unless extraEnv.DM_AUTH_TRUSTED_ORIGINS names it.
   baseUrl: ""
 
 # Back-Channel Logout: a logout at the provider, or in another application,

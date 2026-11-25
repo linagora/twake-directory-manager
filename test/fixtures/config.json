@@ -8,427 +8,6 @@
         "logout": "/logout"
       }
     },
-    "ldapGroups": {
-      "enabled": true,
-      "base": "ou=groups,dc=example,dc=com",
-      "mainAttribute": "cn",
-      "objectClass": [
-        "top",
-        "groupOfNames"
-      ],
-      "schema": {
-        "entity": {
-          "name": "twakeGroup",
-          "mainAttribute": "cn",
-          "objectClass": [
-            "top",
-            "groupOfNames",
-            "twakeStaticGroup"
-          ],
-          "singularName": "group",
-          "pluralName": "groups",
-          "base": "ou=groups,dc=example,dc=com",
-          "label": {
-            "en": "Groups",
-            "fr": "Groupes",
-            "mn": "Бүлгүүд"
-          },
-          "singularLabel": {
-            "en": "group",
-            "fr": "groupe",
-            "mn": "бүлэг"
-          }
-        },
-        "strict": true,
-        "attributes": {
-          "objectClass": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "test": "^[a-zA-Z][a-zA-Z0-9-]*$"
-            },
-            "default": [
-              "top",
-              "groupOfNames",
-              "twakeStaticGroup"
-            ],
-            "required": true,
-            "fixed": true
-          },
-          "cn": {
-            "type": "string",
-            "searchable": true,
-            "test": "^(?!.*\\.\\.)[a-zA-Z0-9!#$%&'*+/=?^_`{|}.-]{1,64}$",
-            "hint": {
-              "en": "Must match an email local part: letters, digits and ! # $ % & ' * + / = ? ^ _ ` { | } . -, no consecutive dots",
-              "fr": "Partie locale d’une adresse électronique : lettres, chiffres et ! # $ % & ' * + / = ? ^ _ ` { | } . -, sans points consécutifs",
-              "mn": "Имэйл хаягийн @-ээс өмнөх хэсэг: үсэг, тоо болон ! # $ % & ' * + / = ? ^ _ ` { | } . -, дараалсан цэггүй"
-            },
-            "required": true,
-            "role": "identifier",
-            "label": {
-              "en": "Name",
-              "fr": "Nom",
-              "mn": "Нэр"
-            }
-          },
-          "description": {
-            "type": "string",
-            "searchable": true,
-            "required": false,
-            "label": {
-              "en": "Description",
-              "fr": "Description",
-              "mn": "Тайлбар"
-            }
-          },
-          "mail": {
-            "type": "string",
-            "searchable": true,
-            "test": "^[^@\\s]+@[^@\\s.]+(\\.[^@\\s.]+)+$",
-            "hint": {
-              "en": "An email address, e.g. all-staff@lists.example.org",
-              "fr": "Une adresse électronique, par ex. all-staff@lists.example.org",
-              "mn": "Имэйл хаяг, жишээ нь all-staff@lists.example.org"
-            },
-            "required": false,
-            "unique": {
-              "attributes": [
-                "mailAlternateAddress"
-              ],
-              "branches": [
-                "dc=example,dc=com"
-              ]
-            },
-            "mailDomainScope": "organization",
-            "allowSubdomains": true,
-            "role": "primaryEmail",
-            "label": {
-              "en": "Email",
-              "fr": "Adresse électronique",
-              "mn": "Имэйл хаяг"
-            }
-          },
-          "businessCategory": {
-            "type": "pointer",
-            "branch": [
-              "ou=twakeListType,ou=nomenclature,dc=example,dc=com"
-            ],
-            "referentialIntegrity": "restrict",
-            "required": false,
-            "role": "writePolicy",
-            "label": {
-              "en": "List type",
-              "fr": "Type de liste",
-              "mn": "Жагсаалтын төрөл"
-            },
-            "group": {
-              "en": "Mailbox Settings",
-              "fr": "Paramètres de messagerie",
-              "mn": "Шуудангийн хайрцгийн тохиргоо"
-            }
-          },
-          "twakeMailboxType": {
-            "type": "pointer",
-            "branch": [
-              "ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com"
-            ],
-            "referentialIntegrity": "restrict",
-            "group": {
-              "en": "Mailbox Settings",
-              "fr": "Paramètres de messagerie",
-              "mn": "Шуудангийн хайрцгийн тохиргоо"
-            },
-            "required": false,
-            "role": "mailboxType",
-            "label": {
-              "en": "Group type",
-              "fr": "Type de groupe",
-              "mn": "Бүлгийн төрөл"
-            }
-          },
-          "member": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "test": "^[a-zA-Z]+=.*,dc=example,dc=com$",
-              "hint": {
-                "en": "The DN of an entry of this directory",
-                "fr": "Le DN d’une entrée de cet annuaire",
-                "mn": "Энэ лавлахын бичлэгийн DN"
-              }
-            },
-            "required": false,
-            "role": "members",
-            "label": {
-              "en": "Members",
-              "fr": "Membres",
-              "mn": "Гишүүд"
-            }
-          },
-          "owner": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "test": "^[a-zA-Z]+=.*,dc=example,dc=com$",
-              "hint": {
-                "en": "The DN of an entry of this directory",
-                "fr": "Le DN d’une entrée de cet annuaire",
-                "mn": "Энэ лавлахын бичлэгийн DN"
-              }
-            },
-            "required": false,
-            "role": "owners",
-            "label": {
-              "en": "Owners",
-              "fr": "Propriétaires",
-              "mn": "Эзэмшигчид"
-            },
-            "referentialIntegrity": "remove"
-          },
-          "twakeGroupAdminOrgLink": {
-            "type": "array",
-            "items": {
-              "type": "pointer",
-              "branch": [
-                "dc=example,dc=com"
-              ]
-            },
-            "referentialIntegrity": "remove",
-            "required": false,
-            "role": "groupAdminOrganizations",
-            "label": {
-              "en": "Delegated organizations",
-              "fr": "Organisations déléguées",
-              "mn": "Томилогдсон байгууллагууд"
-            }
-          },
-          "twakeDepartmentLink": {
-            "type": "pointer",
-            "branch": [
-              "dc=example,dc=com"
-            ],
-            "required": true,
-            "role": "organizationLink",
-            "label": {
-              "en": "Department",
-              "fr": "Organisation",
-              "mn": "Байгууллага"
-            }
-          },
-          "twakeDepartmentPath": {
-            "type": "string",
-            "test": "^[^\\r\\n]{1,4096}$",
-            "required": true,
-            "generated": true,
-            "role": "organizationPath",
-            "label": {
-              "en": "Department path",
-              "fr": "Chemin",
-              "mn": "Зам"
-            }
-          }
-        }
-      },
-      "schemaUrl": "/static/schemas/twake/groups.json",
-      "endpoints": {
-        "list": "/api/v1/ldap/groups",
-        "get": "/api/v1/ldap/groups/:id",
-        "create": "/api/v1/ldap/groups",
-        "update": "/api/v1/ldap/groups/:id",
-        "delete": "/api/v1/ldap/groups/:id",
-        "addMember": "/api/v1/ldap/groups/:id/members",
-        "removeMember": "/api/v1/ldap/groups/:id/members/:memberId",
-        "rename": "/api/v1/ldap/groups/:id/rename",
-        "move": "/api/v1/ldap/groups/:id/move"
-      }
-    },
-    "ldapOrganizations": {
-      "enabled": true,
-      "topOrganization": "ou=organization,dc=example,dc=com",
-      "organizationClass": [
-        "top",
-        "organizationalUnit",
-        "twakeDepartment"
-      ],
-      "linkAttribute": "twakeDepartmentLink",
-      "pathAttribute": "twakeDepartmentPath",
-      "pathSeparator": " / ",
-      "maxSubnodes": 50,
-      "schema": {
-        "entity": {
-          "label": {
-            "en": "Organizations",
-            "fr": "Organisations",
-            "mn": "Байгууллагууд"
-          },
-          "singularLabel": {
-            "en": "organization",
-            "fr": "organisation",
-            "mn": "байгууллага"
-          }
-        },
-        "strict": true,
-        "attributes": {
-          "objectClass": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "test": "^[a-zA-Z][a-zA-Z0-9-]*$"
-            },
-            "default": [
-              "top",
-              "organizationalUnit",
-              "twakeDepartment"
-            ],
-            "required": true,
-            "fixed": true
-          },
-          "ou": {
-            "type": "string",
-            "searchable": true,
-            "test": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9][A-Za-zÀ-ÖØ-öø-ÿ0-9 ()&/,.'’_-]{0,254}$",
-            "hint": {
-              "en": "Letters, digits, spaces and ( ) & / , . ' - _, starting with a letter or a digit",
-              "fr": "Lettres, chiffres, espaces et ( ) & / , . ' - _, en commençant par une lettre ou un chiffre",
-              "mn": "Үсэг, тоо, зай болон ( ) & / , . ' - _, үсэг эсвэл тоогоор эхэлнэ"
-            },
-            "required": true,
-            "unique": true,
-            "role": "identifier",
-            "label": {
-              "en": "Name",
-              "fr": "Nom",
-              "mn": "Нэр"
-            }
-          },
-          "description": {
-            "type": "string",
-            "searchable": true,
-            "required": false,
-            "label": {
-              "en": "Description",
-              "fr": "Description",
-              "mn": "Тайлбар"
-            }
-          },
-          "telephoneNumber": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "required": false,
-            "label": {
-              "en": "Phone",
-              "fr": "Téléphone",
-              "mn": "Утас"
-            }
-          },
-          "facsimileTelephoneNumber": {
-            "type": "string",
-            "required": false,
-            "label": {
-              "en": "Fax",
-              "fr": "Fax",
-              "mn": "Факс"
-            }
-          },
-          "l": {
-            "type": "string",
-            "required": false,
-            "label": {
-              "en": "Locality",
-              "fr": "Commune",
-              "mn": "Суурин газар"
-            }
-          },
-          "postalAddress": {
-            "type": "string",
-            "required": false,
-            "label": {
-              "en": "Address",
-              "fr": "Adresse",
-              "mn": "Хаяг"
-            }
-          },
-          "twakeDepartmentPath": {
-            "type": "string",
-            "test": "^[^\\r\\n]{1,4096}$",
-            "required": true,
-            "generated": true,
-            "role": "organizationPath",
-            "label": {
-              "en": "Path",
-              "fr": "Chemin",
-              "mn": "Зам"
-            }
-          },
-          "twakeManagerLink": {
-            "type": "array",
-            "items": {
-              "type": "pointer",
-              "branch": [
-                "ou=users,dc=example,dc=com"
-              ]
-            },
-            "required": false,
-            "referentialIntegrity": "remove",
-            "role": "managers",
-            "label": {
-              "en": "Managers",
-              "fr": "Responsables",
-              "mn": "Хариуцагчид"
-            }
-          },
-          "twakeDomainLink": {
-            "type": "array",
-            "items": {
-              "type": "pointer",
-              "branch": [
-                "ou=domains,ou=nomenclature,dc=example,dc=com"
-              ]
-            },
-            "referentialIntegrity": "restrict",
-            "required": false,
-            "role": "domainLink",
-            "label": {
-              "en": "Mail domains",
-              "fr": "Domaines de messagerie",
-              "mn": "Имэйлийн домэйнууд"
-            }
-          },
-          "twakeLocalAdminLink": {
-            "type": "array",
-            "items": {
-              "type": "pointer",
-              "branch": [
-                "ou=users,dc=example,dc=com"
-              ]
-            },
-            "required": false,
-            "referentialIntegrity": "remove",
-            "role": "localAdmins",
-            "label": {
-              "en": "Local administrators",
-              "fr": "Administrateurs locaux",
-              "mn": "Дотоод администраторууд"
-            }
-          }
-        }
-      },
-      "schemaUrl": "/static/schemas/twake/organizations.json",
-      "endpoints": {
-        "getTop": "/api/v1/ldap/organizations/top",
-        "get": "/api/v1/ldap/organizations/:dn",
-        "getSubnodes": "/api/v1/ldap/organizations/:dn/subnodes",
-        "searchSubnodes": "/api/v1/ldap/organizations/:dn/subnodes/search",
-        "search": "/api/v1/ldap/organizations/:dn/search",
-        "create": "/api/v1/ldap/organizations",
-        "update": "/api/v1/ldap/organizations/:dn",
-        "move": "/api/v1/ldap/organizations/:dn/move",
-        "delete": "/api/v1/ldap/organizations/:dn"
-      }
-    },
     "ldapPasswordPolicy": {
       "name": "ldapPasswordPolicy",
       "enabled": true,
@@ -1695,7 +1274,428 @@
           }
         }
       ]
+    },
+    "ldapGroups": {
+      "enabled": true,
+      "base": "ou=groups,dc=example,dc=com",
+      "mainAttribute": "cn",
+      "objectClass": [
+        "top",
+        "groupOfNames"
+      ],
+      "schema": {
+        "entity": {
+          "name": "twakeGroup",
+          "mainAttribute": "cn",
+          "objectClass": [
+            "top",
+            "groupOfNames",
+            "twakeStaticGroup"
+          ],
+          "singularName": "group",
+          "pluralName": "groups",
+          "base": "ou=groups,dc=example,dc=com",
+          "label": {
+            "en": "Groups",
+            "fr": "Groupes",
+            "mn": "Бүлгүүд"
+          },
+          "singularLabel": {
+            "en": "group",
+            "fr": "groupe",
+            "mn": "бүлэг"
+          }
+        },
+        "strict": true,
+        "attributes": {
+          "objectClass": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "test": "^[a-zA-Z][a-zA-Z0-9-]*$"
+            },
+            "default": [
+              "top",
+              "groupOfNames",
+              "twakeStaticGroup"
+            ],
+            "required": true,
+            "fixed": true
+          },
+          "cn": {
+            "type": "string",
+            "searchable": true,
+            "test": "^(?!.*\\.\\.)[a-zA-Z0-9!#$%&'*+/=?^_`{|}.-]{1,64}$",
+            "hint": {
+              "en": "Must match an email local part: letters, digits and ! # $ % & ' * + / = ? ^ _ ` { | } . -, no consecutive dots",
+              "fr": "Partie locale d’une adresse électronique : lettres, chiffres et ! # $ % & ' * + / = ? ^ _ ` { | } . -, sans points consécutifs",
+              "mn": "Имэйл хаягийн @-ээс өмнөх хэсэг: үсэг, тоо болон ! # $ % & ' * + / = ? ^ _ ` { | } . -, дараалсан цэггүй"
+            },
+            "required": true,
+            "role": "identifier",
+            "label": {
+              "en": "Name",
+              "fr": "Nom",
+              "mn": "Нэр"
+            }
+          },
+          "description": {
+            "type": "string",
+            "searchable": true,
+            "required": false,
+            "label": {
+              "en": "Description",
+              "fr": "Description",
+              "mn": "Тайлбар"
+            }
+          },
+          "mail": {
+            "type": "string",
+            "searchable": true,
+            "test": "^[^@\\s]+@[^@\\s.]+(\\.[^@\\s.]+)+$",
+            "hint": {
+              "en": "An email address, e.g. all-staff@lists.example.org",
+              "fr": "Une adresse électronique, par ex. all-staff@lists.example.org",
+              "mn": "Имэйл хаяг, жишээ нь all-staff@lists.example.org"
+            },
+            "required": false,
+            "unique": {
+              "attributes": [
+                "mailAlternateAddress"
+              ],
+              "branches": [
+                "dc=example,dc=com"
+              ]
+            },
+            "mailDomainScope": "organization",
+            "allowSubdomains": true,
+            "role": "primaryEmail",
+            "label": {
+              "en": "Email",
+              "fr": "Adresse électronique",
+              "mn": "Имэйл хаяг"
+            }
+          },
+          "businessCategory": {
+            "type": "pointer",
+            "branch": [
+              "ou=twakeListType,ou=nomenclature,dc=example,dc=com"
+            ],
+            "referentialIntegrity": "restrict",
+            "required": false,
+            "role": "writePolicy",
+            "label": {
+              "en": "List type",
+              "fr": "Type de liste",
+              "mn": "Жагсаалтын төрөл"
+            },
+            "group": {
+              "en": "Mailbox Settings",
+              "fr": "Paramètres de messagerie",
+              "mn": "Шуудангийн хайрцгийн тохиргоо"
+            }
+          },
+          "twakeMailboxType": {
+            "type": "pointer",
+            "branch": [
+              "ou=twakeMailboxType,ou=nomenclature,dc=example,dc=com"
+            ],
+            "referentialIntegrity": "restrict",
+            "group": {
+              "en": "Mailbox Settings",
+              "fr": "Paramètres de messagerie",
+              "mn": "Шуудангийн хайрцгийн тохиргоо"
+            },
+            "required": false,
+            "role": "mailboxType",
+            "label": {
+              "en": "Group type",
+              "fr": "Type de groupe",
+              "mn": "Бүлгийн төрөл"
+            }
+          },
+          "member": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "test": "^[a-zA-Z]+=.*,dc=example,dc=com$",
+              "hint": {
+                "en": "The DN of an entry of this directory",
+                "fr": "Le DN d’une entrée de cet annuaire",
+                "mn": "Энэ лавлахын бичлэгийн DN"
+              }
+            },
+            "required": false,
+            "role": "members",
+            "label": {
+              "en": "Members",
+              "fr": "Membres",
+              "mn": "Гишүүд"
+            }
+          },
+          "owner": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "test": "^[a-zA-Z]+=.*,dc=example,dc=com$",
+              "hint": {
+                "en": "The DN of an entry of this directory",
+                "fr": "Le DN d’une entrée de cet annuaire",
+                "mn": "Энэ лавлахын бичлэгийн DN"
+              }
+            },
+            "required": false,
+            "role": "owners",
+            "label": {
+              "en": "Owners",
+              "fr": "Propriétaires",
+              "mn": "Эзэмшигчид"
+            },
+            "referentialIntegrity": "remove"
+          },
+          "twakeGroupAdminOrgLink": {
+            "type": "array",
+            "items": {
+              "type": "pointer",
+              "branch": [
+                "dc=example,dc=com"
+              ]
+            },
+            "referentialIntegrity": "remove",
+            "required": false,
+            "role": "groupAdminOrganizations",
+            "label": {
+              "en": "Delegated organizations",
+              "fr": "Organisations déléguées",
+              "mn": "Томилогдсон байгууллагууд"
+            }
+          },
+          "twakeDepartmentLink": {
+            "type": "pointer",
+            "branch": [
+              "dc=example,dc=com"
+            ],
+            "required": true,
+            "role": "organizationLink",
+            "label": {
+              "en": "Department",
+              "fr": "Organisation",
+              "mn": "Байгууллага"
+            }
+          },
+          "twakeDepartmentPath": {
+            "type": "string",
+            "test": "^[^\\r\\n]{1,4096}$",
+            "required": true,
+            "generated": true,
+            "role": "organizationPath",
+            "label": {
+              "en": "Department path",
+              "fr": "Chemin",
+              "mn": "Зам"
+            }
+          }
+        }
+      },
+      "schemaUrl": "/static/schemas/twake/groups.json",
+      "endpoints": {
+        "list": "/api/v1/ldap/groups",
+        "get": "/api/v1/ldap/groups/:id",
+        "create": "/api/v1/ldap/groups",
+        "update": "/api/v1/ldap/groups/:id",
+        "delete": "/api/v1/ldap/groups/:id",
+        "addMember": "/api/v1/ldap/groups/:id/members",
+        "removeMember": "/api/v1/ldap/groups/:id/members/:memberId",
+        "rename": "/api/v1/ldap/groups/:id/rename",
+        "move": "/api/v1/ldap/groups/:id/move"
+      }
+    },
+    "ldapOrganizations": {
+      "enabled": true,
+      "topOrganization": "ou=organization,dc=example,dc=com",
+      "organizationClass": [
+        "top",
+        "organizationalUnit",
+        "twakeDepartment"
+      ],
+      "linkAttribute": "twakeDepartmentLink",
+      "pathAttribute": "twakeDepartmentPath",
+      "pathSeparator": " / ",
+      "maxSubnodes": 50,
+      "schema": {
+        "entity": {
+          "label": {
+            "en": "Organizations",
+            "fr": "Organisations",
+            "mn": "Байгууллагууд"
+          },
+          "singularLabel": {
+            "en": "organization",
+            "fr": "organisation",
+            "mn": "байгууллага"
+          }
+        },
+        "strict": true,
+        "attributes": {
+          "objectClass": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "test": "^[a-zA-Z][a-zA-Z0-9-]*$"
+            },
+            "default": [
+              "top",
+              "organizationalUnit",
+              "twakeDepartment"
+            ],
+            "required": true,
+            "fixed": true
+          },
+          "ou": {
+            "type": "string",
+            "searchable": true,
+            "test": "^[A-Za-zÀ-ÖØ-öø-ÿ0-9][A-Za-zÀ-ÖØ-öø-ÿ0-9 ()&/,.'’_-]{0,254}$",
+            "hint": {
+              "en": "Letters, digits, spaces and ( ) & / , . ' - _, starting with a letter or a digit",
+              "fr": "Lettres, chiffres, espaces et ( ) & / , . ' - _, en commençant par une lettre ou un chiffre",
+              "mn": "Үсэг, тоо, зай болон ( ) & / , . ' - _, үсэг эсвэл тоогоор эхэлнэ"
+            },
+            "required": true,
+            "unique": true,
+            "role": "identifier",
+            "label": {
+              "en": "Name",
+              "fr": "Nom",
+              "mn": "Нэр"
+            }
+          },
+          "description": {
+            "type": "string",
+            "searchable": true,
+            "required": false,
+            "label": {
+              "en": "Description",
+              "fr": "Description",
+              "mn": "Тайлбар"
+            }
+          },
+          "telephoneNumber": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "required": false,
+            "label": {
+              "en": "Phone",
+              "fr": "Téléphone",
+              "mn": "Утас"
+            }
+          },
+          "facsimileTelephoneNumber": {
+            "type": "string",
+            "required": false,
+            "label": {
+              "en": "Fax",
+              "fr": "Fax",
+              "mn": "Факс"
+            }
+          },
+          "l": {
+            "type": "string",
+            "required": false,
+            "label": {
+              "en": "Locality",
+              "fr": "Commune",
+              "mn": "Суурин газар"
+            }
+          },
+          "postalAddress": {
+            "type": "string",
+            "required": false,
+            "label": {
+              "en": "Address",
+              "fr": "Adresse",
+              "mn": "Хаяг"
+            }
+          },
+          "twakeDepartmentPath": {
+            "type": "string",
+            "test": "^[^\\r\\n]{1,4096}$",
+            "required": true,
+            "generated": true,
+            "role": "organizationPath",
+            "label": {
+              "en": "Path",
+              "fr": "Chemin",
+              "mn": "Зам"
+            }
+          },
+          "twakeManagerLink": {
+            "type": "array",
+            "items": {
+              "type": "pointer",
+              "branch": [
+                "ou=users,dc=example,dc=com"
+              ]
+            },
+            "required": false,
+            "referentialIntegrity": "remove",
+            "role": "managers",
+            "label": {
+              "en": "Managers",
+              "fr": "Responsables",
+              "mn": "Хариуцагчид"
+            }
+          },
+          "twakeDomainLink": {
+            "type": "array",
+            "items": {
+              "type": "pointer",
+              "branch": [
+                "ou=domains,ou=nomenclature,dc=example,dc=com"
+              ]
+            },
+            "referentialIntegrity": "restrict",
+            "required": false,
+            "role": "domainLink",
+            "label": {
+              "en": "Mail domains",
+              "fr": "Domaines de messagerie",
+              "mn": "Имэйлийн домэйнууд"
+            }
+          },
+          "twakeLocalAdminLink": {
+            "type": "array",
+            "items": {
+              "type": "pointer",
+              "branch": [
+                "ou=users,dc=example,dc=com"
+              ]
+            },
+            "required": false,
+            "referentialIntegrity": "remove",
+            "role": "localAdmins",
+            "label": {
+              "en": "Local administrators",
+              "fr": "Administrateurs locaux",
+              "mn": "Дотоод администраторууд"
+            }
+          }
+        }
+      },
+      "schemaUrl": "/static/schemas/twake/organizations.json",
+      "endpoints": {
+        "getTop": "/api/v1/ldap/organizations/top",
+        "get": "/api/v1/ldap/organizations/:dn",
+        "getSubnodes": "/api/v1/ldap/organizations/:dn/subnodes",
+        "searchSubnodes": "/api/v1/ldap/organizations/:dn/subnodes/search",
+        "search": "/api/v1/ldap/organizations/:dn/search",
+        "create": "/api/v1/ldap/organizations",
+        "update": "/api/v1/ldap/organizations/:dn",
+        "move": "/api/v1/ldap/organizations/:dn/move",
+        "delete": "/api/v1/ldap/organizations/:dn"
+      }
     }
   },
-  "version": "2.4.0"
+  "version": "2.6.0"
 }

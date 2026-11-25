@@ -194,7 +194,11 @@ and requests from its own origin only, no inline script or style, images from
 the origin or inlined. A value written into the directory cannot run in the
 console, whatever it holds. A deployment that serves the page from one origin
 and the API from another adds the API's origin to `connect-src` in
-`DM_STATIC_CSP` (ldap-rest's `--static-csp`); `off` sends none.
+`DM_STATIC_CSP` (ldap-rest's `--static-csp`); `off` sends none. It also lists
+the page's origin in `DM_AUTH_TRUSTED_ORIGINS` (`--auth-trusted-origin`,
+comma-separated): from ldap-rest 2.6.0, OpenID Connect and LemonLDAP::NG refuse
+a change a browser sends from an origin other than `DM_BASE_URL`'s. The page
+the image serves is on the API's own origin, and needs nothing.
 
 Hidden attributes stay in the directory as they are: the console neither
 shows nor sends them. An empty `DM_CONSOLE_HIDDEN_ATTRIBUTES` shows them all
@@ -203,7 +207,9 @@ again.
 A deployment with its own
 schemas mounts them and points these variables at them: the mail domains, the
 national formats and the payroll-number rules of a directory belong there,
-never in the code.
+never in the code. A `DM_GROUP_SCHEMA` or `DM_ORGANIZATION_SCHEMA` that cannot
+be read or parsed stops the server (ldap-rest 2.6.0), where it used to serve
+groups or organizations without their rules.
 
 ### Full names
 
@@ -222,7 +228,7 @@ Japan.
 
 The console supports the ldap-rest version `package.json` declares: the
 floor (`ldapRest.min`) and the version the `Dockerfile` builds on and CI
-tests against (`ldapRest.tested`) are 2.1.0 and 2.4.0 today. A fallback for an
+tests against (`ldapRest.tested`) are 2.1.0 and 2.6.0 today. A fallback for an
 older server is tagged `compat(ldap-rest<X.Y.Z)` where it stands, and
 `npm run lint` refuses it once the floor passes it, until it is removed. The
 base image is a build argument:
