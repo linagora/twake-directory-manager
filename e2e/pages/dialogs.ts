@@ -57,12 +57,18 @@ export class ResetPasswordDialog {
   }
 }
 
-/** Claim…, in the side panel: the organization to take an entry in transit into */
+/**
+ * Claim…, in the side panel: the organization to take an entry in transit into. A tree small
+ * enough to walk is offered in a select; a wider one is searched as the operator types.
+ */
 export class ClaimDialog {
   readonly page: Page;
   readonly dialog: Locator;
   readonly title: Locator;
+  /** The select of the organizations, over a small tree */
   readonly target: Locator;
+  /** The search over the organizations, over a tree too wide to walk */
+  readonly search: Locator;
   /** The plain message of an account that writes in no organization */
   readonly noTarget: Locator;
   readonly confirmButton: Locator;
@@ -73,6 +79,7 @@ export class ClaimDialog {
     this.dialog = page.getByRole('dialog');
     this.title = this.dialog.getByRole('heading', { level: 2 });
     this.target = this.dialog.locator('#dc-claim-target');
+    this.search = this.dialog.getByRole('combobox');
     this.noTarget = this.dialog.locator('p.dc-empty');
     this.confirmButton = this.dialog.locator('button[type=submit]');
     this.cancelButton = this.dialog.locator('[data-cancel]');
@@ -84,7 +91,15 @@ export class ClaimDialog {
   }
 
   async claimInto(path: string): Promise<void> {
-    await this.target.selectOption({ label: path });
+    await expect(this.target.or(this.search)).toBeVisible();
+    if (await this.target.isVisible()) {
+      await this.target.selectOption({ label: path });
+    } else {
+      await this.search.fill(path);
+      await this.dialog
+        .getByRole('option', { name: path, exact: true })
+        .click();
+    }
     await this.confirmButton.click();
     await expect(this.dialog).toBeHidden();
   }

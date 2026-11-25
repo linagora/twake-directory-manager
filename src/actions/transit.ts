@@ -6,11 +6,24 @@
  * @module twake-directory-manager/actions/transit
  */
 
+import { SEARCH_MINIMUM } from '../components/EntityList';
+import {
+  GroupPicker,
+  type GroupAnswer,
+  type GroupChoice,
+} from '../components/GroupPicker';
 import type { ConsoleContext } from '../console/context';
-import { comparableDn, explainRefusal, rdnValue } from '../format';
+import { comparableDn, explainRefusal, rdnValue, withinDn } from '../format';
 import { background } from '../shared/background';
 import { html, render } from '../shared/html';
-import type { EntityDescriptor, Entry } from '../types';
+import type { EntityDescriptor, Entry, OrganizationNode } from '../types';
+
+/**
+ * Organizations a claim lists into a select when the server can search the
+ * tree: past them a select is too long to read, and the walk, one request
+ * an organization, kept the panel waiting before it opened.
+ */
+const LISTED_WHEN_SEARCHABLE = 50;
 
 /**
  * The last segment of an organization path: the organization's own name,
@@ -45,6 +58,13 @@ export class TransitActions {
    * those are offered: the server asks for write on the destination and
    * nothing else, so any other choice would be refused.
    *
+   * A tree small enough to walk is offered whole, in a select. A wider one
+   * is searched as the operator types, when the server can: the walk stops
+   * after a few hundred organizations, and a parent of a thousand left most
+   * of its children out of the select, the one the entry was meant for
+   * among them. A server that cannot search keeps the select of those
+   * walked.
+   *
    * @param entity the entry's entity
    * @param id the entry's identifier
    * @param name the entry as a colleague names it
@@ -55,17 +75,31 @@ export class TransitActions {
     const rights = ctx.rights();
     if (!rights.transit) return;
     const transit = comparableDn(rights.transit);
-    const separator = ctx.api.organizationPathSeparator;
+    const roots = rights.claimRoots();
+    const searches = ctx.api.searchesOrganizations;
     let targets: { dn: string; label: string }[];
+    let partial: boolean;
     try {
-      targets = (await ctx.api.organizationOptions(rights.claimRoots())).filter(
+      // Walked only to know whether the tree is small, when it can be
+      // searched: the walk asks once per organization.
+      const walk = await ctx.api.organizationWalk(
+        roots,
+        searches ? LISTED_WHEN_SEARCHABLE : undefined
+      );
+      targets = walk.organizations.filter(
         target => comparableDn(target.dn) !== transit
       );
+      partial = walk.partial;
     } catch (err) {
       ctx.toast((err as Error).message, true);
       return;
     }
+    if (partial && searches) {
+      this.claimSearched(entity, id, name, roots, transit);
+      return;
+    }
 
+    const separator = ctx.api.organizationPathSeparator;
     ctx.panel.open(
       t('transit.claimTitle', { name }),
       body => {
@@ -127,39 +161,7 @@ export class TransitActions {
           const target = targets.find(item => item.dn === select?.value);
           if (!target) return;
           background(
-            () =>
-              ctx.api
-                .move(entity, id, target.dn)
-                .then(async () => {
-                  ctx.panel.close();
-                  ctx.toast(
-                    t('transit.claimed', { name, organization: target.label })
-                  );
-                  // To its card, where its position and its groups wait to be
-                  // put right: the Overview's toast left it to be searched for.
-                  const route = ctx.route();
-                  const here =
-                    route.view === 'entity' &&
-                    route.entity === entity.key &&
-                    route.id === id;
-                  if (here) await this.afterMove();
-                  else {
-                    ctx.go(`${entity.key}/${encodeURIComponent(id)}`);
-                    await ctx.readTransit();
-                  }
-                })
-                // Claiming is judged on the organization chosen alone.
-                .catch((err: unknown) =>
-                  ctx.toast(
-                    explainRefusal(
-                      err,
-                      entity.schema,
-                      ctx.translator(),
-                      target.label
-                    ).message,
-                    true
-                  )
-                ),
+            () => this.claimInto(entity, id, name, target),
             'api.move',
             ctx.report
           );
@@ -167,6 +169,154 @@ export class TransitActions {
       },
       true
     );
+  }
+
+  /**
+   * Claim…, over a tree too wide to list: the organizations of the caller's
+   * branches searched as the operator types, the one chosen as a token, and
+   * the button naming it.
+   *
+   * @param entity the entry's entity
+   * @param id the entry's identifier
+   * @param name the entry as a colleague names it
+   * @param roots the branches the caller writes
+   * @param transit the transit branch, as DNs are compared
+   */
+  private claimSearched(
+    entity: EntityDescriptor,
+    id: string,
+    name: string,
+    roots: OrganizationNode[],
+    transit: string
+  ): void {
+    const { ctx } = this;
+    const t = ctx.t;
+    const separator = ctx.api.organizationPathSeparator;
+    const language = ctx.translator().language;
+    // A branch under another the caller writes is in that one's answer, a
+    // subtree search holding its base: it is not searched a second time.
+    const searched = roots.filter(
+      (root, index) =>
+        !roots.some(
+          (other, before) =>
+            withinDn(root.dn, other.dn) &&
+            (comparableDn(other.dn) !== comparableDn(root.dn) || before < index)
+        )
+    );
+    const picker = new GroupPicker({
+      report: ctx.report,
+      announce: ctx.announce,
+      translator: ctx.translator(),
+      single: true,
+      words: {
+        field: t('transit.target'),
+        hint: t('transit.search', { count: SEARCH_MINIMUM }),
+      },
+      search: async (query: string): Promise<GroupAnswer> => {
+        const answers = await Promise.all(
+          searched.map(root => ctx.api.organizationSearchRead(query, root.dn))
+        );
+        // An organization two answers hold is offered once; the transit
+        // branch, which the server finds among the others, is no choice.
+        const seen = new Set<string>([transit]);
+        const choices = answers
+          .flatMap(answer => answer.organizations)
+          .filter(found => {
+            const key = comparableDn(found.dn);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .sort((a, b) =>
+            a.label.localeCompare(b.label, language, {
+              sensitivity: 'base',
+              numeric: true,
+            })
+          )
+          .map(found => ({
+            dn: found.dn,
+            name: found.label,
+            label: found.label,
+          }));
+        // The server answers the first matches it found: the one looked for
+        // may be among those it left out, which a longer text reaches.
+        return answers.some(answer => answer.truncated)
+          ? { choices, note: t('transit.searchTruncated') }
+          : { choices };
+      },
+      // Where the entry goes, by the organization's own name, as the select
+      // says it; the token above shows the whole path.
+      confirm: (chosen: GroupChoice[]): string =>
+        chosen[0]
+          ? t('transit.claimButton', {
+              organization: pathLeaf(chosen[0].label, separator),
+            })
+          : t('transit.claimSubmit'),
+      // The picker asks only once one is chosen. A refusal is said in a
+      // toast, as from the select, and the choice stays.
+      onAdd: async (
+        chosen: GroupChoice[]
+      ): Promise<{ left: GroupChoice[] }> => {
+        const [target] = chosen;
+        const moved = await this.claimInto(entity, id, name, {
+          dn: target.dn,
+          label: target.label,
+        });
+        return { left: moved ? [] : chosen };
+      },
+      onCancel: (): void => ctx.panel.close(),
+    });
+    ctx.panel.open(
+      t('transit.claimTitle', { name }),
+      body => picker.render(body),
+      true
+    );
+  }
+
+  /**
+   * Move the entry claimed into the organization chosen, say so, and open
+   * its card; a refusal is said, and the panel stays.
+   *
+   * @param entity the entry's entity
+   * @param id the entry's identifier
+   * @param name the entry as a colleague names it
+   * @param target the organization chosen
+   * @returns whether it moved
+   */
+  private async claimInto(
+    entity: EntityDescriptor,
+    id: string,
+    name: string,
+    target: { dn: string; label: string }
+  ): Promise<boolean> {
+    const { ctx } = this;
+    const t = ctx.t;
+    try {
+      await ctx.api.move(entity, id, target.dn);
+      ctx.panel.close();
+      ctx.toast(t('transit.claimed', { name, organization: target.label }));
+      // To its card, where its position and its groups wait to be put right:
+      // the Overview's toast left it to be searched for.
+      const route = ctx.route();
+      const here =
+        route.view === 'entity' &&
+        route.entity === entity.key &&
+        route.id === id;
+      if (here) await this.afterMove();
+      else {
+        ctx.go(`${entity.key}/${encodeURIComponent(id)}`);
+        await ctx.readTransit();
+      }
+      return true;
+    } catch (err) {
+      // Claiming is judged on the organization chosen alone.
+      ctx.toast(
+        explainRefusal(err, entity.schema, ctx.translator(), target.label)
+          .message,
+        true
+      );
+      return false;
+    }
   }
 
   /**

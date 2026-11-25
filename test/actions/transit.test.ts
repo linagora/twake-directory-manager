@@ -10,7 +10,7 @@ import { expect } from 'chai';
 import type nock from 'nock';
 
 import type { Entry, Scope } from '../../src/types';
-import { click, panelOf, until } from '../support/act';
+import { click, panelOf, press, type, until } from '../support/act';
 import {
   mountConsole,
   settled,
@@ -541,6 +541,265 @@ describe('actions/transit', () => {
       expect(body.querySelector('form')).to.equal(null);
       // No field to start on: the panel holds the focus.
       expect(document.activeElement).to.equal(dialog);
+    });
+
+    describe('over a tree too wide to walk', () => {
+      // The production case: 1,136 domains under one parent, the one the
+      // account was meant for 650th of them. The walk stopped after 200
+      // organizations, which the select offered, and left it out.
+      const government = `ou=Government of Mongolia,${top}`;
+      const wanted = `ou=mojha.gov.mn,${government}`;
+      const domain = (ou: string): Entry => ({
+        dn: `ou=${ou},${government}`,
+        ou,
+        twakeDepartmentPath: `Government of Mongolia / ${ou}`,
+      });
+      const domains = Array.from({ length: 1136 }, (_, index) =>
+        index === 649
+          ? domain('mojha.gov.mn')
+          : domain(`agency-${String(index).padStart(4, '0')}.gov.mn`)
+      );
+      const wide = (server: nock.Scope): void => {
+        children(top, [
+          {
+            dn: government,
+            ou: 'Government of Mongolia',
+            twakeDepartmentPath: 'Government of Mongolia',
+          },
+          { dn: transit, ou: 'Transit', twakeDepartmentPath: 'Transit' },
+        ])(server);
+        children(government, domains)(server);
+      };
+      /** The tree searched from a branch, for a text, as the server answers. */
+      const searched = (
+        from: string,
+        query: string,
+        found: Entry[]
+      ): ((server: nock.Scope) => void) => {
+        const path = `/api/v1/ldap/organizations/${from}/search?q=${query}`;
+        return server => {
+          server.get(uri => decodeURIComponent(uri) === path).reply(200, found);
+        };
+      };
+      /** The search box of the panel, and the suggestions under it. */
+      const pickerOf = (
+        body: HTMLElement
+      ): { input: HTMLInputElement; results: HTMLElement } => {
+        const input = body.querySelector<HTMLInputElement>('[role="combobox"]');
+        const results = body.querySelector<HTMLElement>('[role="listbox"]');
+        if (!input || !results) throw new Error('no picker');
+        return { input, results };
+      };
+      const suggestions = (results: HTMLElement): string[] =>
+        Array.from(results.querySelectorAll('[role="option"]')).map(
+          option => option.textContent ?? ''
+        );
+
+      it('should search the organizations past the walk’s bound, and claim into the one found', async () => {
+        const { root, calls, server } = await card('admin', server => {
+          searched(top, 'moj', [
+            // The server answers the transit branch too: it is no choice.
+            { dn: transit, ou: 'Transit', twakeDepartmentPath: 'Transit' },
+            domain('mojha.gov.mn'),
+          ])(server);
+          wide(server);
+        });
+        await claiming(root);
+        const { body, panel } = panelOf(root);
+        // No select of the first organizations walked: a search.
+        expect(body.querySelector('#dc-claim-target')).to.equal(null);
+        const { input, results } = pickerOf(body);
+        expect(document.activeElement).to.equal(input);
+        expect(
+          body.querySelector(`label[for="${input.id}"]`)?.textContent
+        ).to.equal('Into the organization');
+        expect(body.textContent).to.include(
+          'Type 3 characters of the organization’s name or path'
+        );
+        const submit = body.querySelector<HTMLButtonElement>(
+          'button[type="submit"]'
+        );
+        expect(submit?.textContent).to.equal('Claim');
+        expect(submit?.disabled).to.be.true;
+        type(input, 'moj');
+        await until(() => suggestions(results).length > 0);
+        expect(suggestions(results)).to.deep.equal([
+          'Government of Mongolia / mojha.gov.mn',
+        ]);
+        // Searched from the caller's branch, which holds the whole tree.
+        expect(callsOf(calls, 'organizationSearchRead')).to.deep.equal([
+          `organizationSearchRead(moj, ${top})`,
+        ]);
+        press('Enter');
+        // Chosen: a token with its path, the button naming it alone.
+        expect(body.querySelector('[data-chosen]')?.textContent).to.include(
+          'Government of Mongolia / mojha.gov.mn'
+        );
+        expect(submit?.textContent).to.equal('Claim into mojha.gov.mn');
+        expect(submit?.disabled).to.be.false;
+        await until(
+          () =>
+            root.querySelector('[data-announce]')?.textContent ===
+            'Chosen: Government of Mongolia / mojha.gov.mn'
+        );
+        server
+          .post('/api/v1/ldap/users/bob/move', { targetOrgDn: wanted })
+          .reply(200, {});
+        const counted = transitReads(calls);
+        click(body, 'button[type="submit"]');
+        await until(() => toast(root) !== '');
+        expect(calls).to.include(`move(users, bob, ${wanted})`);
+        expect(panel.hidden).to.be.true;
+        expect(toast(root)).to.equal(
+          'Bob Schneider moved to Government of Mongolia / mojha.gov.mn'
+        );
+        await until(() => transitReads(calls) > counted);
+      });
+
+      it('should search each branch the caller writes once, a nested one in its parent’s answer', async () => {
+        const admin = read<Scope>('scopes/admin.json');
+        const branch = (
+          dn: string,
+          name: string
+        ): Scope['branches'][number] => ({
+          dn,
+          read: true,
+          write: true,
+          delete: false,
+          name,
+          path: name,
+        });
+        const scope: Scope = {
+          ...admin,
+          branches: [
+            branch(wanted, 'mojha.gov.mn'),
+            branch(government, 'Government of Mongolia'),
+            // Named twice, as two rules of the scope may.
+            branch(government.toLowerCase(), 'Government of Mongolia'),
+            branch(sales, 'Sales'),
+          ],
+        };
+        const { root, calls } = await card(scope, server => {
+          searched(government, 'gov', [
+            domain('mojha.gov.mn'),
+            domain('agency-0001.gov.mn'),
+          ])(server);
+          searched(sales, 'gov', [
+            {
+              dn: `ou=gov,${sales}`,
+              ou: 'gov',
+              twakeDepartmentPath: 'Sales / gov',
+            },
+          ])(server);
+          children(government, domains)(server);
+        });
+        await claiming(root);
+        const { body } = panelOf(root);
+        const { input, results } = pickerOf(body);
+        type(input, 'gov');
+        await until(() => suggestions(results).length > 0);
+        // Both answers, merged and sorted by path; mojha.gov.mn, a branch
+        // of its own under another, searched once and offered once.
+        expect(suggestions(results)).to.deep.equal([
+          'Government of Mongolia / agency-0001.gov.mn',
+          'Government of Mongolia / mojha.gov.mn',
+          'Sales / gov',
+        ]);
+        expect(callsOf(calls, 'organizationSearchRead')).to.have.members([
+          `organizationSearchRead(gov, ${government})`,
+          `organizationSearchRead(gov, ${sales})`,
+        ]);
+        expect(callsOf(calls, 'organizationSearchRead')).to.have.length(2);
+      });
+
+      it('should say when the server answered only the first organizations found', async () => {
+        const { root } = await card('admin', server => {
+          searched(top, 'gov', [
+            domain('agency-0001.gov.mn'),
+            {
+              dn: `more-organizations-${top}`,
+              _isMoreIndicator: 'true',
+              _totalCount: '1136',
+              _displayedCount: '50',
+            },
+          ])(server);
+          wide(server);
+        });
+        await claiming(root);
+        const { body } = panelOf(root);
+        const { input, results } = pickerOf(body);
+        type(input, 'gov');
+        await until(() => suggestions(results).length > 0);
+        const cut =
+          'Only the first organizations found are shown: type more of the name to find the others';
+        expect(suggestions(results)).to.deep.equal([
+          'Government of Mongolia / agency-0001.gov.mn',
+        ]);
+        expect(
+          results.querySelector('[data-picker-cut]')?.textContent
+        ).to.equal(cut);
+        // Under the options, where the arrows never go: said as well.
+        await until(
+          () => root.querySelector('[data-announce]')?.textContent === cut
+        );
+      });
+
+      it('should keep the panel and the choice, and say why, when the claim is refused', async () => {
+        const { root, server } = await card('admin', server => {
+          searched(top, 'moj', [domain('mojha.gov.mn')])(server);
+          wide(server);
+        });
+        await claiming(root);
+        const { body, panel } = panelOf(root);
+        const { input, results } = pickerOf(body);
+        type(input, 'moj');
+        await until(() => suggestions(results).length > 0);
+        press('Enter');
+        server.post('/api/v1/ldap/users/bob/move').reply(403, forbidden);
+        click(body, 'button[type="submit"]');
+        await until(() => toast(root) !== '');
+        expect(toast(root)).to.equal(
+          'You do not administer Government of Mongolia / mojha.gov.mn: this change is not yours to make.'
+        );
+        expect(refused(root)).to.be.true;
+        expect(panel.hidden).to.be.false;
+        const submit = body.querySelector<HTMLButtonElement>(
+          'button[type="submit"]'
+        );
+        await until(() => submit?.disabled === false);
+        expect(submit?.textContent).to.equal('Claim into mojha.gov.mn');
+      });
+
+      it('should keep the select of the organizations walked on a server that cannot search the tree', async () => {
+        const served = read<{
+          features: { ldapOrganizations: { endpoints: { search?: string } } };
+        }>('config.json');
+        delete served.features.ldapOrganizations.endpoints.search;
+        const { root, calls } = await card('admin', server => {
+          server.get('/api/v1/config').reply(200, served);
+          wide(server);
+        });
+        const button = root.querySelector<HTMLElement>(
+          '[data-main] [data-claim]'
+        );
+        button?.focus();
+        button?.click();
+        // A walk of 200 organizations, one request each: given its time.
+        for (let i = 0; i < 20 && panelOf(root).panel.hidden; i++)
+          await until(() => !panelOf(root).panel.hidden).catch(() => undefined);
+        const { body } = panelOf(root);
+        expect(body.querySelector('[role="combobox"]')).to.equal(null);
+        const shown = offered(body);
+        // The walk's bound, as before: the transit branch left out.
+        expect(shown).to.have.length(199);
+        expect(shown.slice(0, 3)).to.deep.equal([
+          'organization',
+          'Government of Mongolia',
+          'Government of Mongolia / agency-0000.gov.mn',
+        ]);
+        expect(shown).to.not.include('Government of Mongolia / mojha.gov.mn');
+        expect(callsOf(calls, 'organizationSearchRead')).to.deep.equal([]);
+      });
     });
 
     it('should open the card of an entry claimed from the Overview', async () => {

@@ -27,6 +27,16 @@ export interface GroupChoice {
   label: string;
 }
 
+/**
+ * What a search answered, when it has more to say than the groups found: a
+ * note under them, that the server cut its answer and a longer text would
+ * find the ones left out.
+ */
+export interface GroupAnswer {
+  choices: GroupChoice[];
+  note?: string;
+}
+
 export interface GroupPickerOptions {
   translator: Translator;
   /**
@@ -41,9 +51,10 @@ export interface GroupPickerOptions {
   announce?: Announce;
   /**
    * The groups matching what was typed that may be offered: those the
-   * caller writes, the account is not in yet
+   * caller writes, the account is not in yet. Answered with a note when the
+   * list is not the whole answer
    */
-  search(query: string): Promise<GroupChoice[]>;
+  search(query: string): Promise<GroupChoice[] | GroupAnswer>;
   /**
    * Add the account to the groups chosen.
    *
@@ -63,6 +74,17 @@ export interface GroupPickerOptions {
    * found: a shared mailbox takes the accounts of its domain only
    */
   emptyNote?(query: string): string | undefined;
+  /**
+   * Whether one choice is wanted, not several: a new pick replaces the one
+   * held, as a single-valued field of a form does. The organization a
+   * claimed entry goes into
+   */
+  single?: boolean;
+  /**
+   * What the button says, for the choice held: where a claimed entry goes.
+   * "Add" by default
+   */
+  confirm?(chosen: GroupChoice[]): string;
 }
 
 export class GroupPicker {
@@ -111,13 +133,19 @@ export class GroupPicker {
           <button type="button" class="dc-button" data-cancel>${t(
             'app.cancel'
           )}</button>
-          <button type="submit" class="dc-button dc-button-primary" data-add disabled>${t(
-            'groups.confirm'
-          )}</button>
+          <button type="submit" class="dc-button dc-button-primary" data-add disabled>${this.confirmLabel()}</button>
         </div>
       </form>`
     );
     this.bind(container);
+  }
+
+  /** What the button says for the choice held. */
+  private confirmLabel(): string {
+    return (
+      this.options.confirm?.(this.chosen) ??
+      this.options.translator.t('groups.confirm')
+    );
   }
 
   private bind(container: HTMLElement): void {
@@ -137,6 +165,8 @@ export class GroupPicker {
     let busy = false;
     // What the suggestions answer, for a note on why there are none.
     let asked = '';
+    // What the search said under them: that it answered only the first.
+    let note: string | undefined;
 
     const redraw = (): void => {
       render(
@@ -153,6 +183,10 @@ export class GroupPicker {
         )}`
       );
       add.disabled = busy || this.chosen.length === 0;
+      // The button may name the choice held, where a claimed entry goes:
+      // written anew when that changes, and left alone otherwise.
+      const label = this.confirmLabel();
+      if (add.textContent !== label) add.textContent = label;
     };
     const close = (): void => {
       results.hidden = true;
@@ -173,9 +207,13 @@ export class GroupPicker {
       input.removeAttribute('aria-activedescendant');
     };
     const paint = (): void => {
+      // Nothing offered from a cut answer is no "nothing matches": the
+      // matches left out may be the ones looked for.
       if (candidates.length === 0)
         return message(
-          this.options.emptyNote?.(asked) ?? translator.t('list.noMatch')
+          note ??
+            this.options.emptyNote?.(asked) ??
+            translator.t('list.noMatch')
         );
       render(
         results,
@@ -187,7 +225,11 @@ export class GroupPicker {
           data-candidate="${index}" title="${candidate.dn}">${
             candidate.label
           }</li>`
-        )}`
+        )}${
+          note
+            ? html`<li class="dc-picker-note" role="presentation" data-picker-cut>${note}</li>`
+            : ''
+        }`
       );
       results.hidden = false;
       input.setAttribute('aria-expanded', 'true');
@@ -211,6 +253,18 @@ export class GroupPicker {
     };
     const choose = (candidate: GroupChoice): void => {
       drop();
+      if (this.options.single) {
+        // One place to go: the pick replaces the one held, and the box is
+        // given back, its search done.
+        this.chosen = [candidate];
+        redraw();
+        input.value = '';
+        close();
+        this.options.announce?.(
+          translator.t('form.chosenOne', { value: candidate.name })
+        );
+        return;
+      }
       const already = held(candidate.dn);
       if (!already) this.chosen.push(candidate);
       redraw();
@@ -234,15 +288,21 @@ export class GroupPicker {
 
     const run = (query: string, ticket: number): void => {
       asked = query;
+      note = undefined;
       message(translator.t('form.searching'));
       this.options
         .search(query)
         .then(found => {
           if (ticket !== generation) return;
+          const answer = Array.isArray(found) ? { choices: found } : found;
           // What is already chosen is not offered again.
-          candidates = found.filter(candidate => !held(candidate.dn));
+          candidates = answer.choices.filter(candidate => !held(candidate.dn));
+          note = answer.note;
           active = candidates.length ? 0 : -1;
           paint();
+          // Under the list, which a screen reader walking the options with
+          // the arrows never reaches: said as it is shown.
+          if (note) this.options.announce?.(note);
         })
         .catch((err: unknown) => {
           if (ticket === generation) message(listFailure(err, translator));

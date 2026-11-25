@@ -1806,9 +1806,14 @@ export class ConsoleApiClient {
    * is looked for.
    *
    * @param from subtrees to walk instead of the whole tree
+   * @param limit most organizations read: fewer for a caller that can search
+   *   the tree instead, and walks it only to know whether it is small
    * @returns the organizations found, and whether some were left unread
    */
-  async organizationWalk(from?: OrganizationNode[]): Promise<{
+  async organizationWalk(
+    from?: OrganizationNode[],
+    limit = ORGANIZATION_OPTION_LIMIT
+  ): Promise<{
     organizations: { dn: string; label: string }[];
     partial: boolean;
   }> {
@@ -1820,7 +1825,7 @@ export class ConsoleApiClient {
     // Whether every branch reached was read whole: one the server cut, or
     // could not read, may hold organizations the walk never saw.
     let complete = true;
-    while (queue.length > 0 && visited < ORGANIZATION_OPTION_LIMIT) {
+    while (queue.length > 0 && visited < limit) {
       const node = queue.shift() as OrganizationNode;
       const key = comparableDn(node.dn);
       if (seen.has(key)) continue;

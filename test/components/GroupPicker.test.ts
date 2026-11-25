@@ -15,10 +15,13 @@ describe('GroupPicker', () => {
   ];
 
   /** The picker, its field and what it shows under it. */
-  const open = (): {
+  const open = (
+    options: Partial<ConstructorParameters<typeof GroupPicker>[0]> = {}
+  ): {
     input: HTMLInputElement;
     results: HTMLElement;
     chosen: HTMLElement;
+    add: HTMLButtonElement;
     announced: string[];
     type(text: string): void;
     press(key: string): boolean;
@@ -34,11 +37,13 @@ describe('GroupPicker', () => {
         groups.filter(group => group.name.startsWith(query)),
       onAdd: async () => ({ left: [] }),
       onCancel: () => undefined,
+      ...options,
     }).render(container);
     const input = container.querySelector<HTMLInputElement>('#dc-group-search');
     const results = container.querySelector<HTMLElement>('#dc-group-results');
     const chosen = container.querySelector<HTMLElement>('[data-chosen]');
-    if (!input || !results || !chosen) throw new Error('no picker');
+    const add = container.querySelector<HTMLButtonElement>('[data-add]');
+    if (!input || !results || !chosen || !add) throw new Error('no picker');
     const type = (text: string): void => {
       input.value = text;
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -54,7 +59,7 @@ describe('GroupPicker', () => {
     };
     const answered = (text: string): Promise<void> =>
       until(() => results.textContent?.includes(text) ?? false);
-    return { input, results, chosen, announced, type, press, answered };
+    return { input, results, chosen, add, announced, type, press, answered };
   };
 
   it('should offer no suggestion of the text typed before while searching the new one', async () => {
@@ -152,5 +157,65 @@ describe('GroupPicker', () => {
       .to.include('sales-team')
       .and.include('sales-fr');
     expect(chosen.textContent).to.equal('');
+  });
+
+  describe('one choice, the organization a claim goes into', () => {
+    const single = {
+      single: true,
+      confirm: (held: { name: string }[]): string =>
+        held[0] ? `Claim into ${held[0].name}` : 'Claim',
+    };
+
+    it('should replace the choice held, give the box back, and name it on the button', async () => {
+      const { input, results, chosen, add, announced, type, press, answered } =
+        open(single);
+      expect(add.textContent).to.equal('Claim');
+      type('sales-t');
+      await answered('sales-team');
+      press('Enter');
+      expect(chosen.textContent).to.include('sales-team');
+      expect(add.textContent).to.equal('Claim into sales-team');
+      expect(add.disabled).to.equal(false);
+      // One place to go: the search is done once it is picked.
+      expect(input.value).to.equal('');
+      expect(results.hidden).to.equal(true);
+      type('sales-f');
+      await answered('sales-fr');
+      press('Enter');
+      expect(chosen.textContent)
+        .to.include('sales-fr')
+        .and.not.include('sales-team');
+      expect(add.textContent).to.equal('Claim into sales-fr');
+      expect(announced).to.deep.equal([
+        'Chosen: sales-team',
+        'Chosen: sales-fr',
+      ]);
+      chosen.querySelector<HTMLElement>('[data-remove="0"]')?.click();
+      expect(add.textContent).to.equal('Claim');
+      expect(add.disabled).to.equal(true);
+    });
+
+    it('should say that the answer was cut, under the suggestions or instead of none', async () => {
+      const cut = 'More matched: type more';
+      const { results, announced, type, answered } = open({
+        ...single,
+        search: async query => ({
+          choices: groups.filter(group => group.name.startsWith(query)),
+          note: cut,
+        }),
+      });
+      type('sales-t');
+      await answered('sales-team');
+      expect(results.querySelector('[data-picker-cut]')?.textContent).to.equal(
+        cut
+      );
+      expect(announced).to.deep.equal([cut]);
+      // Nothing offered from a cut answer: the note, not "no match".
+      type('nothing');
+      await answered(cut);
+      expect(results.textContent)
+        .to.equal(cut)
+        .and.not.include('No entry matches');
+    });
   });
 });

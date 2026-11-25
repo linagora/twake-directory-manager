@@ -175,6 +175,7 @@ const en: Catalogue = {
   'form.identifierTaken': 'A number is added to it if it is already taken.',
   'form.removeValue': 'Remove {value}',
   'form.chosen': '{value} added to those chosen',
+  'form.chosenOne': 'Chosen: {value}',
   'form.none': '—',
   'form.choose': 'Choose…',
   'form.searchPointer.one': 'Type {count} character to search',
@@ -383,6 +384,13 @@ const en: Catalogue = {
   'transit.claimed': '{name} moved to {organization}',
   'transit.handOver': 'Hand over',
   'transit.claimButton': 'Claim into {organization}',
+  'transit.claimSubmit': 'Claim',
+  'transit.search.one':
+    'Type {count} character of the organization’s name or path',
+  'transit.search.other':
+    'Type {count} characters of the organization’s name or path',
+  'transit.searchTruncated':
+    'Only the first organizations found are shown: type more of the name to find the others',
   'transit.handOverTitle': 'Hand {name} over?',
   'transit.handOverLeaves': '{name} leaves {organization} for Transit.',
   'transit.alsoRemove': 'Also remove {name} from:',
@@ -672,6 +680,7 @@ const fr: Catalogue = {
   'form.identifierTaken': 'Un numéro y est ajouté s’il est déjà pris.',
   'form.removeValue': 'Retirer {value}',
   'form.chosen': '{value} ajouté à la sélection',
+  'form.chosenOne': 'Choix : {value}',
   'form.none': '—',
   'form.choose': 'Choisir…',
   'form.searchPointer.one': 'Tapez {count} caractère pour chercher',
@@ -894,6 +903,13 @@ const fr: Catalogue = {
   'transit.claimed': '{name} est désormais dans {organization}',
   'transit.handOver': 'Mettre en transit',
   'transit.claimButton': 'Rattacher à {organization}',
+  'transit.claimSubmit': 'Rattacher',
+  'transit.search.one':
+    'Tapez {count} caractère du nom ou du chemin de l’organisation',
+  'transit.search.other':
+    'Tapez {count} caractères du nom ou du chemin de l’organisation',
+  'transit.searchTruncated':
+    'Seules les premières organisations trouvées sont affichées : précisez le nom pour trouver les autres',
   'transit.handOverTitle': 'Mettre {name} en transit ?',
   'transit.handOverLeaves': '{name} quitte {organization} pour Transit.',
   'transit.alsoRemove': 'Retirer aussi {name} de :',
@@ -1152,6 +1168,7 @@ const mn: Catalogue = {
   'form.identifierTaken': 'Аль хэдийн ашиглагдсан бол ард нь дугаар нэмнэ.',
   'form.removeValue': '{value} утгыг хасах',
   'form.chosen': '{value} сонгогдсон утгуудад нэмэгдлээ',
+  'form.chosenOne': 'Сонгосон: {value}',
   'form.none': '—',
   'form.choose': 'Сонгох…',
   'form.searchPointer': 'Хайхын тулд {count} тэмдэгт оруулна уу',
@@ -1352,6 +1369,10 @@ const mn: Catalogue = {
   'transit.claimed': '{name}-г {organization} руу шилжүүллээ',
   'transit.handOver': 'Шилжүүлэх',
   'transit.claimButton': '{organization} руу авах',
+  'transit.claimSubmit': 'Авах',
+  'transit.search': 'Байгууллагын нэр эсвэл замын {count} тэмдэгт оруулна уу',
+  'transit.searchTruncated':
+    'Зөвхөн эхний олдсон байгууллагууд харагдаж байна: бусдыг олохын тулд нэрийг илүү дэлгэрэнгүй бичнэ үү',
   'transit.handOverTitle': '{name}-г шилжүүлэх үү?',
   'transit.handOverLeaves':
     '{name} {organization}-с гарч дамжуулалтад шилжинэ.',
