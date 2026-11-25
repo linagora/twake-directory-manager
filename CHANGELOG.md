@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.17.0 (2026-11-26)
+
+Built on ldap-rest 2.6.0, which refuses a change a browser sends from an
+origin other than `DM_BASE_URL`'s, and stops at startup on a configuration it
+used to serve half of
+([upgrading](https://github.com/linagora/ldap-rest/blob/master/docs/usage/upgrading.md)):
+
+- A console served from another origin than `DM_BASE_URL`'s names it in
+  `DM_AUTH_TRUSTED_ORIGINS`; the one the image serves, on the API's own
+  origin, needs nothing
+- A `DM_GROUP_SCHEMA` or `DM_ORGANIZATION_SCHEMA` that cannot be read or
+  parsed stops the server, as does a `postgres` or `valkey` storage without
+  its package (the image carries both) and plugin overrides in `DM_PLUGINS`
+  that are not a JSON object
+
+### Security
+
+- A change sent by a browser from another site is refused by the OpenID
+  Connect and LemonLDAP::NG sign-ins
+  ([GHSA-cpph-5pcw-wv66](https://github.com/linagora/ldap-rest/security/advisories/GHSA-cpph-5pcw-wv66))
+
+### Bug Fixes
+
+- The Claim… dialog searches the organizations as the operator types, instead
+  of offering a select of the first 200 organizations found, which left most
+  of a thousand domains under one parent out, among them the one an account
+  was meant for. A tree small enough to list keeps the select, as does a server
+  without the organization `search` endpoint
+
 ## v0.16.0 (2026-11-19)
 
 Built on ldap-rest 2.4.0.
