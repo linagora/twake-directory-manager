@@ -11,6 +11,7 @@
  */
 
 import { ConsoleApiClient, roleAttribute } from './api/ConsoleApiClient';
+import { framed } from './console/apps';
 import { applyContrast, ShellView } from './console/shell';
 import { attachedClass } from './components/AttachedTables';
 import {
@@ -24,6 +25,7 @@ import { Translator } from './i18n';
 import { Rights } from './rights';
 import { saveDraft, signInAgain, type Draft } from './session';
 import type {
+  AppLink,
   Confirmation,
   AttachedEntries,
   ConsoleOptions,
@@ -243,6 +245,8 @@ export class DirectoryConsole {
       entities: (): EntityDescriptor[] => this.entities,
       plural: (entity: EntityDescriptor): string => this.names.plural(entity),
       logoutUrl: (): string | undefined => this.api.logoutUrl,
+      // Inside the Home, its bar offers them already.
+      apps: (): AppLink[] => (framed() ? [] : this.api.appList),
       transitLabel: (): string => this.transitService.label(),
       main: (): HTMLElement | null => this.main(),
       go: (path: string): void => this.go(path),

@@ -12,7 +12,8 @@ import { availableLanguages, languageName, type Translator } from '../i18n';
 import { splitEntities, type Rights } from '../rights';
 import { background, type Reporter } from '../shared/background';
 import { html, render, trusted, type SafeHtml } from '../shared/html';
-import type { EntityDescriptor } from '../types';
+import type { AppLink, EntityDescriptor } from '../types';
+import { appsMarkup, bindApps } from './apps';
 import { overlayMarkup } from './panel';
 import { POLICIES_KEY } from './route';
 import {
@@ -265,6 +266,8 @@ export interface FrameOptions {
   sidebar: SafeHtml;
   /** The branches administered and the transit branch */
   scope: SafeHtml;
+  /** The Workplace's other applications, none when the deployment lists none */
+  apps?: SafeHtml;
   /** The sign-out control, none when the server offers no way out */
   logout: SafeHtml;
   /** The overlay: side panel, toast region, announcer */
@@ -279,14 +282,14 @@ export interface FrameOptions {
  * @returns the `<div class="dc-app">`
  */
 export function frameMarkup(options: FrameOptions): SafeHtml {
-  const { t, contrast, sidebar, scope, logout, overlay } = options;
+  const { t, contrast, sidebar, scope, apps, logout, overlay } = options;
   return html`
     <div class="dc-app${contrast ? ' dc-contrast-high' : ''}">
       <a class="dc-skip-link dc-button dc-button-primary" href="#dc-main"
         data-skip>${t('app.skipToContent')}</a>
       ${sidebar}
       <div class="dc-content">
-        <header class="dc-header">${scope}${logout}</header>
+        <header class="dc-header">${scope}${apps ?? html``}${logout}</header>
         <main class="dc-main" id="dc-main" data-main tabindex="-1"></main>
         <a class="dc-powered" href="https://linagora.com" target="_blank"
           rel="noopener noreferrer">
@@ -311,6 +314,8 @@ export interface ShellDeps {
   plural(entity: EntityDescriptor): string;
   /** Where the server signs out, when it offers a way to */
   logoutUrl(): string | undefined;
+  /** The Workplace's other applications the header offers, none for none */
+  apps(): AppLink[];
   /** The banner's transit link: the branch's name and what waits */
   transitLabel(): string;
   /** The console's main area, once the frame is drawn */
@@ -399,6 +404,7 @@ export class ShellView {
           contrast: highContrast(),
         }),
         scope: scopeMarkup(t, deps.rights().summary, deps.transitLabel()),
+        apps: appsMarkup(t('app.apps'), deps.apps()),
         logout: logoutMarkup(t, deps.logoutUrl()),
         overlay: overlayMarkup(t('app.close')),
       })
@@ -447,6 +453,8 @@ export class ShellView {
     container
       .querySelector('[data-panel-close]')
       ?.addEventListener('click', () => deps.closePanel());
+
+    bindApps(container);
   }
 
   /** Open or close the reference section of the navigation. */

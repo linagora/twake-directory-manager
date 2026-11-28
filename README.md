@@ -224,6 +224,27 @@ administrator writes it otherwise. Which comes first depends on the country:
 `{surname} {givenName}` puts the family name first, as in Mongolia, China or
 Japan.
 
+### Applications
+
+The header offers the Workplace's other applications in a grid, as Twake
+Calendar and Contacts do, when the deployment lists them (#392). The list is
+Twake Calendar's `appList`, as JSON:
+
+| Variable              | Default | What it is                                                             |
+| --------------------- | ------- | ---------------------------------------------------------------------- |
+| `DM_CONSOLE_APP_LIST` | (none)  | `[{"name": "Mail", "link": "https://mail.example.com/", "icon": "…"}]` |
+
+`link` is an http(s) address or a path; `icon` an image's address, a path or a
+`data:image/` URI, and the application's initial stands in without one. An
+entry without a name, or whose link is no web address, is left out; a value
+that is no JSON array offers none, and the server says so in its log. Inside
+the Home, whose bar offers the applications already, the console shows no
+button.
+
+The image's Content-Security-Policy (`DM_STATIC_CSP`) loads images from the
+console's own origin and `data:` URIs only: icons served elsewhere, such as
+by another application of the Workplace, need their origin in its `img-src`.
+
 ### ldap-rest version
 
 The console supports the ldap-rest version `package.json` declares: the
