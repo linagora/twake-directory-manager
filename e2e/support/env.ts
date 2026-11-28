@@ -14,7 +14,7 @@ export interface StackAddresses {
   directory: string;
   sso: string;
   ldap: string;
-  /** The port OpenLDAP listens on: 1389 on OpenLDAP 2.6, 389 on 2.4 */
+  /** The port OpenLDAP listens on: 389 on both images of the stack */
   ldapPort: number;
 }
 

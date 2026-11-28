@@ -29,13 +29,9 @@ ip() {
     "$(docker compose -p "$QA_PROJECT" -f "$QA_DIR/docker-compose.yaml" ps -q "$1")"
 }
 
-# The port the OpenLDAP image listens on: 1389 on the 2.6 image, 389 on the 2.4 one.
-if docker compose -p "$QA_PROJECT" -f "$QA_DIR/docker-compose.yaml" exec -T ldap \
-  test -x /opt/bitnami/scripts/openldap/run.sh; then
-  ldap_port=1389
-else
-  ldap_port=389
-fi
+# Both OpenLDAP images listen on 389 (#399): the one built from the upstream release and the
+# 2.4 one of the compatibility check.
+ldap_port="${QA_LDAP_PORT:-389}"
 
 mkdir -p "$GENERATED"
 cat >"$GENERATED/stack.json" <<JSON
