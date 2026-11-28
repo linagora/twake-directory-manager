@@ -321,3 +321,21 @@ export interface Confirmation {
    */
   choices?: { title: string; options: { label: string; checked: boolean }[] };
 }
+
+/** What the image's own plugin says about the console (`features.console`). */
+export interface ConsoleFeatures {
+  hiddenAttributes?: string[];
+  fullNameFormat?: string;
+  /** DM_CONSOLE_APP_LIST, unchecked: readAppList (console/apps.ts) checks it */
+  appList?: unknown;
+}
+
+/** An application the header links to. */
+export interface AppLink {
+  /** Its name, under its icon */
+  name: string;
+  /** Where it opens */
+  link: string;
+  /** Its icon: a path, an address or a `data:image/` URI */
+  icon?: string;
+}

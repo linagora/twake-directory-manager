@@ -8,9 +8,12 @@
  * @module twake-directory-manager/api/ConsoleApiClient
  */
 
+import { readAppList } from '../console/apps';
 import type {
+  AppLink,
   AttachedEntries,
   AttachedEntry,
+  ConsoleFeatures,
   EntityDescriptor,
   EntitySchema,
   Entry,
@@ -82,7 +85,7 @@ interface ConfigResponse {
     };
     openidconnect?: { endpoints?: { logout?: string } };
     /** What the image's own plugin says about the console itself */
-    console?: { hiddenAttributes?: string[]; fullNameFormat?: string };
+    console?: ConsoleFeatures;
     externalUsersInGroups?: {
       enabled?: boolean;
       branch?: string;
@@ -390,6 +393,8 @@ export class ConsoleApiClient {
   private hidden = new Set<string>();
   /** How the deployment writes a full name; see fullNameFormat */
   private nameFormat?: string;
+  /** The Workplace's applications (`DM_CONSOLE_APP_LIST`), checked */
+  appList: AppLink[] = [];
   /** Where the password policies are served, when they are */
   private policiesPath?: string;
   /**
@@ -563,6 +568,7 @@ export class ConsoleApiClient {
     const james = config.features.james;
     this.teamMailboxDomain = james !== undefined && !james.teamMailboxAnyDomain;
     this.nameFormat = config.features.console?.fullNameFormat || undefined;
+    this.appList = readAppList(config.features.console?.appList, this.origin);
     this.hidden = new Set(
       (config.features.console?.hiddenAttributes || []).map(name =>
         name.toLowerCase()

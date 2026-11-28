@@ -368,6 +368,82 @@
   font-size: 13px;
 }
 
+/* The Workplace's applications (#392), before the sign-out control: the
+   two pushed to the end of the header together. */
+.dc-apps {
+  position: relative;
+  margin-left: auto;
+}
+
+.dc-apps + .dc-logout {
+  margin-left: 0;
+}
+
+.dc-apps-icon {
+  fill: currentColor;
+}
+
+.dc-apps-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  gap: 4px;
+  margin: 0;
+  padding: 12px;
+  list-style: none;
+  background: var(--dc-surface);
+  border: 1px solid var(--dc-line);
+  border-radius: 8px;
+  box-shadow: var(--dc-shadow-raised);
+}
+
+.dc-apps-menu[hidden] {
+  display: none;
+}
+
+.dc-apps-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px;
+  border-radius: 6px;
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.dc-apps-link:hover,
+.dc-apps-link:focus-visible {
+  background: var(--dc-hover);
+  outline: none;
+}
+
+.dc-apps-link:focus-visible {
+  box-shadow: var(--dc-focus);
+}
+
+.dc-apps-link img,
+.dc-apps-initial {
+  width: 32px;
+  height: 32px;
+}
+
+.dc-apps-initial {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--dc-hover);
+  border: 1px solid var(--dc-line);
+  font-weight: 600;
+}
+
 /* Whatever the scope banner holds, signing out stays at the far end. */
 .dc-logout {
   margin-left: auto;
@@ -2430,6 +2506,16 @@ textarea.dc-policy-text {
 }
 
 @media (max-width: 900px) {
+  /* Held by the header rather than by the button, which Sign out pushes in
+     from the edge: a grid anchored to it ran past a phone's left edge. */
+  .dc-apps {
+    position: static;
+  }
+
+  .dc-apps-menu {
+    right: 16px;
+  }
+
   .dc-app {
     grid-template-columns: minmax(0, 1fr);
   }
