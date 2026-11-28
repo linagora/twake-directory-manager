@@ -368,7 +368,6 @@
   font-size: 13px;
 }
 
-/* Whatever the scope banner holds, signing out stays at the far end. */
 /* The Workplace's applications (#392), before the sign-out control: the
    two pushed to the end of the header together. */
 .dc-apps {
@@ -378,14 +377,6 @@
 
 .dc-apps + .dc-logout {
   margin-left: 0;
-}
-
-.dc-apps-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 4px 12px;
 }
 
 .dc-apps-icon {
@@ -398,7 +389,9 @@
   top: calc(100% + 6px);
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(3, 96px);
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  width: 320px;
+  max-width: calc(100vw - 32px);
   gap: 4px;
   margin: 0;
   padding: 12px;
@@ -406,7 +399,7 @@
   background: var(--dc-surface);
   border: 1px solid var(--dc-line);
   border-radius: 8px;
-  box-shadow: 0 6px 24px rgb(0 0 0 / 18%);
+  box-shadow: var(--dc-shadow-raised);
 }
 
 .dc-apps-menu[hidden] {
@@ -428,7 +421,12 @@
 
 .dc-apps-link:hover,
 .dc-apps-link:focus-visible {
-  background: var(--dc-line);
+  background: var(--dc-hover);
+  outline: none;
+}
+
+.dc-apps-link:focus-visible {
+  box-shadow: var(--dc-focus);
 }
 
 .dc-apps-link img,
@@ -441,10 +439,12 @@
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--dc-line);
+  background: var(--dc-hover);
+  border: 1px solid var(--dc-line);
   font-weight: 600;
 }
 
+/* Whatever the scope banner holds, signing out stays at the far end. */
 .dc-logout {
   margin-left: auto;
   min-height: 32px;

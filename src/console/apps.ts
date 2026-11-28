@@ -35,23 +35,25 @@ function safeUrl(value: unknown, origin: string, images = false): boolean {
  * name, or a link or an icon that is no web address.
  *
  * @param raw `features.console.appList`, as the server answered it
- * @param origin the console's origin
+ * @param origin the API's origin, for a page without a document
  * @returns the applications, in the deployment's order
  */
 export function readAppList(raw: unknown, origin: string): AppLink[] {
   if (!Array.isArray(raw)) return [];
+  // A relative link goes where the page is, which may not be the API's; a
+  // page with no web address of its own (about:blank) has the API's.
+  const page = typeof document === 'undefined' ? '' : document.baseURI;
+  const base = /^https?:/i.test(page) ? page : origin;
   return raw.flatMap((item: unknown): AppLink[] => {
     if (typeof item !== 'object' || item === null) return [];
     const { name, link, icon } = item as Record<string, unknown>;
     if (typeof name !== 'string' || !name.trim()) return [];
-    if (!safeUrl(link, origin)) return [];
+    if (!safeUrl(link, base)) return [];
     return [
       {
         name: name.trim(),
         link: (link as string).trim(),
-        ...(safeUrl(icon, origin, true)
-          ? { icon: (icon as string).trim() }
-          : {}),
+        ...(safeUrl(icon, base, true) ? { icon: (icon as string).trim() } : {}),
       },
     ];
   });
@@ -85,9 +87,7 @@ export function appsMarkup(label: string, apps: AppLink[]): SafeHtml {
           html`<li><a class="dc-apps-link" href="${app.link}">${
             app.icon
               ? html`<img src="${app.icon}" alt="" width="32" height="32" />`
-              : html`<span class="dc-apps-initial" aria-hidden="true">${app.name
-                  .charAt(0)
-                  .toUpperCase()}</span>`
+              : html`<span class="dc-apps-initial" aria-hidden="true">${initialOf(app.name)}</span>`
           }<span>${app.name}</span></a></li>`
       )}
     </ul>
@@ -96,7 +96,8 @@ export function appsMarkup(label: string, apps: AppLink[]): SafeHtml {
 
 /**
  * Open and close the grid: on the button, closed by Escape, which gives the
- * focus back to the button, and when the focus leaves it.
+ * focus back to the button, by a press elsewhere, and by Tab leaving it. An
+ * icon that does not load gives way to the application's initial.
  *
  * @param container what holds the frame
  */
@@ -105,26 +106,52 @@ export function bindApps(container: HTMLElement): void {
   const toggle = box?.querySelector<HTMLButtonElement>('[data-apps-toggle]');
   const menu = box?.querySelector<HTMLElement>('.dc-apps-menu');
   if (!box || !toggle || !menu) return;
-  const show = (open: boolean): void => {
-    menu.hidden = !open;
-    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  // A press elsewhere closes it. Not the focus leaving to nothing: a browser
+  // that does not focus a link it clicks (Safari) would close the grid under
+  // the pointer before the click reached the link, as the More menu says.
+  const outside = (event: Event): void => {
+    if (!box.contains(event.target as Node)) close(false);
   };
-  toggle.addEventListener('click', () => {
-    const open = menu.hidden;
-    show(open);
-    if (open) menu.querySelector<HTMLElement>('a')?.focus();
-  });
+  const open = (): void => {
+    menu.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+    document.addEventListener('pointerdown', outside);
+    menu.querySelector<HTMLElement>('a')?.focus();
+  };
+  const close = (refocus: boolean): void => {
+    document.removeEventListener('pointerdown', outside);
+    if (menu.hidden) return;
+    menu.hidden = true;
+    toggle.setAttribute('aria-expanded', 'false');
+    if (refocus) toggle.focus();
+  };
+  toggle.addEventListener('click', () => (menu.hidden ? open() : close(false)));
   box.addEventListener('keydown', event => {
     if (event.key !== 'Escape' || menu.hidden) return;
     // The grid closes, not the panel or the page under it.
+    event.preventDefault();
     event.stopPropagation();
-    show(false);
-    toggle.focus();
+    close(true);
   });
   box.addEventListener('focusout', event => {
     const next = event.relatedTarget as Node | null;
-    if (!next || !box.contains(next)) show(false);
+    if (next && !box.contains(next)) close(false);
   });
+  for (const icon of Array.from(menu.querySelectorAll('img'))) {
+    icon.addEventListener('error', () => {
+      const name = icon.closest('a')?.textContent ?? '';
+      const initial = document.createElement('span');
+      initial.className = 'dc-apps-initial';
+      initial.setAttribute('aria-hidden', 'true');
+      initial.textContent = initialOf(name);
+      icon.replaceWith(initial);
+    });
+  }
+}
+
+/** An application's initial, a whole character even outside the BMP. */
+function initialOf(name: string): string {
+  return (Array.from(name.trim())[0] ?? '').toUpperCase();
 }
 
 /**

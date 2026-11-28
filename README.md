@@ -235,7 +235,10 @@ Twake Calendar's `appList`, as JSON:
 | `DM_CONSOLE_APP_LIST` | (none)  | `[{"name": "Mail", "link": "https://mail.example.com/", "icon": "…"}]` |
 
 `link` is an http(s) address or a path; `icon` an image's address, a path or a
-`data:image/` URI, and the application's initial stands in without one. An
+`data:image/` URI, and the application's initial stands in without one or
+when it does not load. A path is the console's: the icons of Twake
+Calendar's own list, such as `/assets/images/svg/app-calendar.svg`, are
+Calendar's, and are written as its full address here. An
 entry without a name, or whose link is no web address, is left out; a value
 that is no JSON array offers none, and the server says so in its log. Inside
 the Home, whose bar offers the applications already, the console shows no
