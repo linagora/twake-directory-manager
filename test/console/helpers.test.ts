@@ -416,6 +416,13 @@ describe('DirectoryConsole helpers', () => {
       const listed = await client.organizationWalk(from, 50);
       expect(asked).to.have.length(50);
       expect(listed.partial).to.equal(true);
+      // One more than the bound, the root and 50 children: probed in one.
+      asked.length = 0;
+      wide.length = 50;
+      expect((await client.organizationWalk(from, 50, true)).partial).to.equal(
+        true
+      );
+      expect(asked).to.deep.equal([sales]);
       // A tree as wide as the bound is walked whole either way.
       asked.length = 0;
       wide.length = 49;

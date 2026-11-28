@@ -196,13 +196,15 @@ export class TransitActions {
     const t = ctx.t;
     const separator = ctx.api.organizationPathSeparator;
     const language = ctx.translator().language;
+    // The transit branch is no choice: searched, its matches were dropped.
+    // Left out first, so that a branch the caller writes under it is not
+    // taken as held by its answer.
+    const writable = roots.filter(root => comparableDn(root.dn) !== transit);
     // A branch under another the caller writes is in that one's answer, a
     // subtree search holding its base: it is not searched a second time.
-    // The transit branch is no choice: searched, its matches were dropped.
-    const searched = roots.filter(
+    const searched = writable.filter(
       (root, index) =>
-        comparableDn(root.dn) !== transit &&
-        !roots.some(
+        !writable.some(
           (other, before) =>
             withinDn(root.dn, other.dn) &&
             (comparableDn(other.dn) !== comparableDn(root.dn) || before < index)

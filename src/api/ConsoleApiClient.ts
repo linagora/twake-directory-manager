@@ -1840,9 +1840,9 @@ export class ConsoleApiClient {
     // could not read, may hold organizations the walk never saw.
     let complete = true;
     while (queue.length > 0 && visited < limit) {
-      // Known wider than the bound already: the reads left would only
-      // confirm it.
-      if (probe && visited + waiting.size > limit) break;
+      // Known wider than the bound already, or partial whatever comes
+      // next: the reads left would only confirm it.
+      if (probe && (!complete || visited + waiting.size > limit)) break;
       const node = queue.shift() as OrganizationNode;
       const key = comparableDn(node.dn);
       if (seen.has(key)) continue;
