@@ -32,14 +32,19 @@
       "dependencyDashboardApproval": true
     },
     {
-      "description": "The OpenLDAP and Dex images of the QA stack",
-      "matchDepNames": ["osixia/openldap", "ghcr.io/dexidp/dex"],
+      "description": "The OpenLDAP and Dex of the QA stack: the osixia 2.4 image of the compatibility check, the OpenLDAP release the QA image builds (2.6, the long-term line; 2.7 is a QA_OPENLDAP_VERSION away, #399), and Dex",
+      "matchDepNames": ["osixia/openldap", "openldap", "ghcr.io/dexidp/dex"],
       "groupName": "qa images"
     },
     {
       "description": "The Helm version azure/setup-helm installs, which Renovate reads from the workflows itself",
       "matchDepNames": ["helm"],
       "groupName": "helm"
+    },
+    {
+      "description": "The QA image follows OpenLDAP's long-term 2.6 line",
+      "matchDepNames": ["openldap"],
+      "allowedVersions": "<2.7"
     }
   ],
   "customManagers": [
@@ -59,6 +64,23 @@
       "matchStrings": ["\"tested\": \"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""],
       "depNameTemplate": "ghcr.io/linagora/ldap-rest",
       "datasourceTemplate": "docker"
+    },
+    {
+      "description": "The OpenLDAP release the QA image builds (scripts/qa-environment/openldap/Dockerfile), read from openldap.org's release directory",
+      "customType": "regex",
+      "managerFilePatterns": ["/^scripts/qa-environment/openldap/Dockerfile$/"],
+      "matchStrings": [
+        "ARG OPENLDAP_VERSION=(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "depNameTemplate": "openldap",
+      "datasourceTemplate": "custom.openldap",
+      "extractVersionTemplate": "^openldap-(?<version>\\d+\\.\\d+\\.\\d+)\\.tgz$"
     }
-  ]
+  ],
+  "customDatasources": {
+    "openldap": {
+      "defaultRegistryUrlTemplate": "https://www.openldap.org/software/download/OpenLDAP/openldap-release/",
+      "format": "html"
+    }
+  }
 }

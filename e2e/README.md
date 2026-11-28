@@ -31,10 +31,10 @@ npx playwright test                    # whole suite, ~1 min with 4 workers
 ./scripts/stop.sh                      # removes containers, network and volumes
 ```
 
-The stack runs OpenLDAP 2.6 (`bitnamilegacy/openldap:2.6.10`), the maintained release.
-`QA_LDAP_IMAGE=osixia/openldap:1.5.0` runs the 2.4 compatibility check of #118 instead; the two
-images have different variables, ports and bootstrap, and `start.sh` tells them apart from what
-the image ships (#230).
+The stack runs OpenLDAP from the upstream release, in an image `build.sh` makes from
+`scripts/qa-environment/openldap/` (2.6 by default; `QA_OPENLDAP_VERSION=2.7.2` builds another
+release, #399). `QA_LDAP_IMAGE=osixia/openldap:1.5.0` runs the 2.4 compatibility check of #118
+instead; `start.sh` tells the two apart from what the image ships.
 
 Run a subset:
 

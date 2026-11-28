@@ -7,22 +7,20 @@
 # host needs `127.0.0.1 sso` in /etc/hosts.
 services:
   ldap:
-    # OpenLDAP 2.6 from Bitnami, the maintained release start.sh fills (#230). The osixia 1.5.0
-    # image below runs OpenLDAP 2.4, kept as a compatibility check (#118):
+    # OpenLDAP from the upstream release, built by build.sh from openldap/ (#399), which
+    # start.sh fills. The osixia 1.5.0 image runs OpenLDAP 2.4, kept as a compatibility
+    # check (#118):
     #   QA_LDAP_IMAGE=osixia/openldap:1.5.0 scripts/qa-environment/build.sh  (and ./start.sh)
-    # The two read different variables; start.sh tells them apart from what the image ships.
-    image: ${QA_LDAP_IMAGE:-bitnamilegacy/openldap:2.6.10}
+    # Both listen on 389; start.sh tells them apart from what the image ships.
+    image: ${QA_LDAP_IMAGE:-twake-directory-manager-qa-ldap}
     environment:
-      # OpenLDAP 2.6 (Bitnami): the admin's DN, a tree start.sh seeds itself, and its ppolicy
-      # module; it listens on 1389.
+      # Read by both images: the image built here takes LDAP_ROOT and the admin's password
+      # and leaves the rest to start.sh.
       - LDAP_ROOT=dc=example,dc=com
-      - LDAP_ADMIN_USERNAME=admin
-      - LDAP_SKIP_DEFAULT_TREE=yes
-      - LDAP_CONFIGURE_PPOLICY=yes
-      # OpenLDAP 2.4 (osixia): ignored by the 2.6 image; it listens on 389.
+      - LDAP_ADMIN_PASSWORD=admin
+      # OpenLDAP 2.4 (osixia) only
       - LDAP_ORGANISATION=Example Corp
       - LDAP_DOMAIN=example.com
-      - LDAP_ADMIN_PASSWORD=admin
       - LDAP_CONFIG_PASSWORD=admin
       - LDAP_READONLY_USER=false
       - LDAP_RFC2307BIS_SCHEMA=true
@@ -47,7 +45,7 @@ services:
       - ldap
       - sso
     environment:
-      - DM_LDAP_URL=ldap://ldap:${QA_LDAP_PORT:-1389}
+      - DM_LDAP_URL=ldap://ldap:${QA_LDAP_PORT:-389}
       - DM_LDAP_DN=cn=admin,dc=example,dc=com
       - DM_LDAP_PWD=admin
       - DM_LDAP_BASE=dc=example,dc=com

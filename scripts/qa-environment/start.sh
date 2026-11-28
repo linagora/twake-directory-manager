@@ -8,8 +8,9 @@
 #   scripts/qa-environment/build.sh    # once, and whenever the code under test changes
 #   scripts/qa-environment/start.sh
 #
-# The stack runs OpenLDAP 2.6 (bitnamilegacy/openldap:2.6.10). The 2.4 compatibility check of
-# #118 runs the same stack on osixia/openldap:1.5.0:
+# The stack runs OpenLDAP from the upstream release, in the image build.sh makes from openldap/
+# (2.6 by default; QA_OPENLDAP_VERSION=2.7.2 scripts/qa-environment/build.sh for another one,
+# #399). The 2.4 compatibility check of #118 runs the same stack on osixia/openldap:1.5.0:
 #
 #   QA_LDAP_IMAGE=osixia/openldap:1.5.0 scripts/qa-environment/build.sh
 #   QA_LDAP_IMAGE=osixia/openldap:1.5.0 scripts/qa-environment/start.sh
@@ -37,30 +38,23 @@ ldap_exec() {
   compose exec -T ldap "$@"
 }
 
-if ! docker image inspect twake-directory-manager-qa >/dev/null 2>&1; then
-  echo "The twake-directory-manager-qa image is missing, build it first: scripts/qa-environment/build.sh" >&2
-  exit 1
-fi
+for image in twake-directory-manager-qa "${QA_LDAP_IMAGE:-twake-directory-manager-qa-ldap}"; do
+  case "$image" in twake-directory-manager-qa*) ;; *) continue ;; esac
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    echo "The $image image is missing, build it first: scripts/qa-environment/build.sh" >&2
+    exit 1
+  fi
+done
 
 echo "==> Starting OpenLDAP as compose project '$QA_PROJECT'"
 compose up -d ldap
 
-# The two images share the protocol only: what one ships tells which one runs.
-# A 2.6 image (Bitnami) listens on 1389 and keeps its cn=config socket under
-# its own prefix; the 2.4 image (osixia) listens on 389, its socket at the
-# default path, and holds the main database at {1}mdb where the 2.6 image
-# holds it at {2}mdb.
-if compose exec -T ldap test -x /opt/bitnami/scripts/openldap/run.sh; then
-  ldap_flavour=bitnami
-  export QA_LDAP_PORT="${QA_LDAP_PORT:-1389}"
-  ldapi='ldapi://%2Fopt%2Fbitnami%2Fopenldap%2Fvar%2Frun%2Fldapi'
-  slapd_db='{2}mdb'
-else
-  ldap_flavour=osixia
-  export QA_LDAP_PORT="${QA_LDAP_PORT:-389}"
-  ldapi='ldapi:///'
-  slapd_db='{1}mdb'
-fi
+# Both images listen on 389, keep their cn=config socket at the default path
+# and hold the main database at {1}mdb. The image built here (openldap/)
+# loads no module of its own; the 2.4 image (osixia) loads memberof already.
+export QA_LDAP_PORT="${QA_LDAP_PORT:-389}"
+ldapi='ldapi:///'
+slapd_db='{1}mdb'
 
 echo "==> Generating the configuration in $GENERATED_DIR"
 mkdir -p "$GENERATED_DIR"
@@ -115,6 +109,16 @@ if [ "${ready:-false}" != "true" ]; then
   exit 1
 fi
 
+# Asked once it answers: a container that died would not be asked anything
+if compose exec -T ldap test -x /opt/openldap/libexec/slapd; then
+  ldap_flavour=upstream
+else
+  ldap_flavour=osixia
+fi
+ldap_version="$(compose exec -T ldap sh -c \
+  '{ /opt/openldap/libexec/slapd -VV || slapd -VV || /usr/sbin/slapd -VV; } 2>&1; true' |
+  sed -n 's/.*slapd \([0-9][0-9.]*\).*/\1/p' | head -n 1)"
+
 echo "==> Provisioning"
 # Read whole before grepping: grep -q leaves early, and pipefail takes the writer's broken pipe
 # for a failure
@@ -123,7 +127,7 @@ if grep -q twake <<<"$schemas"; then
   echo "    schemas already loaded"
 else
   # The Twake schema names mailForwardingAddress, which postfix-book defines
-  # and the osixia image loads at bootstrap; a 2.6 image may not ship it.
+  # and the osixia image loads at bootstrap; the image built here does not.
   # Read whole before grepping: grep -q leaves early, and pipefail takes the
   # writer's broken pipe for a failure
   types="$(ldap_exec ldapsearch -Q -Y EXTERNAL -H "$ldapi" -b cn=subschema -s base -LLL attributeTypes)"
@@ -132,33 +136,34 @@ else
   fi
   ldap_exec ldapadd -Q -Y EXTERNAL -H "$ldapi" -f /qa-ldap/mail-schema.ldif >/dev/null
   ldap_exec ldapadd -Q -Y EXTERNAL -H "$ldapi" -f /qa-ldap/twake-schema.ldif >/dev/null
-  if [ "$ldap_flavour" = bitnami ]; then
-    # The ppolicy module and overlay come from LDAP_CONFIGURE_PPOLICY; the
-    # policy the console names is the seed's default one.
+  if [ "$ldap_flavour" = upstream ]; then
+    # pwdReset, which the console sets to force a new password at next login,
+    # is an operational attribute the ppolicy overlay registers; its default
+    # policy is the seed's, which the console names too. memberOf, which an
+    # account's card lists its mailing lists from, is kept by the memberof
+    # overlay, for memberships written after it: hence before the seed data.
     ldap_exec ldapmodify -Q -Y EXTERNAL -H "$ldapi" >/dev/null <<LDIF
-dn: olcOverlay={0}ppolicy,olcDatabase=$slapd_db,cn=config
+dn: cn=module{0},cn=config
 changetype: modify
-add: olcPPolicyDefault
-olcPPolicyDefault: cn=default,ou=policies,dc=example,dc=com
-LDIF
-    # memberOf, which an account's card lists its mailing lists from. The 2.6
-    # image loads neither the module nor an overlay for groupOfNames.
-    ldap_exec ldapmodify -Q -Y EXTERNAL -H "$ldapi" >/dev/null <<LDIF
-dn: cn=module,cn=config
-changetype: add
-cn: module
-objectClass: olcModuleList
-olcModulePath: /opt/bitnami/openldap/lib/openldap
-olcModuleLoad: memberof.so
+add: olcModuleLoad
+olcModuleLoad: memberof
+olcModuleLoad: ppolicy
 
-dn: olcOverlay={1}memberof,olcDatabase=$slapd_db,cn=config
+dn: olcOverlay={0}memberof,olcDatabase=$slapd_db,cn=config
 changetype: add
 objectClass: olcOverlayConfig
 objectClass: olcMemberOfConfig
-olcOverlay: {1}memberof
+olcOverlay: {0}memberof
 olcMemberOfGroupOC: groupOfNames
 olcMemberOfMemberAD: member
 olcMemberOfMemberOfAD: memberOf
+
+dn: olcOverlay={1}ppolicy,olcDatabase=$slapd_db,cn=config
+changetype: add
+objectClass: olcOverlayConfig
+objectClass: olcPPolicyConfig
+olcOverlay: {1}ppolicy
+olcPPolicyDefault: cn=default,ou=policies,dc=example,dc=com
 LDIF
   else
     # pwdReset, which the console sets to force a new password at next login, is an operational
@@ -199,8 +204,8 @@ if ldap_exec ldapsearch -x -H "ldap://localhost:$QA_LDAP_PORT" -D cn=admin,dc=ex
   -b uid=admin,ou=users,dc=example,dc=com -s base dn >/dev/null 2>&1; then
   echo "    already provisioned"
 else
-  # A 2.6 image whose default tree is skipped holds no naming context yet; the
-  # seed only fills what hangs under it.
+  # The image built here starts with an empty database, no naming context
+  # yet; the seed only fills what hangs under it.
   if ! ldap_exec ldapsearch -x -H "ldap://localhost:$QA_LDAP_PORT" -D cn=admin,dc=example,dc=com -w admin \
     -b dc=example,dc=com -s base dn >/dev/null 2>&1; then
     ldap_exec ldapadd -x -H "ldap://localhost:$QA_LDAP_PORT" -D cn=admin,dc=example,dc=com -w admin \
@@ -230,7 +235,7 @@ cat <<INFO
 
 ==> The QA environment is up
 
-  OpenLDAP: $ldap_flavour, port $QA_LDAP_PORT
+  OpenLDAP: ${ldap_version:-?} ($ldap_flavour), port $QA_LDAP_PORT
   Console: $APP_URL/static/console/  (sign in through Dex, password "secret")
            admin (whole directory), sophie.martin (Sales), eric.dubois (Engineering)
   Dex:     http://sso:$QA_SSO_PORT  (from a browser on the host: add "127.0.0.1 sso" to /etc/hosts)
