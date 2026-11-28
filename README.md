@@ -252,7 +252,7 @@ by another application of the Workplace, need their origin in its `img-src`.
 
 The console supports the ldap-rest version `package.json` declares: the
 floor (`ldapRest.min`) and the version the `Dockerfile` builds on and CI
-tests against (`ldapRest.tested`) are 2.1.0 and 2.6.0 today. A fallback for an
+tests against (`ldapRest.tested`) are 2.1.0 and 2.6.1 today. A fallback for an
 older server is tagged `compat(ldap-rest<X.Y.Z)` where it stands, and
 `npm run lint` refuses it once the floor passes it, until it is removed. The
 base image is a build argument:

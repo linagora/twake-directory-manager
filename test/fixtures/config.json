@@ -31,7 +31,8 @@
         "twakeOtherMailbox",
         "twakeDeliveryMode"
       ],
-      "fullNameFormat": ""
+      "fullNameFormat": "",
+      "appList": []
     },
     "static": {
       "enabled": true,
@@ -1697,5 +1698,5 @@
       }
     }
   },
-  "version": "2.6.0"
+  "version": "2.6.1"
 }
