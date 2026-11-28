@@ -2506,6 +2506,16 @@ textarea.dc-policy-text {
 }
 
 @media (max-width: 900px) {
+  /* Held by the header rather than by the button, which Sign out pushes in
+     from the edge: a grid anchored to it ran past a phone's left edge. */
+  .dc-apps {
+    position: static;
+  }
+
+  .dc-apps-menu {
+    right: 16px;
+  }
+
   .dc-app {
     grid-template-columns: minmax(0, 1fr);
   }
