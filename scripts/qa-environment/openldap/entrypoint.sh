@@ -3,8 +3,10 @@
 # First start: a bare cn=config, the root reaching it over ldapi through SASL
 # EXTERNAL, and an empty mdb database for dc=example,dc=com, whose admin is
 # cn=admin with the password "admin" (LDAP_ROOT and LDAP_ADMIN_PASSWORD
-# override them). Everything else, schemas past the core ones, overlays and
-# data, is start.sh's. Then slapd, in the foreground, on 389 and ldapi.
+# override them). Anonymous reads nothing but may bind; the admin, as the
+# root DN, reads and writes everything. Everything else, schemas past the
+# core ones, overlays and data, is start.sh's. Then slapd, in the
+# foreground, on 389 and ldapi.
 set -eu
 
 CONFIG=/etc/openldap/slapd.d
@@ -14,7 +16,8 @@ SCHEMA=/etc/openldap/schema
 MODULES=/opt/openldap/libexec/openldap
 
 if [ ! -e "$CONFIG/cn=config.ldif" ]; then
-  mkdir -p "$CONFIG" "$DATA" /var/run/openldap
+  rm -rf "$CONFIG" "$CONFIG.new" "$DATA"
+  mkdir -p "$CONFIG.new" "$DATA" /var/run/openldap
   hash="$(slappasswd -s "${LDAP_ADMIN_PASSWORD:-admin}")"
   {
     cat <<LDIF
@@ -57,9 +60,12 @@ olcDbIndex: objectClass eq
 olcDbIndex: uid,mail,cn eq,sub
 olcAccess: {0}to * by dn.exact=gidNumber=0+uidNumber=0,cn=peercred,cn=external,cn=auth manage by * break
 olcAccess: {1}to attrs=userPassword by self write by anonymous auth by * none
-olcAccess: {2}to * by * read
+olcAccess: {2}to * by self read by * none
 LDIF
-  } | slapadd -n 0 -F "$CONFIG"
+  } | slapadd -n 0 -F "$CONFIG.new"
+  # Moved into place once whole: a first start that failed is tried again,
+  # rather than leaving a config without its database.
+  mv "$CONFIG.new" "$CONFIG"
 fi
 
 mkdir -p /var/run/openldap

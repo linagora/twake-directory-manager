@@ -14,17 +14,20 @@ FROM ${DEBIAN_IMAGE} AS build
 ARG OPENLDAP_VERSION=2.6.16
 RUN apt-get update -qq \
   && apt-get install -y -qq --no-install-recommends \
-    build-essential ca-certificates curl file groff-base libltdl-dev libsasl2-dev libssl-dev openssl \
+    build-essential ca-certificates curl file gpg gpgv groff-base libltdl-dev libsasl2-dev libssl-dev \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
-# Checked against the digest the release publishes, both over HTTPS.
-RUN release="https://www.openldap.org/software/download/OpenLDAP/openldap-release/openldap-${OPENLDAP_VERSION}" \
-  && curl -fsSLo openldap.tgz "$release.tgz" \
-  && expected="$(curl -fsSL "$release.sha3-512" | sed -n 's/.*= *//p')" \
-  && actual="$(openssl dgst -sha3-512 -r openldap.tgz | cut -d' ' -f1)" \
-  && [ -n "$expected" ] && [ "$expected" = "$actual" ] \
+# Checked against the OpenLDAP Project's release key, kept here
+# (openldap-release.asc, 3CE2 69B5 398B C8B7 8564  5E98 7F67 D5FD 1CE1 CBCE):
+# what the server answers proves nothing by itself.
+COPY openldap-release.asc /tmp/openldap-release.asc
+RUN release="https://www.openldap.org/software/download/OpenLDAP/openldap-release/openldap-${OPENLDAP_VERSION}.tgz" \
+  && curl -fsSL --proto '=https' -o openldap.tgz "$release" \
+  && curl -fsSL --proto '=https' -o openldap.tgz.asc "$release.asc" \
+  && gpg --dearmor < /tmp/openldap-release.asc > /tmp/openldap-release.gpg \
+  && gpgv --keyring /tmp/openldap-release.gpg openldap.tgz.asc openldap.tgz \
   && tar -xzf openldap.tgz --strip-components=1 \
-  && rm openldap.tgz
+  && rm openldap.tgz openldap.tgz.asc
 RUN ./configure --prefix=/opt/openldap --sysconfdir=/etc --localstatedir=/var \
     --enable-slapd --enable-modules --enable-overlays=mod --enable-mdb \
     --with-tls=openssl --with-cyrus-sasl --disable-static \

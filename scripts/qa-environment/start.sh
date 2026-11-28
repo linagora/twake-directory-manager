@@ -38,10 +38,13 @@ ldap_exec() {
   compose exec -T ldap "$@"
 }
 
-if ! docker image inspect twake-directory-manager-qa >/dev/null 2>&1; then
-  echo "The twake-directory-manager-qa image is missing, build it first: scripts/qa-environment/build.sh" >&2
-  exit 1
-fi
+for image in twake-directory-manager-qa "${QA_LDAP_IMAGE:-twake-directory-manager-qa-ldap}"; do
+  case "$image" in twake-directory-manager-qa*) ;; *) continue ;; esac
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    echo "The $image image is missing, build it first: scripts/qa-environment/build.sh" >&2
+    exit 1
+  fi
+done
 
 echo "==> Starting OpenLDAP as compose project '$QA_PROJECT'"
 compose up -d ldap
@@ -49,17 +52,9 @@ compose up -d ldap
 # Both images listen on 389, keep their cn=config socket at the default path
 # and hold the main database at {1}mdb. The image built here (openldap/)
 # loads no module of its own; the 2.4 image (osixia) loads memberof already.
-if compose exec -T ldap test -x /opt/openldap/libexec/slapd; then
-  ldap_flavour=upstream
-else
-  ldap_flavour=osixia
-fi
 export QA_LDAP_PORT="${QA_LDAP_PORT:-389}"
 ldapi='ldapi:///'
 slapd_db='{1}mdb'
-ldap_version="$(compose exec -T ldap sh -c \
-  '{ /opt/openldap/libexec/slapd -VV || slapd -VV || /usr/sbin/slapd -VV; } 2>&1; true' |
-  sed -n 's/.*slapd \([0-9][0-9.]*\).*/\1/p' | head -n 1)"
 
 echo "==> Generating the configuration in $GENERATED_DIR"
 mkdir -p "$GENERATED_DIR"
@@ -113,6 +108,16 @@ if [ "${ready:-false}" != "true" ]; then
   echo "OpenLDAP did not start within 2 minutes, see: docker compose -p $QA_PROJECT logs ldap" >&2
   exit 1
 fi
+
+# Asked once it answers: a container that died would not be asked anything
+if compose exec -T ldap test -x /opt/openldap/libexec/slapd; then
+  ldap_flavour=upstream
+else
+  ldap_flavour=osixia
+fi
+ldap_version="$(compose exec -T ldap sh -c \
+  '{ /opt/openldap/libexec/slapd -VV || slapd -VV || /usr/sbin/slapd -VV; } 2>&1; true' |
+  sed -n 's/.*slapd \([0-9][0-9.]*\).*/\1/p' | head -n 1)"
 
 echo "==> Provisioning"
 # Read whole before grepping: grep -q leaves early, and pipefail takes the writer's broken pipe
