@@ -387,6 +387,51 @@ describe('DirectoryConsole helpers', () => {
       ).to.equal(false);
     });
 
+    it('should end a probing walk as soon as the tree is known wider than its bound', async () => {
+      const asked: string[] = [];
+      const wide = Array.from({ length: 51 }, (_, index) => ({
+        dn: `ou=Team ${index},${sales}`,
+        ou: [`Team ${index}`],
+      }));
+      nock(baseUrl)
+        .persist()
+        .get(/\/api\/v1\/ldap\/organizations\/[^/]+\/subnodes/)
+        .query({ objectClass: 'organizationalUnit' })
+        .reply(uri => {
+          const dn = decodeURIComponent(uri.split('/')[5]);
+          asked.push(dn);
+          return [200, dn === sales ? wide : []];
+        });
+      const from = [{ dn: sales, name: 'Sales', path: 'Sales' }];
+      const client = new ConsoleApiClient(baseUrl);
+      // One read answers 51 children: past a bound of 50, the walk ends.
+      const probed = await client.organizationWalk(from, 50, true);
+      expect(asked).to.deep.equal([sales]);
+      expect(probed.partial).to.equal(true);
+      expect(probed.organizations.map(option => option.dn)).to.deep.equal([
+        sales,
+      ]);
+      // A walk that lists what it reads goes on to its bound.
+      asked.length = 0;
+      const listed = await client.organizationWalk(from, 50);
+      expect(asked).to.have.length(50);
+      expect(listed.partial).to.equal(true);
+      // One more than the bound, the root and 50 children: probed in one.
+      asked.length = 0;
+      wide.length = 50;
+      expect((await client.organizationWalk(from, 50, true)).partial).to.equal(
+        true
+      );
+      expect(asked).to.deep.equal([sales]);
+      // A tree as wide as the bound is walked whole either way.
+      asked.length = 0;
+      wide.length = 49;
+      const whole = await client.organizationWalk(from, 50, true);
+      expect(asked).to.have.length(50);
+      expect(whole.partial).to.equal(false);
+      nock.cleanAll();
+    });
+
     it('should offer a new organization under one only when it may be created', () => {
       const render = (onCreateChild?: () => void): string => {
         const container = page();

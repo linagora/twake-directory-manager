@@ -656,6 +656,177 @@ describe('actions/transit', () => {
         await until(() => transitReads(calls) > counted);
       });
 
+      it('should open the search once a read shows the tree too wide, without walking on', async () => {
+        const read: string[] = [];
+        const { root } = await card('admin', server => {
+          wide(server);
+          // Any other organization read, as the walk would go on to.
+          server
+            .persist()
+            .get(uri => {
+              const path = decodeURIComponent(uri);
+              if (!path.includes(`,${government}/subnodes`)) return false;
+              read.push(path);
+              return true;
+            })
+            .reply(200, []);
+        });
+        await claiming(root);
+        pickerOf(panelOf(root).body);
+        // The top, then the parent of 1,136, past the bound already: none of
+        // the reads of its domains the walk made before.
+        expect(read).to.deep.equal([]);
+      });
+
+      /** A scope writing the parent of 1,136 and Sales, and the branches named. */
+      const twoBranches = (...more: string[]): Scope => {
+        const admin = read<Scope>('scopes/admin.json');
+        const branch = (dn: string): Scope['branches'][number] => ({
+          dn,
+          read: true,
+          write: true,
+          delete: false,
+          name: rdnName(dn),
+          path: rdnName(dn),
+        });
+        return {
+          ...admin,
+          branches: [government, sales, ...more].map(branch),
+        };
+      };
+      const rdnName = (dn: string): string => dn.split(',')[0].split('=')[1];
+      const salesGov: Entry = {
+        dn: `ou=gov,${sales}`,
+        ou: 'gov',
+        twakeDepartmentPath: 'Sales / gov',
+      };
+      /** A branch whose search fails, as a gateway answers. */
+      const failing =
+        (from: string, query: string) =>
+        (server: nock.Scope): void => {
+          const path = `/api/v1/ldap/organizations/${from}/search?q=${query}`;
+          server
+            .get(uri => decodeURIComponent(uri) === path)
+            .reply(502, 'Bad Gateway');
+        };
+
+      it('should offer what the other branches found when one search fails, and say some are missing', async () => {
+        const { root } = await card(twoBranches(), server => {
+          failing(government, 'gov')(server);
+          searched(sales, 'gov', [salesGov])(server);
+          children(government, domains)(server);
+        });
+        await claiming(root);
+        const { body } = panelOf(root);
+        const { input, results } = pickerOf(body);
+        type(input, 'gov');
+        await until(() => suggestions(results).length > 0);
+        expect(suggestions(results)).to.deep.equal(['Sales / gov']);
+        const missing =
+          'Some of your branches could not be searched: their organizations are missing';
+        expect(
+          results.querySelector('[data-picker-cut]')?.textContent
+        ).to.equal(missing);
+        await until(
+          () => root.querySelector('[data-announce]')?.textContent === missing
+        );
+      });
+
+      it('should say the search failed when every branch failed', async () => {
+        const { root } = await card(twoBranches(), server => {
+          failing(government, 'gov')(server);
+          failing(sales, 'gov')(server);
+          children(government, domains)(server);
+        });
+        await claiming(root);
+        const { body } = panelOf(root);
+        const { input, results } = pickerOf(body);
+        type(input, 'gov');
+        await until(
+          () =>
+            !!results.textContent && !results.textContent.includes('Searching')
+        );
+        expect(suggestions(results)).to.deep.equal([]);
+        expect(results.textContent).to.equal(
+          'The list could not be loaded. If the directory holds many entries, narrow the search.'
+        );
+      });
+
+      it('should say both that branches are missing and that an answer was cut', async () => {
+        const { root } = await card(twoBranches(), server => {
+          failing(government, 'gov')(server);
+          searched(sales, 'gov', [
+            salesGov,
+            {
+              dn: `more-organizations-${sales}`,
+              _isMoreIndicator: 'true',
+              _totalCount: '80',
+              _displayedCount: '50',
+            },
+          ])(server);
+          children(government, domains)(server);
+        });
+        await claiming(root);
+        const { body } = panelOf(root);
+        const { input, results } = pickerOf(body);
+        type(input, 'gov');
+        await until(() => suggestions(results).length > 0);
+        expect(
+          results.querySelector('[data-picker-cut]')?.textContent
+        ).to.equal(
+          'Some of your branches could not be searched: their organizations are missing. ' +
+            'Only the first organizations found are shown: type more of the name to find the others'
+        );
+      });
+
+      it('should search a branch the caller writes under the transit branch', async () => {
+        const below = `ou=Arrivals,${transit}`;
+        const { root, calls } = await card(
+          twoBranches(transit, below),
+          server => {
+            searched(government, 'arr', [])(server);
+            searched(sales, 'arr', [])(server);
+            searched(below, 'arr', [
+              {
+                dn: below,
+                ou: 'Arrivals',
+                twakeDepartmentPath: 'Transit / Arrivals',
+              },
+            ])(server);
+            children(government, domains)(server);
+          }
+        );
+        await claiming(root);
+        const { body } = panelOf(root);
+        const { input, results } = pickerOf(body);
+        type(input, 'arr');
+        await until(() => suggestions(results).length > 0);
+        expect(suggestions(results)).to.deep.equal(['Transit / Arrivals']);
+        expect(callsOf(calls, 'organizationSearchRead')).to.have.members([
+          `organizationSearchRead(arr, ${government})`,
+          `organizationSearchRead(arr, ${sales})`,
+          `organizationSearchRead(arr, ${below})`,
+        ]);
+      });
+
+      it('should not search the transit branch, when the caller writes it as a branch', async () => {
+        const { root, calls } = await card(twoBranches(transit), server => {
+          searched(government, 'gov', [domain('mojha.gov.mn')])(server);
+          searched(sales, 'gov', [salesGov])(server);
+          children(government, domains)(server);
+        });
+        await claiming(root);
+        const { body } = panelOf(root);
+        const { input, results } = pickerOf(body);
+        type(input, 'gov');
+        await until(() => suggestions(results).length > 0);
+        expect(callsOf(calls, 'organizationSearchRead')).to.have.members([
+          `organizationSearchRead(gov, ${government})`,
+          `organizationSearchRead(gov, ${sales})`,
+        ]);
+        expect(callsOf(calls, 'organizationSearchRead')).to.have.length(2);
+      });
+
       it('should search each branch the caller writes once, a nested one in its parent’s answer', async () => {
         const admin = read<Scope>('scopes/admin.json');
         const branch = (
