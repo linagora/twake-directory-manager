@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.18.0 (2026-11-28)
+
+Built on ldap-rest 2.6.1.
+
+### Security
+
+- From ldap-rest 2.6.1: the sign-in rate limit holds against parallel
+  attempts
+  ([GHSA-chj2-66q7-q7h2](https://github.com/linagora/ldap-rest/security/advisories/GHSA-chj2-66q7-q7h2)),
+  and a Cloudery provisioning in one organization can no longer act on
+  another's instance
+  ([GHSA-2xpw-hwrg-vqxf](https://github.com/linagora/ldap-rest/security/advisories/GHSA-2xpw-hwrg-vqxf))
+
+### Features
+
+- The header offers the Workplace's other applications in a grid, from
+  `DM_CONSOLE_APP_LIST` in Twake Calendar's `appList` format; none inside the
+  Home, whose bar lists them already (#392)
+
+### Bug Fixes
+
+- Claim… opens after one read on a tree wider than it lists, instead of
+  walking 50 organizations first (#397)
+- Claim…'s search offers what the other branches found when one of them
+  fails, and says that some are missing (#398)
+
 ## v0.17.0 (2026-11-26)
 
 Built on ldap-rest 2.6.0, which refuses a change a browser sends from an
