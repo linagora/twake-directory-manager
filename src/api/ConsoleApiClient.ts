@@ -1808,35 +1808,53 @@ export class ConsoleApiClient {
    * @param from subtrees to walk instead of the whole tree
    * @param limit most organizations read: fewer for a caller that can search
    *   the tree instead, and walks it only to know whether it is small
+   * @param probe stop as soon as the organizations seen and those waiting to
+   *   be read are more than `limit`: for a caller that only asks whether the
+   *   tree is small, which a parent of a thousand answers in one read
    * @returns the organizations found, and whether some were left unread
    */
   async organizationWalk(
     from?: OrganizationNode[],
-    limit = ORGANIZATION_OPTION_LIMIT
+    limit = ORGANIZATION_OPTION_LIMIT,
+    probe = false
   ): Promise<{
     organizations: { dn: string; label: string }[];
     partial: boolean;
   }> {
     const roots = from ?? [await this.organizationTop()];
     const options: { dn: string; label: string }[] = [];
-    const queue = roots.filter((node): node is OrganizationNode => !!node);
+    const queue: OrganizationNode[] = [];
     const seen = new Set<string>();
+    // The organizations queued and not read yet, each once.
+    const waiting = new Set<string>();
+    const enqueue = (nodes: OrganizationNode[]): void => {
+      for (const node of nodes) {
+        queue.push(node);
+        const key = comparableDn(node.dn);
+        if (!seen.has(key)) waiting.add(key);
+      }
+    };
+    enqueue(roots.filter((node): node is OrganizationNode => !!node));
     let visited = 0;
     // Whether every branch reached was read whole: one the server cut, or
     // could not read, may hold organizations the walk never saw.
     let complete = true;
     while (queue.length > 0 && visited < limit) {
+      // Known wider than the bound already: the reads left would only
+      // confirm it.
+      if (probe && visited + waiting.size > limit) break;
       const node = queue.shift() as OrganizationNode;
       const key = comparableDn(node.dn);
       if (seen.has(key)) continue;
       seen.add(key);
+      waiting.delete(key);
       visited++;
       options.push({ dn: node.dn, label: node.path || node.name });
       try {
         const { nodes, truncated } = await this.organizationChildrenRead(
           node.dn
         );
-        queue.push(...nodes);
+        enqueue(nodes);
         if (truncated) complete = false;
       } catch (err) {
         // A branch the caller may not read is simply not offered; one that

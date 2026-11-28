@@ -82,9 +82,12 @@ export class TransitActions {
     try {
       // Walked only to know whether the tree is small, when it can be
       // searched: the walk asks once per organization.
+      // Stopped as soon as the tree is known to be wider than the bound: a
+      // parent of a thousand, read first, needs no 49 more reads to say so.
       const walk = await ctx.api.organizationWalk(
         roots,
-        searches ? LISTED_WHEN_SEARCHABLE : undefined
+        searches ? LISTED_WHEN_SEARCHABLE : undefined,
+        searches
       );
       targets = walk.organizations.filter(
         target => comparableDn(target.dn) !== transit
@@ -195,8 +198,10 @@ export class TransitActions {
     const language = ctx.translator().language;
     // A branch under another the caller writes is in that one's answer, a
     // subtree search holding its base: it is not searched a second time.
+    // The transit branch is no choice: searched, its matches were dropped.
     const searched = roots.filter(
       (root, index) =>
+        comparableDn(root.dn) !== transit &&
         !roots.some(
           (other, before) =>
             withinDn(root.dn, other.dn) &&
@@ -213,9 +218,20 @@ export class TransitActions {
         hint: t('transit.search', { count: SEARCH_MINIMUM }),
       },
       search: async (query: string): Promise<GroupAnswer> => {
-        const answers = await Promise.all(
+        // A branch whose search failed hides nothing the others found: they
+        // are offered, and the note says some are missing. Only when every
+        // branch failed is the search a failure.
+        const settled = await Promise.allSettled(
           searched.map(root => ctx.api.organizationSearchRead(query, root.dn))
         );
+        const answers = settled.flatMap(result =>
+          result.status === 'fulfilled' ? [result.value] : []
+        );
+        const failed = settled.find(
+          (result): result is PromiseRejectedResult =>
+            result.status === 'rejected'
+        );
+        if (failed && answers.length === 0) throw failed.reason;
         // An organization two answers hold is offered once; the transit
         // branch, which the server finds among the others, is no choice.
         const seen = new Set<string>([transit]);
@@ -239,10 +255,15 @@ export class TransitActions {
             label: found.label,
           }));
         // The server answers the first matches it found: the one looked for
-        // may be among those it left out, which a longer text reaches.
-        return answers.some(answer => answer.truncated)
-          ? { choices, note: t('transit.searchTruncated') }
-          : { choices };
+        // may be among those it left out, which a longer text reaches. It
+        // may as well be in a branch that could not be searched.
+        const notes = [
+          failed ? t('transit.searchFailedBranches') : '',
+          answers.some(answer => answer.truncated)
+            ? t('transit.searchTruncated')
+            : '',
+        ].filter(Boolean);
+        return notes.length ? { choices, note: notes.join('. ') } : { choices };
       },
       // Where the entry goes, by the organization's own name, as the select
       // says it; the token above shows the whole path.

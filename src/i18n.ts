@@ -391,6 +391,8 @@ const en: Catalogue = {
     'Type {count} characters of the organization’s name or path',
   'transit.searchTruncated':
     'Only the first organizations found are shown: type more of the name to find the others',
+  'transit.searchFailedBranches':
+    'Some of your branches could not be searched: their organizations are missing',
   'transit.handOverTitle': 'Hand {name} over?',
   'transit.handOverLeaves': '{name} leaves {organization} for Transit.',
   'transit.alsoRemove': 'Also remove {name} from:',
@@ -910,6 +912,8 @@ const fr: Catalogue = {
     'Tapez {count} caractères du nom ou du chemin de l’organisation',
   'transit.searchTruncated':
     'Seules les premières organisations trouvées sont affichées : précisez le nom pour trouver les autres',
+  'transit.searchFailedBranches':
+    'Certaines de vos branches n’ont pas pu être interrogées : leurs organisations manquent',
   'transit.handOverTitle': 'Mettre {name} en transit ?',
   'transit.handOverLeaves': '{name} quitte {organization} pour Transit.',
   'transit.alsoRemove': 'Retirer aussi {name} de :',
@@ -1373,6 +1377,8 @@ const mn: Catalogue = {
   'transit.search': 'Байгууллагын нэр эсвэл замын {count} тэмдэгт оруулна уу',
   'transit.searchTruncated':
     'Зөвхөн эхний олдсон байгууллагууд харагдаж байна: бусдыг олохын тулд нэрийг илүү дэлгэрэнгүй бичнэ үү',
+  'transit.searchFailedBranches':
+    'Таны зарим салбарт хайлт хийж чадсангүй: тэдгээрийн байгууллагууд дутуу байна',
   'transit.handOverTitle': '{name}-г шилжүүлэх үү?',
   'transit.handOverLeaves':
     '{name} {organization}-с гарч дамжуулалтад шилжинэ.',
